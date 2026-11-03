@@ -122,6 +122,7 @@ afterAll(async () => {
 }, 30_000);
 
 it("denies an authenticated Reviewer's missing-comment decision on the actual stage wake without provider dispatch", async () => {
+  vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
   let issueId = "";
   let fixtureExecutorId = "";
   let fixtureReviewerId = "";

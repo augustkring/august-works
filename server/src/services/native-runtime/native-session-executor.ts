@@ -6271,6 +6271,7 @@ export function nativeSessionFailureDisposition(
     sourceFailureCode === "native_provider_model_rejected" ||
     sourceFailureCode === "native_provider_approval_required" ||
     sourceFailureCode === "native_event_replay_conflict" ||
+    sourceFailureCode === "native_event_evidence_unavailable" ||
     sourceFailureCode === "runner_remote_provider_artifact_incompatible" ||
     sourceFailureCode === "native_provider_terminal_failed" ||
     sourceFailureCode === "native_current_wake_comments_unread" ||
@@ -6339,6 +6340,7 @@ export function nativeSessionFailureSourceCode(
   | "native_runner_process_exited"
   | "planning_mode_unsupported"
   | "native_event_replay_conflict"
+  | "native_event_evidence_unavailable"
   | "native_provider_model_rejected"
   | "native_current_wake_comments_unread"
   | "native_current_wake_comments_changed_after_read"
@@ -6409,6 +6411,9 @@ export function nativeSessionFailureSourceCode(
   }
   if (/planning_mode_unsupported/i.test(message)) {
     return "planning_mode_unsupported";
+  }
+  if (/native_event_evidence_unavailable/i.test(message)) {
+    return "native_event_evidence_unavailable";
   }
   if (/native_event_replay_conflict/i.test(message)) {
     return "native_event_replay_conflict";
@@ -9418,6 +9423,363 @@ export function validateNativeManagedWorkspaceEnvironment(
   return result;
 }
 
+/** Persists the execution catch's failure coordinator transaction under its existing lease fence. */
+export async function recordNativeSessionExecutionFailure(input: {
+  db: Db;
+  execution: NativeExecutionInput;
+  error: unknown;
+  attempt: number;
+  leaseOwner: string;
+  controller: NativeControllerIdentity;
+  restartRecovery?: NativeRestartRecoveryClaim;
+  providerUsageLimitEventKey: { sourceInstanceId: string; sourceEventId: string } | null;
+  onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+}): Promise<typeof heartbeatRuns.$inferSelect | null> {
+  const now = new Date();
+  const classifiedFailureCode = nativeSessionFailureSourceCode(input.error);
+  let sourceFailureCode = classifiedFailureCode;
+  if (input.providerUsageLimitEventKey) {
+    let durable: { payload: unknown } | undefined;
+    let durableReadSucceeded = true;
+    try {
+      [durable] = await input.db.select({ payload: heartbeatRunEvents.payload })
+        .from(heartbeatRunEvents)
+        .where(and(
+          eq(heartbeatRunEvents.companyId, input.execution.binding.companyId),
+          eq(heartbeatRunEvents.runId, input.execution.binding.runId),
+          eq(heartbeatRunEvents.agentId, input.execution.binding.agentId),
+          eq(heartbeatRunEvents.sourceInstanceId, input.providerUsageLimitEventKey.sourceInstanceId),
+          eq(heartbeatRunEvents.sourceEventId, input.providerUsageLimitEventKey.sourceEventId),
+        )).limit(1);
+    } catch {
+      durableReadSucceeded = false;
+    }
+    const parsed = durable ? validatePrpEvent(record(durable.payload).prpEvent) : null;
+    const usageLimitEventIsDurable = Boolean(
+      parsed?.ok &&
+      parsed.event.runId === input.execution.binding.runId &&
+      parsed.event.sourceInstanceId === input.providerUsageLimitEventKey.sourceInstanceId &&
+      parsed.event.sourceEventId === input.providerUsageLimitEventKey.sourceEventId &&
+      nativeProviderUsageLimitFromEvent(parsed.event)
+    );
+    if (classifiedFailureCode !== "native_event_replay_conflict") {
+      sourceFailureCode = !durableReadSucceeded || !durable
+        ? "native_event_evidence_unavailable"
+        : usageLimitEventIsDurable
+          ? "native_provider_usage_limit"
+          : "native_event_replay_conflict";
+    }
+  }
+  const recoveryEvidence = await nativeProviderRecoveryEvidence({
+    db: input.db,
+    runId: input.execution.binding.runId,
+    sourceFailureCode,
+  });
+  const disposition = nativeSessionFailureDisposition(input.attempt, now, sourceFailureCode);
+  const phase = recoveryEvidence.recoveryMode === "ambiguous_state"
+    ? ("terminal_failure" as const)
+    : disposition.phase;
+  const failureCode = recoveryEvidence.recoveryMode === "ambiguous_state"
+    ? sourceFailureCode
+    : disposition.failureCode;
+  const nextAttemptAt = recoveryEvidence.recoveryMode === "ambiguous_state"
+    ? null
+    : disposition.nextAttemptAt;
+  const recoveryProjection = nativeSessionRecoveryProjection({
+    phase, failureCode, agentId: input.execution.binding.agentId,
+  });
+  const { exhausted } = recoveryProjection;
+  const integrityFailure = sourceFailureCode === "native_event_replay_conflict";
+  const error = input.error;
+  const message = error instanceof Error ? error.message.slice(0, 2_000) : String(error).slice(0, 2_000);
+  const sanitizedStderrTail = redactSensitiveText(message).slice(-4_096);
+  const { attempt, leaseOwner, controller } = input;
+  const ownershipUnverified = classifiedFailureCode === NATIVE_ADOPTED_RUNNER_AUTHENTICATION_TIMEOUT;
+  const attemptFailureStep = async (operation: () => unknown) => {
+    try {
+      await operation();
+    } catch (secondaryError) {
+      if (!(error instanceof NativeSessionProtocolIntegrityError)) throw secondaryError;
+    }
+  };
+  const executionFailureMessage = redactSensitiveText(
+    error instanceof Error ? error.message : String(error),
+  ).slice(-4_096);
+  await attemptFailureStep(() => input.onLog?.(
+    "stderr",
+    `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
+  ));
+  if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1" ||
+      process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1") {
+    const originalError = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown } } : null;
+    const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_]{1,32}$/.test(value)
+      ? value : undefined;
+    const frames = originalError?.stack?.split("\n").slice(1).flatMap(line => {
+      const match = /\/server\/src\/services\/([^():]+\.ts):(\d+):\d+/.exec(line);
+      return match ? [`${match[1]}:${match[2]}`] : [];
+    }).slice(0, 4) ?? [];
+    const failureFacts = { name: originalError?.name ?? "UnknownError",
+      code: safeCode(originalError?.code), causeCode: safeCode(originalError?.cause?.code), frames };
+    await attemptFailureStep(() => input.onLog?.("stderr",
+      `[paperclip-runner] native session original failure facts: ${JSON.stringify(failureFacts)}\n`));
+  }
+  let terminalRunToReport: typeof heartbeatRuns.$inferSelect | null = null;
+  await input.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select set_config('statement_timeout', '15000', true), set_config('lock_timeout', '1000', true)`,
+        );
+        // Use the same issue-before-run lock order as admission. A late failure
+        // can terminalize its own run, but cannot change a reassigned task.
+        const [failureTask] = await tx
+          .select()
+          .from(issues)
+          .where(
+            and(
+              eq(issues.id, input.execution.binding.issueId),
+              eq(issues.companyId, input.execution.binding.companyId),
+            ),
+          )
+          .for("update");
+        const updated = await tx
+          .update(nativeRunFinalizations)
+          .set({
+            phase,
+            controlDeadlineAt: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            recoveryState:
+              phase === "retryable_failure" ? "resuming_session" : "blocked",
+            failureCode,
+            failureDetail: {
+              message,
+              originalFailureCode:
+                error instanceof NativeProviderTerminalFailure
+                  ? error.providerCode
+                  : sourceFailureCode,
+              recoverable:
+                error instanceof NativeProviderTerminalFailure
+                  ? error.recoverable
+                  : phase === "retryable_failure",
+              recoveryMode: recoveryEvidence.recoveryMode,
+              providerSessionEstablished:
+                recoveryEvidence.providerSessionEstablished,
+              providerEventsExist: recoveryEvidence.providerEventsExist,
+              checkpointExists: recoveryEvidence.checkpointExists,
+              recoveryOwner: recoveryProjection.recoveryOwner,
+              nextAction:
+                sourceFailureCode === "native_provider_approval_required"
+                  ? "Approval required. Review the operation and update the agent's permission setting before retrying. This runner has no interactive approval handler."
+                  : sourceFailureCode === "native_session_cleanup_quarantined"
+                  ? NATIVE_CLEANUP_OPERATOR_RECOVERY_MESSAGE
+                  : sourceFailureCode === "native_provider_terminal_failed"
+                    ? "The provider session is permanently unusable. Verify stopped execution, completed actions, and task context before starting a linked continuation."
+                    : recoveryEvidence.recoveryMode === "ambiguous_state"
+                      ? "Inspect the original provider failure and durable events; state is ambiguous and a replacement provider session is forbidden."
+                      : sourceFailureCode === "native_event_evidence_unavailable"
+                        ? "Inspect durable runner-event evidence; the exact terminal event could not be verified, so automatic retry is stopped."
+                        : integrityFailure
+                          ? "Inspect the persisted runner events and checkpoint for a source-sequence integrity conflict; automatic recovery is stopped."
+                          : sourceFailureCode === "native_provider_usage_limit"
+                          ? "Restore model provider usage capacity, then explicitly retry the task. Automatic retries cannot resolve an exhausted provider allowance."
+                          : ownershipUnverified
+                            ? "Inspect the retained runner's executable and authenticated connection. Do not replace its provider until ownership is safely resolved."
+                            : exhausted
+                              ? "Inspect the persisted native session after its bounded resume budget was exhausted."
+                              : recoveryEvidence.recoveryMode ===
+                                  "bootstrap_retry"
+                                ? "Retry provider bootstrap on this same run; durable evidence proves no provider session or provider event was created."
+                                : "Resume this same run from its exact persisted native provider checkpoint after the retry delay.",
+            },
+            nextAttemptAt,
+            recoveryHistory: sql`(
+              select coalesce(jsonb_agg(item order by ordinal), '[]'::jsonb)
+              from jsonb_array_elements(
+                coalesce(${nativeRunFinalizations.recoveryHistory}, '[]'::jsonb)
+                || jsonb_build_array(${JSON.stringify({
+                  at: now.toISOString(),
+                  disposition: phase,
+                  reason: sourceFailureCode,
+                  controllerBootId: controller.bootId,
+                  controllerGeneration:
+                    input.restartRecovery?.controllerGeneration ?? null,
+                  providerAttempt: attempt,
+                  stderrTail: sanitizedStderrTail,
+                  providerSessionEstablished:
+                    recoveryEvidence.providerSessionEstablished,
+                  checkpointExists: recoveryEvidence.checkpointExists,
+                })}::jsonb)
+              ) with ordinality as history(item, ordinal)
+              where ordinal > greatest(
+                jsonb_array_length(
+                  coalesce(${nativeRunFinalizations.recoveryHistory}, '[]'::jsonb)
+                  || jsonb_build_array(${JSON.stringify({
+                    at: now.toISOString(),
+                    disposition: phase,
+                    reason: sourceFailureCode,
+                    controllerBootId: controller.bootId,
+                    controllerGeneration:
+                      input.restartRecovery?.controllerGeneration ?? null,
+                    providerAttempt: attempt,
+                    stderrTail: sanitizedStderrTail,
+                    providerSessionEstablished:
+                      recoveryEvidence.providerSessionEstablished,
+                    checkpointExists: recoveryEvidence.checkpointExists,
+                  })}::jsonb)
+                ) - 20,
+                0
+              )
+            )`,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(nativeRunFinalizations.runId, input.execution.binding.runId),
+              eq(
+                nativeRunFinalizations.companyId,
+                input.execution.binding.companyId,
+              ),
+              eq(
+                nativeRunFinalizations.issueId,
+                input.execution.binding.issueId,
+              ),
+              eq(nativeRunFinalizations.leaseOwner, leaseOwner),
+              eq(nativeRunFinalizations.attempt, attempt),
+              eq(nativeRunFinalizations.controllerBootId, controller.bootId),
+              eq(nativeRunFinalizations.controllerPid, controller.pid),
+              eq(
+                nativeRunFinalizations.controllerProcessStartedAt,
+                controller.processStartedAt,
+              ),
+              gt(nativeRunFinalizations.leaseExpiresAt, sql`now()`),
+            ),
+          )
+          .returning({ runId: nativeRunFinalizations.runId })
+          .then((rows) => rows[0] ?? null);
+        if (!updated) throw new Error("native_session_lease_lost");
+        const [runBeforeWrite] = await tx
+          .select({ status: heartbeatRuns.status })
+          .from(heartbeatRuns)
+          .where(eq(heartbeatRuns.id, input.execution.binding.runId))
+          .for("update");
+        const [updatedRun] = await tx
+          .update(heartbeatRuns)
+          .set({
+            // An authentication timeout does not prove the retained runner or
+            // its provider stopped. Preserve physical ownership until verified.
+            ...(!ownershipUnverified
+              ? {
+                  status: "failed",
+                  executionStatusDeliveryId: randomUUID(),
+                  finishedAt: now,
+                }
+              : {}),
+            nativePhase: phase,
+            nativePhaseUpdatedAt: now,
+            error: message,
+            errorCode: ownershipUnverified
+              ? NATIVE_OWNERSHIP_UNVERIFIED_ERROR_CODE
+              : sourceFailureCode,
+            updatedAt: now,
+          })
+          .where(eq(heartbeatRuns.id, input.execution.binding.runId))
+          .returning();
+        if (
+          updatedRun &&
+          runBeforeWrite &&
+          updatedRun.status !== runBeforeWrite.status
+        ) {
+          terminalRunToReport = updatedRun;
+        }
+        const stillOwnsTask =
+          failureTask?.assigneeAgentId === input.execution.binding.agentId &&
+          ["in_progress", "in_review"].includes(failureTask.status) &&
+          (!failureTask.executionRunId ||
+            failureTask.executionRunId === input.execution.binding.runId) &&
+          (!failureTask.checkoutRunId ||
+            failureTask.checkoutRunId === input.execution.binding.runId);
+        let failureBlockStatusVersion: number | undefined;
+        if (stillOwnsTask && recoveryProjection.issueStatus) {
+          const projected = await issueService(tx as unknown as Db).update(
+            input.execution.binding.issueId,
+            { status: recoveryProjection.issueStatus },
+            tx,
+          );
+          if (projected?.status === "blocked") failureBlockStatusVersion = projected.statusVersion;
+        }
+        if (
+          !ownershipUnverified &&
+          stillOwnsTask &&
+          phase === "terminal_failure"
+        ) {
+          await tx
+            .update(issues)
+            .set({ executionRunId: null, checkoutRunId: null, updatedAt: now })
+            .where(eq(issues.id, input.execution.binding.issueId));
+        }
+        if (!stillOwnsTask) return;
+        await issueRecoveryActionService(
+          tx as unknown as Db,
+        ).upsertSourceScoped({
+          companyId: input.execution.binding.companyId,
+          sourceIssueId: input.execution.binding.issueId,
+          kind: "active_run_watchdog",
+          ownerType: recoveryProjection.recoveryActionOwnerType,
+          ownerAgentId: recoveryProjection.recoveryActionOwnerAgentId,
+          returnOwnerAgentId: input.execution.binding.agentId,
+          cause: recoveryProjection.recoveryActionCause,
+          fingerprint: createHash("sha256")
+            .update(`${input.execution.binding.runId}:${failureCode}`)
+            .digest("hex"),
+          evidence: {
+            runId: input.execution.binding.runId,
+            ...(failureBlockStatusVersion !== undefined ? { nativeFailureBlock: {
+              runId: input.execution.binding.runId,
+              statusVersion: failureBlockStatusVersion,
+            } } : {}),
+            coordinatorAttempt: attempt,
+            sourceFailureCode,
+            recoveryDisposition: failureCode,
+            recoveryMode: recoveryEvidence.recoveryMode,
+            providerSessionEstablished:
+              recoveryEvidence.providerSessionEstablished,
+          },
+          nextAction:
+            sourceFailureCode === "native_provider_approval_required"
+              ? "Approval required. Review the operation and update the agent's permission setting before retrying. This runner has no interactive approval handler."
+              : sourceFailureCode === "native_session_cleanup_quarantined"
+              ? NATIVE_CLEANUP_OPERATOR_RECOVERY_MESSAGE
+              : sourceFailureCode === "native_provider_terminal_failed"
+                ? "Verify that the failed provider stopped and reconcile its action outcomes. A linked continuation can proceed only after these checks succeed."
+                : recoveryEvidence.recoveryMode === "ambiguous_state"
+                  ? "Inspect the original provider failure and explicitly resolve the ambiguous session state; do not open a replacement provider session."
+                  : sourceFailureCode === "native_event_evidence_unavailable"
+                    ? "Inspect durable runner-event evidence; the exact terminal event could not be verified, so automatic retry is stopped."
+                    : integrityFailure
+                      ? "Inspect the persisted runner event collision and explicitly repair or replace the run; automatic retries are disabled."
+                      : sourceFailureCode === "native_provider_usage_limit"
+                      ? "Restore model provider usage capacity, then explicitly retry the task; automatic retries are stopped."
+                      : ownershipUnverified
+                        ? "Resolve the retained runner's authentication or executable compatibility before an explicit recovery; do not blindly restart, cancel, or replace its provider session."
+                        : exhausted
+                          ? "Inspect the provider trace and explicitly choose a replacement run or provider configuration; automatic provider work is stopped."
+                          : recoveryEvidence.recoveryMode === "bootstrap_retry"
+                            ? "Retry bootstrap on the same run without manufacturing a provider checkpoint."
+                            : "Resume the exact persisted native session on the same heartbeat run.",
+          wakePolicy: nextAttemptAt
+            ? {
+                kind: "resume_native_run",
+                runId: input.execution.binding.runId,
+                notBefore: nextAttemptAt.toISOString(),
+              }
+            : null,
+          maxAttempts: 3,
+          supersedeOnIdentityChange:
+            recoveryProjection.supersedeOnIdentityChange,
+        });
+  });
+  return terminalRunToReport;
+}
+
 export async function executePaperclipNativeSession(input: {
   db: Db;
   execution: NativeExecutionInput;
@@ -9666,133 +10028,17 @@ export async function executePaperclipNativeSession(input: {
   }
 }
 
-async function executePaperclipNativeSessionWithinScope(
-  input: Parameters<typeof executePaperclipNativeSession>[0],
-  stagedAttachmentSources?: readonly NativeRunnerAttachmentSourceCapture[],
-  stagedAttachments?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["attachments"],
-  baseExecution?: NativeExecutionInput,
-): Promise<AdapterExecutionResult> {
-  const runId = input.execution.binding.runId;
-  if (
-    input.execution.provider.kind !== "codex" &&
-    input.execution.provider.kind !== "opencode" &&
-    input.execution.provider.kind !== "claude_managed" &&
-    input.execution.provider.kind !== "aws_agentcore" &&
-    input.execution.provider.kind !== "acpx"
-    && input.execution.provider.kind !== "aw_text_only"
-  ) {
-    throw new Error("paperclip_runner_provider_unsupported");
-  }
-  if (input.execution.provider.kind === "aw_text_only" && (!input.backend || input.useRunnerd))
-    throw new Error("aw_text_draft_requires_private_controller_backend");
-  if (
-    input.execution.provider.kind === "acpx" &&
-    input.execution.provider.agent === "pi"
-  ) {
-    throw new Error(
-      "paperclip_runner_provider_unsupported: ACPX Pi is unavailable until descriptor-confined verified launch is implemented",
-    );
-  }
-  const preparationSpans = input.preparationSpans ?? [];
-  const preparationStarts = nativeRunPreparationStarts(
-    preparationSpans,
-    Date.now(),
-  );
-  const trace = createNativeRunTrace({
-    runId: input.execution.binding.runId,
-    startedAtMs: preparationStarts.runStartedAtMs,
-    onEvent: input.onEvent,
-  });
-  const toolTrace = createNativeToolTrace(trace);
-  const taskPrepareScope = trace.start("task.prepare", {
-    parentName: "task.run",
-    startedAtMs: preparationStarts.preparationStartedAtMs,
-  });
-  const environmentSpans = preparationSpans.filter(
-    (span) =>
-      span.name === "environment.acquire" ||
-      span.name === "environment.workspace.realize",
-  );
-  const environmentStartedAtMs = environmentSpans.reduce(
-    (earliest, span) => Math.min(earliest, span.startedAtMs),
-    Date.now(),
-  );
-  const environmentEndedAtMs = environmentSpans.reduce(
-    (latest, span) => Math.max(latest, span.endedAtMs),
-    environmentStartedAtMs,
-  );
-  const environmentScope =
-    environmentSpans.length > 0
-      ? trace.start("environment.startup", {
-          parentName: "task.prepare",
-          startedAtMs: environmentStartedAtMs,
-        })
-      : null;
-  for (const span of preparationSpans) {
-    const rootMilestone = isNativeRunRootHistoricalSpan(span.name);
-    await trace.record({
-      ...span,
-      parentName: rootMilestone
-        ? "task.run"
-        : environmentSpans.includes(span)
-          ? "environment.startup"
-          : "task.prepare",
-    });
-  }
-  if (environmentScope) {
-    await trace.end(environmentScope, { endedAtMs: environmentEndedAtMs });
-  }
-  let retainedTransition: VerifiedWarmTransitionBinding | undefined;
-  if (input.useRunnerd) {
-    retainedTransition = await migrateRunnerdStateRootForExecution({
-      db: input.db,
-      execution: input.execution,
-      allowVerifiedBackup:
-        input.runnerExecutionTarget?.kind === "remote" &&
-        input.runnerExecutionTarget.transport === "sandbox",
-      // A retained warm runner is deliberately still ready rather than
-      // suspended. Only the exact idle in-process owner may rotate that
-      // prior-run authority; after a hard restart the map is empty and the
-      // durable-state verifier continues to require a suspended runner.
-      allowRetainedWarmRunner: hasIdleWarmNativeSessionOwner(input),
-      allowLocalRecovery: input.runnerExecutionTarget?.kind !== "remote",
-      onLog: input.onLog,
-      restartRecovery: input.restartRecovery,
-      runnerExecutionTarget: input.runnerExecutionTarget,
-      conversationMode: input.conversationMode,
-    });
-  }
-  const durableRunnerBinding = input.useRunnerd
-    ? loadRunnerdDurableBinding(input.execution, retainedTransition)
-    : null;
-  const effectiveRunnerInstanceId =
-    durableRunnerBinding?.runnerInstanceId ?? input.runnerInstanceId;
-  if (effectiveRunnerInstanceId !== input.runnerInstanceId) {
-    await input.db
-      .update(heartbeatRuns)
-      .set({
-        runnerInstanceId: effectiveRunnerInstanceId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(heartbeatRuns.id, input.execution.binding.runId),
-          eq(heartbeatRuns.companyId, input.execution.binding.companyId),
-          eq(heartbeatRuns.agentId, input.execution.binding.agentId),
-        ),
-      );
-  }
-  const leaseOwner =
-    input.leaseOwner ?? `${effectiveRunnerInstanceId}:${randomUUID()}`;
+/** Claims a native session coordinator using the executor's existing bound CAS transaction. */
+export async function claimNativeExecutionCoordinator(input: {
+  db: Db;
+  execution: NativeExecutionInput;
+  runnerInstanceId: string;
+  leaseOwner?: string;
+  restartRecovery?: NativeRestartRecoveryClaim;
+}): Promise<{ attempt: number; leaseOwner: string; controller: NativeControllerIdentity }> {
+  const leaseOwner = input.leaseOwner ?? `${input.runnerInstanceId}:${randomUUID()}`;
   const controller = await currentNativeControllerIdentity();
-  const leaseNow = new Date();
-  const leaseExpiresAt = new Date(leaseNow.getTime() + 20 * 60_000);
-  let attempt: number;
-  try {
-    attempt = await trace.measure(
-      "native.coordinator.claim",
-      () =>
-        input.db.transaction(async (tx) => {
+  const attempt = await input.db.transaction(async (tx) => {
           const coordinator = await tx
             .select()
             .from(nativeRunFinalizations)
@@ -9981,7 +10227,137 @@ async function executePaperclipNativeSessionWithinScope(
             })
             .where(eq(heartbeatRuns.id, coordinator.runId));
           return nextAttempt;
-        }),
+  });
+  return { attempt, leaseOwner, controller };
+}
+
+async function executePaperclipNativeSessionWithinScope(
+  input: Parameters<typeof executePaperclipNativeSession>[0],
+  stagedAttachmentSources?: readonly NativeRunnerAttachmentSourceCapture[],
+  stagedAttachments?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["attachments"],
+  baseExecution?: NativeExecutionInput,
+): Promise<AdapterExecutionResult> {
+  const runId = input.execution.binding.runId;
+  if (
+    input.execution.provider.kind !== "codex" &&
+    input.execution.provider.kind !== "opencode" &&
+    input.execution.provider.kind !== "claude_managed" &&
+    input.execution.provider.kind !== "aws_agentcore" &&
+    input.execution.provider.kind !== "acpx"
+    && input.execution.provider.kind !== "aw_text_only"
+  ) {
+    throw new Error("paperclip_runner_provider_unsupported");
+  }
+  if (input.execution.provider.kind === "aw_text_only" && (!input.backend || input.useRunnerd))
+    throw new Error("aw_text_draft_requires_private_controller_backend");
+  if (
+    input.execution.provider.kind === "acpx" &&
+    input.execution.provider.agent === "pi"
+  ) {
+    throw new Error(
+      "paperclip_runner_provider_unsupported: ACPX Pi is unavailable until descriptor-confined verified launch is implemented",
+    );
+  }
+  const preparationSpans = input.preparationSpans ?? [];
+  const preparationStarts = nativeRunPreparationStarts(
+    preparationSpans,
+    Date.now(),
+  );
+  const trace = createNativeRunTrace({
+    runId: input.execution.binding.runId,
+    startedAtMs: preparationStarts.runStartedAtMs,
+    onEvent: input.onEvent,
+  });
+  const toolTrace = createNativeToolTrace(trace);
+  const taskPrepareScope = trace.start("task.prepare", {
+    parentName: "task.run",
+    startedAtMs: preparationStarts.preparationStartedAtMs,
+  });
+  const environmentSpans = preparationSpans.filter(
+    (span) =>
+      span.name === "environment.acquire" ||
+      span.name === "environment.workspace.realize",
+  );
+  const environmentStartedAtMs = environmentSpans.reduce(
+    (earliest, span) => Math.min(earliest, span.startedAtMs),
+    Date.now(),
+  );
+  const environmentEndedAtMs = environmentSpans.reduce(
+    (latest, span) => Math.max(latest, span.endedAtMs),
+    environmentStartedAtMs,
+  );
+  const environmentScope =
+    environmentSpans.length > 0
+      ? trace.start("environment.startup", {
+          parentName: "task.prepare",
+          startedAtMs: environmentStartedAtMs,
+        })
+      : null;
+  for (const span of preparationSpans) {
+    const rootMilestone = isNativeRunRootHistoricalSpan(span.name);
+    await trace.record({
+      ...span,
+      parentName: rootMilestone
+        ? "task.run"
+        : environmentSpans.includes(span)
+          ? "environment.startup"
+          : "task.prepare",
+    });
+  }
+  if (environmentScope) {
+    await trace.end(environmentScope, { endedAtMs: environmentEndedAtMs });
+  }
+  let retainedTransition: VerifiedWarmTransitionBinding | undefined;
+  if (input.useRunnerd) {
+    retainedTransition = await migrateRunnerdStateRootForExecution({
+      db: input.db,
+      execution: input.execution,
+      allowVerifiedBackup:
+        input.runnerExecutionTarget?.kind === "remote" &&
+        input.runnerExecutionTarget.transport === "sandbox",
+      // A retained warm runner is deliberately still ready rather than
+      // suspended. Only the exact idle in-process owner may rotate that
+      // prior-run authority; after a hard restart the map is empty and the
+      // durable-state verifier continues to require a suspended runner.
+      allowRetainedWarmRunner: hasIdleWarmNativeSessionOwner(input),
+      allowLocalRecovery: input.runnerExecutionTarget?.kind !== "remote",
+      onLog: input.onLog,
+      restartRecovery: input.restartRecovery,
+      runnerExecutionTarget: input.runnerExecutionTarget,
+      conversationMode: input.conversationMode,
+    });
+  }
+  const durableRunnerBinding = input.useRunnerd
+    ? loadRunnerdDurableBinding(input.execution, retainedTransition)
+    : null;
+  const effectiveRunnerInstanceId =
+    durableRunnerBinding?.runnerInstanceId ?? input.runnerInstanceId;
+  if (effectiveRunnerInstanceId !== input.runnerInstanceId) {
+    await input.db
+      .update(heartbeatRuns)
+      .set({
+        runnerInstanceId: effectiveRunnerInstanceId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(heartbeatRuns.id, input.execution.binding.runId),
+          eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+          eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+        ),
+      );
+  }
+  let coordinatorClaim: Awaited<ReturnType<typeof claimNativeExecutionCoordinator>>;
+  try {
+    coordinatorClaim = await trace.measure(
+      "native.coordinator.claim",
+      () => claimNativeExecutionCoordinator({
+        db: input.db,
+        execution: input.execution,
+        runnerInstanceId: effectiveRunnerInstanceId,
+        leaseOwner: input.leaseOwner,
+        restartRecovery: input.restartRecovery,
+      }),
       { parentName: "task.prepare" },
     );
     await trace.end(taskPrepareScope);
@@ -9990,6 +10366,7 @@ async function executePaperclipNativeSessionWithinScope(
     await trace.finish("failed");
     throw error;
   }
+  const { attempt, leaseOwner, controller } = coordinatorClaim;
   const controlPlaneInstanceId = `${effectiveRunnerInstanceId}:control`;
   const planSynchronizations: PlanSynchronization[] = [];
   const upsertPlanSynchronization = (
@@ -10046,7 +10423,7 @@ async function executePaperclipNativeSessionWithinScope(
   let turnSubmittedAtMs: number | null = null;
   let turnStartedAtMs: number | null = null;
   let firstAgentEventRecorded = false;
-  let providerUsageLimitObserved = false;
+  let providerUsageLimitEventKey: { sourceInstanceId: string; sourceEventId: string } | null = null;
   let turnCompletedAtMs: number | null = null;
   let runnerSessionStartupScope: NativeRunSpanScope | null = null;
   let agentTurnScope: NativeRunSpanScope | null = null;
@@ -10118,7 +10495,9 @@ async function executePaperclipNativeSessionWithinScope(
         markAppendDiagnosticStage?.("callback_runner_goal_projection");
         await projectSessionGoalEvent(event);
         markAppendDiagnosticStage?.("callback_event_accounting");
-        providerUsageLimitObserved ||= nativeProviderUsageLimitFromEvent(event);
+        if (nativeProviderUsageLimitFromEvent(event)) {
+          providerUsageLimitEventKey ??= { sourceInstanceId: event.sourceInstanceId, sourceEventId: event.sourceEventId };
+        }
         const eventAtMs = Date.parse(event.emittedAt);
         const milestoneAtMs = Number.isFinite(eventAtMs)
           ? eventAtMs
@@ -10321,7 +10700,9 @@ async function executePaperclipNativeSessionWithinScope(
         // publication, logging, trace, and metric effects remain committed-only.
         await liveQuestions.observe(event);
         await projectSessionGoalEvent(event);
-        providerUsageLimitObserved ||= nativeProviderUsageLimitFromEvent(event);
+        if (nativeProviderUsageLimitFromEvent(event)) {
+          providerUsageLimitEventKey ??= { sourceInstanceId: event.sourceInstanceId, sourceEventId: event.sourceEventId };
+        }
         const questionFallback = await materializeRuntimeQuestionFallback({
           db: input.db,
           binding: input.execution.binding,
@@ -11200,9 +11581,6 @@ async function executePaperclipNativeSessionWithinScope(
         );
 
       const failedAtMs = Date.now();
-      const executionFailureMessage = redactSensitiveText(
-        error instanceof Error ? error.message : String(error),
-      ).slice(-4_096);
       if (!taskSettleScope) {
         taskSettleScope = trace.start("task.settle", {
           parentName: "task.run",
@@ -11273,323 +11651,16 @@ async function executePaperclipNativeSessionWithinScope(
         await trace.finish("ok");
         throw error;
       }
-      const now = new Date();
-      const classifiedFailureCode = nativeSessionFailureSourceCode(error);
-      const sourceFailureCode =
-        classifiedFailureCode === "native_event_replay_conflict"
-          ? classifiedFailureCode
-          : providerUsageLimitObserved
-            ? "native_provider_usage_limit"
-            : classifiedFailureCode;
-      const recoveryEvidence = await nativeProviderRecoveryEvidence({
+      const terminalRunToReport = await recordNativeSessionExecutionFailure({
         db: input.db,
-        runId: input.execution.binding.runId,
-        sourceFailureCode,
-      });
-      const disposition = nativeSessionFailureDisposition(
+        execution: input.execution,
+        error,
         attempt,
-        now,
-        sourceFailureCode,
-      );
-      const phase =
-        recoveryEvidence.recoveryMode === "ambiguous_state"
-          ? ("terminal_failure" as const)
-          : disposition.phase;
-      const failureCode =
-        recoveryEvidence.recoveryMode === "ambiguous_state"
-          ? sourceFailureCode
-          : disposition.failureCode;
-      const nextAttemptAt =
-        recoveryEvidence.recoveryMode === "ambiguous_state"
-          ? null
-          : disposition.nextAttemptAt;
-      const recoveryProjection = nativeSessionRecoveryProjection({
-        phase,
-        failureCode,
-        agentId: input.execution.binding.agentId,
-      });
-      const { exhausted } = recoveryProjection;
-      const integrityFailure =
-        sourceFailureCode === "native_event_replay_conflict";
-      const message =
-        error instanceof Error
-          ? error.message.slice(0, 2_000)
-          : String(error).slice(0, 2_000);
-      const sanitizedStderrTail = redactSensitiveText(message).slice(-4_096);
-      // Set inside the transaction only when the write below genuinely
-      // transitions the run into "failed". Read after the transaction
-      // commits, so a rolled-back write never reports a false failure.
-      let terminalRunToReport: typeof heartbeatRuns.$inferSelect | null = null;
-      // Preserve the execution error even if recording its state later fails
-      // on a separate database lock or storage error.
-      await attemptFailureStep(() =>
-        input.onLog?.(
-          "stderr",
-          `[paperclip-runner] native session execution failed: ${executionFailureMessage}\n`,
-        ),
-      );
-      if (process.env.PAPERCLIP_MANAGED_OPENCODE_E2E_DIAGNOSTICS === "1" ||
-          process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1") {
-        const originalError = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown } } : null;
-        const safeCode = (value: unknown) => typeof value === "string" && /^[A-Z0-9_]{1,32}$/.test(value)
-          ? value : undefined;
-        const frames = originalError?.stack?.split("\n").slice(1).flatMap(line => {
-          const match = /\/server\/src\/services\/([^():]+\.ts):(\d+):\d+/.exec(line);
-          return match ? [`${match[1]}:${match[2]}`] : [];
-        }).slice(0, 4) ?? [];
-        const failureFacts = { name: originalError?.name ?? "UnknownError",
-          code: safeCode(originalError?.code), causeCode: safeCode(originalError?.cause?.code), frames };
-        await attemptFailureStep(() => input.onLog?.("stderr",
-          `[paperclip-runner] native session original failure facts: ${JSON.stringify(failureFacts)}\n`));
-      }
-      await input.db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select set_config('statement_timeout', '15000', true), set_config('lock_timeout', '1000', true)`,
-        );
-        // Use the same issue-before-run lock order as admission. A late failure
-        // can terminalize its own run, but cannot change a reassigned task.
-        const [failureTask] = await tx
-          .select()
-          .from(issues)
-          .where(
-            and(
-              eq(issues.id, input.execution.binding.issueId),
-              eq(issues.companyId, input.execution.binding.companyId),
-            ),
-          )
-          .for("update");
-        const updated = await tx
-          .update(nativeRunFinalizations)
-          .set({
-            phase,
-            controlDeadlineAt: null,
-            leaseOwner: null,
-            leaseExpiresAt: null,
-            recoveryState:
-              phase === "retryable_failure" ? "resuming_session" : "blocked",
-            failureCode,
-            failureDetail: {
-              message,
-              originalFailureCode:
-                error instanceof NativeProviderTerminalFailure
-                  ? error.providerCode
-                  : sourceFailureCode,
-              recoverable:
-                error instanceof NativeProviderTerminalFailure
-                  ? error.recoverable
-                  : phase === "retryable_failure",
-              recoveryMode: recoveryEvidence.recoveryMode,
-              providerSessionEstablished:
-                recoveryEvidence.providerSessionEstablished,
-              providerEventsExist: recoveryEvidence.providerEventsExist,
-              checkpointExists: recoveryEvidence.checkpointExists,
-              recoveryOwner: recoveryProjection.recoveryOwner,
-              nextAction:
-                sourceFailureCode === "native_provider_approval_required"
-                  ? "Approval required. Review the operation and update the agent's permission setting before retrying. This runner has no interactive approval handler."
-                  : sourceFailureCode === "native_session_cleanup_quarantined"
-                  ? NATIVE_CLEANUP_OPERATOR_RECOVERY_MESSAGE
-                  : sourceFailureCode === "native_provider_terminal_failed"
-                    ? "The provider session is permanently unusable. Verify stopped execution, completed actions, and task context before starting a linked continuation."
-                    : recoveryEvidence.recoveryMode === "ambiguous_state"
-                      ? "Inspect the original provider failure and durable events; state is ambiguous and a replacement provider session is forbidden."
-                      : integrityFailure
-                        ? "Inspect the persisted runner events and checkpoint for a source-sequence integrity conflict; automatic recovery is stopped."
-                        : sourceFailureCode === "native_provider_usage_limit"
-                          ? "Restore model provider usage capacity, then explicitly retry the task. Automatic retries cannot resolve an exhausted provider allowance."
-                          : ownershipUnverified
-                            ? "Inspect the retained runner's executable and authenticated connection. Do not replace its provider until ownership is safely resolved."
-                            : exhausted
-                              ? "Inspect the persisted native session after its bounded resume budget was exhausted."
-                              : recoveryEvidence.recoveryMode ===
-                                  "bootstrap_retry"
-                                ? "Retry provider bootstrap on this same run; durable evidence proves no provider session or provider event was created."
-                                : "Resume this same run from its exact persisted native provider checkpoint after the retry delay.",
-            },
-            nextAttemptAt,
-            recoveryHistory: sql`(
-              select coalesce(jsonb_agg(item order by ordinal), '[]'::jsonb)
-              from jsonb_array_elements(
-                coalesce(${nativeRunFinalizations.recoveryHistory}, '[]'::jsonb)
-                || jsonb_build_array(${JSON.stringify({
-                  at: now.toISOString(),
-                  disposition: phase,
-                  reason: sourceFailureCode,
-                  controllerBootId: controller.bootId,
-                  controllerGeneration:
-                    input.restartRecovery?.controllerGeneration ?? null,
-                  providerAttempt: attempt,
-                  stderrTail: sanitizedStderrTail,
-                  providerSessionEstablished:
-                    recoveryEvidence.providerSessionEstablished,
-                  checkpointExists: recoveryEvidence.checkpointExists,
-                })}::jsonb)
-              ) with ordinality as history(item, ordinal)
-              where ordinal > greatest(
-                jsonb_array_length(
-                  coalesce(${nativeRunFinalizations.recoveryHistory}, '[]'::jsonb)
-                  || jsonb_build_array(${JSON.stringify({
-                    at: now.toISOString(),
-                    disposition: phase,
-                    reason: sourceFailureCode,
-                    controllerBootId: controller.bootId,
-                    controllerGeneration:
-                      input.restartRecovery?.controllerGeneration ?? null,
-                    providerAttempt: attempt,
-                    stderrTail: sanitizedStderrTail,
-                    providerSessionEstablished:
-                      recoveryEvidence.providerSessionEstablished,
-                    checkpointExists: recoveryEvidence.checkpointExists,
-                  })}::jsonb)
-                ) - 20,
-                0
-              )
-            )`,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(nativeRunFinalizations.runId, input.execution.binding.runId),
-              eq(
-                nativeRunFinalizations.companyId,
-                input.execution.binding.companyId,
-              ),
-              eq(
-                nativeRunFinalizations.issueId,
-                input.execution.binding.issueId,
-              ),
-              eq(nativeRunFinalizations.leaseOwner, leaseOwner),
-              eq(nativeRunFinalizations.attempt, attempt),
-              eq(nativeRunFinalizations.controllerBootId, controller.bootId),
-              eq(nativeRunFinalizations.controllerPid, controller.pid),
-              eq(
-                nativeRunFinalizations.controllerProcessStartedAt,
-                controller.processStartedAt,
-              ),
-              gt(nativeRunFinalizations.leaseExpiresAt, sql`now()`),
-            ),
-          )
-          .returning({ runId: nativeRunFinalizations.runId })
-          .then((rows) => rows[0] ?? null);
-        if (!updated) throw new Error("native_session_lease_lost");
-        const [runBeforeWrite] = await tx
-          .select({ status: heartbeatRuns.status })
-          .from(heartbeatRuns)
-          .where(eq(heartbeatRuns.id, input.execution.binding.runId))
-          .for("update");
-        const [updatedRun] = await tx
-          .update(heartbeatRuns)
-          .set({
-            // An authentication timeout does not prove the retained runner or
-            // its provider stopped. Preserve physical ownership until verified.
-            ...(!ownershipUnverified
-              ? {
-                  status: "failed",
-                  executionStatusDeliveryId: randomUUID(),
-                  finishedAt: now,
-                }
-              : {}),
-            nativePhase: phase,
-            nativePhaseUpdatedAt: now,
-            error: message,
-            errorCode: ownershipUnverified
-              ? NATIVE_OWNERSHIP_UNVERIFIED_ERROR_CODE
-              : sourceFailureCode,
-            updatedAt: now,
-          })
-          .where(eq(heartbeatRuns.id, input.execution.binding.runId))
-          .returning();
-        if (
-          updatedRun &&
-          runBeforeWrite &&
-          updatedRun.status !== runBeforeWrite.status
-        ) {
-          terminalRunToReport = updatedRun;
-        }
-        const stillOwnsTask =
-          failureTask?.assigneeAgentId === input.execution.binding.agentId &&
-          ["in_progress", "in_review"].includes(failureTask.status) &&
-          (!failureTask.executionRunId ||
-            failureTask.executionRunId === input.execution.binding.runId) &&
-          (!failureTask.checkoutRunId ||
-            failureTask.checkoutRunId === input.execution.binding.runId);
-        let failureBlockStatusVersion: number | undefined;
-        if (stillOwnsTask && recoveryProjection.issueStatus) {
-          const projected = await issueService(tx as unknown as Db).update(
-            input.execution.binding.issueId,
-            { status: recoveryProjection.issueStatus },
-            tx,
-          );
-          if (projected?.status === "blocked") failureBlockStatusVersion = projected.statusVersion;
-        }
-        if (
-          !ownershipUnverified &&
-          stillOwnsTask &&
-          phase === "terminal_failure"
-        ) {
-          await tx
-            .update(issues)
-            .set({ executionRunId: null, checkoutRunId: null, updatedAt: now })
-            .where(eq(issues.id, input.execution.binding.issueId));
-        }
-        if (!stillOwnsTask) return;
-        await issueRecoveryActionService(
-          tx as unknown as Db,
-        ).upsertSourceScoped({
-          companyId: input.execution.binding.companyId,
-          sourceIssueId: input.execution.binding.issueId,
-          kind: "active_run_watchdog",
-          ownerType: recoveryProjection.recoveryActionOwnerType,
-          ownerAgentId: recoveryProjection.recoveryActionOwnerAgentId,
-          returnOwnerAgentId: input.execution.binding.agentId,
-          cause: recoveryProjection.recoveryActionCause,
-          fingerprint: createHash("sha256")
-            .update(`${input.execution.binding.runId}:${failureCode}`)
-            .digest("hex"),
-          evidence: {
-            runId: input.execution.binding.runId,
-            ...(failureBlockStatusVersion !== undefined ? { nativeFailureBlock: {
-              runId: input.execution.binding.runId,
-              statusVersion: failureBlockStatusVersion,
-            } } : {}),
-            coordinatorAttempt: attempt,
-            sourceFailureCode,
-            recoveryDisposition: failureCode,
-            recoveryMode: recoveryEvidence.recoveryMode,
-            providerSessionEstablished:
-              recoveryEvidence.providerSessionEstablished,
-          },
-          nextAction:
-            sourceFailureCode === "native_provider_approval_required"
-              ? "Approval required. Review the operation and update the agent's permission setting before retrying. This runner has no interactive approval handler."
-              : sourceFailureCode === "native_session_cleanup_quarantined"
-              ? NATIVE_CLEANUP_OPERATOR_RECOVERY_MESSAGE
-              : sourceFailureCode === "native_provider_terminal_failed"
-                ? "Verify that the failed provider stopped and reconcile its action outcomes. A linked continuation can proceed only after these checks succeed."
-                : recoveryEvidence.recoveryMode === "ambiguous_state"
-                  ? "Inspect the original provider failure and explicitly resolve the ambiguous session state; do not open a replacement provider session."
-                  : integrityFailure
-                    ? "Inspect the persisted runner event collision and explicitly repair or replace the run; automatic retries are disabled."
-                    : sourceFailureCode === "native_provider_usage_limit"
-                      ? "Restore model provider usage capacity, then explicitly retry the task; automatic retries are stopped."
-                      : ownershipUnverified
-                        ? "Resolve the retained runner's authentication or executable compatibility before an explicit recovery; do not blindly restart, cancel, or replace its provider session."
-                        : exhausted
-                          ? "Inspect the provider trace and explicitly choose a replacement run or provider configuration; automatic provider work is stopped."
-                          : recoveryEvidence.recoveryMode === "bootstrap_retry"
-                            ? "Retry bootstrap on the same run without manufacturing a provider checkpoint."
-                            : "Resume the exact persisted native session on the same heartbeat run.",
-          wakePolicy: nextAttemptAt
-            ? {
-                kind: "resume_native_run",
-                runId: input.execution.binding.runId,
-                notBefore: nextAttemptAt.toISOString(),
-              }
-            : null,
-          maxAttempts: 3,
-          supersedeOnIdentityChange:
-            recoveryProjection.supersedeOnIdentityChange,
-        });
+        leaseOwner,
+        controller,
+        restartRecovery: input.restartRecovery,
+        providerUsageLimitEventKey,
+        onLog: input.onLog,
       });
       if (terminalRunToReport) void reportRunFailure(input.db, terminalRunToReport);
       await boundedExecutionCleanup(async () => {

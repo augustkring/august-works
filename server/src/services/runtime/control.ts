@@ -523,6 +523,22 @@ function exactNativeProviderArtifactChunkCommand(input: {
   const append = `current=$(wc -c < ${quote(temp)}); test "$current" -le 67108864 && test $((current + ${chunkLength})) -le 67108864 && base64 -d >> ${quote(temp)}`;
   return argv[2] === append;
 }
+// This is lexical admission against the current signed policy, not a remote
+// filesystem observation. The sandbox retains physical symlink enforcement.
+function sandboxExecutionCwdAllowed(cwd: string, filesystem: { readPaths?: unknown; writePaths?: unknown } | undefined): boolean {
+  if (!path.posix.isAbsolute(cwd) || !Array.isArray(filesystem?.readPaths) || !Array.isArray(filesystem?.writePaths)) return false;
+  const requested = path.posix.normalize(cwd);
+  const roots = [
+    ...(Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : []),
+    ...(Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : []),
+  ];
+  return roots.some(root => {
+    if (typeof root !== "string" || !path.posix.isAbsolute(root)) return false;
+    const relative = path.posix.relative(path.posix.normalize(root), requested);
+    return relative === "" || (relative !== ".." && !relative.startsWith("../") && !path.posix.isAbsolute(relative));
+  });
+}
+
 type CurrentSandboxTaskSource = NonNullable<Awaited<ReturnType<ReturnType<typeof executionSandboxService>["assertTaskExecutionContext"]>>>;
 const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare", "native_provider_data_erasure_probe"]);
 
@@ -3578,6 +3594,8 @@ export function runtimeControlService(
         source.manifest.hash !== request.manifestHash || source.policy.id !== request.policySnapshotId ||
         source.policy.policyHash !== request.policyHash || source.deadlineAt.toISOString() < request.deadlineAt)
         throw forbidden("Sandbox execution source changed before host dispatch");
+      if (!sandboxExecutionCwdAllowed(request.cwd, source.policy.compilation.compiledPolicy.filesystem))
+        throw forbidden("Sandbox execution workspace is outside its current filesystem policy", { code: "sandbox_execution_cwd_outside_policy" });
       const sessionDescriptor = request.modelBrokerSession;
       if (sessionDescriptor) {
         const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
@@ -4277,6 +4295,8 @@ export function runtimeControlService(
       });
     });
     if (!initialSource) return null;
+    if (!sandboxExecutionCwdAllowed(cwd, initialSource.policy.compilation.compiledPolicy.filesystem))
+      throw forbidden("Sandbox execution workspace is outside its current filesystem policy", { code: "sandbox_execution_cwd_outside_policy" });
     const attempt = initialSource.attempt?.attempt ?? Math.max(1, initialSource.run.continuationAttempt + 1);
     const conversationTask = initialSource.source.task;
     const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;

@@ -2142,11 +2142,31 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         base64: "/usr/bin/base64", rm: "/usr/bin/rm" };
       const executable = fixtureExecutables[requestedExecutable] ?? requestedExecutable;
       if (!posix.isAbsolute(executable)) throw new Error("fixture_sandbox_exec_argv_invalid");
+      // This adapter executes in the local software image. Resolve its actual
+      // cwd and matching policy roots here; this is not remote/physical proof.
+      if (!Array.isArray(currentDocument?.filesystem_policy?.read_only) ||
+        !Array.isArray(currentDocument?.filesystem_policy?.read_write))
+        throw new Error("fixture_sandbox_cwd_policy_invalid");
+      const canonicalCwd = realpathSync(cwd);
+      const filesystemRoots = [...(currentDocument?.filesystem_policy?.read_only ?? []),
+        ...(currentDocument?.filesystem_policy?.read_write ?? [])];
+      const canonicalCwdAllowed = filesystemRoots.some((root: unknown) => {
+        if (typeof root !== "string" || !posix.isAbsolute(root)) return false;
+        const lexicalRelative = posix.relative(posix.normalize(root), posix.normalize(cwd));
+        if (lexicalRelative === ".." || lexicalRelative.startsWith("../") || posix.isAbsolute(lexicalRelative)) return false;
+        try {
+          const canonicalRoot = realpathSync(root);
+          const relative = posix.relative(canonicalRoot, canonicalCwd);
+          return relative === "" || (relative !== ".." && !relative.startsWith("../") && !posix.isAbsolute(relative));
+        } catch { return false; }
+      });
+      if (!canonicalCwdAllowed || !statSync(canonicalCwd).isDirectory())
+        throw new Error("fixture_sandbox_cwd_outside_policy");
       // The production Host has already authorized argv. This software-only
       // adapter resolves the image's shell and Node from the trusted fixture
       // image, while the Host journal owns provider credentials and attachment.
       activateModelOrigin();
-      return spawn(executable, workload.slice(1), { cwd, env, shell: false, windowsHide: true,
+      return spawn(executable, workload.slice(1), { cwd: canonicalCwd, env, shell: false, windowsHide: true,
         stdio: options.stdio as ["pipe", "pipe", "pipe"] });
     };
     sessionHostEngine = openShellHostEngine({ config: { executable,
@@ -3495,8 +3515,36 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       command: "true", cwd: taskRoot, timeoutMs: 1000 }));
     const wrongLeaseDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: randomUUID(),
       command: "true", cwd: taskRoot, timeoutMs: 1000 }));
-    const wrongCwdDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
-      command: "true", cwd: `${taskRoot}/outside`, timeoutMs: 1000 }));
+    // An existing child is valid for a generic Worker; a missing path would
+    // only test ENOENT. Conversation/session-start exact-root guards stay separate.
+    if (ordinaryWorkerMode) {
+      const allowedChild = mkdtempSync(join(taskRoot, ".native-cwd-child-"));
+      try {
+        const acceptedChild = await runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
+          command: "true", cwd: allowedChild, timeoutMs: 1000 });
+        assert.ok(acceptedChild && acceptedChild.exitCode === 0 && !acceptedChild.timedOut,
+          "ordinary_worker_allowed_child_cwd_rejected");
+      } finally { rmSync(allowedChild, { recursive: true, force: true }); }
+    }
+    const outsideCwd = mkdtempSync(join(input.root, ".native-cwd-outside-"));
+    let wrongCwdDenied = false;
+    try {
+      const outsideAllowed = [...compiled.compilation.compiledPolicy.filesystem.readPaths,
+        ...compiled.compilation.compiledPolicy.filesystem.writePaths].some(root => {
+          const relative = posix.relative(posix.normalize(root), posix.normalize(outsideCwd));
+          return relative === "" || (relative !== ".." && !relative.startsWith("../") && !posix.isAbsolute(relative));
+        });
+      assert.equal(outsideAllowed, false, "negative_cwd_probe_must_be_outside_current_policy");
+      try {
+        await runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
+          command: "true", cwd: outsideCwd, timeoutMs: 1000 });
+      } catch (error) {
+        const details = error && typeof error === "object" && "details" in error ? error.details : null;
+        wrongCwdDenied = Boolean(error && typeof error === "object" && "status" in error && error.status === 403 &&
+          details && typeof details === "object" && "code" in details && details.code === "sandbox_execution_cwd_outside_policy");
+        if (!wrongCwdDenied) throw error;
+      }
+    } finally { rmSync(outsideCwd, { recursive: true, force: true }); }
     const execCountBeforeStartProbes = execFacts.length;
     const wrongSessionStartCommandDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
       command: "sh", args: ["-c", "exit 0", "paperclip-not-runner-launch"], cwd: taskRoot, timeoutMs: 1000,

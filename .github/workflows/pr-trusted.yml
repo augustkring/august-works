@@ -1568,23 +1568,32 @@ jobs:
           specs="$(node ./scripts/e2e-shard.mjs \
             --shard-index ${{ matrix.shard_index }} --shard-count ${{ matrix.shard_count }})"
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          # Exact selected filenames share the existing source-bound pack consumer.
+          managed_connection=false
+          for spec in $specs; do
+            case "$spec" in
+              tests/e2e/connection-intents.spec.ts|tests/e2e/connection-review-approve.spec.ts|tests/e2e/connection-review-decline.spec.ts|tests/e2e/connection-review-always.spec.ts|tests/e2e/connection-review-failure.spec.ts|tests/e2e/mcp-user-stories.spec.ts)
+                managed_connection=true ;;
+            esac
+          done
+          echo "managed_connection=$managed_connection" >> "$GITHUB_OUTPUT"
 
       # Reuse the same source-bound build and exact checks as the server lane.
       - name: Install selected managed connection image Node
-        if: contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
+        if: steps.e2e_suites.outputs.managed_connection == 'true'
         env:
           ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
         run: *managed_native_image_node
 
       - name: Download selected managed connection provider pack
-        if: contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
+        if: steps.e2e_suites.outputs.managed_connection == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: managed-native-provider-pack-${{ github.run_id }}
           path: ${{ runner.temp }}/paperclip-native-provider-pack-artifact
 
       - name: Prepare selected managed connection image bytes
-        if: contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
+        if: steps.e2e_suites.outputs.managed_connection == 'true'
         run: *managed_native_image_bytes
 
       - name: Set up pinned optional numerical interpreter
@@ -1594,7 +1603,7 @@ jobs:
           python-version: '3.12.14'
 
       - name: Install selected native sandbox
-        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'tests/e2e/connection-intents.spec.ts')
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts') || steps.e2e_suites.outputs.managed_connection == 'true'
         run: bash scripts/ci-install-native-sandbox.sh
 
       - name: Install selected hash-locked numerical runtimes

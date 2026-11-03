@@ -26,7 +26,16 @@ import { listenOnFetchAllowedPort } from "../fetch-allowed-port";
 /** Actual supported serial Native lifecycle with only the fixed Railway HTTP
  * boundary controlled. Authentication, Human input, Plans, Runs, installation,
  * catalog contracts, tool dispatch and terminalization retain their owners. */
-export async function withManagedConnectionIntent(page: Page, deadlineAt: number) {
+export async function withManagedConnectionIntent(page: Page, deadlineAt: number, options?: {
+  mode: "connected_read";
+  observe: (facts: {
+    request: Page["request"]; origin: string; seed: { companyId: string; prefix: string };
+    agent: { id: string; name: string }; connection: { id: string; name: string }; toolName: string;
+    run: { id: string; status: string; error: string | null };
+    captures: ReadonlyArray<{ purpose: "projects_probe" | "projects_call" }>;
+  }) => Promise<void>;
+}) {
+  const connectedRead = options?.mode === "connected_read";
   const binary = process.env.PAPERCLIP_QUALIFIED_OPENCODE_BINARY;
   if (!binary) throw new Error("managed_connection_requires_source_bound_provider_artifact");
   const remaining = () => {
@@ -60,10 +69,13 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
           heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
         // This identity is only the existing installation holder. Its adapter
         // is never invoked and it confers no runtime or paid qualification.
-        const [holder] = await db.insert(agents).values({ companyId, name: "Existing Railway holder",
-          role: "engineer", status: "idle", adapterType: "process", adapterConfig: {}, runtimeConfig: {} }).returning();
-        assert(holder);
-        railway = await prepareConnectionIntentRailwayFixture({ db, companyId, userId: actor.userId, holderAgentId: holder.id });
+        let holderAgentId = agentId;
+        if (!connectedRead) {
+          const [holder] = await db.insert(agents).values({ companyId, name: "Existing Railway holder",
+            role: "engineer", status: "idle", adapterType: "process", adapterConfig: {}, runtimeConfig: {} }).returning();
+          assert(holder); holderAgentId = holder.id;
+        }
+        railway = await prepareConnectionIntentRailwayFixture({ db, companyId, userId: actor.userId, holderAgentId });
       },
       beforeProviderResponse: async ({ actor, reservation, run, manifest, request: wire, sourceReceipt }) => {
         assert.equal(reservation.status, "dispatched"); assert.equal(reservation.purpose, "worker_model");
@@ -74,7 +86,7 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
       },
       providerReply: ({ body, callIndex, execution, runId }) => {
         if (!providerRuns.includes(runId)) providerRuns.push(runId);
-        assert(providerRuns.length <= 2, "The interaction may produce exactly two Runs");
+        assert(providerRuns.length <= (connectedRead ? 1 : 2), "Every actual Run must belong to the selected journey");
         const ordinal = providerRuns.indexOf(runId);
         const tools = body.tools as Array<{ name: string }>;
         assert(Array.isArray(tools));
@@ -85,19 +97,19 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
         const use = (id: string, name: string, input: Record<string, unknown>) => ({
           stop_reason: "tool_use" as const, content: [{ type: "tool_use", id, name, input }],
         });
-        if (ordinal === 0 && callIndex === 1) {
+        if (!connectedRead && ordinal === 0 && callIndex === 1) {
           assert(!tools.some(item => item.name.toLowerCase().includes("railway") && /list[-_]?projects/.test(item.name.toLowerCase())));
           return use("connection-search", tool("connections_search"), { query: "railway" });
         }
-        if (ordinal === 0 && callIndex === 2)
+        if (!connectedRead && ordinal === 0 && callIndex === 2)
           return use("connection-request", tool("connection_request"), { service: "railway" });
-        if (ordinal === 1 && callIndex === 1) {
+        if ((connectedRead || ordinal === 1) && callIndex === 1) {
           assert(railway);
           const selected = tools.filter(item => item.name.toLowerCase().includes("railway") && /list[-_]?projects/.test(item.name.toLowerCase()));
           assert.equal(selected.length, 1, "Use the actual installed fixed Railway descriptor");
           return use("railway-projects", selected[0]!.name, { workspaceId: railway.workspaceId });
         }
-        if (ordinal === 1 && callIndex === 2) {
+        if ((connectedRead || ordinal === 1) && callIndex === 2) {
           const messages = body.messages as Array<{ content: unknown }>;
           const results = messages.flatMap(message => Array.isArray(message.content) ? message.content : []) as Array<Record<string, unknown>>;
           const result = results.find(item => item.type === "tool_result" && item.tool_use_id === "railway-projects");
@@ -108,7 +120,7 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
             key: "result", title: "Railway project inventory", body: actualOutput, baseRevisionId: null });
         }
         if ((ordinal === 0 && callIndex === 3) || (ordinal === 1 && callIndex === 3)) {
-          const done = ordinal === 1;
+          const done = connectedRead || ordinal === 1;
           return use(`connection-finish-${ordinal}`, tool("paperclip_finish"), {
             schema: "paperclip.run_result.v1", reportedWorkDisposition: done ? "done" : "yielded",
             summary: done ? "Retained the actual Railway inventory." : "Waiting for the responsible Human's connection card.",
@@ -167,19 +179,21 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
           const [company] = await db.select().from(companies).where(eq(companies.id, companyId)); assert(company);
           const [agent] = await db.select().from(agents).where(eq(agents.id, agentId)); assert(agent);
           const task = await issueService(db).create(companyId, { title: "Read our Railway projects",
-            description: "Read the fixed Railway project inventory after my connection approval; retain its actual output.",
+            description: connectedRead ? "Read the installed fixed Railway project inventory and retain its actual output."
+              : "Read the fixed Railway project inventory after my connection approval; retain its actual output.",
             status: "in_progress", responsibleUserId: actor.userId, createdByUserId: actor.userId, assigneeAgentId: agentId },
             db, undefined, { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
           const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
             expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
             completionContract: { objective: "Retain the actual Railway project inventory", requiredOutputs: [{ kind: "task_document", key: "result" }],
               businessInvariants: ["Only the Human may approve connection access", "Use the actual fixed-contract tool result"] },
-            budgets: { maxWallClockSeconds: 360, maxModelCostMinor: 10, maxToolActions: 8, maxRetries: 1 },
+            budgets: { maxWallClockSeconds: connectedRead ? 180 : 360, maxModelCostMinor: 10, maxToolActions: 8, maxRetries: connectedRead ? 0 : 1 },
             workers: [{ key: "inventory", issueId: task.id }] });
           await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
             action: "start", rationale: "Human requests a bounded inventory with a connection card if needed" });
           const response = await page.request.post(`${origin}/api/issues/${task.id}/comments`, { data: {
-            body: "Read our Railway projects. Send me the connection card if access is missing, then wait for my answer.",
+            body: connectedRead ? "Read our Railway projects from the installed connection and retain their actual inventory."
+              : "Read our Railway projects. Send me the connection card if access is missing, then wait for my answer.",
           } });
           assert.equal(response.status(), 201); const comment = await response.json() as { id: string };
           const runRows = () => db.select({ run: heartbeatRuns, wake: agentWakeupRequests }).from(heartbeatRuns)
@@ -209,6 +223,25 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
             const stopped = await verifyNativeCleanupRuntimeState(db, { companyId, runId: first.run.id, leaseId: lease.id },
               lease.metadata?.remoteExecutionTermination);
             assert.equal(stopped.state, "stopped");
+          }
+          if (options?.mode === "connected_read") {
+            const runs = await runRows(); assert.equal(runs.length, 1);
+            assert.equal(first.run.status, "succeeded"); assert.equal(first.run.runtimeMode, "native");
+            assert.deepEqual(providerRuns, [first.run.id]);
+            const facts = factsForRun(first.run.id);
+            assert(facts.providerCallCount >= 3);
+            assert(facts.issuerFacts.length > 0 && facts.issuerFacts.every(fact => fact.scope === "worker_model" && fact.runId === first.run.id));
+            assert.equal(railway.captures().filter(item => item.purpose === "projects_call").length, 1);
+            const [current] = await db.select().from(issues).where(eq(issues.id, task.id)); assert.equal(current?.status, "done");
+            const [result] = await db.select({ body: documents.latestBody }).from(issueDocuments).innerJoin(documents,
+              and(eq(documents.id, issueDocuments.documentId), eq(documents.companyId, companyId))).where(and(
+                eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+            assert(actualOutput); assert.equal(result?.body, actualOutput);
+            await options.observe({ request: page.request, origin,
+              seed: { companyId, prefix: company.issuePrefix }, agent: { id: agent.id, name: agent.name },
+              connection: { id: railway.connection.id, name: railway.connection.name }, toolName: railway.tool.toolName,
+              run: { id: first.run.id, status: first.run.status, error: first.run.error }, captures: railway.captures() });
+            return;
           }
           const taskUrl = `/${company.issuePrefix}/issues/${task.identifier}`;
           await page.goto(origin + taskUrl);

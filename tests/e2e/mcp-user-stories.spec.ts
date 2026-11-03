@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 import { createServer, type Server } from "node:http";
 import { listenOnFetchAllowedPort } from "./fetch-allowed-port";
 import { storyById } from "./mcp-user-stories.catalog";
+import { withManagedConnectionIntent } from "./fixtures/managed-connection-intent";
 
 const SCREENSHOT_DIR = "test-results/mcp-user-stories";
 
@@ -271,11 +272,11 @@ async function pollTestCall(
 async function expectAuditEvent(
   request: APIRequestContext,
   companyId: string,
-  options: { connectionId: string; agentId: string; search: string },
+  options: { connectionId: string; agentId: string; search: string; origin?: string },
 ) {
   const audit = await json<{ events: Array<Json> }>(
     await request.get(
-      `/api/tool-gateway/audit?companyId=${companyId}&app=${options.connectionId}&agent=${options.agentId}&search=${encodeURIComponent(options.search)}&limit=50`,
+      `${options.origin ?? ""}/api/tool-gateway/audit?companyId=${companyId}&app=${options.connectionId}&agent=${options.agentId}&search=${encodeURIComponent(options.search)}&limit=50`,
     ),
   );
   expect(audit.events.length, `expected audit/activity row matching ${options.search}`).toBeGreaterThan(0);
@@ -284,30 +285,31 @@ async function expectAuditEvent(
 test.describe.serial("MCP prod Phase 5a user-story harness", () => {
   test.setTimeout(180_000);
 
-  test(`${storyById("US-1").id} ${storyById("US-1").title} @mcp-runnable @mcp-us1`, async ({ page, request }) => {
-    const { seed, scout, mock, connectionId } = await seedConnectedFixture(request, "us1");
-    try {
-      await setScoutScript(request, scout, buildGatewayCallScript(connectionId, "sheets:list_rows"));
-      const invoked = await invokeHeartbeat(request, scout.id);
-      const run = await waitForRun(request, invoked.id);
-      const failedLog = run.status === "succeeded"
-        ? null
-        : await json<{ content?: string }>(await request.get(`/api/heartbeat-runs/${run.id}/log?offset=0&limitBytes=65536`));
-      expect(
-        run.status,
-        [run.error ?? `heartbeat run ${run.id} did not succeed`, failedLog?.content].filter(Boolean).join("\n"),
-      ).toBe("succeeded");
-      expect(mock.captures.some((capture) => capture.method === "tools/call" && capture.toolName === "sheets:list_rows")).toBe(true);
-      await expectAuditEvent(request, seed.companyId, { connectionId, agentId: scout.id, search: "sheets:list_rows" });
+  test(`${storyById("US-1").id} ${storyById("US-1").title} — fixed Railway contract @mcp-runnable @mcp-us1`, async ({ page }) => {
+    // One fixed initial case budget; the Native Run's own180s policy is unchanged.
+    const deadlineAt = Date.now() + 180_000;
+    await withManagedConnectionIntent(page, deadlineAt, {
+      mode: "connected_read",
+      observe: async ({ request, origin, seed, agent: scout, connection, toolName, run, captures }) => {
+        const connectionId = connection.id;
+        const failedLog = run.status === "succeeded"
+          ? null
+          : await json<{ content?: string }>(await request.get(`${origin}/api/heartbeat-runs/${run.id}/log?offset=0&limitBytes=65536`));
+        expect(
+          run.status,
+          [run.error ?? `heartbeat run ${run.id} did not succeed`, failedLog?.content].filter(Boolean).join("\n"),
+        ).toBe("succeeded");
+        expect(toolName).toBe("paperclip-railway-list-projects");
+        expect(captures.some(capture => capture.purpose === "projects_call")).toBe(true);
+        await expectAuditEvent(request, seed.companyId, { connectionId, agentId: scout.id, search: toolName, origin });
 
-      await page.goto(`/${seed.prefix}/apps/${connectionId}`);
-      await expect(page.getByRole("heading", { name: /Sheets Fixture us1/i })).toBeVisible({ timeout: 30_000 });
-      await screenshot(page, "US-1", "01-connected-app");
-      await page.goto(`/${seed.prefix}/activity?action=tool_`);
-      await screenshot(page, "US-1", "02-activity");
-    } finally {
-      await mock.close();
-    }
+        await page.goto(`${origin}/${seed.prefix}/apps/${connectionId}`);
+        await expect(page.getByRole("heading", { name: connection.name, exact: true })).toBeVisible({ timeout: Math.min(30_000, deadlineAt - Date.now()) });
+        await screenshot(page, "US-1", "01-connected-app");
+        await page.goto(`${origin}/${seed.prefix}/activity?action=tool_`);
+        await screenshot(page, "US-1", "02-activity");
+      },
+    });
   });
 
   test(`${storyById("US-2").id} ${storyById("US-2").title} @mcp-runnable @mcp-us2`, async ({ page, request }) => {
