@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+import { captureNativeBlockedHumanInteraction } from "../native-direct-input.js";
 import { nativeStageTaskBodyResultProjection } from "../native-stage-task-body-source.js";
 import { settleSlackConversation } from "../slack-conversation-lifecycle.js";
 import { dismissAutomaticCompletionReviews } from "./automatic-completion-reviews.js";
@@ -1190,6 +1192,21 @@ export async function finalizeNativeRun(input: {
       companyId: run.companyId, issueId: authoritativeIssue.id, agentId: run.agentId,
       contextSnapshot: reviewContext, allowResolvedByRunId: run.id,
     }) : null;
+    let readonlyDependencyInteraction = false;
+    if (terminalState === "succeeded" && authoritativeIssue.status === "blocked" &&
+        result.reportedWorkDisposition === "blocked" && record(result.completionClaim).objectiveSatisfied === false) {
+      const source = await captureNativeBlockedHumanInteraction(input.db, { companyId: run.companyId,
+        issueId: authoritativeIssue.id, runId: run.id, agentId: run.agentId });
+      if (source) {
+        if (dependencyReadiness.unresolvedBlockerCount < 1 ||
+            !isDeepStrictEqual([...source.unresolvedBlockerIssueIds].sort(), [...dependencyReadiness.unresolvedBlockerIssueIds].sort()))
+          throw new Error("native_dependency_interaction_readiness_changed");
+        if (resultRow.schemaStatus !== "accepted" || resultRow.companyId !== run.companyId || resultRow.issueId !== authoritativeIssue.id ||
+            resultRow.runId !== run.id || !await acceptedResponseDigestMatches(input.db, run, resultRow))
+          throw new Error("native_dependency_interaction_result_invalid");
+        readonlyDependencyInteraction = true;
+      }
+    }
     const proposedDecision = resolveNativeFinalizerStatus({
       ...(reviewContext ? { nativeReviewOutcome: nativeReview
         ? nativeReview.interaction.status === "pending" ? "pending" as const : "resolved" as const
@@ -1204,6 +1221,7 @@ export async function finalizeNativeRun(input: {
         contractRow.completionAuthority === "agent_claim_policy",
       hasUnresolvedIssueBlockers:
         dependencyReadiness.unresolvedBlockerCount > 0,
+      readonlyDependencyInteraction,
       governanceResolvedForRun: resolvedInteraction !== null,
       externalChatResponseWaitAuthorization,
       boardResponseWaitAuthorized: boardResponseWait !== null,

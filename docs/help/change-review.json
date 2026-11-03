@@ -885,10 +885,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "59f80740134df13c69fc0c582f4e2e7701729f0882674d6c0042e74bf3efad75",
+      "sourceSha256": "bf0f76fcb7aa45971048eba0a5391c04f3477923a0f5620d9c30d63b42a25dbc",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The current configured-profile wiring for company notices does not change customer Help or support actions. The article still describes support cases, status information, and direct human contact."
+      "rationale": "The application forwards its existing server-owned Heartbeat service to the Stop route. Help, support cases and direct human contact remain unchanged."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1197,10 +1197,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "59f80740134df13c69fc0c582f4e2e7701729f0882674d6c0042e74bf3efad75",
+      "sourceSha256": "bf0f76fcb7aa45971048eba0a5391c04f3477923a0f5620d9c30d63b42a25dbc",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Den aktuelle profilkonfiguration for virksomhedsbeskeder ændrer ikke kundens handlinger i Hjælp eller support. Artiklen beskriver fortsat supportsager, statusoplysninger og direkte menneskelig kontakt."
+      "rationale": "Appen sender sin eksisterende serverstyrede Heartbeat-tjeneste videre til Stop-ruten. Det ændrer ikke Hjælp, supportsager eller direkte kontakt med et menneske."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "60f76e808c063a55edc8cffbe69482d01a1bb31e3b5fb995e274c0c45004fd6b",
+      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Native review wakes retain their exact applied-decision and current Task generation checks. Initial Human-comment continuations now retain final redacted comment snapshots, the actual admitted wake and current source access. The article still correctly directs users to the original Task and current run before retrying; Forget separately verifies process stop and storage removal."
+      "rationale": "Stop retains the original execution owner and unknown acknowledgements remain pending. Readonly dependency handling retains the original Task and role. The article still requires checking the current Task/run before Retry; Forget separately requires actual stop and storage removal."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "dc3a0f8d487913795164457d436773ca8577401dc01d378d2850dad962db4ca7",
+      "sourceSha256": "ab995a34a8896082d5d2edd554ed00ee64ca9a5c8ed3097a3b8d893d17b2ddea",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The current Task owner captures a real Human-created related Task and its first attachment under current source authority. Recovery guidance still requires checking the original Task, retained access and current state before retrying; this change adds no replacement-work or completion guarantee."
+      "rationale": "Workspace source hashing now binds the same value with an explicit PostgreSQL text type. Recovery actions and permissions are unchanged; guidance to inspect the current original Task and run before Retry remains correct."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "60f76e808c063a55edc8cffbe69482d01a1bb31e3b5fb995e274c0c45004fd6b",
+      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Native-vækninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Fortsættelser efter en første Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte vækning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Forget kontrollerer processtop og fjernelse fra lageret separat."
+      "rationale": "Stop bevarer den oprindelige ejer af kørslen, og ukendte bekræftelser forbliver afventende. Skrivebeskyttet håndtering af afhængigheder bevarer den oprindelige opgave og rolle. Artiklen kræver fortsat kontrol af den aktuelle opgave og kørsel før Retry; Forget kræver separat faktisk stop og fjernelse fra lageret."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "dc3a0f8d487913795164457d436773ca8577401dc01d378d2850dad962db4ca7",
+      "sourceSha256": "ab995a34a8896082d5d2edd554ed00ee64ca9a5c8ed3097a3b8d893d17b2ddea",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "The current Task owner captures a real Human-created related Task and its first attachment under current source authority. Recovery guidance still requires checking the original Task, retained access and current state before retrying; this change adds no replacement-work or completion guarantee."
+      "rationale": "Hashning af arbejdsområdets kilde binder nu den samme værdi med en eksplicit PostgreSQL-teksttype. Handlinger til gendannelse og tilladelser er uændrede; vejledningen om at kontrollere den aktuelle oprindelige opgave og kørsel før Retry gælder fortsat."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "60f76e808c063a55edc8cffbe69482d01a1bb31e3b5fb995e274c0c45004fd6b",
+      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Native review wakes retain their exact applied-decision and current Task generation checks. Initial Human-comment continuations now retain final redacted comment snapshots, the actual admitted wake and current source access. The article still correctly directs users to the original Task and current run before retrying; Forget separately verifies process stop and storage removal."
+      "rationale": "Stop retains the original execution owner and unknown acknowledgements remain pending. Readonly dependency handling retains the original Task and role. The article still requires checking the current Task/run before Retry; Forget separately requires actual stop and storage removal."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "60f76e808c063a55edc8cffbe69482d01a1bb31e3b5fb995e274c0c45004fd6b",
+      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Native-vækninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Fortsættelser efter en første Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte vækning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Forget kontrollerer processtop og fjernelse fra lageret separat."
+      "rationale": "Stop bevarer den oprindelige ejer af kørslen, og ukendte bekræftelser forbliver afventende. Skrivebeskyttet håndtering af afhængigheder bevarer den oprindelige opgave og rolle. Artiklen kræver fortsat kontrol af den aktuelle opgave og kørsel før Retry; Forget kræver separat faktisk stop og fjernelse fra lageret."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

@@ -14,7 +14,7 @@ export type ModelChannel = { readonly runId: string; readonly leaseId: string; r
 const hash = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 const transient = (error: unknown) => ["ENOENT", "ESRCH"].includes((error as NodeJS.ErrnoException).code ?? "");
 const checked = (condition: unknown) => { if (!condition) throw new Error("model_channel_observation_unavailable"); };
-const identityFailurePhases = ["pid_invalid", "directory_stat", "uid_mismatch", "stat_read", "stat_shape",
+const identityFailurePhases = ["pid_invalid", "status_read", "status_shape", "uid_mismatch", "stat_read", "stat_shape",
   "zombie", "parent_invalid", "start_invalid"] as const;
 const identityObservationRoles = ["runner", "socket_ancestry", "ancestry_recheck"] as const;
 const identityFailures = new WeakMap<object, { phase: typeof identityFailurePhases[number];
@@ -25,12 +25,31 @@ function modelIdentityFailureFacts(error: unknown) {
     identityObservationRoles.some(value => value === failure.role)
     ? { identityFailurePhase: failure.phase, identityObservationRole: failure.role } : {};
 }
+/** /proc directory ownership can change with dumpability. Credential UID
+ * fields remain the authority; all four must match the current observer. */
+function processUidStatus(status: string, pid: number, uid: number | undefined) {
+  checked(typeof status === "string" && Buffer.byteLength(status) > 0 && Buffer.byteLength(status) <= 64 * 1024 && status.endsWith("\n"));
+  const pidRows = status.match(/^Pid:[^\n]*$/gm) ?? [], uidRows = status.match(/^Uid:[^\n]*$/gm) ?? [];
+  checked(pidRows.length === 1 && uidRows.length === 1);
+  const actualPid = /^Pid:[ \t]+([0-9]+)$/.exec(pidRows[0]!);
+  const values = /^Uid:[ \t]+([0-9]+)[ \t]+([0-9]+)[ \t]+([0-9]+)[ \t]+([0-9]+)$/.exec(uidRows[0]!);
+  checked(actualPid && Number.isSafeInteger(Number(actualPid[1])) && Number(actualPid[1]) === pid && values);
+  checked(Number.isSafeInteger(uid) && uid! >= 0 && values!.slice(1).every(value =>
+    Number.isSafeInteger(Number(value)) && Number(value) === uid));
+}
+
 function processIdentity(pid: number, role: typeof identityObservationRoles[number]) {
   let phase: typeof identityFailurePhases[number] = "pid_invalid";
   try {
-    const directoryUid = () => { phase = "directory_stat"; const uid = statSync(`/proc/${pid}`).uid;
-      phase = "uid_mismatch"; return uid; };
-    checked(Number.isSafeInteger(pid) && pid > 0 && directoryUid() === process.getuid?.());
+    checked(Number.isSafeInteger(pid) && pid > 0);
+    phase = "status_read";
+    const status = readFileSync(`/proc/${pid}/status`, "utf8");
+    phase = "status_shape";
+    // Validate the same requested PID and all real/effective/saved/fs UIDs.
+    // No root-owned proc directory or partial credential row grants a match.
+    const uidRows = status.match(/^Uid:[^\n]*$/gm) ?? [];
+    if (uidRows.length === 1 && /^Uid:[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+[ \t]+[0-9]+$/.test(uidRows[0]!)) phase = "uid_mismatch";
+    processUidStatus(status, pid, process.getuid?.());
     phase = "stat_read";
     const raw = readFileSync(`/proc/${pid}/stat`, "utf8"), end = raw.lastIndexOf(") ");
     phase = "stat_shape";
@@ -43,6 +62,9 @@ function processIdentity(pid: number, role: typeof identityObservationRoles[numb
     throw error;
   }
 }
+/** Kernel primitive controls only; no model, Run or caller authority. */
+export const managedModelProcessIdentityControls = Object.freeze({ processIdentity, processUidStatus });
+
 function endpoint(address: string | undefined, port: number | undefined) {
   checked(address === "127.0.0.1" && Number.isInteger(port) && port! > 0 && port! <= 65535);
   return `0100007F:${port!.toString(16).padStart(4, "0").toUpperCase()}`;

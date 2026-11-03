@@ -1,3 +1,4 @@
+import { captureNativeBlockedHumanInteraction } from "../native-direct-input.js";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, sql } from "drizzle-orm";
 import {
@@ -76,6 +77,7 @@ export async function qualifyNativeDraftWorker(
   plan: Plan,
   worker: Worker,
   responsibleUserId: string,
+  runId?: string,
 ) {
   const gateway = installed.get(rootDb);
   if (
@@ -102,11 +104,14 @@ export async function qualifyNativeDraftWorker(
     .where(
       and(eq(issues.companyId, plan.companyId), eq(issues.id, plan.issueId)),
     );
+  const blockedInteraction = task?.status === "blocked" && runId
+    ? await captureNativeBlockedHumanInteraction(tx, { companyId: plan.companyId, issueId: task.id,
+        runId, agentId: worker.agentId! }) : null;
   if (
     !task ||
     task.hiddenAt ||
     task.workMode !== "standard" ||
-    !["backlog", "todo", "in_progress"].includes(task.status) ||
+    (! ["backlog", "todo", "in_progress"].includes(task.status) && !blockedInteraction) ||
     task.assigneeAgentId !== worker.agentId ||
     !root ||
     root.hiddenAt ||
@@ -154,6 +159,8 @@ export async function qualifyNativeDraftWorker(
     agentId: worker.agentId,
     responsibleUserId,
   });
+  if (blockedInteraction && qualified.providerKind !== "opencode")
+    throw forbidden("The dependency interaction requires its managed read-only SDK tools");
   const minimumToolActions = minimumNativeDraftToolActions(
     qualified.providerKind,
     completion.requiredOutputs,
@@ -291,6 +298,7 @@ export async function prepareNativeDraftBackend(
     bound.plan,
     bound.worker,
     bound.run.responsibleUserId!,
+    bound.run.id,
   );
   if (
     execution.provider.profileId !== qualified.profileId ||

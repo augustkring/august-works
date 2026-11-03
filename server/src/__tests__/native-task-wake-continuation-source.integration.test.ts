@@ -371,3 +371,75 @@ it("retains an unchanged live pending sibling when a Human resolves the other go
   const [untouched] = await db.select().from(toolInvocations).where(eq(toolInvocations.id,b.invocationId));
   expect(untouched?.status).toBe("awaiting_approval");expect(untouched?.completedAt).toBeNull();
 },30_000);
+
+
+import { captureNativeBlockedHumanInteraction, assertNativeBlockedInteractionResult } from "../services/native-direct-input.js";
+import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
+
+// Component readers only: these rows do not assert model/Run admission. The
+// managed scheduler companion exercises the genuine capped SDK producer.
+async function blockedHumanSourceFixture() {
+  const f = await fixture(false, true);
+  const blocker = await issueService(db).create(f.f.home, { title: "Unresolved current Human prerequisite", status: "todo",
+    responsibleUserId: f.f.userId, createdByUserId: f.f.userId }, db, undefined,
+    { manualInputActor: f.actor, privacyActor: f.actor, sourceAccessActor: f.actor });
+  await issueService(db).update(f.task.id, { status: "blocked", blockedByIssueIds: [blocker.id],
+    actorUserId: f.f.userId, privacyActor: f.actor });
+  const binding = { companyId: f.f.home, issueId: f.task.id, runId: f.run.id, agentId: f.f.presence.id };
+  return { ...f, blocker, binding };
+}
+
+it("requires the exact claimed Human comment queue owner rather than an interaction flag", async () => {
+  const f = await blockedHumanSourceFixture();
+  const capture = await captureNativeBlockedHumanInteraction(db, f.binding);
+  expect(capture).toMatchObject({ ...f.binding, wakeupRequestId: f.wake.id,
+    commentSources: [expect.objectContaining({ kind: "comment", commentId: f.comment.id })],
+    unresolvedBlockerIssueIds: [f.blocker.id] });
+  await db.update(agentWakeupRequests).set({ requestedByActorType: "system" }).where(eq(agentWakeupRequests.id, f.wake.id));
+  await expect(captureNativeBlockedHumanInteraction(db, f.binding)).rejects.toThrow();
+  await db.update(agentWakeupRequests).set({ requestedByActorType: "user", runId: null }).where(eq(agentWakeupRequests.id, f.wake.id));
+  if (!capture) throw new Error("blocked_source_capture_missing");
+  await expect(captureNativeBlockedHumanInteraction(db, f.binding, capture)).rejects.toThrow();
+});
+
+it("rejects Human-tombstoned triggering comments and revoked current Human access", async () => {
+  const f = await blockedHumanSourceFixture();
+  const capture = await captureNativeBlockedHumanInteraction(db, f.binding);
+  if (!capture) throw new Error("blocked_source_capture_missing");
+  await issueService(db).tombstoneComment(f.comment.id, { actorType: "user", userId: f.f.userId });
+  await expect(captureNativeBlockedHumanInteraction(db, f.binding)).rejects.toThrow();
+  const second = await blockedHumanSourceFixture();
+  await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, second.f.home), eq(companyMemberships.principalId, second.f.userId)));
+  await expect(captureNativeBlockedHumanInteraction(db, second.binding)).rejects.toThrow();
+});
+
+it("enforces the read-only tool ceiling before hidden mutation dispatch and rejects a done result", async () => {
+  const f = await blockedHumanSourceFixture();
+  const capture = await captureNativeBlockedHumanInteraction(db, f.binding);
+  if (!capture) throw new Error("blocked_source_capture_missing");
+  const authority = new PaperclipRunnerToolAuthority(db, { ...f.binding, blockedHumanInteraction: capture });
+  expect(authority.definitions().map(tool => tool.name).sort()).toEqual(["get_task_context", "get_task_history", "read_document"]);
+  for (const tool of ["write_document", "create_task", "call_api", "create_project", "self_remember", "resolve_review"])
+    await expect(authority.execute({ tool, callId: randomUUID(), arguments: {} })).rejects.toThrow("cannot perform task work");
+  const blocked = { reportedWorkDisposition: "blocked", completionClaim: { objectiveSatisfied: false,
+    criteria: [], remainingWork: [{ description: "Existing Human prerequisite", blocksCompletion: true }] }, attentionRequests: [], artifacts: [] };
+  await expect(assertNativeBlockedInteractionResult(db, f.binding, blocked)).resolves.toBeUndefined();
+  await expect(assertNativeBlockedInteractionResult(db, f.binding, { ...blocked, reportedWorkDisposition: "done" })).rejects.toThrow();
+  await expect(assertNativeBlockedInteractionResult(db, f.binding, { ...blocked, artifacts: [{ kind: "work" }] })).rejects.toThrow();
+  await issueService(db).update(f.blocker.id, { status: "done", actorUserId: f.f.userId, privacyActor: f.actor });
+  await expect(captureNativeBlockedHumanInteraction(db, f.binding, capture)).rejects.toThrow();
+});
+
+
+it("does not transfer an old Human interaction capture to a separately owned new Human wake", async () => {
+  const old = await blockedHumanSourceFixture();
+  const capture = await captureNativeBlockedHumanInteraction(db, old.binding);
+  if (!capture) throw new Error("blocked_source_capture_missing");
+  // Two actual Human comment/wake owners, but structural reader Runs only.
+  // No fabricated admission, accepted result or provider dispatch is asserted.
+  const current = await fixture(false, true);
+  const binding = { companyId: current.f.home, issueId: current.task.id, runId: current.run.id, agentId: current.f.presence.id };
+  expect(current.wake.id).not.toBe(old.wake.id);
+  await expect(captureNativeBlockedHumanInteraction(db, binding)).resolves.toBeNull();
+  await expect(captureNativeBlockedHumanInteraction(db, binding, capture)).rejects.toThrow();
+});

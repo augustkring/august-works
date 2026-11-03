@@ -1408,4 +1408,313 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     expect(taskRead.current?.foreignStatus).toBeGreaterThanOrEqual(400);
   },240_000);
 
+  function nativeStopGate() {
+    let release: () => void = () => { throw new Error("Native Stop gate is not initialized"); };
+    const promise = new Promise<void>(resolve => { release = resolve; });
+    return { promise, release };
+  }
+  function nativeStopRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value)) : {};
+  }
+  function nativeStopWhere(query: string, parameters: readonly unknown[]) {
+    const normalized = query.replace(/\s+/g, " ").trim();
+    const start = normalized.indexOf(" where ");
+    if (start < 0) return null;
+    let valid = true;
+    const where = normalized.slice(start + 7).replace(/ returning [\s\S]*$/, "")
+      .replace(/\$(\d+)/g, (_token, index: string) => {
+        const position = Number(index) - 1;
+        if (!Number.isSafeInteger(position) || position < 0 || position >= parameters.length) { valid = false; return "invalid"; }
+        const value = parameters[position];
+        if (value !== null && typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+          valid = false; return "invalid";
+        }
+        return JSON.stringify(value);
+      });
+    return valid ? where : null;
+  }
+
+  async function runGenuineNativeStopPair(mode: "stop_wins" | "writer_error" | "result_wins") {
+    const binary = qualifiedOpenCodeBinary();
+    if (!binary) throw new Error("qualified_opencode_binary_unavailable");
+    const { createServer } = await import("node:http");
+    const { AsyncLocalStorage } = await import("node:async_hooks");
+    const { createApp } = await import("../../app.js");
+    const { createStorageService } = await import("../../storage/service.js");
+    const { createLocalDiskStorageProvider } = await import("../../storage/local-disk-provider.js");
+    const { activityLog, orchestrationModelReservations } = await import("@paperclipai/db");
+    const { createDecisionWakeOriginAgent } = await import("../decision-wakeup.js");
+    const { nativeRunnerOwnershipNotHeldCondition } = await import("./native-runner-ownership.js");
+    const scope = new AsyncLocalStorage<{ runId: string }>();
+    const humanCasReady = nativeStopGate(), allowFault = nativeStopGate(), releaseBackground = nativeStopGate();
+    const fault = new Error("Native Stop terminal CAS unavailable");
+    const wire: { app?: ReturnType<typeof express>; origin?: string; cookie?: string } = {};
+    const originalUnsafe = db.$client.unsafe;
+    let restoreUnsafe: (() => void) | undefined;
+    let writerObservation: Promise<{ error: unknown }> | undefined;
+    let journeyFailure: unknown = null;
+    let faultClaimed = false, faultCount = 0, backgroundGates = 0, providerBoundaries = 0;
+    let target: { runId: string; issueId: string; companyId: string; humanId: string; taskStatus: string;
+      manifestId: string; reservationId: string; responseHash: string } | undefined;
+    const stopRequests: Array<Promise<{ status: number; body: unknown }>> = [];
+    const stop = (runId: string) => {
+      if (!wire.app || !wire.origin || !wire.cookie) throw new Error("Actual Human Stop app is unavailable");
+      const requested = request(wire.app).post(`/api/heartbeat-runs/${runId}/cancel`)
+        .set("cookie", wire.cookie).set("origin", wire.origin).timeout({ response: 30_000, deadline: 45_000 })
+        .then(response => ({ status: response.status, body: response.body }));
+      void requested.catch(() => undefined);
+      return requested;
+    };
+    const checkWriterObservation = async () => {
+      if (mode !== "writer_error") return;
+      if (!writerObservation) throw new Error("Native writer observer was not started");
+      const observed = await writerObservation;
+      if (observed.error !== null) throw observed.error;
+    };
+    try {
+      const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary,
+        conversationWorkMode: "standard",
+        createConversationApp: async ({ heartbeat, resolveSession }) => {
+          const server = createServer();
+          await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+          const closeServer = () => new Promise<void>((resolve, reject) => {
+            server.closeAllConnections(); server.close(error => error ? reject(error) : resolve());
+          });
+          const address = server.address();
+          if (!address || typeof address === "string") { await closeServer(); throw new Error("Native Stop listener unavailable"); }
+          const origin = `http://127.0.0.1:${address.port}`;
+          try {
+            const product = await createApp(db, { heartbeat, resolveSession, uiMode: "none", serverPort: address.port,
+              storageService: createStorageService(createLocalDiskStorageProvider(join(root, `stop-storage-${mode}`))),
+              deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1",
+              allowedHostnames: ["127.0.0.1"], authReady: true, companyDeletionEnabled: false,
+              instanceId, localPluginDir: join(root, "plugins"), managedPluginAutoInstall: [],
+              decisionServiceOptions: { wakeOriginAgent: createDecisionWakeOriginAgent(heartbeat.wakeup) } });
+            const app = express();
+            app.use((req, _res, next) => {
+              const match = /^\/api\/heartbeat-runs\/([0-9a-f-]{36})\/cancel$/.exec(req.path);
+              if (req.method === "POST" && typeof match?.[1] === "string") scope.run({ runId: match[1] }, next);
+              else next();
+            });
+            app.use(product); server.on("request", app); wire.app = app; wire.origin = origin;
+            return { app, origin, close: async () => {
+              try { await product.locals.paperclipShutdown?.(); } finally { await closeServer(); }
+            } };
+          } catch (error) { await closeServer(); throw error; }
+        },
+        driveConversation: async context => {
+          wire.cookie = context.humanCookie;
+          const opened = await request(context.app).post(context.chatPath)
+            .set("cookie", context.humanCookie).set("origin", context.origin);
+          expect(opened.status).toBe(200);
+          if (typeof opened.body.id !== "string") throw new Error("Actual conversation Task was not created");
+          context.onConversationOpened(opened.body.id);
+          const changed = await request(context.app).patch(`/api/issues/${opened.body.id}`)
+            .set("cookie", context.humanCookie).set("origin", context.origin).send({ workMode: "standard" });
+          expect(changed.status).toBe(200);
+          const sent = await request(context.app).post(`/api/issues/${opened.body.id}/comments`)
+            .set("cookie", context.humanCookie).set("origin", context.origin)
+            .send({ body: context.prompt, clientRequestId: randomUUID() });
+          expect(sent.status).toBe(201);
+          if (typeof sent.body.id !== "string") throw new Error("Actual Human wake comment was not created");
+          return { issueId: opened.body.id, wakeCommentId: sent.body.id };
+        },
+        beforeProviderResponse: async facts => {
+          try {
+            providerBoundaries++;
+            expect(facts.run).toMatchObject({ status: "running", runtimeMode: "native", nativeIssueId: facts.issueId,
+              responsibleUserId: facts.actor.userId, agentId: facts.agentId, companyId: facts.companyId });
+            if (!facts.actor.userId) throw new Error("The actual responsible Human is missing");
+            expect(facts.reservation).toMatchObject({ purpose: "conversation_model", status: "dispatched",
+              conversationRunId: facts.run.id, conversationIssueId: facts.issueId,
+              executionManifestId: facts.manifest.id, executionManifestHash: expect.any(String) });
+            expect(facts.sourceReceipt).toMatchObject({ version: 1, binding: { runId: facts.run.id,
+              issueId: facts.issueId, responsibleUserId: facts.run.responsibleUserId } });
+            const [task] = await db.select({ status: issues.status }).from(issues).where(eq(issues.id, facts.issueId));
+            if (!task) throw new Error("The actual conversation Task is missing");
+            target ??= { runId: facts.run.id, issueId: facts.issueId, companyId: facts.companyId, humanId: facts.actor.userId,
+              taskStatus: task.status, manifestId: facts.manifest.id, reservationId: facts.reservation.id,
+              responseHash: facts.providerResponseSha256 };
+            expect(facts.request.wireBodySha256).toMatch(/^[a-f0-9]{64}$/);
+            expect(facts.providerResponseSha256).toMatch(/^[a-f0-9]{64}$/);
+            if (mode === "result_wins") return;
+            expect(providerBoundaries).toBe(1);
+            if (mode === "writer_error") {
+              const expected = db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+                eq(heartbeatRuns.id, facts.run.id), inArray(heartbeatRuns.status, ["queued", "running", "scheduled_retry"]),
+                nativeRunnerOwnershipNotHeldCondition(),
+              )).toSQL();
+              const expectedWhere = nativeStopWhere(expected.sql, expected.params);
+              if (!expectedWhere) throw new Error("Native Stop expected CAS predicate is missing");
+              function observeUnsafe<T extends unknown[]>(query: string,
+                parameters?: Parameters<typeof db.$client.unsafe>[1], options?: Parameters<typeof db.$client.unsafe>[2]) {
+                const pending = arguments.length === 1 ? originalUnsafe<T>(query)
+                  : arguments.length === 2 ? originalUnsafe<T>(query, parameters)
+                  : originalUnsafe<T>(query, parameters, options);
+                const normalized = query.replace(/\s+/g, " ").trim();
+                const whereAt = normalized.indexOf(" where ");
+                const set = whereAt < 0 ? "" : normalized.slice(0, whereAt);
+                const status = /"status" = \$(\d+)/.exec(set), delivery = /"execution_status_delivery_id" = \$(\d+)/.exec(set);
+                const args = Array.isArray(parameters) ? parameters : [];
+                const selected = /^update "heartbeat_runs" set /.test(normalized) && status && delivery &&
+                  args[Number(status[1]) - 1] === "cancelled" &&
+                  typeof args[Number(delivery[1]) - 1] === "string" &&
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(args[Number(delivery[1]) - 1])) &&
+                  nativeStopWhere(normalized, args) === expectedWhere;
+                if (!selected || faultCount !== 0) return pending;
+                const humanRequest = scope.getStore()?.runId === facts.run.id;
+                // Only this first selected Human query owns the injected fault.
+                // Later selected CAS queries also wait, even if they inherit Human ALS.
+                const isFaultOwner = humanRequest && !faultClaimed;
+                if (isFaultOwner) { faultClaimed = true; humanCasReady.release(); }
+                else backgroundGates++;
+                return new Proxy(pending, { get(object, key, receiver) {
+                  if (key !== "then") return Reflect.get(object, key, receiver);
+                  const then: typeof pending.then = (fulfilled, rejected) => {
+                    const delayed = isFaultOwner
+                      ? allowFault.promise.then(() => { faultCount++; throw fault; })
+                      : releaseBackground.promise.then(() => pending);
+                    return delayed.then(fulfilled, rejected);
+                  };
+                  return then;
+                } });
+              }
+              const spy = vi.spyOn(db.$client, "unsafe").mockImplementation(observeUnsafe);
+              restoreUnsafe = () => spy.mockRestore();
+            }
+            const firstRequest = stop(facts.run.id);
+            stopRequests.push(firstRequest);
+            if (mode === "stop_wins") stopRequests.push(stop(facts.run.id));
+            if (mode === "writer_error") {
+              writerObservation = (async () => {
+                try {
+                  await Promise.race([humanCasReady.promise, firstRequest.then(response => {
+                    throw new Error(`Human Stop returned ${response.status} before the selected terminal CAS`);
+                  })]);
+                  const [live] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, facts.run.id));
+                  const [coordinator] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, facts.run.id));
+                  expect(live?.status).toBe("running"); expect(coordinator?.resultId).toBeNull();
+                  const ack = nativeStopRecord(live?.resultJson?.nativeCancellation);
+                  expect(ack).toMatchObject({ dispatchState: "acknowledged", dispatched: true });
+                  if (typeof ack.intentAuditId !== "string" || typeof ack.acknowledgementAuditId !== "string")
+                    throw new Error("Actual canonical Stop audit identities are missing");
+                  const audits = await db.select({ action: activityLog.action }).from(activityLog).where(and(
+                    eq(activityLog.companyId, facts.companyId), eq(activityLog.entityId, facts.run.id),
+                    inArray(activityLog.id, [ack.intentAuditId, ack.acknowledgementAuditId]),
+                  ));
+                  expect(audits.map(row => row.action).sort()).toEqual([
+                    "native.cancellation_dispatch_acknowledged", "native.cancellation_intent_recorded",
+                  ]);
+                  allowFault.release();
+                  expect((await firstRequest).status).toBe(500); expect(faultCount).toBe(1);
+                  const routeSuccess = await db.select({ id: activityLog.id }).from(activityLog).where(and(
+                    eq(activityLog.companyId, facts.companyId), eq(activityLog.entityId, facts.run.id), eq(activityLog.action, "heartbeat.cancelled"),
+                  ));
+                  expect(routeSuccess).toHaveLength(0);
+                } finally {
+                  allowFault.release(); releaseBackground.release();
+                }
+              })().then(() => ({ error: null }), error => ({ error }));
+            }
+            await vi.waitFor(async () => {
+              const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, facts.run.id));
+              const intent = nativeStopRecord(run?.resultJson?.nativeCancellation);
+              expect(intent).toMatchObject({ schema: "paperclip.native-cancellation.v1", runId: facts.run.id,
+                companyId: facts.companyId, issueId: facts.issueId, scope: "run", reasonCode: "cancellation_run_only" });
+              expect(intent.intentAuditId).toEqual(expect.any(String));
+              expect(["pending", "acknowledged"]).toContain(intent.dispatchState);
+            }, { timeout: 30_000, interval: 25 });
+          } catch (error) {
+            allowFault.release(); releaseBackground.release();
+            throw error;
+          }
+          // Return the original provider response after committed intent;
+          // ACK/CAS/HTTP observation proceeds independently, without a response cycle.
+        },
+        afterRunSettledBeforeTeardown: async facts => {
+          await checkWriterObservation();
+          if (!target || !facts.run) throw new Error("Actual Native Stop target did not settle");
+          expect(facts.run).toMatchObject({ id: target.runId, companyId: target.companyId, nativeIssueId: target.issueId,
+            agentId: facts.agentId, responsibleUserId: target.humanId, runtimeMode: "native",
+            status: mode === "result_wins" ? "succeeded" : "cancelled", nativeProcessCleanupPending: false });
+          expect(facts.manifest?.id).toBe(target.manifestId);
+          const [originalReservation] = await db.select().from(orchestrationModelReservations)
+            .where(eq(orchestrationModelReservations.id, target.reservationId));
+          expect(originalReservation?.conversationRunId).toBe(target.runId);
+          if (mode === "stop_wins") {
+            expect((await Promise.all(stopRequests)).map(response => response.status)).toEqual([200, 200]);
+          } else if (mode === "writer_error") {
+            expect(faultCount).toBe(1);
+            expect((await stop(target.runId)).status).toBe(200);
+          } else {
+            const before = facts.run, beforeCalls = providerBoundaries;
+            const reply = await stop(target.runId); expect(reply.status).toBe(200);
+            expect(providerBoundaries).toBe(beforeCalls);
+            const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, target.runId));
+            expect(after?.status).toBe("succeeded"); expect(after?.finishedAt).toEqual(before.finishedAt);
+            expect(after?.resultJson).toEqual(before.resultJson);
+            expect(after?.runnerProfileJson).toEqual(before.runnerProfileJson);
+          }
+          if (mode !== "result_wins") {
+            const ack = nativeStopRecord(facts.run.resultJson?.nativeCancellation);
+            expect(ack).toMatchObject({ schema: "paperclip.native-cancellation.v1", runId: target.runId,
+              companyId: target.companyId, issueId: target.issueId, scope: "run", dispatchState: "acknowledged", dispatched: true });
+            const [task] = await db.select({ status: issues.status }).from(issues).where(eq(issues.id, target.issueId));
+            expect(task?.status).toBe(target.taskStatus);
+            const succeeded = await db.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents).where(and(
+              eq(heartbeatRunEvents.runId, target.runId), eq(heartbeatRunEvents.message, "run succeeded"),
+            )); expect(succeeded).toHaveLength(0);
+            const results = await db.select({ id: nativeRunResults.id }).from(nativeRunResults).where(eq(nativeRunResults.runId, target.runId));
+            expect(results).toHaveLength(0); expect(facts.providerCallCount).toBe(1);
+          }
+          const [lease] = await db.select().from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, target.companyId), eq(environmentLeases.heartbeatRunId, target.runId),
+          ));
+          if (!lease) throw new Error("Actual Native Stop lease is missing");
+          expect(lease.cleanupStatus).toBe("success"); expect(lease.releasedAt).toBeInstanceOf(Date);
+          expect(["released", "expired", "retained"]).toContain(lease.status);
+          await expect(verifyNativeCleanupRuntimeState(db, { companyId: target.companyId, runId: target.runId, leaseId: lease.id },
+            lease.metadata?.remoteExecutionTermination)).resolves.toMatchObject({ runId: target.runId, leaseId: lease.id, state: "stopped" });
+          expect(facts.sandboxRuntimeFacts?.nativeRunnerClosureWitness).toMatchObject({ present: true, launchMatched: true,
+            identityMatched: true, runPidStartedAtMatched: true, processGone: true, processGroupLive: 0,
+            processSessionLive: 0, stopReceiptMatched: true });
+        },
+      });
+      await checkWriterObservation();
+      expect(result.workerPlan).toBeNull(); expect(result.workerAttempts).toHaveLength(0);
+      expect(result.providerKeyMatched).toBe(true); expect(result.providerHookFailure).toBeNull();
+      expect(result.foreignWriteStatus).toBeGreaterThanOrEqual(400); expect(result.foreignWriteDidNotMutate).toBe(true);
+      expect(result.runStatus).toBe(mode === "result_wins" ? "succeeded" : "cancelled");
+      expect(providerBoundaries).toBe(result.providerCallCount);
+      expect(faultCount).toBe(mode === "writer_error" ? 1 : 0);
+      if (mode === "writer_error") expect(faultClaimed).toBe(true);
+      console.info("native_stop_pair_owner_facts", { mode, faultClaimed, faultCount, backgroundGates,
+        providerBoundaries, expectedRunStatus: mode === "result_wins" ? "succeeded" : "cancelled" });
+    } catch (error) {
+      journeyFailure = error;
+      throw error;
+    } finally {
+      allowFault.release(); releaseBackground.release();
+      try {
+        if (writerObservation) {
+          const observed = await writerObservation;
+          if (observed.error !== null && observed.error !== journeyFailure)
+            throw journeyFailure === null ? observed.error
+              : new AggregateError([journeyFailure, observed.error], "Native journey and writer observation failed");
+        }
+      } finally { restoreUnsafe?.(); }
+    }
+  }
+
+  it("lets two authenticated Human Stops beat the genuine Native provider response", async () => {
+    await runGenuineNativeStopPair("stop_wins");
+  }, 240_000);
+  it("retains the real Native ACK after a Human terminal-CAS failure and recovers the original Run", async () => {
+    await runGenuineNativeStopPair("writer_error");
+  }, 240_000);
+  it("preserves a genuine committed Native result when the Human Stop arrives later", async () => {
+    await runGenuineNativeStopPair("result_wins");
+  }, 240_000);
+
 });

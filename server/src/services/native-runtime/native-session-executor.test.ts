@@ -279,6 +279,7 @@ import {
   closeIdleWarmNativeSessionsForRestart,
   createGovernedWaitEventObservation,
   createRemoteRunnerProcessLauncher,
+  serializeNativeRemoteCommands,
   createRunnerdBackend,
   createRunnerDiagnosticLogSink,
   executePaperclipNativeSession,
@@ -868,6 +869,99 @@ describe("remote runner process supervision", () => {
     expect(handle.child.pid).toBe(4321);
 
 
+  });
+
+  it("rejects managed completion on identity mismatch without signalling or stopping the foreign process", async () => {
+    let nonce = "";
+    const execute = vi.fn(async (input: { args?: string[]; modelBrokerSessionPhase?: string }) => {
+      const label = input.args?.[2];
+      if (label === "paperclip-runner-launch") nonce = input.args?.[4] ?? "";
+      else if (label !== "paperclip-runner-process-identity" && label !== "paperclip-runner-monitor")
+        throw new Error("unexpected_mismatched_process_operation");
+      return { exitCode: label === "paperclip-runner-monitor" ? 4 : 0,
+        signal: null, timedOut: false, stderr: "",
+        stdout: label === "paperclip-runner-process-identity"
+          ? `${nonce}\n4321\n2026-09-06T00:00:00.000Z\nrunner-remote\n` : "" };
+    });
+    const launcher = createRemoteRunnerProcessLauncher({
+      target: { kind: "remote", transport: "sandbox", environmentId: "environment-remote",
+        leaseId: "lease-remote", remoteCwd: "/workspace" },
+      runner: { execute } as never,
+      remoteBinary: "/runtime/paperclip-runnerd",
+      processIdentityPath: "/runtime/runner-process.identity", stateDirectory: "/runtime",
+      diagnosticsDirectory: "/runtime/diagnostics", runnerInstanceId: "runner-remote",
+      nativeSessionStart: true, managedModelSession: true, nativeHarnessState: true,
+    });
+    const handle = launcher({ command: "/controller/paperclip-runnerd",
+      args: ["--runner-id", "runner-remote"], cwd: "/controller", environment: {} });
+    await expect(handle.completion).rejects.toThrow("runner_remote_process_identity_mismatch");
+    const completedCalls = execute.mock.calls.length;
+    expect(handle.child.kill("SIGKILL")).toBe(false);
+    await Promise.resolve();
+    expect(execute).toHaveBeenCalledTimes(completedCalls);
+    expect(execute.mock.calls.map(([input]) => input.args?.[2])).toEqual([
+      "paperclip-runner-launch", "paperclip-runner-process-identity", "paperclip-runner-monitor",
+    ]);
+    expect(execute.mock.calls.some(([input]) => input.modelBrokerSessionPhase === "stop")).toBe(false);
+  });
+
+  it.each([false, true])("orders command receipts without clearing a rejected unknown predecessor (%s)", async unknown => {
+    let settle!: () => void;
+    let reject!: (error: Error) => void;
+    const first = new Promise<void>((resolve, fail) => { settle = resolve; reject = fail; });
+    let occupied = true;
+    const result = { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" };
+    const execute = vi.fn(async (command: { command: string }) => {
+      if (command.command === "first") { await first; occupied = false; return result; }
+      // This controlled boundary models the ORIGINAL guard's continued
+      // refusal, not a claim-clearing permission invented by the wrapper.
+      if (occupied) throw new Error("original_claim_still_unknown");
+      return result;
+    });
+    const runner = serializeNativeRemoteCommands({ execute });
+    const a = runner.execute({ command: "first", timeoutMs: 1000 });
+    const b = runner.execute({ command: "second", timeoutMs: 1000 });
+    const observedA = a.catch(error => error);
+    const observedB = b.catch(error => error);
+    await Promise.resolve();
+    expect(execute).toHaveBeenCalledTimes(1);
+    if (unknown) reject(new Error("original_outcome_unknown")); else settle();
+    if (unknown) {
+      expect(await observedA).toMatchObject({ message: "original_outcome_unknown" });
+      expect(await observedB).toMatchObject({ message: "original_claim_still_unknown" });
+      expect(occupied).toBe(true);
+    } else {
+      expect(await observedA).toEqual(result);
+      expect(await observedB).toEqual(result);
+    }
+    expect(execute.mock.calls.map(([command]) => command.command)).toEqual(["first", "second"]);
+  });
+
+  it("does not dispatch a queued expired command or release its predecessor's position", async () => {
+    vi.useFakeTimers();
+    try {
+      let settle!: () => void;
+      const gate = new Promise<void>(resolve => { settle = resolve; });
+      const result = { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" };
+      const execute = vi.fn(async (command: { command: string; timeoutMs?: number }) => {
+        if (command.command === "first") await gate;
+        return result;
+      });
+      const runner = serializeNativeRemoteCommands({ execute });
+      const a = runner.execute({ command: "first", timeoutMs: 1000 });
+      const b = runner.execute({ command: "skip", timeoutMs: 100 });
+      const rejected = b.catch(error => error);
+      const c = runner.execute({ command: "last", timeoutMs: 500 });
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(110);
+      expect(await rejected).toMatchObject({ message: "exec_timeout" });
+      expect(execute).toHaveBeenCalledTimes(1);
+      settle(); await a; await c;
+      expect(execute.mock.calls.map(([command]) => command.command)).toEqual(["first", "last"]);
+      const remaining = execute.mock.calls[1]![0].timeoutMs!;
+      expect(remaining).toBeGreaterThan(0);
+      expect(remaining).toBeLessThanOrEqual(390);
+    } finally { vi.useRealTimers(); }
   });
 
   it("terminates a detached runner when its process identity cannot be adopted", async () => {

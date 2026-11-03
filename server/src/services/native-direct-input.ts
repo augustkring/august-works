@@ -2,13 +2,13 @@ import { readNativeWorkspaceCoordination } from "./native-runtime/native-workspa
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, gte, inArray, is, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, is, isNull, sql } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
-import { activityLog, agents, issues, projects, projectWorkspaces, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
+import { activityLog, agents, issues, projects, projectWorkspaces, issueRelations, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, memoryRecords,
   memoryDeletionMarkers,
   completionContracts, heartbeatRuns, orchestrationModelReservations, agentExecutionManifests, executionWorkspaces, foundationDocuments,
-  documents, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems,
+  nativeRunResults, nativeRunFinalizations, workAssessments, statusDecisions, statusDecisionEffects, documents, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems,
   agentRolePackAssignments, issueThreadInteractions, agentWakeupRequests, type Db } from "@paperclipai/db";
 import { toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
@@ -34,7 +34,7 @@ import { projectService } from "./projects.js";
 import { skillResolverService } from "./skill-resolver.js";
 import { nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds, nativeTaskWakeInteraction, nativeContinuationCommentProjection, nativeCommentProjectionHash, nativeSha256 } from "./native-runtime/canonical.js";
 import { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } from "./native-runtime/native-session-resume.js";
-import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { CAPABILITY_SEMANTIC_TOOL_CATALOG, codexSemanticToolSpecs, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 import type { NativeTaskContinuationCapture } from "./execution-continuation.js";
 import { sanitizeQuarantinedCommentForHigherTrust, redactQuarantinedBodyForHigherTrust } from "./source-trust.js";
@@ -1772,7 +1772,9 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   const run = await nativeSourceReadRun(db, input.companyId, input.runId, scope);
   const context = run?.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
     ? run.contextSnapshot as Record<string, unknown> : null;
-  const wake = context?.paperclipWake;
+  const savedDependency = nativeSourceRecord(nativeSourceRecord(run?.runnerProfileJson).nativeBootstrapBlockedHumanInteraction);
+  const retainedDependencyReader = run?.status === "succeeded" && savedDependency.capture !== undefined;
+  const wake = retainedDependencyReader ? savedDependency.wake : context?.paperclipWake;
   const wakeRecord = wake && typeof wake === "object" && !Array.isArray(wake) ? wake as Record<string, unknown> : null;
   const issueValue = wakeRecord?.issue;
   const wakeIssue = issueValue && typeof issueValue === "object" && !Array.isArray(issueValue)
@@ -2032,11 +2034,19 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   const workspaceCoordinationCapture = originalCoordinationCapture !== undefined && run?.agentId
     ? await readNativeWorkspaceCoordination(db, { companyId: input.companyId, runId: input.runId,
       agentId: run.agentId, issueId: input.issueId, capture: originalCoordinationCapture, reader: input.actor }) : null;
+  const blockedHumanInteraction = run ? retainedDependencyReader
+    ? await readRetainedBlockedHumanInteractionOwner(db, scope, run, input.actor, savedDependency, input.bootstrapInputs)
+    : await readNativeBlockedHumanInteractionOwner(db, {
+      companyId: input.companyId, issueId: input.issueId, runId: input.runId, agentId: run.agentId }) : null;
+  if (blockedHumanInteraction && blockedHumanInteraction.blockers.some(blocker =>
+      !input.bootstrapInputs.some(source => isDeepStrictEqual(source, blocker.source)) ||
+      !input.inputs.some(source => isDeepStrictEqual(source, blocker.source))))
+    throw forbidden("The dependency interaction blocker source changed");
   const current = run && run.nativeIssueId === input.issueId && taskSources.length === 1 && taskSource && wakeTask &&
     taskSource.sourceVersion === input.source.sourceVersion
     ? captureNativeTaskWakeSource({ companyId: input.companyId, runId: input.runId, issueId: input.issueId,
       sourceVersion: taskSource.sourceVersion, agentId: run.agentId, responsibleUserId: run.responsibleUserId,
-      workspaceCapture, workspaceCoordinationCapture,
+      workspaceCapture, workspaceCoordinationCapture, blockedHumanInteraction,
       wakeupRequestId: run.wakeupRequestId, continuationCapture,
       historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: admittedWake.reason,
       task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
@@ -2465,6 +2475,331 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
     return assertNativePayloadSourceSetCurrentInScope(tx, input, scope);
   }));
+}
+
+
+export type NativeBlockedHumanInteraction = {
+  companyId: string; issueId: string; runId: string; agentId: string; responsibleUserId: string;
+  wakeupRequestId: string; requestedByUserId: string; commentSources: Extract<NativePayloadSourceInput, { kind: "comment" }>[];
+  commentSourceSnapshots: { input: Extract<NativePayloadSourceInput, { kind: "comment" }>; payloadSourceSnapshot: NativePayloadSourceSnapshot }[];
+  unresolvedBlockerIssueIds: string[];
+  blockers: { source: Extract<NativePayloadSourceInput, { kind: "task" }>; payloadSourceSnapshot: NativePayloadSourceSnapshot;
+    summary: { id: string; identifier: string | null; title: string; status: string; priority: string;
+      assigneeAgentId: string | null; assigneeUserId: string | null } }[];
+};
+
+/** Current source-owner proof, never a caller flag or a persisted permission. */
+async function readNativeBlockedHumanInteractionOwner(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string;
+}, expected?: NativeBlockedHumanInteraction): Promise<NativeBlockedHumanInteraction | null> {
+  return inNativeSourceReadTransaction(db, async tx => {
+    const [initialRun] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId)));
+    const originalReadOnlyCatalog = nativeBlockedHumanInteractionCatalog(initialRun, input);
+    const initialContext = nativeSourceRecord(initialRun?.contextSnapshot);
+    const initialWakePayload = nativeSourceRecord(initialContext.paperclipWake);
+    if (!expected && !originalReadOnlyCatalog && initialContext.dependencyBlockedInteraction !== true && initialWakePayload.dependencyBlockedInteraction !== true) {
+      const [initialTask] = await tx.select({ status: issues.status }).from(issues)
+        .where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)));
+      // Preserve ordinary callers. This read cannot grant the exception; every
+      // candidate below acquires the original privacy/Task/Run source locks.
+      if (initialTask?.status !== "blocked") return null;
+      const [initialWake] = initialRun?.wakeupRequestId ? await tx.select({ reason: agentWakeupRequests.reason })
+        .from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, input.companyId),
+          eq(agentWakeupRequests.id, initialRun.wakeupRequestId), eq(agentWakeupRequests.runId, input.runId))) : [];
+      // Unrelated review/Stage owners retain their own existing admission.
+      // A blocked assignment still fails the unchanged paid status qualifier.
+      if (!initialWake || !["issue_commented", "issue_comment_mentioned"].includes(initialWake.reason ?? "")) return null;
+    }
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: input.companyId,
+      agentId: input.agentId, runId: input.runId, onBehalfOfUserId: initialRun?.responsibleUserId };
+    return withNativeSourceReadScope(tx, actor, input.companyId, async scope => {
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId))).for("share");
+    const context = nativeSourceRecord(run?.contextSnapshot);
+    const wakePayload = nativeSourceRecord(context.paperclipWake);
+    // Existing server-captured interaction fields can tighten a Run's ceiling;
+    // they never establish the Human/source authority checked below.
+    const previouslyBound = expected !== undefined || nativeBlockedHumanInteractionCatalog(run, input) || context.dependencyBlockedInteraction === true || wakePayload.dependencyBlockedInteraction === true;
+    if (!previouslyBound && task?.status !== "blocked") return null;
+    const reject = (): never => { throw forbidden("The current Human dependency interaction source is unavailable"); };
+    if (!task || !run || run.status !== "running" || run.resultJson?.startupCancellation ||
+        task.status !== "blocked" || task.hiddenAt || task.workMode !== "standard" || task.assigneeAgentId !== input.agentId ||
+        !run.responsibleUserId || !run.wakeupRequestId ||
+        (run.nativeIssueId !== null && run.nativeIssueId !== input.issueId) ||
+        (context.issueId !== input.issueId && context.taskId !== input.issueId)) return reject();
+    const [wake] = await tx.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, input.companyId),
+      eq(agentWakeupRequests.id, run.wakeupRequestId), eq(agentWakeupRequests.agentId, input.agentId),
+      eq(agentWakeupRequests.runId, input.runId))).for("share");
+    if (!wake || wake.status !== "claimed" || wake.requestedByActorType !== "user" || !wake.requestedByActorId ||
+        !["issue_commented", "issue_comment_mentioned"].includes(wake.reason ?? "") ||
+        !["automation", "on_demand"].includes(wake.source) ||
+        nativeSourceRecord(wake.payload).issueId !== input.issueId) return reject();
+    const ids = nativeTaskWakeOriginCommentIds(wake.payload);
+    if (!ids.length || ids.length > 256 || ids.some(id => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) return reject();
+    if (run.responsibleUserId !== actor.onBehalfOfUserId) return reject();
+    const human: AuthorizationActor = { type: "board", source: "session", userId: wake.requestedByActorId };
+    if (!await nativeSourceReaderHasCompanyAccess(tx, input.companyId, actor) ||
+        !await nativeSourceReaderHasCompanyAccess(tx, input.companyId, human) ||
+        !await canActorReadIssuePrivacy(tx, actor, task) || !await canActorReadIssuePrivacy(tx, human, task) ||
+        !await canActorReadHeartbeatRunPrivacy(tx, actor, { id: input.runId, companyId: input.companyId }) ||
+        !await canActorReadHeartbeatRunPrivacy(tx, human, { id: input.runId, companyId: input.companyId })) return reject();
+    const receipt = nativeRunInputSourceReceiptSchema.safeParse(run.runnerProfileJson?.nativeInputSourceReceipt);
+    if (run.runnerProfileJson?.nativeInputSourceReceipt && !receipt.success) return reject();
+    const commentSources: NativeBlockedHumanInteraction["commentSources"] = [];
+    const commentSourceSnapshots: NativeBlockedHumanInteraction["commentSourceSnapshots"] = [];
+    for (const commentId of ids.sort()) {
+      const [comment] = await tx.select({ row: issueComments,
+        sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` }).from(issueComments)
+        .where(and(eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+          eq(issueComments.id, commentId), isNull(issueComments.deletedAt))).for("share");
+      if (!comment || comment.row.authorType !== "user" || comment.row.authorAgentId || comment.row.createdByRunId ||
+          comment.row.authorUserId !== wake.requestedByActorId) return reject();
+      const snapshot = nativePayloadSourceSnapshotSchema.safeParse(comment.row.payloadSourceSnapshot);
+      if (!snapshot.success) return reject();
+      const captured = receipt.success ? receipt.data.bootstrap.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
+        source.kind === "comment" && source.issueId === input.issueId && source.commentId === commentId) : [];
+      if (receipt.success && captured.length < 1) return reject();
+      const selected = captured.length ? captured : [{ kind: "comment" as const, issueId: input.issueId, commentId,
+        sourceVersion: comment.sourceVersion, contentHash: nativeCommentProjectionHash(comment.row) }];
+      for (const source of selected) {
+        await assertConversationCommentSourceCurrent(tx, { companyId: input.companyId, actor, source,
+          policy: snapshot.data.policy, inputs: [...snapshot.data.inputs, source] }, scope);
+        commentSources.push(source);
+        commentSourceSnapshots.push({ input: source, payloadSourceSnapshot: snapshot.data });
+      }
+    }
+    const { issueService } = await import("./issues.js");
+    const readiness = await issueService(tx as Db).getDependencyReadiness(input.issueId);
+    if (readiness.isDependencyReady || readiness.unresolvedBlockerCount < 1) return reject();
+    const rows = await tx.select({ row: issues,
+      sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+      contentHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))` })
+      .from(issueRelations).innerJoin(issues, and(eq(issues.companyId, issueRelations.companyId), eq(issues.id, issueRelations.issueId)))
+      .where(and(eq(issueRelations.companyId, input.companyId), eq(issueRelations.type, "blocks"),
+        eq(issueRelations.relatedIssueId, input.issueId), inArray(issues.id, readiness.unresolvedBlockerIssueIds)))
+      .orderBy(asc(issues.title)).for("share", { of: issues });
+    if (rows.length !== readiness.unresolvedBlockerIssueIds.length) return reject();
+    const blockers: NativeBlockedHumanInteraction["blockers"] = [];
+    for (const blocker of rows) {
+      if (!await canActorReadIssuePrivacy(tx, actor, blocker.row) || !await canActorReadIssuePrivacy(tx, human, blocker.row)) return reject();
+      const snapshot = nativePayloadSourceSnapshotSchema.safeParse(blocker.row.payloadSourceSnapshot);
+      if (!snapshot.success) return reject();
+      const source: Extract<NativePayloadSourceInput, { kind: "task" }> = { kind: "task", issueId: blocker.row.id,
+        sourceVersion: blocker.sourceVersion, contentHash: blocker.contentHash };
+      await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, actor, source, scope);
+      blockers.push({ source, payloadSourceSnapshot: snapshot.data, summary: { id: blocker.row.id,
+        identifier: blocker.row.identifier, title: blocker.row.title, status: blocker.row.status, priority: blocker.row.priority,
+        assigneeAgentId: blocker.row.assigneeAgentId, assigneeUserId: blocker.row.assigneeUserId } });
+    }
+    const capture: NativeBlockedHumanInteraction = { companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, agentId: input.agentId, responsibleUserId: run.responsibleUserId,
+      wakeupRequestId: wake.id, requestedByUserId: wake.requestedByActorId, commentSources, commentSourceSnapshots, blockers, unresolvedBlockerIssueIds: [...readiness.unresolvedBlockerIssueIds].sort() };
+    if (expected && !isDeepStrictEqual(capture, expected)) return reject();
+    return capture;
+    });
+  });
+}
+
+/** Historical source review only. This owner is never called by paid
+ * admission, wire dispatch, tools or result acceptance. Original rendering is
+ * bound by the immutable native_task_wake hash; current ACL/snapshots remain. */
+async function readRetainedBlockedHumanInteractionOwner(db: Db | Transaction, scope: NativeSourceReadScope,
+  run: typeof heartbeatRuns.$inferSelect, actor: AuthorizationActor, original: unknown,
+  bootstrapInputs: NativePayloadSourceInput[]): Promise<NativeBlockedHumanInteraction> {
+  const reject = (): never => { throw forbidden("The retained dependency interaction source is unavailable"); };
+  const saved = nativeSourceRecord(original), value = nativeSourceRecord(saved.capture), wake = nativeSourceRecord(saved.wake);
+  if (run.status !== "succeeded" || run.nativePhase !== "committed" ||
+      run.nativeProcessCleanupPending !== false || !run.nativeIssueId || !run.responsibleUserId || !run.wakeupRequestId ||
+      value.companyId !== run.companyId || value.issueId !== run.nativeIssueId || value.runId !== run.id || value.agentId !== run.agentId ||
+      value.responsibleUserId !== run.responsibleUserId || value.wakeupRequestId !== run.wakeupRequestId || wake.dependencyBlockedInteraction !== true)
+    return reject();
+  if (!nativeBlockedHumanInteractionCatalog(run, { companyId: run.companyId, issueId: run.nativeIssueId,
+      runId: run.id, agentId: run.agentId })) return reject();
+  const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, run.companyId), eq(nativeRunFinalizations.issueId, run.nativeIssueId),
+    eq(nativeRunFinalizations.runId, run.id), eq(nativeRunFinalizations.phase, "committed"),
+    isNull(nativeRunFinalizations.leaseOwner))).for("share");
+  if (!coordinator?.resultId || !coordinator.assessmentId || !coordinator.decisionId || coordinator.failureCode || coordinator.nextAttemptAt)
+    return reject();
+  const [committed] = await db.select({ accepted: nativeRunResults, assessment: workAssessments, decision: statusDecisions })
+    .from(nativeRunResults).innerJoin(workAssessments, and(eq(workAssessments.companyId, nativeRunResults.companyId),
+      eq(workAssessments.resultId, nativeRunResults.id), eq(workAssessments.id, coordinator.assessmentId),
+      eq(workAssessments.issueId, run.nativeIssueId), eq(workAssessments.runId, run.id)))
+    .innerJoin(statusDecisions, and(eq(statusDecisions.companyId, workAssessments.companyId),
+      eq(statusDecisions.assessmentId, workAssessments.id), eq(statusDecisions.id, coordinator.decisionId)))
+    .where(and(eq(nativeRunResults.companyId, run.companyId), eq(nativeRunResults.issueId, run.nativeIssueId),
+      eq(nativeRunResults.runId, run.id), eq(nativeRunResults.id, coordinator.resultId), eq(nativeRunResults.schemaStatus, "accepted"),
+      eq(statusDecisions.issueId, run.nativeIssueId), eq(statusDecisions.runId, run.id), eq(statusDecisions.toStatus, "blocked"),
+      eq(statusDecisions.applicationState, "applied"), eq(statusDecisions.reasonCode, "durable_dependency_blocker_bound"))).for("share");
+  if (!committed || !committed.decision.appliedAt) return reject();
+  const resultEnvelope = nativeSourceRecord(committed.accepted.resultJson), result = nativeSourceRecord(resultEnvelope.result);
+  const terminal = nativeSourceRecord(resultEnvelope.terminal), decision = nativeSourceRecord(committed.decision.decisionJson);
+  const runResult = nativeSourceRecord(run.resultJson);
+  if (result.schema !== "paperclip.run_result.v1" || result.reportedWorkDisposition !== "blocked" ||
+      nativeSourceRecord(result.completionClaim).objectiveSatisfied !== false ||
+      terminal.reportedWorkDisposition !== "blocked" || terminal.runTerminalState !== "succeeded" || terminal.turnTerminalState !== "completed" ||
+      committed.accepted.completionContractId !== run.completionContractId || decision.statusAction !== "preserve" ||
+      !Array.isArray(decision.effects) || decision.effects.length !== 0 ||
+      runResult.finalizationPhase !== "committed" || runResult.assessmentId !== coordinator.assessmentId || runResult.decisionId !== coordinator.decisionId)
+    return reject();
+  const [effect] = await db.select({ id: statusDecisionEffects.id }).from(statusDecisionEffects).where(and(
+    eq(statusDecisionEffects.companyId, run.companyId), eq(statusDecisionEffects.issueId, run.nativeIssueId),
+    eq(statusDecisionEffects.decisionId, coordinator.decisionId))).limit(1).for("share");
+  const { acceptedResponseDigestMatches } = await import("./native-runtime/native-run-finalizer.js");
+  if (effect || !await acceptedResponseDigestMatches(db, run, committed.accepted)) return reject();
+  const [queue] = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, run.companyId),
+    eq(agentWakeupRequests.id, run.wakeupRequestId), eq(agentWakeupRequests.agentId, run.agentId), eq(agentWakeupRequests.runId, run.id))).for("share");
+  if (!committed || !queue || queue.status !== "completed" || queue.requestedByActorType !== "user" || !queue.requestedByActorId || value.requestedByUserId !== queue.requestedByActorId ||
+      !["automation", "on_demand"].includes(queue.source) || nativeSourceRecord(queue.payload).issueId !== run.nativeIssueId ||
+      !["issue_commented", "issue_comment_mentioned"].includes(queue.reason ?? "")) return reject();
+  const human: AuthorizationActor = { type: "board", source: "session", userId: queue.requestedByActorId };
+  const [currentTask] = await db.select().from(issues).where(and(eq(issues.companyId, run.companyId), eq(issues.id, run.nativeIssueId))).for("share");
+  if (!currentTask || !await canActorReadIssuePrivacy(db, actor, currentTask) || !await canActorReadIssuePrivacy(db, human, currentTask)) return reject();
+  if (!await nativeSourceReaderHasCompanyAccess(db, run.companyId, actor) || !await nativeSourceReaderHasCompanyAccess(db, run.companyId, human) ||
+      !await canActorReadHeartbeatRunPrivacy(db, actor, { id: run.id, companyId: run.companyId }) ||
+      !await canActorReadHeartbeatRunPrivacy(db, human, { id: run.id, companyId: run.companyId })) return reject();
+  const commentSources = nativePayloadSourceInputSchema.array().max(256).safeParse(value.commentSources);
+  const originalIds = nativeTaskWakeOriginCommentIds(queue.payload).sort();
+  if (!commentSources.success || !originalIds.length || commentSources.data.some(source => source.kind !== "comment" ||
+      source.issueId !== run.nativeIssueId || !bootstrapInputs.some(input => isDeepStrictEqual(input, source))) ||
+      !isDeepStrictEqual([...new Set(commentSources.data.flatMap(source => source.kind === "comment" ? [source.commentId] : []))].sort(), originalIds)) return reject();
+  const selectedComments: NativeBlockedHumanInteraction["commentSources"] = [];
+  const selectedSnapshots: NativeBlockedHumanInteraction["commentSourceSnapshots"] = [];
+  for (const source of commentSources.data) {
+    if (source.kind !== "comment") return reject();
+    const [comment] = await db.select().from(issueComments).where(and(eq(issueComments.companyId, run.companyId),
+      eq(issueComments.issueId, run.nativeIssueId), eq(issueComments.id, source.commentId), isNull(issueComments.deletedAt))).for("share");
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(comment?.payloadSourceSnapshot);
+    if (!comment || comment.authorType !== "user" || comment.authorAgentId || comment.createdByRunId ||
+        comment.authorUserId !== queue.requestedByActorId || !snapshot.success) return reject();
+    await assertConversationCommentSourceCurrent(db, { companyId: run.companyId, actor, source,
+      policy: snapshot.data.policy, inputs: [...snapshot.data.inputs, source] }, scope);
+    selectedComments.push(source);
+    selectedSnapshots.push({ input: source, payloadSourceSnapshot: snapshot.data });
+  }
+  if (!Array.isArray(value.blockers) || !value.blockers.length || value.blockers.length > 256 ||
+      !Array.isArray(value.unresolvedBlockerIssueIds) || value.unresolvedBlockerIssueIds.some(id => typeof id !== "string")) return reject();
+  const blockers: NativeBlockedHumanInteraction["blockers"] = [];
+  for (const raw of value.blockers) {
+    const blocker = nativeSourceRecord(raw), summary = nativeSourceRecord(blocker.summary);
+    const source = nativePayloadSourceInputSchema.safeParse(blocker.source);
+    if (!source.success || source.data.kind !== "task" || summary.id !== source.data.issueId ||
+        !bootstrapInputs.some(input => isDeepStrictEqual(input, source.data))) return reject();
+    const [task] = await db.select().from(issues).where(and(eq(issues.companyId, run.companyId), eq(issues.id, source.data.issueId))).for("share");
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(task?.payloadSourceSnapshot);
+    const capturedSnapshot = nativePayloadSourceSnapshotSchema.safeParse(blocker.payloadSourceSnapshot);
+    if (!task || !snapshot.success || !capturedSnapshot.success || snapshot.data.digest !== capturedSnapshot.data.digest ||
+        !await canActorReadIssuePrivacy(db, actor, task) || !await canActorReadIssuePrivacy(db, human, task) ||
+        summary.identifier !== task.identifier || summary.title !== task.title || typeof summary.status !== "string" ||
+        typeof summary.priority !== "string" || !(summary.assigneeAgentId === null || typeof summary.assigneeAgentId === "string") ||
+        !(summary.assigneeUserId === null || typeof summary.assigneeUserId === "string")) return reject();
+    await assertNativeTaskSourceInputCurrentInScope(db, run.companyId, actor, source.data, scope);
+    blockers.push({ source: source.data, payloadSourceSnapshot: capturedSnapshot.data,
+      summary: { id: task.id, identifier: task.identifier, title: task.title, status: summary.status, priority: summary.priority,
+        assigneeAgentId: summary.assigneeAgentId, assigneeUserId: summary.assigneeUserId } });
+  }
+  const ids = value.unresolvedBlockerIssueIds as string[];
+  if (!isDeepStrictEqual([...ids].sort(), blockers.map(blocker => blocker.summary.id).sort()) ||
+      !Array.isArray(wake.unresolvedBlockerIssueIds) || !isDeepStrictEqual([...wake.unresolvedBlockerIssueIds].sort(), [...ids].sort()) || !isDeepStrictEqual(wake.unresolvedBlockerSummaries, blockers.map(blocker => blocker.summary))) return reject();
+  return { companyId: run.companyId, issueId: run.nativeIssueId, runId: run.id, agentId: run.agentId,
+    responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId, requestedByUserId: queue.requestedByActorId,
+    commentSources: selectedComments, commentSourceSnapshots: selectedSnapshots, blockers, unresolvedBlockerIssueIds: ids };
+}
+
+/** Current paid/tool/wire owner. The lower reader never recursively reads
+ * its own bootstrap wake; this wrapper validates that full retained prefix. */
+export async function captureNativeBlockedHumanInteraction(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string;
+}, expected?: NativeBlockedHumanInteraction): Promise<NativeBlockedHumanInteraction | null> {
+  return inNativeSourceReadTransaction(db, async tx => {
+    const capture = await readNativeBlockedHumanInteractionOwner(tx, input, expected);
+    if (!capture) return null;
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId)));
+    const receipt = nativeRunInputSourceReceiptSchema.safeParse(run?.runnerProfileJson?.nativeInputSourceReceipt);
+    if (run?.runnerProfileJson?.nativeInputSourceReceipt && !receipt.success)
+      throw forbidden("The original dependency interaction source is unavailable");
+    if (receipt.success) await assertNativePayloadSourceSetCurrent(tx, { ...input,
+      actor: { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId,
+        runId: input.runId, onBehalfOfUserId: capture.responsibleUserId }, ...receipt.data.bootstrap });
+    return capture;
+  });
+}
+
+/** Exact server definitions used by the existing managed bridge. The hash is
+ * recoverable from actual wire intents even if a mutable catalog is removed. */
+function nativeBlockedHumanInteractionCatalogHash(): string {
+  return nativeSha256([
+    ...CAPABILITY_SEMANTIC_TOOL_CATALOG.filter(tool => NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(tool.operationId))
+      .map(tool => ({ name: tool.operationId, description: tool.description, inputSchema: tool.inputSchema })),
+    ...codexSemanticToolSpecs().map(tool => ({ ...structuredClone(tool),
+      inputSchema: { ...nativeSourceRecord(tool.inputSchema), additionalProperties: false } })),
+  ]);
+}
+
+/** A retained actual catalog/hash only tightens; it never admits a Human. */
+function nativeBlockedHumanInteractionCatalog(run: typeof heartbeatRuns.$inferSelect | undefined, input: {
+  companyId: string; issueId: string; runId: string; agentId: string;
+}): boolean {
+  const profile = nativeSourceRecord(run?.runnerProfileJson);
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const rawExecution = nativeSourceRecord(profile.nativeExecutionInput);
+  if (nativeSourceRecord(rawExecution.provider).kind !== "opencode") return false;
+  const authority = nativeSourceRecord(profile.nativeOpenCodeSourceAuthority);
+  const wireIntents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(nativeSourceRecord) : [];
+  const restrictedHash = nativeBlockedHumanInteractionCatalogHash();
+  const originalRestrictedDispatch = wireIntents.some(intent => intent.modelPurpose === "worker_model" && intent.toolSchemasHash === restrictedHash);
+  const restrictedCatalog = authority.toolSchemasHash === restrictedHash;
+  // The feature has no legacy restricted dispatches. An absent optional hash
+  // never reclassifies an ordinary legacy/full-catalog Run.
+  if (!originalRestrictedDispatch && !restrictedCatalog) return false;
+  let execution: ReturnType<typeof parseNativeExecutionInput>;
+  try { execution = parseNativeExecutionInput(rawExecution); }
+  catch { throw forbidden("The original dependency interaction catalog is unavailable"); }
+  if (!receipt.success || authority.version !== 1 || !Array.isArray(authority.toolSchemas) ||
+      authority.toolSchemasHash !== restrictedHash || nativeSha256(authority.toolSchemas) !== restrictedHash ||
+      authority.executionInputHash !== nativeSha256(rawExecution) ||
+      !isDeepStrictEqual({ companyId: execution.binding.companyId, issueId: execution.binding.issueId,
+        runId: execution.binding.runId, agentId: execution.binding.agentId }, input) ||
+      !isDeepStrictEqual({ companyId: receipt.data.binding.companyId, issueId: receipt.data.binding.issueId,
+        runId: receipt.data.binding.runId, agentId: receipt.data.binding.agentId }, input))
+    throw forbidden("The original dependency interaction catalog changed");
+  const acknowledged = [receipt.data.bootstrap, ...receipt.data.dispatches, ...receipt.data.additionalInputs]
+    .flatMap(set => set.inputs).filter((source): source is Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" }> =>
+      source.kind === "worker_model_dispatch" && source.runId === input.runId);
+  if (wireIntents.some(intent => intent.modelPurpose === "worker_model" && intent.toolSchemasHash !== restrictedHash) ||
+      acknowledged.some(source => wireIntents.filter(intent => intent.modelPurpose === "worker_model" &&
+        intent.reservationId === source.reservationId && intent.callId === source.callId && intent.requestHash === source.requestHash &&
+        intent.wireBodyHash === source.wireBodyHash && intent.responseContentHash === source.responseHash &&
+        intent.toolSchemasHash === restrictedHash).length !== 1))
+    throw forbidden("The original dependency interaction dispatch catalog changed");
+  return true;
+}
+
+export const NATIVE_BLOCKED_INTERACTION_READ_TOOLS: ReadonlySet<string> = new Set([
+  "get_task_context", "get_task_history", "read_document",
+]);
+
+export async function assertNativeBlockedInteractionResult(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string;
+}, result: unknown): Promise<void> {
+  const [accepted] = await db.select({ resultJson: nativeRunResults.resultJson }).from(nativeRunResults)
+    .where(and(eq(nativeRunResults.companyId, input.companyId), eq(nativeRunResults.issueId, input.issueId),
+      eq(nativeRunResults.runId, input.runId), eq(nativeRunResults.schemaStatus, "accepted"))).limit(1);
+  // An exact retained duplicate is not a new result or a new grant. Each result
+  // owner still checks its original binding/fingerprint before returning it.
+  if (accepted && isDeepStrictEqual(nativeSourceRecord(accepted.resultJson).result, result)) return;
+  const capture = await captureNativeBlockedHumanInteraction(db, input);
+  if (!capture) return;
+  const value = nativeSourceRecord(result), claim = nativeSourceRecord(value.completionClaim);
+  if (value.reportedWorkDisposition !== "blocked" || claim.objectiveSatisfied !== false ||
+      !Array.isArray(claim.criteria) || claim.criteria.some(item => nativeSourceRecord(item).status === "satisfied") ||
+      !Array.isArray(claim.remainingWork) || !claim.remainingWork.some(item => nativeSourceRecord(item).blocksCompletion === true) ||
+      !Array.isArray(value.attentionRequests) || value.attentionRequests.length || !Array.isArray(value.artifacts) || value.artifacts.length)
+    throw forbidden("A dependency interaction may only report its existing blocked work");
 }
 
 /** Revalidate one exact captured Task body against its original owner snapshot,
@@ -2937,6 +3272,13 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         : false;
       const conflictingCopies = dispatchReceipt?.success && dispatchReceipt.data.dispatches.some(prefix => prefix.inputs.some(value =>
         value.kind === "worker_model_dispatch" && value.reservationId === source.reservationId && !isDeepStrictEqual(value, source)));
+      if (intent?.toolSchemasHash !== undefined) {
+        const catalog = nativeSourceRecord(dispatchProfile?.nativeOpenCodeSourceAuthority);
+        if (typeof intent.toolSchemasHash !== "string" || !/^[0-9a-f]{64}$/.test(intent.toolSchemasHash) ||
+            !Array.isArray(catalog.toolSchemas) || catalog.toolSchemasHash !== intent.toolSchemasHash ||
+            nativeSha256(catalog.toolSchemas) !== intent.toolSchemasHash)
+          throw forbidden("The Native historical dispatch catalog changed");
+      }
       const reservation = await nativeSourceReadReservation(db, input.companyId, source.reservationId, scope);
       if (!dispatchRun || !dispatchBindingCurrent || !dispatchReceipt?.success || source.runId !== dispatchRun.id ||
         intents.length !== 1 || !exactSourceDispatchPrefix || conflictingCopies || !reservation ||

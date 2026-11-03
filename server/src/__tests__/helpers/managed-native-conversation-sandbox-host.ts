@@ -532,7 +532,10 @@ function authenticateSerialModelRequest(authorization: string | undefined,
   if (!token || !claims || !claims.worker_model || claims.company_id !== scope.companyId || claims.sub !== scope.agentId ||
       (scope.runId !== undefined && claims.run_id !== scope.runId) ||
       (scope.capabilityToken !== undefined && nativeSha256(token) !== nativeSha256(scope.capabilityToken)))
-    throw new Error("scheduler_software_host_incoming_model_authority_invalid");
+    throw Object.assign(new Error("scheduler_software_host_incoming_model_authority_invalid"), {
+      serialIncomingCredentialKind: !authorization ? "absent" : !match ? "non_bearer"
+        : token?.split(".").length === 3 ? "jwt" : "opaque",
+    });
   return { token, claims };
 }
 
@@ -3799,9 +3802,13 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       finally { activeModelRequests--; }
     },
     attestModelProxyClient: async (client: Socket) => {
-      if (!modelOrigin) return null;
+      if (!modelOrigin) {
+        console.info("serial_model_attestation_failure_projection", JSON.stringify({ modelOriginPresent: false, attestationResult: false }));
+        return null;
+      }
       const original = modelOrigin;
       const observed = await attestNativeModelClient(client, original);
+      if (!observed) console.info("serial_model_attestation_failure_projection", JSON.stringify({ modelOriginPresent: true, attestationResult: false }));
       if (observed && input.observeModelOriginDenials && !observedModelChannel) {
         try {
           const wrongNonce = await attestNativeModelClient(client, { ...original, nonce: "invalid-fixed-negative-nonce" });

@@ -1,0 +1,463 @@
+{
+  "kind": "reviewed-current-source-inventory-delta-not-qualification",
+  "sourceHead": "e31c09662af4851560bf3ef50dc64fc341c6df3a",
+  "priorRegisterCommit": "136b4b11d",
+  "priorRegisterSha256": "cd326df9b733887f54e4bc969e86955337981e06ea58728c47702372bbe71673",
+  "changedExistingPins": 18,
+  "retiredExistingPins": 1,
+  "changes": [
+    {
+      "path": ".github/workflows/aw-v9-coverage.yml",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "4c8c0e842af06895fcd813770d88c9e287b871e3619ca4221ff6445fc9a8aea1",
+      "newSha256": "3f75345ccd6abdd3eed9be87ae0f09692095ce2288df492f1aec5cdc2cabc73a",
+      "reason": "Coverage checkout now fetches full history and installs ripgrep for the existing migration scanner; this is CI input drift, not migration qualification.",
+      "changeCommits": [
+        "d60139d2fac8911a2be89a27e7c20e3e01de6133 fix(ci): install ripgrep for migration source scans",
+        "5904b5e88595dae197057971d5797df9abf0252e ci: fetch the source base required by migration phase inventory [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "package.json",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "1ade0a815658469950b49e1d3251e9ae531df87d162b9c9ccb1fe18f1ae10ea3",
+      "newSha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "reason": "Adds native-tool-alias compatibility commands to Platform Skill contracts; V10-169 commands retain their original checker and tests.",
+      "changeCommits": [
+        "a3ddabbb1686dcfc8edd2e1c2dc15d822c1977bb ci: preserve typed legacy tool aliases until reviewed consumer migration and retirement [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "2127e77f623190c9805cb8a397862034d5440f19aeae4a75fa93e890d5246bad",
+      "newSha256": "a1c07a3d5293a29a66a97997b7fc75e126f838e91009826a5735ea41d35c17c3",
+      "reason": "Official journal now includes six published migrations0566 through0571; inventory must cover them without asserting apply/rollout success.",
+      "changeCommits": [
+        "72f674f189d0a3fb56c5c2218285f74bcbabf31c fix(v10): preserve stage sources and authorize workspace preparation",
+        "bc77f57c9ece72d71d0bab9f1a8464f07c12cda9 fix(v10): preserve governed source provenance and cancellation fences",
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts",
+        "c1db24de796c28ef935c46661470535ddfd1248c fix: qualify sandbox admission epochs and preserve Stop revocation [skip ci]",
+        "bacec1d0d4caf5611364b61145b12d7747a12290 feat: collect consented Feedback quality measures with immutable source receipts and withdrawal [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "3e902784b9aa967e2c69569915034922ae8be5f2051b7536fa91bc4abd8b2baa",
+      "newSha256": "9a9fb84494608990bb5f3835ec8f7443e15c1cb3ce9b1c00459665735a3c1754",
+      "reason": "Adds exact-input union and closed bounded workspace/native-stage Task transforms. Parser structure does not confer source authority.",
+      "changeCommits": [
+        "72f674f189d0a3fb56c5c2218285f74bcbabf31c fix(v10): preserve stage sources and authorize workspace preparation",
+        "bc77f57c9ece72d71d0bab9f1a8464f07c12cda9 fix(v10): preserve governed source provenance and cancellation fences",
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "disposition": "retired_current_test_reference",
+      "oldSha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd",
+      "newSha256": null,
+      "reason": "Deliberate test retirement, not a missing restored file. Native0565 projection/preflight coverage replaced an old helper-specific fixture; no exact drop-in equivalence is claimed.",
+      "evidence": "doc/operations/aw-v10-evidence/responsibility-projection-and-preflight-qualified-2026-10-30/qualification.json",
+      "evidenceFact": "candidateFiles records this path, baselineSha2565828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd, action delete_after_review; its r6Native0565 PostgreSQL20/20 is a dated candidate receipt.",
+      "qualificationDisposition": "Historical retired fixture and receipts retained. Surviving source cases are current inventory only."
+    },
+    {
+      "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "3d3c5d2aa6a3f13fc1488a1ddd6d5ce4c8a57ac0ab2f0906efc997e1dbb41ac3",
+      "newSha256": "c951c2cfaeac101bc899cab955a8cc8fd55ad11099e9c36aebc8b5c01d7bd840",
+      "reason": "Expands current native temporal/Task source and workspace/Stage transformation cases. Present source is not a new execution receipt.",
+      "changeCommits": [
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "2066661119a1081043580c5f9e5fbdfef21adefe882b1b28a1ee19b4916ff3a2",
+      "newSha256": "6e0e28a1a829654402eb26fa39fdf25fd71c59d1bd92e70f59d86fa5ffaa720a",
+      "reason": "Expands native responsibility projections, current Routine/workflow/contact/source ACL and departure preflight coverage; dated20-case publication remains distinct from current source.",
+      "changeCommits": [
+        "e32bb2a91e6b3ab84ea20325536d4546980fc46b fix: use one current responsibility projection and hide member evidence after denied refresh [skip ci]",
+        "24e3c582f71d968a85068de284c807889b81f8ac feat: preview member responsibility without delaying revocation or retaining stale session data [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "fa308271eb629b17344223266568482ce3a45e9a9295fae7e07c7bc3e0bb104f",
+      "newSha256": "edf104acac20c2f600c5e281516b036cf8130f7d26877074a4258b02b663d5e2",
+      "reason": "Adds retained native source erasure regression coverage; prior test results are not transferred to changed bytes.",
+      "changeCommits": [
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/routes/companies.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "de9fd53330b9c5fbcb06f8616e2e5de77b8f8c6e3a038d637937f8f69e5b2c18",
+      "newSha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a",
+      "reason": "Requires current Human company-default authority and expected user/session fences for responsibility-contact management.",
+      "changeCommits": [
+        "d685f32d4542f7cf1a1a60463d56bcc9932c40e6 fix: bind responsibility contacts to current Human authority and hide stale session data [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "920275e0a2afbcd44043548cb031f5021f1270f2a7333a65fdce7ff4015a242c",
+      "newSha256": "56fd410c688fec6e2b9ac91601ee52b4b211f6008c332194cb094c1da61de026",
+      "reason": "Adds bounded Context read/deadline handling and actual-transaction structural proof reuse; no old result certifies this changed source.",
+      "changeCommits": [
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/services/authorization.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "90e03f9112765b0fa161833a5cc913c793472735683e7242fcd1c2cc72774241",
+      "newSha256": "44c2969fcc1dd11e162a9980aad380afdc4611e0a5b1e7a31163defcceb23eca",
+      "reason": "Changes bounded native source graph execution and transaction-local structural/mutable source dependency proof handling. Current authority/source checks remain canonical owners; this inventory does not qualify the new algorithm.",
+      "changeCommits": [
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/services/context/context-manifest.test.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "ed7a34d078acc4ef9e64f229696d7b97b5a8bd82e0ef0880c2c5bc83714f96c3",
+      "newSha256": "78b43341a918d0bd5543c0365b580faf138d4c902b153b5b700a49b6f5ff056e",
+      "reason": "Adds current Context/source capture regressions; source inventory only at this head.",
+      "changeCommits": [
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/services/context/context-manifest.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "f6e592175fde963a9ae04cabea81f0e32545f447ebb1fc40f4f8fab4e321dd49",
+      "newSha256": "31dd1f6a9c4c11c70e64b5e12959c02a80d7dd41fbcab26d9ddd734cf34bb0b9",
+      "reason": "Changes current Context source capture/read-budget and canonical source-owner integration; old exact-source receipts remain historical.",
+      "changeCommits": [
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "9a07410333b5caad34ff396f41927db76d63e888954d8bc1fc8791979e4ccb16",
+      "newSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f",
+      "reason": "Changes native Memory source read-budget and actual-transaction temporal/structural proof reuse; not requalified by refreshing this pin.",
+      "changeCommits": [
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "4e3d721fbccdf40cbe11305bbe70aa2e5112af36975647141bd13ca2573b63ae",
+      "newSha256": "b79f5e8b83351b31fcf580ed1660935d9fc841838abe3047ec86c20ffad8bee7",
+      "reason": "Updates native execution, lifecycle/admission and provider/remote workload cleanup paths; original cleanup evidence does not certify the full changed executor.",
+      "changeCommits": [
+        "72f674f189d0a3fb56c5c2218285f74bcbabf31c fix(v10): preserve stage sources and authorize workspace preparation",
+        "a7561941c921e6f959dff8a52f4fad4a5653294c fix: export source schema and enforce sandbox working-directory policy",
+        "778035cd93c5b8922318981895294d5cdb403cd8 fix: suppress stale remote signals and provide qualified CI SDK fixtures",
+        "27981bd014835e5a1d59b578f6044728b5f1f5c4 feat: integrate governed worker startup and stopped-session recovery",
+        "213f8bcb819f97f3dfffb107493f2313278f4e5f feat: integrate v10 managed native execution and lifecycle contracts",
+        "1ddf4265d80949c885193c867a01ab7a18827ebb fix: order Native event transactions with managed tool operations [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "server/src/services/saas/account-deletion.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "4c04bb8b7d5df9be9e9939a6db52d2b411482964579f944854cb15697050d183",
+      "newSha256": "8c7c4cf8f84785c2f3ff34b32184e4659f7715f4e0fb30994e48a411b8759d5b",
+      "reason": "Includes Feedback experience-measure erasure in original account deletion ownership.",
+      "changeCommits": [
+        "bacec1d0d4caf5611364b61145b12d7747a12290 feat: collect consented Feedback quality measures with immutable source receipts and withdrawal [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "ui/src/api/companies.ts",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "5d1864a416d957f6f762325a0635cf0cfbaebfca78ff0738c64583d0e146d643",
+      "newSha256": "229ba77be6dcd363c0b0e3cbc2564f1041851c55be5e35309c19c4ab7e28ab31",
+      "reason": "Adds scoped responsibility-contact request handling and original company API contract changes; current pin is inventory only.",
+      "changeCommits": [
+        "d685f32d4542f7cf1a1a60463d56bcc9932c40e6 fix: bind responsibility contacts to current Human authority and hide stale session data [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "ui/src/pages/CompanySettings.tsx",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "9a4b6d142148014043266f674dd731f4b7faefc0d9af1fcb2ef7437f02b6e834",
+      "newSha256": "fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6",
+      "reason": "Adds current Human/session/company authority fencing for contact settings; dated UI evidence has its own source boundary.",
+      "changeCommits": [
+        "d685f32d4542f7cf1a1a60463d56bcc9932c40e6 fix: bind responsibility contacts to current Human authority and hide stale session data [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    },
+    {
+      "path": "ui/src/pages/CompanySettingsRenameHint.test.tsx",
+      "disposition": "reviewed_current_source_delta",
+      "oldSha256": "34e42e83bf1e00b464e18a935d73b9eca20de519e6c7237ccb8761484ce1266f",
+      "newSha256": "0357a097b6d40c7b938f46eb3867d7d25797b71c22475b205feafb6900bacd4e",
+      "reason": "Expands contact settings authority/session regression fixture coverage; no current test verdict is inferred.",
+      "changeCommits": [
+        "d685f32d4542f7cf1a1a60463d56bcc9932c40e6 fix: bind responsibility contacts to current Human authority and hide stale session data [skip ci]"
+      ],
+      "qualificationDisposition": "Current source inventory at sourceHead only; retain prior exact-source receipts as historical, with no status promotion or new execution claim."
+    }
+  ],
+  "addedPins": [
+    {
+      "path": "packages/db/src/migrations/0566_customer_feedback_experience_measures.sql",
+      "sha256": "d84292b1b5bbdb66175393ca3bcb82d3df0db351f6d31fa0d11e695fe303b97e"
+    },
+    {
+      "path": "packages/db/src/migrations/0567_sandbox_qualification_probe_gate.sql",
+      "sha256": "280b3e2eb46c73bcdfc316925489a1172894b3e7a54a1e68236c051693f976a2"
+    },
+    {
+      "path": "packages/db/src/migrations/0568_sandbox_recompile_stopped_policy.sql",
+      "sha256": "2cdad19151dcb57116e8875dc97c61710aed92f130d84d7c2943c934f20da2ef"
+    },
+    {
+      "path": "packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql",
+      "sha256": "6dcd86c4371703331e5e24d6a717afc1c6d43459139abc34307d4f08d4de7087"
+    },
+    {
+      "path": "packages/db/src/migrations/0570_issue_workspace_source_transform.sql",
+      "sha256": "1dc73b3270f6137c09a77d50a9527929ae45d7bf4ff6476c9d150ae089bee88a"
+    },
+    {
+      "path": "packages/db/src/migrations/0571_issue_native_stage_source_transform.sql",
+      "sha256": "7e141a4c058cbb85119d36dd55155e2b5adae123294ab87b0dbf35c8630b0f4d"
+    },
+    {
+      "path": "packages/db/src/schema/customer_feedback_experience_measures.ts",
+      "sha256": "dbf45db715ae0221e9a734f54bf154b3026227fde1a5189252d3d32627e3b7b3"
+    },
+    {
+      "path": "packages/db/src/schema/execution_sandbox.ts",
+      "sha256": "5c6df7469351be5acbba9c9840af654aca3ecdc30ed387e5318d3da780365669"
+    },
+    {
+      "path": "server/src/__tests__/native-remote-workload-stop-projection.integration.test.ts",
+      "sha256": "d2da6a33582acad0709242c64578a37bbb927a145e775714fa69008d31c565a7"
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-policy.test.ts",
+      "sha256": "2e38c1288b7ca97818ec8f36f71f78db82d320f97a220c4cc5ba2ae112a42c01"
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "sha256": "ee838e05f4f34714a63f1dba583efb5c6fb16e02a6093f20fec1330cee789fb0"
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox.integration.test.ts",
+      "sha256": "be0c3b45ceadf903205e6234526d6404f12730112070c91a74652673e5e7862a"
+    },
+    {
+      "path": "server/src/__tests__/v9-customer-feedback.integration.test.ts",
+      "sha256": "fc5ff4b2e0514010a2df40accbcbe1d2fbb9fab64f92bae7b54d2a7b17286c40"
+    },
+    {
+      "path": "server/src/services/customer-feedback-retention-erasure.ts",
+      "sha256": "9eada3f382e30693ea934d5bee0b3e482177663c61bb0c3cd99619cee2a6bdfc"
+    },
+    {
+      "path": "server/src/services/customer-feedback.ts",
+      "sha256": "7e39b9d211b7e32896e012e78f0ee48e568172698a05277b94a5803d226aab85"
+    },
+    {
+      "path": "server/src/services/execution-sandbox/policy-compiler.ts",
+      "sha256": "cdb3d1e46c35556a081ef96f19eaa7dc214f3db6629e4704712bf67e4402e202"
+    },
+    {
+      "path": "server/src/services/execution-sandbox/qualification.ts",
+      "sha256": "7c39a6e7f0de97c97e31d1a39362d2438e6fc4d53278b32ef21dcf8fb51eab5c"
+    },
+    {
+      "path": "server/src/services/execution-sandbox/sandbox-service.ts",
+      "sha256": "b7e8bf0c6684a6bceb12baff095ae90685c19966a34a4c884aecec0d7422e4cb"
+    },
+    {
+      "path": "server/src/services/experience/private-0565/company-responsibility-attention.ts",
+      "sha256": "9a79e4be557c517dc9080b0de710e7e3676a21034915a93de1d1ba4b40bd75d6"
+    },
+    {
+      "path": "server/src/services/experience/service.ts",
+      "sha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1"
+    },
+    {
+      "path": "server/src/services/native-stage-task-body-source.test.ts",
+      "sha256": "27e52dcf32e50f4721e16e1617b2ad53ec77a505bb6063dd67272adf00f3bc89"
+    },
+    {
+      "path": "server/src/services/native-stage-task-body-source.ts",
+      "sha256": "e3538e788529e4400d414f79fdd7c364deab31b10b09eae2966e05f6b084e491"
+    }
+  ],
+  "qualificationBoundary": "Fresh b1 scoped CLI and all six unchanged regression callbacks passed; the original Main baseline failure is retained. These prove register consistency only. No PG, migration apply, runtime integration, source-owner qualification, admission or historical status promotion is inferred. All dated receipts retain their original source boundaries. The old R3 raw archive was not recovered; this publication embeds only the newly captured raw evidence.",
+  "recoverySourceBasis": {
+    "kind": "exact-R1-recovery-plus-b1-inventory-review",
+    "recoveredRegisterSha256": "1d1e04cb9537ab7a50eb8f925407806b3b3fce2fe5736c94be8e922afbcd6d1f",
+    "originalSourceHead": "e31c09662af4851560bf3ef50dc64fc341c6df3a",
+    "currentSourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",
+    "publishedDeltaPaths": [
+      "doc/operations/agent-native-tool-alias-compatibility.json",
+      "docs/help/change-review.json",
+      "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+      "server/src/__tests__/heartbeat-native-status-context.test.ts",
+      "server/src/services/heartbeat.ts",
+      "server/src/services/issues.ts"
+    ],
+    "deltaIntersectsPinnedSources": false,
+    "allCurrentSourcePinsVerified": true,
+    "preservedPacket": "packet-4 of source-checkpoints/private-reviewed-successors-through-e31-20261103.tar.gz",
+    "lostEvidenceBoundary": "Old R3 archive c1cb42825be445f530aebb1834dbd32bc74b138acb9bad73861825813becfb79 bytes were not recovered and are not reproduced or claimed. Any later qualification archive records new captures only.",
+    "qualification": "Initial recovery awaited a fresh capture; actual fresh b1 evidence is preserved in history and actual composed-overlay consistency evidence is recorded separately below. No lost raw archive bytes were reconstructed."
+  },
+  "approvedCombinedPinChanges": [
+    {
+      "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "oldSha256": "c951c2cfaeac101bc899cab955a8cc8fd55ad11099e9c36aebc8b5c01d7bd840",
+      "proposedSha256": "e9d7efe73869514f2397e6a04a47775575856267b41e3d88e5e4f3bfdba75a0a",
+      "reason": "Reviewed TemporalR2 fixture now uses actual Human review/accepted predecessor binding, retaining original source privacy assertions. Pending actual SDK/current combined qualification; no historical result transfer.",
+      "status": "ROOT_APPROVED_CURRENT_SOURCE_INVENTORY_NOT_RUNTIME_QUALIFICATION"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "oldSha256": "b79f5e8b83351b31fcf580ed1660935d9fc841838abe3047ec86c20ffad8bee7",
+      "proposedSha256": "3063cc758ab63d4989452da7b7b5ba4c99d2cfe5cb8f34e71068c4e40ba89ff6",
+      "reason": "Exact composition of reviewed managed command identity/serialization and readonly blocked-Human handling. Both patch orders commute byte-exact; original source/role/run proof remains authoritative. No completion or source admission bit is introduced; combined runtime qualification is pending.",
+      "status": "ROOT_APPROVED_CURRENT_SOURCE_INVENTORY_NOT_RUNTIME_QUALIFICATION"
+    }
+  ],
+  "combinedSourceManifestSha256": "20db33d995b3298ae52acdd4645b4b312f9ca3ec5cb600a149cce2cd7c6cccd6",
+  "registerConsistencyQualificationHistory": [
+    {
+      "kind": "fresh-b1-scoped-register-consistency-only",
+      "checkedRegisterSha256": "c8e3b0c5ff0e077721dad5636c1709315e892f65db21a1bec209d46109d7fbfa",
+      "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",
+      "cliResult": "Actual exit 0: 70 affected SQL files, 12 owner groups, current source pins match, no unsupported promotion.",
+      "regressionResult": "Actual exit 0: all six unchanged existing regression callbacks passed using the unchanged production validator.",
+      "harnessBoundary": "Exactly three path-bootstrap substitutions only; existing callbacks remain byte-identical, with an exact inverse proof.",
+      "baselineResult": "Actual exit 1: the original Main register has five passing callbacks and one failing positive inventory callback against its stale source pins. This is not a candidate failure.",
+      "evidenceArchive": {
+        "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/register-consistency-evidence-b1-20261103.tar.gz",
+        "sha256": "087d1aab4d44fbc0fdbf6a10898a49c4b46fc4537ed0e7fb492e9c21f6cbb245",
+        "members": {
+          "SHA256SUMS": "5c32156a8eeee89100f5bda752c53c7e3679efaeb6b186912c4488eee32750b6",
+          "checked-b1-phase-matrix.json": "c8e3b0c5ff0e077721dad5636c1709315e892f65db21a1bec209d46109d7fbfa",
+          "fresh/candidate-cli.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+          "fresh/candidate-cli.log": "f5002694f11fb1b4ae881e9b5b4f9a0f47fb73fefd8e4dd5478d0d754c3e26ba",
+          "fresh/candidate-six-callbacks.exit": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+          "fresh/candidate-six-callbacks.log": "bef9c3bc7fd8fa04c0c4f70299e10b82050bff5473c07839d641013060194ea4",
+          "fresh/exact-callbacks-as-run.mjs": "3fe92012d122d0e8162ed3033f06665f5f9360a66f62c8593c9c649fdfda485f",
+          "fresh/original-main-baseline.exit": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+          "fresh/original-main-baseline.log": "c8cf8d8611e55aa40f23ae5415bf80a79327fe5af49c37f4abb04dd6c39ea3c7",
+          "fresh/path-bootstrap-proof.json": "4d25bdcbc6db0e5b87e0827cedabf4bb095aa3b787ddcb9042dac0db2aa5c8ad",
+          "fresh/receipt.json": "95ced052cce424551c11c34166817285b9076ac69a468766bd0146542836f62d",
+          "recovered-exact-r1-phase-matrix.json": "1d1e04cb9537ab7a50eb8f925407806b3b3fce2fe5736c94be8e922afbcd6d1f",
+          "source-recovery-proof.json": "ce72c1d135db91a112ada34cab0afde78c20acb5bbdbcb3c3c81ac27b7b00a0a",
+          "source/original-regression-tests.mjs": "9e957bb415e9ea2d42218af5f0971feadb66dcaa36a725903e79820375f44511",
+          "source/production-cli.mjs": "9d8c0bc38d5a04f9f4522dcbf6301ca78f3d9cc7b5f157bfb33467e4de5c71fd",
+          "source/production-validator.mjs": "4301b567c6d01fcec186d027327d1e60cfd98ac37fa0bc02f6d742439c3b031b"
+        }
+      },
+      "limits": [
+        "New raw logs and receipts from the restored environment only. Old R3 archive bytes were not recovered and are not reproduced.",
+        "No PostgreSQL, migration application, application/runtime integration, source-owner suites, operator or physical/provider/Human qualification.",
+        "Final publication metadata and packaging are ignored by the unchanged validator; all validator-consumed fields equal the actual checked b1 matrix. No further Node execution claimed."
+      ],
+      "resourceReceipt": {
+        "lockPath": "/workspace/v10-preparation/v10-pg-tests.lock",
+        "heapMiB": 64,
+        "groupRssCapMiB": 128,
+        "deadlineSeconds": 30,
+        "allPinsUnchanged": true,
+        "oomBefore": {
+          "low": "0",
+          "high": "0",
+          "max": "0",
+          "oom": "0",
+          "oom_kill": "0",
+          "oom_group_kill": "0"
+        },
+        "oomAfter": {
+          "low": "0",
+          "high": "0",
+          "max": "0",
+          "oom": "0",
+          "oom_kill": "0",
+          "oom_group_kill": "0"
+        },
+        "actualRunReceipts": "archive member fresh/receipt.json"
+      }
+    }
+  ],
+  "approvedOwnDocumentationPinChanges": [
+    {
+      "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/README.md",
+      "oldSha256": "9175ecb3a3db8270a7812188edb1738cee3068b37af8f19971074e39c5466cef",
+      "newSha256": "79e03782b02bc1922ec3c28798221139382d90b0273e202f72477f366c3d9097",
+      "reason": "Root-approved own-document inventory correction; actual composed overlay failed the unchanged strict guard on exactly this artifact. No historical/phase/runtime status promotion."
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/stage-list.txt",
+      "oldSha256": "660235e2f417cc8813561d42ce3701e80aea5717dbe50dfd6086ca04f0822850",
+      "newSha256": "9555fe64747766f1e67d3e0f62a14e05aca3ed7b7dad84ff007797d73264052a",
+      "reason": "Root-approved own-document inventory correction; actual composed overlay failed the unchanged strict guard on exactly this artifact. No historical/phase/runtime status promotion."
+    }
+  ],
+  "registerConsistencyQualification": {
+    "kind": "exact-composed-source28-scoped-consistency-only",
+    "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",
+    "sourceManifestSha256": "20db33d995b3298ae52acdd4645b4b312f9ca3ec5cb600a149cce2cd7c6cccd6",
+    "scope": "Both generators, five positive guards and 34 original regression callbacks actual exit0 on the exact private overlay. Original Help pure interface; genuine alternate Git index. Final documentation count change separately passed original SafeGraph generator/check. No SDK, PG, migration apply, source-owner readiness or historical promotion.",
+    "evidenceArchive": {
+      "path": "doc/operations/aw-v10-evidence/combined-b1-reviewed-source-20261103/qualification.tar.gz",
+      "sha256": "d1876a0481da9d6ded4b8531b2289e33764c16accba84b9abec9f3ac24570727",
+      "checkedRegisterMember": "checked/doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/phase-matrix.json",
+      "receiptMember": "capture/receipt.json",
+      "finalDocumentationCountReceipt": "prior-or-final/qualification-final-count/receipt.json"
+    },
+    "outerSessionBoundary": "Per-command actual waited exits retained; later outer tool session lookup unavailable, no extra parent-exit claim."
+  },
+  "approvedIncrementalSource": {
+    "sourceManifestSha256": "2d376280e27420adc40a7229c6c779202798519e9bf9f90d6f91d9fc83ebe57c",
+    "sourceFiles": 6,
+    "scope": "Individually reviewed UID R2, Human comment V3 and diagnostic R2 layer; no existing semantic phase source pins affected and no historical result promotion."
+  },
+  "incrementalConsistencyQualification": {
+    "kind": "reviewed-increment-six-source-consistency-only",
+    "sourceManifestSha256": "2d376280e27420adc40a7229c6c779202798519e9bf9f90d6f91d9fc83ebe57c",
+    "evidenceArchive": {
+      "path": "doc/operations/aw-v10-evidence/combined-b1-reviewed-source-20261103/incremental-qualification.tar.gz",
+      "sha256": "69b8e35aa9f943af2664ac9998131cedf6b4a21ea6ed864d59f20f4baa9b2171",
+      "receiptMember": "current-capture/receipt.json"
+    },
+    "result": "Both original generators, five positive guards and 34 original regression callbacks passed with actual per-command and durable orchestration exit0. No SDK/PG/application/rollout/Human acceptance or historical status promotion."
+  }
+}

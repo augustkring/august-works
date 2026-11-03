@@ -1,3 +1,4 @@
+import { assertNativeBlockedInteractionResult } from "../native-direct-input.js";
 import { and, asc, eq, gt, or } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -401,6 +402,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     });
 
     await this.#db.transaction(async (tx) => {
+      await assertNativeBlockedInteractionResult(tx, this.#binding, validated.result);
       // Result insertion checks the task foreign key. Acquire that parent lock
       // before the run, matching task mutations that subsequently update a run.
       // Otherwise concurrent chat/status writes can deadlock after generation.

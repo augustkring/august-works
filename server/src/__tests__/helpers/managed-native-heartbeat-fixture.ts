@@ -136,6 +136,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     agentId: string; gateway: ReturnType<typeof workerModelGateway>; heartbeat: ReturnType<typeof heartbeatService>;
     managedAgentIds: { executor: string; reviewer: string } | null;
     closeManagedAgentHostForRun: (runId: string) => Promise<void>;
+    humanApi: { app: ExpressApp; humanCookie: string };
     managedSignoff: { app: ExpressApp; humanCookie: string; agentApiTokens: { executor: string; reviewer: string } } | null;
     facts: () => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
       sandboxRuntimeFacts: Record<string, unknown> | null };
@@ -298,7 +299,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   let providerToolNames: string[] = [];
   const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
     sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
-    errorCode?: string; serviceFrames?: string[]; sourceFrames?: ReturnType<typeof managedModelRepositorySourceFrames> }> = [];
+    errorCode?: string; serviceFrames?: string[]; serialIncomingCredentialKind?: "absent" | "non_bearer" | "jwt" | "opaque";
+    sourceFrames?: ReturnType<typeof managedModelRepositorySourceFrames> }> = [];
   const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean; runId: string }> = [];
   const reservationForRun = async (runId: string) => db.select({ reservation: orchestrationModelReservations })
     .from(orchestrationModelReservations).innerJoin(orchestrationWorkerAttempts,
@@ -448,7 +450,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const result = await executeAssignedTool(call, workflowContext, scopedContext);
       const status = result && typeof result === "object" && !Array.isArray(result)
         ? (result as Record<string, unknown>).status : null;
-      if (status === "completed") await input.afterSuccessfulAssignedToolResult!({ call: capturedCall, result,
+      if (status === "completed" || status === "replayed") await input.afterSuccessfulAssignedToolResult!({ call: capturedCall, result,
         replay: () => executeAssignedTool(structuredClone(replayCall), workflowContext, scopedContext) });
       return result;
     };
@@ -526,11 +528,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   brokerApp.use((error: unknown, req: express.Request, _res: express.Response, next: express.NextFunction) => {
     const fact = brokerRequestByObject.get(req);
     const diagnostic = error && typeof error === "object" ? error as Error & {
-      code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown };
+      code?: unknown; status?: unknown; statusCode?: unknown; cause?: { code?: unknown }; serialIncomingCredentialKind?: unknown;
     } : null;
     const safeIdentifier = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_:-]{1,96}$/.test(value) ? value : null;
     if (fact && diagnostic) {
       fact.sourceFrames = managedModelRepositorySourceFrames(error);
+      const kind = diagnostic.serialIncomingCredentialKind;
+      if (kind === "absent" || kind === "non_bearer" || kind === "jwt" || kind === "opaque") fact.serialIncomingCredentialKind = kind;
       fact.errorName = safeIdentifier(diagnostic.name) ?? "UnknownError";
       fact.errorCode = safeIdentifier(diagnostic.code) ?? safeIdentifier(diagnostic.cause?.code) ?? undefined;
       const status = typeof diagnostic.status === "number" ? diagnostic.status
@@ -999,44 +1003,45 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       throw error;
     }
   } });
+  const [humanSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+    token: authSessions.token, expiresAt: authSessions.expiresAt }).from(authSessions)
+    .where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, userId))).limit(1);
+  if (!humanSession || humanSession.expiresAt.getTime() <= Date.now())
+    throw new Error("scheduler_fixture_human_session_unavailable");
+  const humanCookie = `session_token=${encodeURIComponent(humanSession.token)}`;
+  const resolveSession = async (req: ExpressRequest): Promise<BetterAuthSessionResult | null> => {
+    const tokenCookie = (req.header("cookie") ?? "").split(";").map(value => value.trim())
+      .find(value => value.startsWith("session_token="));
+    const token = tokenCookie ? decodeURIComponent(tokenCookie.slice("session_token=".length)) : null;
+    if (!token) return null;
+    const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
+      expiresAt: authSessions.expiresAt }).from(authSessions)
+      .where(and(eq(authSessions.token, token), sql`${authSessions.expiresAt} > now()`)).limit(1);
+    if (!session) return null;
+    const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+      .from(authUsers).where(eq(authUsers.id, session.userId)).limit(1);
+    if (!user) return null;
+    return { session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user };
+  };
+  const app = express();
+  app.use(express.json());
+  app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession }));
+  app.use("/api", issueRoutes(db, createStorageService(createLocalDiskStorageProvider(join(runHome, "signoff-api-storage"))), { heartbeat }));
+  app.use(errorHandler);
+  const humanApi = { app, humanCookie };
   let managedSignoff: { app: ExpressApp; humanCookie: string;
     agentApiTokens: { executor: string; reviewer: string } } | null = null;
   if (managedAgentIds) {
-    const [humanSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
-      token: authSessions.token, expiresAt: authSessions.expiresAt }).from(authSessions)
-      .where(and(eq(authSessions.id, sessionId), eq(authSessions.userId, userId))).limit(1);
-    if (!humanSession || humanSession.expiresAt.getTime() <= Date.now())
-      throw new Error("scheduler_fixture_human_session_unavailable");
-    const humanCookie = `session_token=${encodeURIComponent(humanSession.token)}`;
-    const resolveSession = async (req: ExpressRequest): Promise<BetterAuthSessionResult | null> => {
-      const tokenCookie = (req.header("cookie") ?? "").split(";").map(value => value.trim())
-        .find(value => value.startsWith("session_token="));
-      const token = tokenCookie ? decodeURIComponent(tokenCookie.slice("session_token=".length)) : null;
-      if (!token) return null;
-      const [session] = await db.select({ id: authSessions.id, userId: authSessions.userId,
-        expiresAt: authSessions.expiresAt }).from(authSessions)
-        .where(and(eq(authSessions.token, token), sql`${authSessions.expiresAt} > now()`)).limit(1);
-      if (!session) return null;
-      const [user] = await db.select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
-        .from(authUsers).where(eq(authUsers.id, session.userId)).limit(1);
-      if (!user) return null;
-      return { session: { id: session.id, userId: session.userId, expiresAt: session.expiresAt }, user };
-    };
     const executorKey = await agentService(db).createApiKey(managedAgentIds.executor, "Managed signoff Executor test key",
       { kind: "standard" }, { responsibleUserId: human.userId });
     const reviewerKey = await agentService(db).createApiKey(managedAgentIds.reviewer, "Managed signoff Reviewer test key",
       { kind: "standard" }, { responsibleUserId: human.userId });
-    const app = express();
-    app.use(express.json());
-    app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession }));
-    app.use("/api", issueRoutes(db, createStorageService(createLocalDiskStorageProvider(join(runHome, "signoff-api-storage"))), { heartbeat }));
-    app.use(errorHandler);
-    managedSignoff = { app, humanCookie,
+    managedSignoff = { ...humanApi,
       agentApiTokens: { executor: executorKey.token, reviewer: reviewerKey.token } };
   }
   try {
     return await input.driveScheduler({ db, actor: human, companyId, agentId, managedAgentIds,
-      closeManagedAgentHostForRun, managedSignoff, gateway, heartbeat,
+      closeManagedAgentHostForRun, humanApi, managedSignoff, gateway, heartbeat,
       facts: () => ({ providerCallCount: providerCalls.length, issuerFacts: structuredClone(issuerFacts),
         sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.facts?.(),
           originHttpDenials: Object.fromEntries(originHttpDenials), authenticatedModelTunnels, appliedModelProfileInjections: structuredClone(appliedModelProfileInjections) }
@@ -1081,6 +1086,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
           ? allowed.has(value) ? value : "unrecognized" : null;
         if (brokerFailures.length > 0) console.info("managed_scheduler_fixture_broker_failure_projection", JSON.stringify({
           fixtureTotalBrokerFailures: brokerFailures.length,
+          intentionalOriginDenialsEnabled: input.observeModelOriginDenials === true,
           failures: brokerFailures.slice(0, 8).map(fact => ({
             status: fact.status,
             errorStatus: typeof fact.errorStatus === "number" && Number.isInteger(fact.errorStatus)
@@ -1091,6 +1097,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
             constraintPresent: typeof fact.constraint === "string",
             errorName: closed(fact.errorName, knownErrorNames),
             sourceFrames: fact.sourceFrames ?? [],
+            incomingCredentialKind: fact.serialIncomingCredentialKind ?? null,
           })),
         }));
       }

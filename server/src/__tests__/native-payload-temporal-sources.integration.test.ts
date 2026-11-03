@@ -5,12 +5,14 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { companyMemberships, completionContracts, contextManifestItems, createDb, documents, documentRevisions,
+import { agents, agentWakeupRequests, nativeRunFinalizations, orchestrationPlans, companyMemberships, completionContracts, contextManifestItems, createDb, documents, documentRevisions,
   heartbeatRuns, issueComments, issueDocuments, issues, memoryJobs, memoryRecords, toolInvocations, orchestrationModelReservations, orchestrationWorkerAttempts, issuePrivacySources } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { activeMemoryTemporalContexts, canActorReadIssuePrivacy, withReadMemoryTemporalSources,
   withReadPinnedNativeTaskSnapshot, type MemoryPageStructuralProofMemoStore } from "../services/authorization.js";
 import * as authorizationChecks from "../services/authorization.js";
+import { heartbeatService } from "../services/heartbeat.js";
+import { verificationService } from "../services/supervision/verification-service.js";
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
@@ -158,9 +160,55 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     if (!taskA || !taskB) throw new Error("The managed Native Task outputs disappeared");
     if (!taskB) throw new Error("The Native Task B disappeared");
 
+    // Independently settle the first retained product through its real Human
+    // verification owner before this same Agent admits another Task.
+    stage("verify_first_journey");
+    const {runId:firstRunId,issueId:firstIssueId,planId:firstPlanId} = first;
+    if (!firstRunId || !firstIssueId || !firstPlanId) throw new Error("temporal_verified_predecessor_owner_missing");
+    const verifier = verificationService(db);
+    const packet = await verifier.packet(first.aliceActor,first.companyId,firstPlanId);
+    expect(packet.deterministicFailures).toEqual([]);
+    expect(packet.policy.workerSelfCertification).toBe(false);
+    const reviewedDocuments = packet.evidence.filter(item=>item.type==="task_document" && item.hash!==null &&
+      [nativeSha256("A predates the private Context read."),nativeSha256("B follows the private Context read.")].includes(item.hash));
+    expect(reviewedDocuments).toHaveLength(2);
+    const evidenceRefs = reviewedDocuments.map(item=>item.ref);
+    const judgement = (_:unknown,index:number)=>({index,satisfied:true,evidenceRefs});
+    const review = await verifier.review(first.aliceActor,first.companyId,firstPlanId,{
+      expectedPlanVersion:packet.planVersion,expectedResultHash:packet.resultHash,workerId:packet.workerId,
+      result:"pass",objectiveSatisfied:true,rationale:"The initiating Human checked both exact retained temporal journey documents.",
+      businessInvariants:packet.contract.businessInvariants.map(judgement),
+      evidenceRequirements:packet.contract.evidenceRequirements.map(judgement),
+      prohibitedOutcomes:packet.contract.prohibitedOutcomes.map(judgement),
+    });
+    expect(review).toMatchObject({result:"pass",reviewerType:"human",reviewerId:first.aliceUserId,recommendation:"FINISH",resultHash:packet.resultHash});
+    if (!review.workerAttemptId) throw new Error("temporal_verified_predecessor_attempt_missing");
+    const [reviewedAttempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+      eq(orchestrationWorkerAttempts.companyId,first.companyId),eq(orchestrationWorkerAttempts.id,review.workerAttemptId)));
+    expect(reviewedAttempt).toMatchObject({planId:firstPlanId,runId:firstRunId,agentId:first.agentId,status:"succeeded"});
+    const [reviewedPlan] = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id,firstPlanId));
+    const [reviewedTask] = await db.select().from(issues).where(eq(issues.id,firstIssueId));
+    expect(reviewedPlan).toMatchObject({status:"completed"});
+    expect(reviewedTask).toMatchObject({status:"done",assigneeAgentId:first.agentId,responsibleUserId:first.aliceUserId});
+    const [firstFinalizer] = await db.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId,first.companyId),eq(nativeRunFinalizations.runId,firstRunId)));
+    if (!firstFinalizer?.decisionId) throw new Error("temporal_verified_predecessor_decision_missing");
+    const firstHeartbeat = heartbeatService(db);
+    await firstHeartbeat.dispatchPendingNativeStatusWakeups({companyId:first.companyId});
+    const [skippedContinuation] = await db.select().from(agentWakeupRequests).where(and(
+      eq(agentWakeupRequests.companyId,first.companyId),eq(agentWakeupRequests.agentId,first.agentId),
+      eq(agentWakeupRequests.idempotencyKey,`native-status:${firstFinalizer.decisionId}:continuation`)));
+    expect(skippedContinuation).toMatchObject({status:"skipped",runId:null});
+    expect(skippedContinuation?.finishedAt).toBeTruthy();
+    const [claimGeneration] = await db.select({value:sql<string>`${agents.updatedAt}::text`}).from(agents).where(and(
+      eq(agents.companyId,first.companyId),eq(agents.id,first.agentId)));
+    if (!claimGeneration?.value) throw new Error("temporal_verified_predecessor_generation_missing");
+    const verifiedPredecessor = {runId:firstRunId,issueId:firstIssueId,planId:firstPlanId,workerAttemptId:review.workerAttemptId,
+      verificationRunId:review.id,resultHash:packet.resultHash,agentUpdatedAtGeneration:claimGeneration.value};
+
     stage("second_journey");
     const second = await runManagedNativeOpenCodeFixture({ ...sandboxOptions, db, connectionString: database.connectionString,
-      root, instanceId, reuseIdentity: first.reuseIdentity, existingTaskId: taskBId,
+      root, instanceId, reuseIdentity: first.reuseIdentity, existingTaskId: taskBId, verifiedPredecessor,
       onPreserveDebugArtifacts: () => { preserveDebugArtifacts = true; },
       taskTitle: `Temporal follow-up ${randomUUID()}`,
       steps: [

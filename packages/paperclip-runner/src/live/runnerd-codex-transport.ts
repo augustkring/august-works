@@ -4200,6 +4200,9 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     let runnerSuspended = false;
     let providerDrained = false;
     let suspensionRequired = false;
+    // A remote handle also owns its awaited model-provider Stop. Durable
+    // suspension cannot replace successful completion of that exact owner.
+    let exactCompletionConfirmed = this.#handle === null;
     if (
       this.#core !== null &&
       (this.#handle !== null || adoptedRunner !== undefined) &&
@@ -4264,6 +4267,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
             this.#handle,
             Math.max(0, closeDeadline - Date.now()),
           );
+          exactCompletionConfirmed = true;
           this.#evidence.runnerExited = true;
           this.#evidence.runnerExitCode = result.code;
           this.#evidence.runnerSignal = result.signal as NodeJS.Signals | null;
@@ -4323,6 +4327,7 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
     // an incomplete or identity-conflicting state remains fail-closed.
     const finalProviderState = this.#providerDrainState();
     const runnerSettled =
+      exactCompletionConfirmed &&
       runnerSuspended &&
       providerDrained &&
       this.#core?.semanticToolResultsSettled() === true &&

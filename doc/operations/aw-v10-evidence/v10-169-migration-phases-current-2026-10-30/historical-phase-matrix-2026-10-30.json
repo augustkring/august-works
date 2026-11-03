@@ -1,0 +1,1315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "kind": "v10-169-current-migration-phase-register",
+  "registerDate": "2026-10-30",
+  "requirement": "V10-169",
+  "briefClauses": [
+    "MIG-01",
+    "MIG-02",
+    "MIG-03",
+    "MIG-04",
+    "MIG-05",
+    "MIG-06",
+    "MIG-07"
+  ],
+  "historicalRegister": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+  "historicalRegisterDisposition": "preserved unchanged; V10-169 remains historical_partial_evidence_open there",
+  "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "officialMigrationInterval": {
+    "first": 502,
+    "last": 565,
+    "latestOfficialMigration": "0565_first_gorgon",
+    "latestOfficialMigrationCommit": null,
+    "journalSource": "packages/db/src/migrations/meta/_journal.json"
+  },
+  "promotion": "phase-index-only; no whole-program or production rollout qualification claimed",
+  "groups": [
+    {
+      "id": "native-payload-context-provenance",
+      "migrations": [
+        504,
+        505,
+        506,
+        507,
+        508,
+        509,
+        510,
+        511,
+        512,
+        513,
+        514,
+        515,
+        516,
+        517,
+        533,
+        545,
+        546,
+        548,
+        549
+      ],
+      "purpose": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding.",
+      "authority": "Native owner services write source snapshots and source identities; PostgreSQL guards enforce immutable protocol bindings and monotonic invalidation. Unknown protocol/version 0 remains unqualified and is denied for private read admission; it is never inferred as verified.",
+      "durableState": [
+        "projects.source_project_ids and privacy-source lineage",
+        "heartbeat_runs source_context_manifest_ids, provenance-qualified bit, native input protocol/profile receipt",
+        "payload_source_protocol_version/snapshot/invalidated owner fields",
+        "Context manifest roots and Memory source-reference rows",
+        "memory_records.source_provenance_qualified and bounded source identity arrays",
+        "projects.source_provenance_qualified/source_issue_ids"
+      ],
+      "compatibility": "Mixed old writers may leave protocol 0 or missing provenance. New readers preserve unknown state and refuse private disclosure; old writer behavior is not grandfathered as proof. Backfill only where owner evidence can be reconstructed; otherwise quarantine/deny.",
+      "owners": [
+        "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql",
+        "packages/db/src/migrations/0506_wild_thanos.sql",
+        "packages/db/src/migrations/0510_hard_colonel_america.sql",
+        "packages/db/src/migrations/0511_native_run_input_source_binding.sql",
+        "packages/db/src/migrations/0517_native_payload_erasure.sql",
+        "packages/db/src/migrations/0545_native_attachment_stage_dispatch_binding.sql",
+        "packages/db/src/migrations/0546_human_memory_evidence_snapshot_seal.sql",
+        "packages/db/src/migrations/0548_native_conversation_dispatch_sources.sql",
+        "server/src/services/authorization.ts",
+        "server/src/services/analytical-context-authority.ts",
+        "server/src/services/context/context-manifest.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "packages/db/src/migrations/0507_lethal_star_brand.sql",
+        "packages/db/src/migrations/0508_deep_black_cat.sql",
+        "packages/db/src/migrations/0509_nebulous_wong.sql",
+        "packages/db/src/migrations/0512_flimsy_satana.sql",
+        "packages/db/src/migrations/0513_soft_risque.sql",
+        "packages/db/src/migrations/0514_abandoned_hex.sql",
+        "packages/db/src/migrations/0515_happy_screwball.sql",
+        "packages/db/src/migrations/0516_memory_payload_binding_order.sql",
+        "packages/db/src/migrations/0533_native_run_input_source_dispatch_receipts.sql",
+        "packages/db/src/migrations/0549_native_plugin_routine_source_binding.sql",
+        "packages/db/src/migrations/0504_conscious_sleepwalker.sql",
+        "packages/shared/src/validators/native-payload-source-snapshot.ts",
+        "packages/db/src/schema/memory.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/native-payload-source-binding.integration.test.ts",
+        "server/src/__tests__/native-payload-source-mutation-binding.integration.test.ts",
+        "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+        "server/src/__tests__/v10-private-payload.integration.test.ts",
+        "server/src/services/context/context-manifest.test.ts",
+        "packages/db/src/native-input-source-protocol.test.ts",
+        "packages/db/src/native-payload-invalidation-migration.test.ts",
+        "server/src/__tests__/memory-native-capture-purpose.integration.test.ts"
+      ],
+      "recovery": "Erasure and late/restored source writes are rejected by native owner and DB guards; restore-ledger/erasure tests cover selected local DB restore fixtures. Backup archive completeness, mixed hosted fleet, provider copies and arbitrary historical provenance reconstruction remain unqualified."
+    },
+    {
+      "id": "native-authenticator-and-challenge-generation",
+      "migrations": [
+        502,
+        518,
+        519,
+        520,
+        521,
+        522,
+        523,
+        524,
+        558
+      ],
+      "purpose": "Board API key security-event ownership plus passkey/authenticator lifecycle, user-bound challenge generation, TOTP replay state and Better Auth issuer/account compatibility.",
+      "authority": "Native board-key/authenticator owners write the audit and generation state; PostgreSQL constraints/triggers reject malformed security events, stale challenges and rewritten challenge generations.",
+      "durableState": [
+        "passkey and two_factor credential state",
+        "verification authenticator_version and immutable challenge identity",
+        "account provider_id/account_id issuer uniqueness",
+        "auth_security_events board_api_key_id/action and expiry index"
+      ],
+      "compatibility": "Old challenges lacking generation are not treated as current proof; pending challenges are expired/rejected when their owning authenticator generation changes. Issuer migration fails closed on duplicate provider/account identities.",
+      "owners": [
+        "packages/db/src/migrations/0518_safe_hiroim.sql",
+        "packages/db/src/migrations/0519_native_authenticator_lifetime.sql",
+        "packages/db/src/migrations/0520_native_challenge_lifetime.sql",
+        "packages/db/src/migrations/0522_native_challenge_generation.sql",
+        "packages/db/src/migrations/0558_better_auth_issuer_compatibility.sql",
+        "packages/db/src/better-auth-account-issuer-migration.test.ts",
+        "server/src/__tests__/native-two-factor.integration.test.ts",
+        "packages/db/src/migrations/0521_opposite_garia.sql",
+        "packages/db/src/migrations/0523_crazy_lake.sql",
+        "packages/db/src/migrations/0524_mute_doctor_octopus.sql",
+        "packages/db/src/migrations/0502_swift_maria_hill.sql",
+        "packages/db/src/schema/saas_lifecycle.ts",
+        "server/src/services/board-auth.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/native-two-factor.integration.test.ts",
+        "packages/db/src/better-auth-account-issuer-migration.test.ts",
+        "server/src/__tests__/v6-account-deletion.integration.test.ts",
+        "server/src/__tests__/cli-auth-routes.test.ts"
+      ],
+      "recovery": "Credential revocation/generation advancement is monotonic; restoring prior credentials does not restore authority. DB migration fixture covers duplicate issuer refusal. Hosted IdP/session/cache and full backup restore are not claimed."
+    },
+    {
+      "id": "privacy-lineage-and-retained-source-identity",
+      "migrations": [
+        503,
+        525,
+        526,
+        543
+      ],
+      "purpose": "Issue/project access grant and visibility expansion plus routine source identity and issue privacy-source lineage across Project/Run/workflow/routine/native output identities.",
+      "authority": "Current authorization owner writes scoped access grants; Issue/Task/Project and routine owner writes privacy-source edges; retained DB rows preserve deletion lineage after source mutation/deletion.",
+      "durableState": [
+        "issue_privacy_sources typed source references",
+        "routine source identity and erased source snapshot",
+        "Task and Project source lineage",
+        "issue_access_grants/project_access_members scoped subject grants",
+        "issues/projects visibility and privacy root/parent identities"
+      ],
+      "compatibility": "New source kinds are added through explicit DB constraint changes. Unknown or deleted origins remain unavailable for sensitive reconstruction; old binaries that cannot preserve the expanded provenance are not allowed through a mixed-writer rollout without drain/compatibility proof.",
+      "owners": [
+        "packages/db/src/migrations/0525_routine_source_identity.sql",
+        "packages/db/src/migrations/0526_flimsy_bulldozer.sql",
+        "packages/db/src/migrations/0543_lumpy_azazel.sql",
+        "server/src/services/authorization.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "packages/db/src/migrations/0503_furry_norman_osborn.sql",
+        "packages/db/src/schema/issue_access_grants.ts",
+        "packages/db/src/schema/project_access_members.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+        "server/src/__tests__/activity-native-source-privacy.integration.test.ts",
+        "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+        "server/src/__tests__/v10-private-payload.integration.test.ts"
+      ],
+      "recovery": "Deletion lineage is retained to reject late/restore writes; targeted native source-erasure tests exist. Full provider/analytics/Memory derivative inventory and hosted restore remain release gates."
+    },
+    {
+      "id": "customer-operation-and-import-recovery",
+      "migrations": [
+        527,
+        528,
+        529,
+        537,
+        554,
+        556
+      ],
+      "purpose": "Uncertain import outcome retention, durable customer operation state, admission claims, fenced import effects, leases/checkpoints and expired lease recovery.",
+      "authority": "customer_operations is the durable operation ledger; a lease owner + expiry fences worker claims, accepted_plan/effect_checkpoint track progress, and domain state/effect receipts determine reconciliation.",
+      "durableState": [
+        "company_transfer_runs.needs_reconciliation",
+        "customer_operations status/attempt/attempt_id",
+        "lease_owner_id/lease_expires_at",
+        "accepted_plan/effect_checkpoint",
+        "sandbox admission claim"
+      ],
+      "compatibility": "A legacy failed import is promoted to needs_reconciliation, never blindly replayed. Expired worker leases can be reclaimed under attempt fencing; ambiguous external acknowledgements require reconcile before retry. Old app rollback is valid only before incompatible state/effects; otherwise roll forward or isolate.",
+      "owners": [
+        "packages/db/src/migrations/0527_retain_uncertain_import_history.sql",
+        "packages/db/src/migrations/0528_lying_black_bolt.sql",
+        "packages/db/src/migrations/0554_company_import_fenced_effects.sql",
+        "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql",
+        "server/src/__tests__/company-import-jobs.integration.test.ts",
+        "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+        "packages/db/src/migrations/0529_left_wilson_fisk.sql",
+        "packages/db/src/migrations/0537_sandbox_admission_claim.sql"
+      ],
+      "tests": [
+        "server/src/__tests__/company-import-jobs.integration.test.ts",
+        "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+        "server/src/__tests__/company-import-job-history.integration.test.ts",
+        "server/src/__tests__/company-import-transfer-routes.test.ts"
+      ],
+      "recovery": "Process restart/expired lease and uncertain outcome cases are covered by local PostgreSQL owner tests. No provider delivery qualification or guarantee that arbitrary third-party effects can be undone; compensation is domain-specific."
+    },
+    {
+      "id": "resource-budget-plugin-and-provider-reservations",
+      "migrations": [
+        530,
+        531,
+        532,
+        534,
+        535,
+        536,
+        538,
+        539,
+        547,
+        553
+      ],
+      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding.",
+      "authority": "Budget/reservation owner and durable provider receipts are authoritative before dispatch; plugin lifecycle rows control admitted runtime state; Memory share publication is explicit and scoped.",
+      "durableState": [
+        "memory_private_share_publications target binding/source owner",
+        "orchestration_company_purpose_budgets and reservations",
+        "agent_package_versions pin",
+        "durable_plugin lifecycle",
+        "provider_wire_receipt",
+        "orchestration_model_reservations native conversation identity"
+      ],
+      "compatibility": "Legacy reservations without new purpose/source identity are not silently upgraded into a supported capability. Rollout requires admission gate and writer drain where old binaries cannot populate bindings. Provider acknowledgement uncertainty is reconciled from immutable receipts; never repeat a consequential call just because response was lost.",
+      "owners": [
+        "packages/db/src/migrations/0530_curious_lockjaw.sql",
+        "packages/db/src/migrations/0532_company_purpose_model_budgets.sql",
+        "packages/db/src/migrations/0534_first_party_support_package_pin.sql",
+        "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
+        "packages/db/src/migrations/0547_native_conversation_model_reservations.sql",
+        "packages/db/src/migrations/0553_cute_thor_girl.sql",
+        "server/src/services/resource-governance.ts",
+        "packages/db/src/migrations/0531_regular_bug.sql",
+        "packages/db/src/migrations/0535_giant_adam_warlock.sql",
+        "packages/db/src/migrations/0536_yellow_nemesis.sql",
+        "packages/db/src/migrations/0539_jev_decision_settings.sql"
+      ],
+      "tests": [
+        "server/src/__tests__/resource-governance.integration.test.ts",
+        "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
+        "server/src/__tests__/memory-private-share-publication.integration.test.ts",
+        "server/src/__tests__/first-party-support-model-gateway.test.ts"
+      ],
+      "recovery": "Reservation/lease and queue recovery tests exercise selected local DB state transitions. Provider execution, external billing, plugin host and cross-region backup/restore remain unqualified."
+    },
+    {
+      "id": "company-preferences-and-membership-permission-initialization",
+      "migrations": [
+        540,
+        541,
+        542,
+        544,
+        555
+      ],
+      "purpose": "Support/decision settings, sidebar preference, source-release review contract, locale/timezone and membership permission initialization.",
+      "authority": "Company and membership owner is authoritative; `permissions_initialized_at` marks initialized user membership and no migration invents a role/permission grant beyond the declared initializer.",
+      "durableState": [
+        "company locale/timezone",
+        "company_user_sidebar_preferences.preferred_agent_id",
+        "customer_operations.source_release_review",
+        "company_memberships.permissions_initialized_at",
+        "decision settings"
+      ],
+      "compatibility": "Unknown locale/timezone/config is refused by constraints; membership permission normalization is explicit and needs post-migration count/reconciliation before admitting new authorization reads. No old/new privilege expansion is assumed.",
+      "owners": [
+        "packages/db/src/migrations/0540_little_kabuki.sql",
+        "packages/db/src/migrations/0541_wet_spectrum.sql",
+        "packages/db/src/migrations/0542_bored_payback.sql",
+        "packages/db/src/migrations/0544_watery_dazzler.sql",
+        "packages/db/src/migrations/0555_company_membership_permission_initialization.sql",
+        "server/src/services/authorization.ts",
+        "server/src/__tests__/authorization-service.test.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/authorization-service.test.ts",
+        "server/src/__tests__/v10-support-cases.integration.test.ts",
+        "server/src/__tests__/company-import-jobs.integration.test.ts"
+      ],
+      "recovery": "Schema-level rejection and current authorization tests exist; migration-specific before/after population proof and hosted rollback are not claimed."
+    },
+    {
+      "id": "company-purge-and-runtime-erasure",
+      "migrations": [
+        550,
+        551,
+        552
+      ],
+      "purpose": "Run-owned manifest payload purge, runtime-asset erasure receipt merge and role-pack/company purge authorization.",
+      "authority": "Company deletion operation + native run/manifest erasure owner and receipt ledger are authoritative. Purge is monotonic; retained receipts/tombstones fence late writes.",
+      "durableState": [
+        "execution manifest payloadDeleted marker",
+        "native runtime asset erasure receipt/operation id",
+        "company deletion operation purge stage and transaction id",
+        "content-free retained erasure identities"
+      ],
+      "compatibility": "Pre-purge readers are refused where they would expose erased payload; restoration cannot clear deletion markers. A restore requires authenticated deletion-ledger replay/quarantine and fresh admission review.",
+      "owners": [
+        "packages/db/src/migrations/0550_native_manifest_run_owned_purge.sql",
+        "packages/db/src/migrations/0551_native_runtime_erasure_receipt_merge.sql",
+        "packages/db/src/migrations/0552_role_pack_company_purge.sql",
+        "server/src/services/native-runtime/native-session-executor.ts",
+        "server/src/services/memory/memory-maintenance.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/native-finalization-migration.test.ts",
+        "server/src/__tests__/v9-feedback-restore-migration.integration.test.ts",
+        "server/src/__tests__/v9-memory-maintenance-attention.integration.test.ts",
+        "server/src/__tests__/native-payload-temporal-sources.integration.test.ts"
+      ],
+      "recovery": "Selected actual PostgreSQL restore-ledger replay and late-write denial cases exist. Restore quarantine and external asset absence need separate evidence; backup completeness and provider-side deletion are not inferred."
+    },
+    {
+      "id": "trust-support-delegation-and-model-migration-records",
+      "migrations": [
+        557,
+        559,
+        560,
+        561,
+        562,
+        563
+      ],
+      "purpose": "Version-pinned trust document acceptance/action/access grant, delegated human workflow coverage, support-case issue link, and model migration monitor receipts.",
+      "authority": "Company-scoped trust registry revision and principal/action receipts are authoritative; workflow coverage ties delegatee to request/action; support link and model migration monitor are records, not authorization substitutes.",
+      "durableState": [
+        "trust_document_acceptances/action_receipts/access_grants",
+        "human_workflow_coverages",
+        "support_case_issue_links",
+        "agent_model_migration_monitor_receipts"
+      ],
+      "compatibility": "Exact document revision/version and current authorization are required; stale reader/client pins are refused. Restored record alone does not prove current user authority or external review completion.",
+      "owners": [
+        "packages/db/src/migrations/0557_dear_forgotten_one.sql",
+        "packages/db/src/migrations/0559_big_valkyrie.sql",
+        "packages/db/src/migrations/0560_thin_terror.sql",
+        "packages/db/src/migrations/0561_equal_supernaut.sql",
+        "packages/db/src/migrations/0562_curious_scarecrow.sql",
+        "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+        "server/src/__tests__/trust-document-registry-postgres.test.ts",
+        "server/src/__tests__/trust-document-routes.integration.test.ts",
+        "server/src/services/agents/authoring-model-migration-monitor.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/trust-document-registry-postgres.test.ts",
+        "server/src/__tests__/trust-document-routes.integration.test.ts",
+        "server/src/__tests__/v9-workflow-step-actors.integration.test.ts",
+        "server/src/__tests__/support-case-storage.integration.test.ts",
+        "server/src/__tests__/v9-agent-publication.integration.test.ts",
+        "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts"
+      ],
+      "recovery": "Current DB tests exercise revision binding and scoped action grants. Operator content approval, legal acceptance and external model-provider monitoring remain separate; no Human or provider completion claim."
+    },
+    {
+      "id": "native-process-cleanup-reconciliation",
+      "migrations": [
+        564
+      ],
+      "purpose": "Native process cleanup pending marker and bounded lease lookup index for crash/restart cleanup reconciliation.",
+      "authority": "heartbeat_runs native run owner is authoritative for pending cleanup; heartbeat_run_events and environment_leases are reconciled by the native cleanup worker.",
+      "durableState": [
+        "heartbeat_runs.native_process_cleanup_pending",
+        "heartbeat_run_events stop evidence",
+        "environment_leases cleanup status/provider receipt"
+      ],
+      "compatibility": "NULL legacy marker is interpreted only through the explicit native-mode/lease/event fallback. Unknown or contradictory cleanup state stays pending and blocks unsafe reuse; no forced success is synthesized.",
+      "owners": [
+        "packages/db/src/migrations/0564_broken_guardian.sql",
+        "server/src/services/native-runtime/native-session-executor.ts",
+        "server/src/services/resource-governance.ts",
+        "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
+        "server/src/__tests__/resource-governance.integration.test.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
+        "server/src/__tests__/heartbeat-native-runner-cancellation.test.ts",
+        "server/src/__tests__/resource-governance.integration.test.ts"
+      ],
+      "recovery": "Restart/reconciliation is exercised by current cleanup admission and Resource DB tests; physical host process disappearance and deployed host recovery remain unqualified."
+    },
+    {
+      "id": "responsibility-scan-and-contact-authority",
+      "migrations": [
+        565
+      ],
+      "purpose": "Company-scoped responsibility scan candidate pointers plus optional security/support incident contacts; this migration adds nullable company contact references and durable bounded scan state.",
+      "authority": "Scheduled scanner writes only source-kind/id/version candidate pointers. Per-kind Native owner readers re-read current source, company scope, current visibility/ACL and current authorization before any card is projected. Contacts are optional routing hints selected from active verified same-company Humans; they never grant a permission or replace Native owner authority.",
+      "durableState": [
+        "responsibility_scan_runs status, version, per-kind keyset cursor, bounded attempt count, lease owner/token/expiry and retry timestamps",
+        "responsibility_scan_candidates company/run/resource pointer plus sourceVersion and expiry; no source title/body/owner/ACL is stored",
+        "companies.security_contact_user_id and support_incident_contact_user_id nullable optional references"
+      ],
+      "compatibility": "0565 is additive: old readers can ignore nullable contacts/new tables, while the new scanner cannot run against a 0564 schema. Keep feature admission closed until schema and reader deployment are compatible. A cache pointer never authorizes disclosure; stale/unknown/missing/currently hidden sources produce no card. Local scan cadence is not an operator SLA.",
+      "recovery": "The scan run has durable queued/running/complete/failed/abandoned state, attempt count, keyset cursor and lease-token fencing; retry/restart cases pass, including exact maxAttempts bounds. Candidate pointers expire and are re-read through current native visibility/ACL before projection. Restore is not specifically qualified for this cache: an operator must keep the derived feature unavailable or trigger a fresh scan until restore source freshness is known; do not claim the cache is automatically cleared or that a backup restore reconstructs all current pointers. Contact IDs are resolved against current active verified same-company Humans.",
+      "qualificationStatus": "qualified_software_source_at_commit_a0b495464; final register pins remain provisional pending 0566 and Native freeze",
+      "knownFindings": [],
+      "owners": [
+        "packages/db/src/migrations/0565_first_gorgon.sql",
+        "packages/db/src/migrations/meta/0565_snapshot.json",
+        "packages/db/src/migrations/meta/_journal.json",
+        "packages/db/src/schema/responsibility_scan.ts",
+        "packages/db/src/schema/companies.ts",
+        "server/src/services/experience/private-0565/responsibility-scan.ts",
+        "server/src/services/experience/private-0565/responsibility-scan-store.ts",
+        "server/src/services/experience/private-0565/authorized-subset-reader.ts",
+        "server/src/services/experience/private-0565/native-metadata-sources.ts",
+        "server/src/services/experience/private-0565/native-reader-adapters.ts",
+        "server/src/services/experience/private-0565/maintenance-runner.ts",
+        "server/src/services/company-responsibility-contacts.ts",
+        "server/src/routes/companies.ts",
+        "server/src/services/saas/account-deletion.ts",
+        "server/src/services/saas/platform.ts",
+        "server/src/services/experience/company-responsibility-attention.ts",
+        "ui/src/api/companies.ts",
+        "ui/src/pages/CompanySettings.tsx"
+      ],
+      "tests": [
+        "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+        "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+        "ui/src/pages/CompanySettingsArchive.test.tsx",
+        "ui/src/pages/CompanySettingsRenameHint.test.tsx"
+      ],
+      "recoveryEvidence": "Exact published-source qualification is recorded in qualificationEvidence and the portable bundle. It includes corrected per-field offboarding, unrelated-holder preservation, exact maxAttempts=4 claim bounds, 17/17 PostgreSQL tests, 1/1 generated official migration apply from 0564, current server TSC/Oxc, UI tests/typecheck, and exact post-publication hashes. Arbitrary backup restore, automatic derived-cache reset, retirement/cleanup policy, deployed-writer drain, old/new binary fleet compatibility, hosted rollout, and Human approval remain unqualified.",
+      "exactRequalificationRequired": [],
+      "backfillDisposition": "No backfill is introduced: the scan run/pointer tables are new and start empty; the two optional company contact references are nullable and are not inferred/backfilled from historic users or support data.",
+      "retirementDisposition": "No deprecation/sunset/removal/retirement of the scanner or stored contact values is qualified. Pointer expiry governs read eligibility; cleanup/retention lifecycle and operator observation remain explicit future owner decisions.",
+      "irreversibleBoundaries": "No destructive schema contraction is in 0565. Contact changes remain reversible through owner-authorized settings; scan cache is derived but has no verified restore-reset owner. Do not drop tables or erase contact identities without a separately reviewed consumer/retention phase.",
+      "qualificationEvidence": {
+        "status": "qualified_for_exact_published_source_bundle",
+        "commit": "a0b495464",
+        "sourceBundle": "doc/operations/aw-v10-evidence/responsibility-scan-0565-2026-10-30/qualification.tar.gz",
+        "sourceBundleSha256": "758c9101bb788155f5ca716bbee2ceaee52b3eebcde08208fbc4cded6aebaa41",
+        "readme": "doc/operations/aw-v10-evidence/responsibility-scan-0565-2026-10-30/README.md",
+        "receipts": [
+          {
+            "case": "Native responsibility/ACL/contact/offboarding database suite including unrelated-holder preservation and exact retry bounds",
+            "result": "17/17 passed",
+            "receipt": "qualification.tar.gz:responsibility-0565-portable-review-r2-20261030/evidence/followup-pg-17-of-17.log"
+          },
+          {
+            "case": "Generated official 0565 migration applied from 0564 in embedded PostgreSQL",
+            "result": "1/1 passed; DDL unchanged",
+            "receipt": "qualification.tar.gz:responsibility-0565-portable-review-r2-20261030/evidence/generated-migration-pg.log"
+          },
+          {
+            "case": "Server TypeScript and Oxc syntax check",
+            "result": "passed; Oxc 1,002 files",
+            "receipt": "qualification.tar.gz:responsibility-0565-portable-review-r2-20261030/evidence/followup-server-typecheck.log and followup-oxc.log"
+          },
+          {
+            "case": "Company Settings UI verification",
+            "result": "10/10 UI tests plus UI typecheck passed; responsibility owner hashes unchanged",
+            "receipt": "qualification.tar.gz:responsibility-0565-portable-review-r2-20261030/evidence/ui-10-of-10.log and ui-hash-equivalence.json"
+          },
+          {
+            "case": "Post-publication exact source hashes and migration safety",
+            "result": "all 35 published file hashes verified; 0560 snapshot pruned once; migration check and diff check passed",
+            "receipt": "qualification.tar.gz:responsibility-0565-portable-review-r2-20261030/evidence/post-publication-result.json"
+          }
+        ],
+        "qualificationBoundary": "Software source, PostgreSQL, server/UI checks only. No hosted rollout, provider behavior, Human owner approval, SLA, or arbitrary backup restore claim."
+      },
+      "resolvedFindings": [
+        "Offboarding now clears default/security/support-contact fields independently, preserving other users when the departing user matched only one field; actual PostgreSQL coverage includes unrelated contact preservation.",
+        "Retry attempt count uses the atomically incremented/returned claim value; maxAttempts=4 permits exactly four claims and then abandons."
+      ]
+    }
+  ],
+  "phaseCases": [
+    {
+      "phase": "add/expand",
+      "status": "source_and_selected_db_cases_exist",
+      "evidence": [
+        "packages/db/src/migrations/meta/_journal.json",
+        "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql",
+        "packages/db/src/migrations/0564_broken_guardian.sql"
+      ],
+      "qualificationLimit": "Migration SQL and selected DB fixtures establish schema behavior only; no universal mixed-version binary matrix or hosted rollout proof.",
+      "cases": [
+        {
+          "path": "server/src/__tests__/native-payload-source-binding.integration.test.ts",
+          "case": "retains a bound snapshot across operational updates but rejects silently replacing its body"
+        },
+        {
+          "path": "server/src/__tests__/trust-document-registry-postgres.test.ts",
+          "case": "keeps exact gated grants and separate revocation receipts append-only"
+        },
+        {
+          "path": "server/src/__tests__/cli-auth-routes.test.ts",
+          "case": "creates, lists, and revokes a board API key through the authenticated lifecycle"
+        },
+        {
+          "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+          "case": "current source authorization and privacy graph cases exercise private issue/project scoping"
+        },
+        {
+          "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+          "case": "binds a concrete native source reader for every applicable §17 kind"
+        }
+      ]
+    },
+    {
+      "phase": "backfill/reconcile",
+      "status": "owner_specific_and_partial",
+      "evidence": [
+        "packages/db/src/migrations/0506_wild_thanos.sql",
+        "packages/db/src/migrations/0513_soft_risque.sql",
+        "packages/db/src/migrations/0527_retain_uncertain_import_history.sql",
+        "packages/db/src/migrations/0555_company_membership_permission_initialization.sql",
+        "server/src/__tests__/company-import-jobs.integration.test.ts"
+      ],
+      "qualificationLimit": "Only explicit migration updates have bounded population consequences visible in SQL; no claim of production-scale counts, late-write reconciliation for every group, or financial totals.",
+      "cases": [
+        {
+          "path": "server/src/__tests__/native-payload-source-binding.integration.test.ts",
+          "case": "invalidates an inconsistent Memory capture left by the old trigger order during migration"
+        },
+        {
+          "path": "server/src/__tests__/company-import-jobs.integration.test.ts",
+          "case": "reconciles expired imports in bounded batches and never returns checkpoint payloads"
+        }
+      ]
+    },
+    {
+      "phase": "cutover/drain",
+      "status": "operator_gate_open",
+      "evidence": [
+        "doc/operations/aw-v6-runtime.md"
+      ],
+      "qualificationLimit": "Drain old writers/clients and close admission when old writers cannot emit current owner bindings. No current hosted deployment/partial-rollout receipt is linked; operator version allowance must be selected per deployment.",
+      "cases": [
+        {
+          "path": "doc/operations/aw-v6-runtime.md",
+          "case": "rollback and admission guidance; deployment-specific old-writer drain must be recorded by operator"
+        }
+      ]
+    },
+    {
+      "phase": "rollback/roll-forward",
+      "status": "state_conditioned_documented",
+      "evidence": [
+        "doc/operations/aw-v6-runtime.md"
+      ],
+      "qualificationLimit": "No down migrations or history rewrites. Roll back app/config only while old code is valid against current state/effects; otherwise forward repair, pause/isolate, or domain compensation.",
+      "cases": [
+        {
+          "path": "doc/operations/aw-v6-runtime.md",
+          "case": "rollback first closes admission; old image only if compatible; otherwise forward fix or isolated restore"
+        }
+      ]
+    },
+    {
+      "phase": "restart/retry",
+      "status": "selected_actual_db_cases",
+      "evidence": [
+        "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+        "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
+        "server/src/__tests__/native-finalization-recovery.test.ts"
+      ],
+      "qualificationLimit": "Tests qualify only listed local owner recovery paths, not every external effect, worker cadence, or hosted restart.",
+      "cases": [
+        {
+          "path": "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+          "case": "preserves one real imported Agent and the original unknown job after child death before receipt"
+        },
+        {
+          "path": "server/src/__tests__/company-import-jobs.integration.test.ts",
+          "case": "keeps cancellation requested during effects and makes restart inconclusive"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
+          "case": "holds the same task until its native executor settles while allowing unrelated tasks"
+        },
+        {
+          "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+          "case": "persists bounded keyset progress and resumes rather than truncating a kind"
+        },
+        {
+          "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+          "case": "fences an expired worker lease and lets only the new token commit"
+        }
+      ]
+    },
+    {
+      "phase": "restore",
+      "status": "selected_local_db_restore_cases",
+      "evidence": [
+        "server/src/__tests__/v9-feedback-restore-migration.integration.test.ts",
+        "server/src/__tests__/v7-derived-memory.integration.test.ts",
+        "doc/operations/aw-v6-runtime.md"
+      ],
+      "qualificationLimit": "Selected software restore fixtures replay explicit ledgers and reject late writes. This does not qualify arbitrary archive integrity, disaster timing, provider copies, or zero-loss erasure.",
+      "cases": [
+        {
+          "path": "server/src/__tests__/v7-derived-memory.integration.test.ts",
+          "case": "erases all derived versions and re-applies source deletion tombstones after restore"
+        },
+        {
+          "path": "server/src/__tests__/v7-derived-memory.integration.test.ts",
+          "case": "propagates Context root erasure into run/Task payloads and blocks late restored writes"
+        },
+        {
+          "path": "server/src/__tests__/v9-feedback-restore-migration.integration.test.ts",
+          "case": "upgrades actual pre-V9-restore erasure receipts and image states into immutable minimal identities"
+        }
+      ]
+    },
+    {
+      "phase": "unknown_or_legacy_provenance",
+      "status": "deny_or_quarantine_unless_reconstructed",
+      "evidence": [
+        "packages/db/src/migrations/0506_wild_thanos.sql",
+        "packages/db/src/migrations/0513_soft_risque.sql",
+        "packages/db/src/migrations/0527_retain_uncertain_import_history.sql",
+        "server/src/__tests__/v10-private-payload.integration.test.ts",
+        "server/src/__tests__/company-import-jobs.integration.test.ts"
+      ],
+      "qualificationLimit": "Unknown private payload provenance is not upgraded to verified. Uncertain import state reconciles before retry. No fabricated historical provenance.",
+      "cases": [
+        {
+          "path": "server/src/__tests__/native-payload-source-binding.integration.test.ts",
+          "case": "keeps pre-protocol payloads unknown and refuses an in-place upgrade"
+        },
+        {
+          "path": "server/src/__tests__/native-payload-source-mutation-binding.integration.test.ts",
+          "case": "does not upgrade an unknown historical Context item from today's body"
+        },
+        {
+          "path": "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+          "case": "preserves one real imported Agent and the original unknown job after child death before receipt"
+        },
+        {
+          "path": "server/src/__tests__/memory-native-capture-purpose.integration.test.ts",
+          "case": "retains an unqualified provenance state rather than inferring authority from historical payload"
+        },
+        {
+          "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+          "case": "returns no metadata or responsibility signal for a native Agent hidden by its current source ACL"
+        }
+      ]
+    }
+  ],
+  "pendingRows": [
+    {
+      "id": "pending-0566-feedback",
+      "expectedMigration": "0566",
+      "status": "pending_private_not_published_not_qualified",
+      "sourcePin": null,
+      "evidence": [],
+      "note": "Quality owner is developing private Feedback source; do not add to journal coverage until publication and exact qualification."
+    }
+  ],
+  "qualificationGates": {
+    "oldReaderNewWriter": "Not generally qualified; drain/refuse old writers where source snapshots, privacy lineage, permissions, reservations or receipts cannot be represented. Unknown provenance is denied/quarantined, not upgraded.",
+    "operatorRollout": "No universal N-1 or zero-downtime promise. Operator must confirm backups, preflight locks/timeouts, take bounded window, pause affected admission, apply official migration once, verify invariants, resume only on pass; if rollback schema compatibility is unknown, remain paused and roll forward or use isolated restore.",
+    "restore": "Local software restore cases are linked where present. Archive freshness/completeness, arbitrary point-in-time loss, third-party side effects and hosted DR remain open.",
+    "humanProvider": "No unsupported provider, deployed runtime, operator completion or Human acceptance is asserted."
+  },
+  "sourcePins": [
+    {
+      "path": ".github/workflows/aw-v9-coverage.yml",
+      "sha256": "4c8c0e842af06895fcd813770d88c9e287b871e3619ca4221ff6445fc9a8aea1",
+      "gitStatusAtCapture": "M .github/workflows/aw-v9-coverage.yml"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",
+      "sha256": "63fc64316d59206557d94497f6efeb8c0c0f45123bd1513f7a9d2e53c30d84b3"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/README.md",
+      "sha256": "9175ecb3a3db8270a7812188edb1738cee3068b37af8f19971074e39c5466cef",
+      "gitStatusAtCapture": "?? doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/README.md"
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/stage-list.txt",
+      "sha256": "660235e2f417cc8813561d42ce3701e80aea5717dbe50dfd6086ca04f0822850",
+      "gitStatusAtCapture": "?? doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/stage-list.txt"
+    },
+    {
+      "path": "doc/operations/aw-v6-runtime.md",
+      "sha256": "b49bb952657b904e60faea4bdbe1880e7b2064eef99f71426e207bdd9149b785"
+    },
+    {
+      "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+      "sha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22"
+    },
+    {
+      "path": "package.json",
+      "sha256": "1ade0a815658469950b49e1d3251e9ae531df87d162b9c9ccb1fe18f1ae10ea3",
+      "gitStatusAtCapture": "M package.json"
+    },
+    {
+      "path": "packages/db/src/better-auth-account-issuer-migration.test.ts",
+      "sha256": "7a55ffaae915982130824729b823fa2486167f1e4c8aa914d9e48cd1d654d254"
+    },
+    {
+      "path": "packages/db/src/migrations/0502_swift_maria_hill.sql",
+      "sha256": "ff1f116270eef8f88bba0171ba8de427f689e78bacebc80c4f936aefc928f12e"
+    },
+    {
+      "path": "packages/db/src/migrations/0503_furry_norman_osborn.sql",
+      "sha256": "9f41bc0b885e6aed121bf5aca49f6aac67d5cd953392a66205ebf968b54a806e"
+    },
+    {
+      "path": "packages/db/src/migrations/0504_conscious_sleepwalker.sql",
+      "sha256": "5a9e21fac154e2ff5bfb3dd8be9c5d200b7e2eca48e3f67924d5377bf38f6b6a"
+    },
+    {
+      "path": "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql",
+      "sha256": "34beeda1e394168ff37884c5e7504f65b8730bfbb68c4d0e1c89d2f33f3128d4"
+    },
+    {
+      "path": "packages/db/src/migrations/0506_wild_thanos.sql",
+      "sha256": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+    },
+    {
+      "path": "packages/db/src/migrations/0507_lethal_star_brand.sql",
+      "sha256": "73e67a785c0f4c82e600e082ebbf4747cbf6c3e2cceb12d1b2051985f958cd47"
+    },
+    {
+      "path": "packages/db/src/migrations/0508_deep_black_cat.sql",
+      "sha256": "9687be3d6e5624d267740293992965cc8ef5dea08b052b4319fefe67d66bcd70"
+    },
+    {
+      "path": "packages/db/src/migrations/0509_nebulous_wong.sql",
+      "sha256": "4e9f04e21728f67595127d424eacf418108cb80c678eef214991321ada1d934f"
+    },
+    {
+      "path": "packages/db/src/migrations/0510_hard_colonel_america.sql",
+      "sha256": "71b046b973c73c2ef221214310a201229486f695158530cda8d0ff38064ccc04"
+    },
+    {
+      "path": "packages/db/src/migrations/0511_native_run_input_source_binding.sql",
+      "sha256": "0159ed3cab84b8393e4340b437b5adca393b1372006c796207fec71e8a5342b0"
+    },
+    {
+      "path": "packages/db/src/migrations/0512_flimsy_satana.sql",
+      "sha256": "5f075cb91e42197e987121f7601700bede2ab181f33a8afe733dd36249688a54"
+    },
+    {
+      "path": "packages/db/src/migrations/0513_soft_risque.sql",
+      "sha256": "7a1c88416f1c3915c7ad5fc2e71d984b28731849ae523bf248cece53f635565b"
+    },
+    {
+      "path": "packages/db/src/migrations/0514_abandoned_hex.sql",
+      "sha256": "9165b31400c351ff521a39a024d29793e189174d2fb9436f8186a64a63a9eff4"
+    },
+    {
+      "path": "packages/db/src/migrations/0515_happy_screwball.sql",
+      "sha256": "bacbaf19835c5e8b73107f0c68dafd2368b1aa2162e7a889800ae8a2f3af32a3"
+    },
+    {
+      "path": "packages/db/src/migrations/0516_memory_payload_binding_order.sql",
+      "sha256": "04bb490e4bb083f1f823fce49eb282dfa7e859ae6b361bb3135434e6d8cef665"
+    },
+    {
+      "path": "packages/db/src/migrations/0517_native_payload_erasure.sql",
+      "sha256": "55c290c98005493730607d6857ec5a7938ee0bfa91917064f95aa20457f49d41"
+    },
+    {
+      "path": "packages/db/src/migrations/0518_safe_hiroim.sql",
+      "sha256": "8b2775e134f0bdcbfead0873556f8f535b849c49a2ee32f80374c9142b5e7bce"
+    },
+    {
+      "path": "packages/db/src/migrations/0519_native_authenticator_lifetime.sql",
+      "sha256": "915c1956ecd54fcc6e1d229ee22ec38eafe48f185fc2c8feaab0d40aae073f10"
+    },
+    {
+      "path": "packages/db/src/migrations/0520_native_challenge_lifetime.sql",
+      "sha256": "da3a8288c6882196b593c68d7e5a2413c795ae67b24b0c15b1b35c5268df13e7"
+    },
+    {
+      "path": "packages/db/src/migrations/0521_opposite_garia.sql",
+      "sha256": "8888a7c26b4c1542c4087909f21b6447ff67f29ebecb546f6e52dafe779a04c6"
+    },
+    {
+      "path": "packages/db/src/migrations/0522_native_challenge_generation.sql",
+      "sha256": "de7398b306b8ff637343c89db6a0ac590e52da4b54bfd8b4948f8ce9e6672d69"
+    },
+    {
+      "path": "packages/db/src/migrations/0523_crazy_lake.sql",
+      "sha256": "478508ac594af8bb609509812435e504e2d785a4ed70e879cae31263ef672cdd"
+    },
+    {
+      "path": "packages/db/src/migrations/0524_mute_doctor_octopus.sql",
+      "sha256": "da932519ab3fb7a70b3efbda0459c64031f855025bdcd3474d24fea1ef737c79"
+    },
+    {
+      "path": "packages/db/src/migrations/0525_routine_source_identity.sql",
+      "sha256": "39a27c78ab50eee0644a52707f649d36fa55c6955ed8827e9611b4e54f6aa87d"
+    },
+    {
+      "path": "packages/db/src/migrations/0526_flimsy_bulldozer.sql",
+      "sha256": "b696f0e3fdde97f8be9f77dce53c36063764850f085473b5b01e73935d3f3da8"
+    },
+    {
+      "path": "packages/db/src/migrations/0527_retain_uncertain_import_history.sql",
+      "sha256": "d25971a0b34eee9e9097b413c6ecc47d9aeb12230b3646044e8e6e7181f7dcc2"
+    },
+    {
+      "path": "packages/db/src/migrations/0528_lying_black_bolt.sql",
+      "sha256": "4216c19e4d41addfc0c4c3b350fb2e102f72ccf90b2a26ec8b9265e1d76a2ed1"
+    },
+    {
+      "path": "packages/db/src/migrations/0529_left_wilson_fisk.sql",
+      "sha256": "1ce5295860cf1b0684a1e4682b52aec3dd29e91e1a139c34cfa93eac00fc37fc"
+    },
+    {
+      "path": "packages/db/src/migrations/0530_curious_lockjaw.sql",
+      "sha256": "435a422e2521ec3d5db98762baeb9d7e80e3c30f5d32355751ed7953d3366166"
+    },
+    {
+      "path": "packages/db/src/migrations/0531_regular_bug.sql",
+      "sha256": "f1794e2545cdd5abf0f0746cebcd2a36aa2c5c71ca0316bc6e530c23b498dd21"
+    },
+    {
+      "path": "packages/db/src/migrations/0532_company_purpose_model_budgets.sql",
+      "sha256": "13d278320b54f32bcd82c438e9378d9cd23488044bcdb3f009766dfb4f22cd62"
+    },
+    {
+      "path": "packages/db/src/migrations/0533_native_run_input_source_dispatch_receipts.sql",
+      "sha256": "5b32577a755b2b52ccbca374b29a46dc09e38c30982eaa54f10cb1577db5dc92"
+    },
+    {
+      "path": "packages/db/src/migrations/0534_first_party_support_package_pin.sql",
+      "sha256": "52f84f38cfc4e9f20fd36d726626f73c3b266588a25d251a34bbff7be7825d81"
+    },
+    {
+      "path": "packages/db/src/migrations/0535_giant_adam_warlock.sql",
+      "sha256": "e46a3943b4376422b395fc8e90bb9c40857d27f4bca1bfc97963d58b1a53d03c"
+    },
+    {
+      "path": "packages/db/src/migrations/0536_yellow_nemesis.sql",
+      "sha256": "2ff76ad45be296478825fe0c5457bddc9b7ce0dd65482461aa6fe3839414044f"
+    },
+    {
+      "path": "packages/db/src/migrations/0537_sandbox_admission_claim.sql",
+      "sha256": "7428c73a1dc832b8ed92a67ce474118e357b90705dad689040020d217b3301aa"
+    },
+    {
+      "path": "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
+      "sha256": "ce3c0560f7e3a3d7e786dbf79f14888b7b8fde3e5bbf12bfab3efd378dd2f25c"
+    },
+    {
+      "path": "packages/db/src/migrations/0539_jev_decision_settings.sql",
+      "sha256": "ec4b00cde46c0482428de73faec5587dc5d47a1365dd6afdf196f2ec79910aee"
+    },
+    {
+      "path": "packages/db/src/migrations/0540_little_kabuki.sql",
+      "sha256": "a93fd9ed1b3796aab53f128f8ec95c28788b020c5cea24bfe9b03c155bf0453e"
+    },
+    {
+      "path": "packages/db/src/migrations/0541_wet_spectrum.sql",
+      "sha256": "3648ff7c3e45ef97e2f95a28089b844321c71860ae674a2f830b3e1af9dc1214"
+    },
+    {
+      "path": "packages/db/src/migrations/0542_bored_payback.sql",
+      "sha256": "1654fddcb19deff2c28541aaf82f4781784d959fab644d6c0743108c462dae66"
+    },
+    {
+      "path": "packages/db/src/migrations/0543_lumpy_azazel.sql",
+      "sha256": "c3d35627798b48cc0b5b0dffa284987ee4904115713ded9c0aa102d0c246dd73"
+    },
+    {
+      "path": "packages/db/src/migrations/0544_watery_dazzler.sql",
+      "sha256": "fa5dd6d42b1024cb638879bfa6edb0c29d774b90d51c20e89477aed7df3b4d98"
+    },
+    {
+      "path": "packages/db/src/migrations/0545_native_attachment_stage_dispatch_binding.sql",
+      "sha256": "85ebab91f6d5fa019b7ecc2b84d5e352138c03e8ec2ccd410c47814cd0d71dfa"
+    },
+    {
+      "path": "packages/db/src/migrations/0546_human_memory_evidence_snapshot_seal.sql",
+      "sha256": "aaffb31ade34aa719736f69efbb95fb17af2867932a41d30a157d0572605a80a"
+    },
+    {
+      "path": "packages/db/src/migrations/0547_native_conversation_model_reservations.sql",
+      "sha256": "82821c471e402817d1244366d50ba3cdef452fcd91566763da951963d47a7e9f"
+    },
+    {
+      "path": "packages/db/src/migrations/0548_native_conversation_dispatch_sources.sql",
+      "sha256": "a0689cdbccfc98db2079578fb2d2d4519cea5afea4f2c95f583a2e35bb6b4c1f"
+    },
+    {
+      "path": "packages/db/src/migrations/0549_native_plugin_routine_source_binding.sql",
+      "sha256": "f715f95e8587975b44b57a9c93dbfdc128bef299fc3d0b087bcd35b55a1daf6b"
+    },
+    {
+      "path": "packages/db/src/migrations/0550_native_manifest_run_owned_purge.sql",
+      "sha256": "df172fd77b663bb7df43a89335aa6fc1e82be50b8a0e00bbd8ac43c1a10c5005"
+    },
+    {
+      "path": "packages/db/src/migrations/0551_native_runtime_erasure_receipt_merge.sql",
+      "sha256": "799a85e7ad270d17485790dcde0d9cf92c4d9c8968ccd202e3e986ef3ecbe220"
+    },
+    {
+      "path": "packages/db/src/migrations/0552_role_pack_company_purge.sql",
+      "sha256": "555147456bb7e571cf5dfc9ff94184d8407433946d90d0550fe1dfdf61abd74a"
+    },
+    {
+      "path": "packages/db/src/migrations/0553_cute_thor_girl.sql",
+      "sha256": "e3292cc28f5c0a8fce641a6d4fb3341806f627a1ad526a00eec09a2a3b5a70ee"
+    },
+    {
+      "path": "packages/db/src/migrations/0554_company_import_fenced_effects.sql",
+      "sha256": "2fd20017f85b28aea1c23e2ff93f8237545ebe3f62b312d5e4053679b53567d8"
+    },
+    {
+      "path": "packages/db/src/migrations/0555_company_membership_permission_initialization.sql",
+      "sha256": "3da3161399d6d4bd333b140b66c9de6573051c3de3b5854d86bbaa7585d67788"
+    },
+    {
+      "path": "packages/db/src/migrations/0556_customer_operation_expired_lease_recovery.sql",
+      "sha256": "4af0d1ec3ede090c761e22044dd56aaa31a831d59a317c73593cd918dd7f41ef"
+    },
+    {
+      "path": "packages/db/src/migrations/0557_dear_forgotten_one.sql",
+      "sha256": "458f7d83d22566bceb9280c45b03b172995016dc648c438f7b9ad3a2911b5a80"
+    },
+    {
+      "path": "packages/db/src/migrations/0558_better_auth_issuer_compatibility.sql",
+      "sha256": "4193c6137c427feaea2360e6956f21635af493141d7312eed6d95a077224821e"
+    },
+    {
+      "path": "packages/db/src/migrations/0559_big_valkyrie.sql",
+      "sha256": "ae9ae4bb134769e5de5c80a93cc86d8b4d8c9bf8f92707a41970453350094ae9"
+    },
+    {
+      "path": "packages/db/src/migrations/0560_thin_terror.sql",
+      "sha256": "8bb3246cf1bb806e3bf7ce79d34f83ea94dc8ec0874c757618f11c4227bf87a3"
+    },
+    {
+      "path": "packages/db/src/migrations/0561_equal_supernaut.sql",
+      "sha256": "c2a75432c25d39c101c3332fab15b6c40610529a95fbb5c3968a8d4b357eafa8"
+    },
+    {
+      "path": "packages/db/src/migrations/0562_curious_scarecrow.sql",
+      "sha256": "4eec24f610288b51719594aaca7378058ab83d491556dac0e6714e2c17d4febd"
+    },
+    {
+      "path": "packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "sha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "path": "packages/db/src/migrations/0564_broken_guardian.sql",
+      "sha256": "f6a864d30917b526d97e4ad62bcca58b238dc88a41832a2e04e3bcfe966a7dab"
+    },
+    {
+      "path": "packages/db/src/migrations/0565_first_gorgon.sql",
+      "sha256": "b52deb6d1a9a182b03f8d638f19ca5b6f0be82dc3b75d5439ecc13d563c1937a"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0565_snapshot.json",
+      "sha256": "c28d535a3ab777a13f82cabd90ad05e0261de899a0391819fc32d7a6f121795e"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "2127e77f623190c9805cb8a397862034d5440f19aeae4a75fa93e890d5246bad"
+    },
+    {
+      "path": "packages/db/src/native-input-source-protocol.test.ts",
+      "sha256": "5db0c6fe2cd3a8fad368844c7a25f1e4a03049c2e356d8cd4386ec4a69ad0d1a"
+    },
+    {
+      "path": "packages/db/src/native-payload-invalidation-migration.test.ts",
+      "sha256": "5022cadf5f4a4d693e284145a4cd4f14948970732a87733ef0735043473b0b7c"
+    },
+    {
+      "path": "packages/db/src/schema/companies.ts",
+      "sha256": "579a4c7c797fdb0de9798cc736b27157c077ea67ddae3d907b88c2994ecd81be"
+    },
+    {
+      "path": "packages/db/src/schema/issue_access_grants.ts",
+      "sha256": "3402c713a28cdd662650c239bf1bfb65d89e1465f87002fdcdb89a752331d4cb"
+    },
+    {
+      "path": "packages/db/src/schema/memory.ts",
+      "sha256": "d1ecce3ad7beb9cd8c49ce6af411d7ee61135e3fc9697c276d2575122ae890fd"
+    },
+    {
+      "path": "packages/db/src/schema/project_access_members.ts",
+      "sha256": "a0f980daa4101e75d51bb9d7dbd5f6363604c388cc2bddf61ad6e99dd6e29523"
+    },
+    {
+      "path": "packages/db/src/schema/responsibility_scan.ts",
+      "sha256": "f1f3d84eb99b6e5f0bcc32a559daf697b29aab4e10b75c421952a4725b4b7151"
+    },
+    {
+      "path": "packages/db/src/schema/saas_lifecycle.ts",
+      "sha256": "e465817bfe9e956cf1a09382fd0bc0163eb8ec4302e41a9096253ec1b3d9efee"
+    },
+    {
+      "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
+      "sha256": "3e902784b9aa967e2c69569915034922ae8be5f2051b7536fa91bc4abd8b2baa",
+      "gitStatusAtCapture": "M packages/shared/src/validators/native-payload-source-snapshot.ts"
+    },
+    {
+      "path": "scripts/check-v10-169-migration-phase-register.mjs",
+      "sha256": "9d8c0bc38d5a04f9f4522dcbf6301ca78f3d9cc7b5f157bfb33467e4de5c71fd",
+      "gitStatusAtCapture": "?? scripts/check-v10-169-migration-phase-register.mjs"
+    },
+    {
+      "path": "scripts/check-v10-169-migration-phase-register.test.mjs",
+      "sha256": "9e957bb415e9ea2d42218af5f0971feadb66dcaa36a725903e79820375f44511",
+      "gitStatusAtCapture": "?? scripts/check-v10-169-migration-phase-register.test.mjs"
+    },
+    {
+      "path": "scripts/lib/v10-169-migration-phase-register.mjs",
+      "sha256": "4301b567c6d01fcec186d027327d1e60cfd98ac37fa0bc02f6d742439c3b031b",
+      "gitStatusAtCapture": "?? scripts/lib/v10-169-migration-phase-register.mjs"
+    },
+    {
+      "path": "server/src/__tests__/activity-native-source-privacy.integration.test.ts",
+      "sha256": "1f097a40a1b30e275cc088cf001e9889b3dbb9395de51a47505e3e2b81018fea"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c"
+    },
+    {
+      "path": "server/src/__tests__/authorization-service.test.ts",
+      "sha256": "7ecf07623106b48776b4c630e82fbc4a1716929aea61fb5d0c8c20033125daa1"
+    },
+    {
+      "path": "server/src/__tests__/cli-auth-routes.test.ts",
+      "sha256": "6560b6b737f86e7fe4593ef4ea390e0f435830ed0c93638c0d2497c2e4d78967"
+    },
+    {
+      "path": "server/src/__tests__/company-import-job-history.integration.test.ts",
+      "sha256": "5011cb9ee0154e708bb3d84bfd067bcbe84c45ccadb21ea3b855e2fef06dd199"
+    },
+    {
+      "path": "server/src/__tests__/company-import-jobs.integration.test.ts",
+      "sha256": "b67f3ea4698de89ec8a4b08000e7293445f6e50cf5842da8212c807fde1bf4ec"
+    },
+    {
+      "path": "server/src/__tests__/company-import-process-recovery.integration.test.ts",
+      "sha256": "4e6f79aa0f256002992b65f85301d870dc4851d5a439c3d0521ca4ed2c8dfd8f"
+    },
+    {
+      "path": "server/src/__tests__/company-import-transfer-routes.test.ts",
+      "sha256": "446476cd90ff2b73362669b0eb97e6f33e867298e2c2cc40d9584e6192847587"
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd",
+      "gitStatusAtCapture": "?? server/src/__tests__/company-responsibility-attention.integration.test.ts"
+    },
+    {
+      "path": "server/src/__tests__/first-party-support-model-gateway.test.ts",
+      "sha256": "6d0538b7698dc8e08078077746cfa0c96cd4c96eb004d5f0ba1273dbf706b610"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
+      "sha256": "9578f6f26db732a569ed1a86e3a6a1c6d27438f5f0208f2179c4b080666c9504"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-native-runner-cancellation.test.ts",
+      "sha256": "c46dd9f80b505b94fbccef91e8fb8372fcc1c655a528d16a538c7d01e266ab4b"
+    },
+    {
+      "path": "server/src/__tests__/memory-native-capture-purpose.integration.test.ts",
+      "sha256": "7ef9d19a285be4c0d70a2da9d71d88eb41925828f492dde738864c4e38138d45",
+      "gitStatusAtCapture": "M server/src/__tests__/memory-native-capture-purpose.integration.test.ts"
+    },
+    {
+      "path": "server/src/__tests__/memory-private-share-publication.integration.test.ts",
+      "sha256": "d913f93c3432337da9f0f0e2e008d9191b9a21f80111b8c63d742ba66c980833"
+    },
+    {
+      "path": "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
+      "sha256": "60ef184146c6ca40d1de0f05d5446e6c9daaa54ec902fbc6cda98c03cebf9302"
+    },
+    {
+      "path": "server/src/__tests__/native-finalization-migration.test.ts",
+      "sha256": "963637acb3df6f0ec8ca1e6aafb0eac86b61863d190222f08517149d35b8bdf8"
+    },
+    {
+      "path": "server/src/__tests__/native-finalization-recovery.test.ts",
+      "sha256": "ff0d264b20c8947abdbe59b2c0788c7452b377df590993ff906196d6c490236b"
+    },
+    {
+      "path": "server/src/__tests__/native-payload-source-binding.integration.test.ts",
+      "sha256": "a68008d680de218c051ede7f24948e058836d9e1661ecd7ec406a1cbadf1710e"
+    },
+    {
+      "path": "server/src/__tests__/native-payload-source-mutation-binding.integration.test.ts",
+      "sha256": "ab29827f900a9fa8c25a98cfc1043c55d656ce1194ccd44adf63ddfcaf3bb3b0"
+    },
+    {
+      "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "sha256": "3d3c5d2aa6a3f13fc1488a1ddd6d5ce4c8a57ac0ab2f0906efc997e1dbb41ac3",
+      "gitStatusAtCapture": "M server/src/__tests__/native-payload-temporal-sources.integration.test.ts"
+    },
+    {
+      "path": "server/src/__tests__/native-two-factor.integration.test.ts",
+      "sha256": "e8b0ae12dde257a178b71e2608c6b86018dab093a83be18b9af3c6fe1cad2551"
+    },
+    {
+      "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "sha256": "2066661119a1081043580c5f9e5fbdfef21adefe882b1b28a1ee19b4916ff3a2"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "sha256": "483983848ee49c8b728bc47fb4a8cc4ecc77f7a04f528011a4af85d0f2731b31"
+    },
+    {
+      "path": "server/src/__tests__/support-case-storage.integration.test.ts",
+      "sha256": "ba320a93bee1bcf2a5f04cfeead040ba69063f5ea7f386f8314fe35d79e8434d"
+    },
+    {
+      "path": "server/src/__tests__/trust-document-registry-postgres.test.ts",
+      "sha256": "9c0490351d3d22daecfca221f7cab7130f7869268cd8c111634e97241ce23e49"
+    },
+    {
+      "path": "server/src/__tests__/trust-document-routes.integration.test.ts",
+      "sha256": "592efea21d78d1fdc88faae57cc270f15e10e026ae04ce9419dca368e11306b8"
+    },
+    {
+      "path": "server/src/__tests__/v10-private-payload.integration.test.ts",
+      "sha256": "2ff07df03312c0f7c10790591ce0af625249d4cf65661f570d43990de13e2a5c"
+    },
+    {
+      "path": "server/src/__tests__/v10-support-cases.integration.test.ts",
+      "sha256": "128d955bab1c3d70442750c8a5ec9b0786ee16312b30d570448fc1f24d1d326e"
+    },
+    {
+      "path": "server/src/__tests__/v6-account-deletion.integration.test.ts",
+      "sha256": "0c9b6a49bafc50e0d806a8aace363c236a9a718cf1052baed926c22965acc15a"
+    },
+    {
+      "path": "server/src/__tests__/v7-derived-memory.integration.test.ts",
+      "sha256": "2f200e389c9f93e637c2d987b8fa9282428fb30e8ddf37814d3138781f945f81"
+    },
+    {
+      "path": "server/src/__tests__/v9-agent-publication.integration.test.ts",
+      "sha256": "3152dc4797007a3bf732cefc6e31bec806458830e570db5d29e8c6f118547764"
+    },
+    {
+      "path": "server/src/__tests__/v9-feedback-restore-migration.integration.test.ts",
+      "sha256": "59af2fa18c2198dae09db3f4f8cb00c4d385754c15263770e9cf82a5b1e77ef9"
+    },
+    {
+      "path": "server/src/__tests__/v9-memory-maintenance-attention.integration.test.ts",
+      "sha256": "98f6efa353bdcedf164a4ec8b891292711e0e9dc0961626d70913e9e9134ecc5"
+    },
+    {
+      "path": "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+      "sha256": "fa308271eb629b17344223266568482ce3a45e9a9295fae7e07c7bc3e0bb104f"
+    },
+    {
+      "path": "server/src/__tests__/v9-workflow-authoring-sources.integration.test.ts",
+      "sha256": "16453415f9aa5925fba0e1e6d685faabc2199d88ed82109223d771b5ffbd8f0f"
+    },
+    {
+      "path": "server/src/__tests__/v9-workflow-step-actors.integration.test.ts",
+      "sha256": "b8d2858af168e6ec6974f159f4cf9a7a9a0fc33f31138fb5e059141bac8a3a77"
+    },
+    {
+      "path": "server/src/routes/companies.ts",
+      "sha256": "de9fd53330b9c5fbcb06f8616e2e5de77b8f8c6e3a038d637937f8f69e5b2c18"
+    },
+    {
+      "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
+      "sha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "920275e0a2afbcd44043548cb031f5021f1270f2a7333a65fdce7ff4015a242c",
+      "gitStatusAtCapture": "M server/src/services/analytical-context-authority.ts"
+    },
+    {
+      "path": "server/src/services/authorization.ts",
+      "sha256": "90e03f9112765b0fa161833a5cc913c793472735683e7242fcd1c2cc72774241",
+      "gitStatusAtCapture": "M server/src/services/authorization.ts"
+    },
+    {
+      "path": "server/src/services/board-auth.ts",
+      "sha256": "b65f4c4ea61adb386c9d2daf6ca5aaf6d04ff669fae1740c9b76e3d34ce85157"
+    },
+    {
+      "path": "server/src/services/company-responsibility-contacts.ts",
+      "sha256": "6bdec82fba88dbcb856155013908d85af39f44206c08586798b292d3f2328a7f"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.test.ts",
+      "sha256": "ed7a34d078acc4ef9e64f229696d7b97b5a8bd82e0ef0880c2c5bc83714f96c3",
+      "gitStatusAtCapture": "M server/src/services/context/context-manifest.test.ts"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.ts",
+      "sha256": "f6e592175fde963a9ae04cabea81f0e32545f447ebb1fc40f4f8fab4e321dd49",
+      "gitStatusAtCapture": "M server/src/services/context/context-manifest.ts"
+    },
+    {
+      "path": "server/src/services/experience/company-responsibility-attention.ts",
+      "sha256": "80c6666a104b558cc8a4c5e44dd9dd9ed1f057cf813e9c1c6ccb370b29ef477f"
+    },
+    {
+      "path": "server/src/services/experience/private-0565/authorized-subset-reader.ts",
+      "sha256": "27e106257879013fad436d32c0379aac80d8f371aff1f73ae037ce3b8ba3a3b7"
+    },
+    {
+      "path": "server/src/services/experience/private-0565/maintenance-runner.ts",
+      "sha256": "37471163cfd763eae1ae1d22252c122c660f10c458fa3c308cc72ec3ac93f8ca"
+    },
+    {
+      "path": "server/src/services/experience/private-0565/native-metadata-sources.ts",
+      "sha256": "d1928add5d73905f611418582eb588309155f9725b021e338a4efd6323e9d567"
+    },
+    {
+      "path": "server/src/services/experience/private-0565/native-reader-adapters.ts",
+      "sha256": "0df3a10a042e49f9d58f942b0eb0a5a3a06941156c6cca14e785e92cc2bebd7b"
+    },
+    {
+      "path": "server/src/services/experience/private-0565/responsibility-scan-store.ts",
+      "sha256": "cb252779e0f9879501483bb256374c94c044319c2b862a0c31360614a0620176"
+    },
+    {
+      "path": "server/src/services/experience/private-0565/responsibility-scan.ts",
+      "sha256": "3624c8cfd41b3bd0312e51daf23d6a2527db76aad3f8e65fb95ef00fc8cd8dae"
+    },
+    {
+      "path": "server/src/services/memory/memory-maintenance.ts",
+      "sha256": "e46a065357e6e6e6ccc12f52c6dcf2e192130d9a2bf3af024ebf8dfe768f9bf7"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "9a07410333b5caad34ff396f41927db76d63e888954d8bc1fc8791979e4ccb16",
+      "gitStatusAtCapture": "M server/src/services/memory/memory-privacy.ts"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "4e3d721fbccdf40cbe11305bbe70aa2e5112af36975647141bd13ca2573b63ae",
+      "gitStatusAtCapture": "M server/src/services/native-runtime/native-session-executor.ts"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "server/src/services/saas/account-deletion.ts",
+      "sha256": "4c04bb8b7d5df9be9e9939a6db52d2b411482964579f944854cb15697050d183"
+    },
+    {
+      "path": "server/src/services/saas/platform.ts",
+      "sha256": "32f2d6d0d883d012d9091c9b0f710fb00bdf1843dadb86d237ded90bc83d0e79"
+    },
+    {
+      "path": "ui/src/api/companies.ts",
+      "sha256": "5d1864a416d957f6f762325a0635cf0cfbaebfca78ff0738c64583d0e146d643"
+    },
+    {
+      "path": "ui/src/pages/CompanySettings.tsx",
+      "sha256": "9a4b6d142148014043266f674dd731f4b7faefc0d9af1fcb2ef7437f02b6e834"
+    },
+    {
+      "path": "ui/src/pages/CompanySettingsArchive.test.tsx",
+      "sha256": "19ea6a5c61fed9b4bb80b5df7614e8eb3bbf5697e9bed4ba4bdd726f63a61f94"
+    },
+    {
+      "path": "ui/src/pages/CompanySettingsRenameHint.test.tsx",
+      "sha256": "34e42e83bf1e00b464e18a935d73b9eca20de519e6c7237ccb8761484ce1266f"
+    }
+  ],
+  "sourcePinBasis": "Exact SHA-256 hashes of the worktree bytes at register creation; sourceBaseCommit identifies the checked-out HEAD, and dirty owner/test files are recorded individually.",
+  "affectedMigrationDiscovery": {
+    "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
+    "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
+    "currentAffectedCount": 64,
+    "currentAffectedFirst": "0502_swift_maria_hill",
+    "currentAffectedLast": "0565_first_gorgon"
+  },
+  "sourcePinFinality": "INTERIM: 0565 source pins refreshed to corrected commit a0b495464. Refresh all phase pins once after private Quality 0566 publishes and Native source freeze completes.",
+  "latestMigrationPublication": {
+    "migration": "0565_first_gorgon",
+    "sourceState": "committed source and migration at a0b495464; published portable qualification bundle is present in repository evidence",
+    "sourceCommit": "a0b495464",
+    "portableReview": "doc/operations/aw-v10-evidence/responsibility-scan-0565-2026-10-30",
+    "portableReviewTar": "doc/operations/aw-v10-evidence/responsibility-scan-0565-2026-10-30/qualification.tar.gz",
+    "stageList": "doc/operations/aw-v10-evidence/responsibility-scan-0565-2026-10-30/qualification.tar.gz:responsibility-0565-portable-review-r2-20261030/stage-list.txt",
+    "sourceChangeReasons": [
+      "Added durable bounded responsibility scan run and candidate-pointer tables with company scope, run/resource uniqueness, kind and source-version constraints, lease-pair/state/cursor bounds, fair claim and expiry indexes.",
+      "Added nullable optional security/support incident contact references on companies; settings route restricts selection to active verified same-company Humans, and labels alone confer no authority.",
+      "Added 17-kind source scanner using bounded keyset pages and lease-token fencing; the pointer cache stores identifiers/version only, while display re-reads the current native source and ACL and hides stale/private pointers.",
+      "Added periodic scheduler integration, owner-visible attention projection, contact settings UI, and account offboarding enqueue-after-commit behavior. Corrected offboarding clears each matching contact field independently, preserving unrelated holders; exact retry maximum is enforced using the atomically returned claim count."
+    ],
+    "qualificationSummary": "17/17 current responsibility PostgreSQL tests; official generated 0565 apply 1/1 from 0564; server TSC and Oxc 1002 passed; UI 10/10 and UI typecheck; exact 35-file hash guard and single 0560 snapshot prune passed.",
+    "phaseBoundary": "No backfill; new scan/pointer tables begin empty, optional company contact refs are nullable and are not inferred from history. Candidate cache is advisory, readers recheck current Native authority. Restore cache behavior and retirement remain unqualified."
+  },
+  "affectedMigrationReasons": {
+    "0502": "Extends auth_security_events action contract with board_api_key_id, owner/user and company-null constraints, and expiry index; board-key audit rows use the existing user-auth event writer.",
+    "0503": "Introduces private issue/project access and privacy lineage tables, per-Issue/Project visibility/root/parent identities, and retained Run-to-Task provenance; current auth/privacy graph readers enforce these rows.",
+    "0504": "Adds bounded qualified source identity arrays to Memory and Projects; the DB trigger keeps provenance monotonic, erases source arrays on deletion, and keeps legacy rows unqualified rather than promoting them."
+  }
+}

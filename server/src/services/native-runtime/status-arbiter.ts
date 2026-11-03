@@ -104,6 +104,8 @@ export function arbitrateNativeStatus(input: {
    * checkout is intentionally gated until the dependency resolves.
    */
   hasUnresolvedIssueBlockers?: boolean;
+  /** Current Human/source-owner fact from the canonical finalizer only. Never model input. */
+  readonlyDependencyInteraction?: boolean;
   /** A governance interaction created by this run was accepted before the run settled. */
   governanceResolvedForRun?: boolean;
   externalChatResponseWaitAuthorization?:
@@ -250,6 +252,11 @@ export function arbitrateNativeStatus(input: {
     input.hasUnresolvedIssueBlockers === true &&
     ["done", "blocked"].includes(input.assessment.reportedDisposition)
   ) {
+    if (input.readonlyDependencyInteraction === true && input.priorIssueStatus === "blocked" &&
+        input.terminalState === "succeeded" && input.assessment.reportedDisposition === "blocked") {
+      return { policyVersion: NATIVE_STATUS_ARBITER_POLICY_VERSION, statusAction: "preserve", toStatus: "blocked",
+        reasonCode: "durable_dependency_blocker_bound", unblockDescriptor: null, effects: [] };
+    }
     const owner = input.assessment.blocker?.boardOwned
       ? ("board" as const)
       : { agentId: input.agentId };

@@ -47,6 +47,7 @@ import {
   nativeRunFinalizations,
   nativeRunResults,
   statusDecisionEffects,
+  verificationRuns,
   workAssessments,
   statusDecisions,
   toolInvocations,
@@ -79,6 +80,7 @@ import { preparePlatformSkillAdmission } from "../../services/platform-skill-adm
 import { hasPendingRunCleanup } from "../../services/execution-blocker.js";
 import { remoteExecutionHasStopped, readNativeRemoteWorkloadIntent } from "../../services/remote-execution-termination.js";
 import { heartbeatService } from "../../services/heartbeat.js";
+import { evaluateAgentInvokabilityFromDb } from "../../services/agent-invokability.js";
 import { managedNativeProjectArgumentsJsonSchema } from "../../services/native-project-output.js";
 import { verifyNativeCleanupRuntimeState } from "../../services/execution-sandbox/run-lease-cleanup.js";
 import { recordNativeLocalProcessStopAfterExit } from "../../services/native-local-process-stop.js";
@@ -308,17 +310,102 @@ export type ManagedWorkerSandboxHost = Awaited<ReturnType<typeof configureManage
     ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
 };
 
+export type ManagedNativeVerifiedPredecessor = {
+  runId:string; issueId:string; planId:string; workerAttemptId:string;
+  verificationRunId:string; resultHash:string; agentUpdatedAtGeneration:string;
+};
+
 /** Mirror the ordinary heartbeat claim for this manually constructed fixture run.
  * A paused/ineligible Agent and any outstanding run or cleanup remain held. */
 export async function claimManagedNativeFixtureRun(db: ReturnType<typeof createDb>, input: {
   companyId: string; agentId: string; issueId: string; responsibleUserId: string;
   startedAt: Date; conversationSessionGeneration: number | null;
+  verifiedPredecessor?: ManagedNativeVerifiedPredecessor;
 }) {
   return db.transaction(async tx => {
     const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId),
       eq(issues.id, input.issueId))).for("update");
     if (!task || task.assigneeAgentId !== input.agentId || task.responsibleUserId !== input.responsibleUserId)
       throw new Error("managed_fixture_run_task_ownership_changed");
+    if (input.verifiedPredecessor) {
+      const proof = input.verifiedPredecessor;
+      const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId,input.companyId),eq(agents.id,input.agentId))).for("update");
+      const [generation] = await tx.select({value:sql<string>`${agents.updatedAt}::text`}).from(agents).where(eq(agents.id,input.agentId));
+      if (!agent || agent.adapterType!=="paperclip_runner" || agent.status!=="running" || generation?.value!==proof.agentUpdatedAtGeneration ||
+        !(await evaluateAgentInvokabilityFromDb(tx as unknown as ReturnType<typeof createDb>,agent)).invokable)
+        throw new Error("managed_fixture_verified_predecessor_agent_changed");
+      const [previousTask] = await tx.select().from(issues).where(and(eq(issues.companyId,input.companyId),eq(issues.id,proof.issueId))).for("share");
+      const [previousRun] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,input.companyId),
+        eq(heartbeatRuns.id,proof.runId),eq(heartbeatRuns.agentId,input.agentId))).for("share");
+      const [coordinator] = await tx.select().from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId,input.companyId),
+        eq(nativeRunFinalizations.issueId,proof.issueId),eq(nativeRunFinalizations.runId,proof.runId))).for("share");
+      const [membership] = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId,input.companyId),
+        eq(companyMemberships.principalType,"user"),eq(companyMemberships.principalId,input.responsibleUserId),eq(companyMemberships.status,"active"))).for("share");
+      if (!previousTask || previousTask.status!=="done" || previousTask.hiddenAt || previousTask.assigneeAgentId!==input.agentId ||
+        previousTask.responsibleUserId!==input.responsibleUserId || !membership || !previousRun || previousRun.responsibleUserId!==input.responsibleUserId ||
+        previousRun.nativeIssueId!==proof.issueId || previousRun.runtimeMode!=="native" || previousRun.status!=="succeeded" || !previousRun.finishedAt ||
+        !previousRun.completionContractId || previousRun.nativePhase!=="committed" || previousRun.nativeProcessCleanupPending!==false || !coordinator || coordinator.phase!=="committed" ||
+        coordinator.leaseOwner || !coordinator.resultId || !coordinator.assessmentId || !coordinator.decisionId ||
+        previousRun.resultJson?.finalizationPhase!=="committed" || previousRun.resultJson?.decisionId!==coordinator.decisionId ||
+        previousRun.resultJson?.assessmentId!==coordinator.assessmentId)
+        throw new Error("managed_fixture_verified_predecessor_owner_changed");
+      const [accepted] = await tx.select().from(nativeRunResults).where(and(eq(nativeRunResults.companyId,input.companyId),
+        eq(nativeRunResults.issueId,proof.issueId),eq(nativeRunResults.runId,proof.runId),eq(nativeRunResults.id,coordinator.resultId),
+        eq(nativeRunResults.completionContractId,previousRun.completionContractId),eq(nativeRunResults.schemaStatus,"accepted"))).for("share");
+      const [assessment] = await tx.select().from(workAssessments).where(and(eq(workAssessments.companyId,input.companyId),
+        eq(workAssessments.issueId,proof.issueId),eq(workAssessments.runId,proof.runId),eq(workAssessments.id,coordinator.assessmentId),
+        eq(workAssessments.resultId,coordinator.resultId))).for("share");
+      const [decision] = await tx.select().from(statusDecisions).where(and(eq(statusDecisions.companyId,input.companyId),
+        eq(statusDecisions.issueId,proof.issueId),eq(statusDecisions.runId,proof.runId),eq(statusDecisions.id,coordinator.decisionId),
+        eq(statusDecisions.assessmentId,coordinator.assessmentId),eq(statusDecisions.applicationState,"applied"))).for("share");
+      const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId,input.companyId),eq(orchestrationPlans.id,proof.planId))).for("share");
+      const [attempt] = await tx.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId,input.companyId),
+        eq(orchestrationWorkerAttempts.planId,proof.planId),eq(orchestrationWorkerAttempts.id,proof.workerAttemptId),
+        eq(orchestrationWorkerAttempts.runId,proof.runId),eq(orchestrationWorkerAttempts.agentId,input.agentId))).for("share");
+      const [worker] = attempt ? await tx.select().from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId,input.companyId),
+        eq(orchestrationWorkers.planId,proof.planId),eq(orchestrationWorkers.id,attempt.workerId))).for("share") : [];
+      const [verification] = await tx.select().from(verificationRuns).where(and(eq(verificationRuns.companyId,input.companyId),
+        eq(verificationRuns.id,proof.verificationRunId),eq(verificationRuns.planId,proof.planId),eq(verificationRuns.issueId,proof.issueId),
+        eq(verificationRuns.workerAttemptId,proof.workerAttemptId))).for("share");
+      const [contract] = previousRun.completionContractId ? await tx.select().from(completionContracts).where(and(eq(completionContracts.companyId,input.companyId),
+        eq(completionContracts.issueId,proof.issueId),eq(completionContracts.id,previousRun.completionContractId))).for("share") : [];
+      if (!accepted || !assessment || assessment.contractId!==previousRun.completionContractId || !decision?.appliedAt ||
+        decision.reasonCode!=="completion_evidence_incomplete" || !plan || plan.status!=="completed" || plan.erasedAt || plan.issueId!==proof.issueId ||
+        !attempt || attempt.status!=="succeeded" || !worker || worker.status!=="completed" || worker.issueId!==proof.issueId ||
+        !verification || verification.erasedAt || verification.result!=="pass" || verification.recommendation!=="FINISH" ||
+        verification.reviewerType!=="human" || verification.reviewerId!==input.responsibleUserId || verification.resultHash!==proof.resultHash ||
+        verification.failedInvariants.length!==0 || verification.uncertainties.length!==0 || verification.evidenceRefs.length===0 ||
+        verification.expectedPlanVersion+1!==plan.version || verification.createdAt<previousRun.finishedAt ||
+        (verification.workerId!==null && verification.workerId!==worker.id) ||
+        !contract || verification.completionContractId!==contract.id || verification.completionContractHash!==contract.canonicalSha256 ||
+        previousRun.completionContractSha256!==contract.canonicalSha256 || plan.completionContractId!==contract.id)
+        throw new Error("managed_fixture_verified_predecessor_review_changed");
+      const [continuation] = await tx.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId,input.companyId),
+        eq(agentWakeupRequests.agentId,input.agentId),eq(agentWakeupRequests.idempotencyKey,`native-status:${decision.id}:continuation`))).for("share");
+      const [effect] = continuation ? await tx.select().from(statusDecisionEffects).where(and(eq(statusDecisionEffects.companyId,input.companyId),
+        eq(statusDecisionEffects.issueId,proof.issueId),eq(statusDecisionEffects.decisionId,decision.id),eq(statusDecisionEffects.effectKind,"enqueue_continuation"),
+        eq(statusDecisionEffects.targetType,"agent_wakeup_request"),eq(statusDecisionEffects.targetId,continuation.id))).for("share") : [];
+      if (!continuation || continuation.status!=="skipped" || continuation.runId!==null || !continuation.finishedAt ||
+        continuation.requestedByActorType!=="system" || continuation.requestedByActorId!=="native-status-committer" ||
+        !isDeepStrictEqual(continuation.payload,{issueId:proof.issueId,taskId:proof.issueId,nativeDecisionId:decision.id,
+          continuationKind:"same_agent",continuationIdempotencyKey:"native-completion-incomplete",
+          continuationSummary:"Finish the remaining work and report done, or explicitly request a named reviewer decision. Waiting for checks or an incomplete completion report does not require human approval.",
+          _paperclipWakeContext:{issueId:proof.issueId,taskId:proof.issueId,wakeReason:"issue_status_changed",source:"native_status_decision",statusDecisionSource:"native_status_decision"}}) || !effect ||
+        effect.deliveryState!=="delivered" || !effect.deliveredAt ||
+        await hasPendingRunCleanup(tx as unknown as ReturnType<typeof createDb>,input.companyId,proof.runId) ||
+        !await remoteExecutionHasStopped(tx as unknown as ReturnType<typeof createDb>,input.companyId,proof.runId))
+        throw new Error("managed_fixture_verified_predecessor_continuation_changed");
+      const [claimedAgent] = await tx.update(agents).set({status:"running",updatedAt:sql`greatest(clock_timestamp(),${agents.updatedAt}+interval '1 microsecond')`}).where(and(
+        eq(agents.companyId,input.companyId),eq(agents.id,input.agentId),eq(agents.status,"running"),
+        sql`${agents.updatedAt}=${proof.agentUpdatedAtGeneration}::timestamptz`,
+        sql`not exists(select 1 from ${agentWakeupRequests} w where w.company_id=${input.companyId}::uuid and w.agent_id=${input.agentId}::uuid
+          and w.status in ('queued','claimed','deferred','deferred_issue_execution'))`,
+        sql`not exists(select 1 from ${heartbeatRuns} h where h.company_id=${input.companyId}::uuid and h.agent_id=${input.agentId}::uuid and
+          (h.status in ('queued','running','scheduled_retry','retry_wait') or public.aw_v10_has_pending_run_cleanup(h.company_id,h.id)
+            or (h.id<>${proof.runId}::uuid and h.created_at>=${previousRun.createdAt})))`,
+      )).returning({id:agents.id});
+      if (!claimedAgent) throw new Error("managed_fixture_verified_predecessor_claim_changed");
+    } else {
     const [claimedAgent] = await tx.update(agents).set({ status: "running" }).where(and(
       eq(agents.companyId, input.companyId), eq(agents.id, input.agentId), eq(agents.adapterType, "paperclip_runner"), eq(agents.status, "idle"),
       sql`not exists (select 1 from ${heartbeatRuns} h where h.company_id=${input.companyId}::uuid
@@ -326,6 +413,7 @@ export async function claimManagedNativeFixtureRun(db: ReturnType<typeof createD
           or public.aw_v10_has_pending_run_cleanup(h.company_id,h.id)))`,
     )).returning({ id: agents.id });
     if (!claimedAgent) throw new Error("managed_fixture_agent_run_claim_unavailable");
+    }
     const [run] = await tx.insert(heartbeatRuns).values({ companyId: input.companyId, agentId: input.agentId,
       responsibleUserId: input.responsibleUserId, status: "running", startedAt: input.startedAt,
       runtimeMode: "native", nativeIssueId: input.issueId,
@@ -376,6 +464,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       sourceSet: import("../../services/native-runtime/native-execution-input.js").NativePayloadSourceSet } }) => Promise<void>;
   /** Validate the exact persisted Project source prefix when its actual tool_result reaches the next provider request. */
   nativeProjectCreatePrefixProbe?: { callId: string };
+  verifiedPredecessor?: ManagedNativeVerifiedPredecessor;
   reuseIdentity?: { companyId: string; agentId: string; aliceUserId: string; bobUserId: string;
     aliceSessionId?: string; bobSessionId?: string };
   onPreserveDebugArtifacts?: () => void;
@@ -769,7 +858,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const heartbeatRunStartedAt = new Date();
     const run = await claimManagedNativeFixtureRun(db, { companyId, agentId, issueId: task.id,
       responsibleUserId: aliceUserId, startedAt: heartbeatRunStartedAt,
-      conversationSessionGeneration: task.conversationSessionGeneration });
+      conversationSessionGeneration: task.conversationSessionGeneration, verifiedPredecessor: input.verifiedPredecessor });
     await preparePlatformSkillAdmission(db, { companyId, agentId, runId: run!.id,
       responsibleUserId: aliceUserId, requireExisting: false }, blenteraPlatformContractHashes());
     let providerFetch: NonNullable<NonNullable<Parameters<typeof workerModelGateway>[1]>["fetch"]> | undefined;

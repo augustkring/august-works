@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { createReadStream, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, createConnection, type Socket } from "node:net";
 import { join } from "node:path";
@@ -124,4 +124,79 @@ describe("actual model-client kernel observation", () => {
       expect(port).toBeGreaterThan(0);
     });
   }, 30_000);
+});
+
+
+import { managedModelProcessIdentityControls } from "./managed-native-model-transport.js";
+
+async function withNondumpableUidProcess(work: (value: { pid: number; start: string; status: string; directoryUid: number }) => Promise<void>) {
+  const script = String.raw`import ctypes,json,os,sys
+libc=ctypes.CDLL(None,use_errno=True)
+if libc.prctl(4,0,0,0,0)!=0: sys.exit(126)
+s=open('/proc/self/stat').read()
+print(json.dumps({'pid':os.getpid(),'start':s[s.rfind(') ')+2:].split()[19],'dumpable':libc.prctl(3,0,0,0,0)}),flush=True)
+sys.stdin.buffer.read()
+`;
+  const child = spawn("/usr/bin/python3", ["-I", "-c", script], { env: { PATH: "/usr/bin:/bin" }, stdio: ["pipe", "pipe", "pipe"] });
+  const stopped = new Promise<void>(resolve => child.once("close", () => resolve()));
+  try {
+    const ready = await new Promise<{ pid: number; start: string; dumpable: number }>((resolve, reject) => {
+      let text = "";
+      child.once("error", reject); child.once("close", () => reject(new Error("uid_child_exited_before_ready")));
+      child.stdout.on("data", bytes => { text += bytes.toString("utf8");
+        if (Buffer.byteLength(text) > 4096) { reject(new Error("uid_child_output_bound")); return; }
+        if (text.includes("\n")) { try { resolve(JSON.parse(text.split("\n", 1)[0]!)); } catch (error) { reject(error); } }
+      });
+    });
+    expect(ready.pid).toBe(child.pid); expect(ready.dumpable).toBe(0);
+    const status = readFileSync(`/proc/${ready.pid}/status`, "utf8"), directoryUid = statSync(`/proc/${ready.pid}`).uid;
+    await work({ pid: ready.pid, start: ready.start, status, directoryUid });
+  } finally { child.stdin.end(); await stopped; }
+}
+
+describe("actual process credential identity", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("accepts a live same-UID nondumpable process using its four actual credential UIDs", async () => {
+    expect(process.getuid?.()).toBeGreaterThan(0);
+    await withNondumpableUidProcess(async ({ pid, start, status, directoryUid }) => {
+      expect(status.match(/^Uid:[^\n]*$/m)?.[0].trim().split(/\s+/).slice(1).map(Number))
+        .toEqual(Array(4).fill(process.getuid!()));
+      expect(managedModelProcessIdentityControls.processIdentity(pid, "socket_ancestry"))
+        .toEqual({ pid, parent: process.pid, start });
+      // Directory ownership is observed, never accepted as credential proof.
+      expect(Number.isSafeInteger(directoryUid)).toBe(true);
+    });
+  });
+  it("rejects a real foreign-UID process and partial, mixed or wrong-PID status observations", async () => {
+    expect(process.getuid?.()).toBeGreaterThan(0);
+    const foreignPid = readdirSync("/proc").filter(value => /^[0-9]+$/.test(value)).map(Number).find(pid => {
+      try {
+        const status = readFileSync(`/proc/${pid}/status`, "utf8");
+        const uids = status.match(/^Uid:[^\n]*$/m)?.[0].trim().split(/\s+/).slice(1).map(Number);
+        return uids?.length === 4 && uids.every(uid => Number.isSafeInteger(uid) && uid !== process.getuid!());
+      } catch { return false; }
+    });
+    expect(foreignPid, "real foreign-UID process must exist for the kernel negative control").toBeDefined();
+    expect(() => managedModelProcessIdentityControls.processIdentity(foreignPid!, "socket_ancestry")).toThrow();
+    await withNondumpableUidProcess(async ({ pid, status }) => {
+      const uid = process.getuid!();
+      for (const changed of [status.replace(/^Uid:[^\n]*\n/m, ""),
+        status.replace(/^Uid:[^\n]*/m, `Uid:\t${uid}\t${uid}\t${uid}`),
+        status.replace(/^Uid:[^\n]*/m, `Uid:\t${uid}\t${uid}\t${uid}\t${uid + 1}`),
+        status.replace(/^Pid:[^\n]*/m, `Pid:\t${pid + 1}`), status + `Uid:\t${uid}\t${uid}\t${uid}\t${uid}\n`])
+        expect(() => managedModelProcessIdentityControls.processUidStatus(changed, pid, uid)).toThrow();
+    });
+  });
+  it("rejects a reused-PID marker expectation when the actual live process start identity differs", async () => {
+    vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "model-observer-reuse-control-only");
+    await withKernelClient(async ({ client, origin, marker }) => {
+      const text = readFileSync(marker, "utf8"), lines = text.split("\n"), parts = lines[4]!.split(":");
+      const pid = Number(lines[1]), observed = managedModelProcessIdentityControls.processIdentity(pid, "runner");
+      expect(observed.start).toBe(parts[2]);
+      lines[4] = `${parts[0]}:${parts[1]}:${BigInt(observed.start) + 1n}`;
+      writeFileSync(marker, lines.join("\n"));
+      expect(await attestNativeModelClient(client, origin)).toBeNull();
+      expect(managedModelProcessIdentityControls.processIdentity(pid, "runner").start).toBe(observed.start);
+    });
+  }, 30000);
 });

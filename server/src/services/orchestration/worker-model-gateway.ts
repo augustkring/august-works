@@ -66,7 +66,7 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
-import { assertNativeManagedConsumedSourceSetCurrent } from "../native-direct-input.js";
+import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent } from "../native-direct-input.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import {
@@ -1190,6 +1190,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   if (!parsedPolicy.success || !parsedInputs.success ||
     Buffer.byteLength(JSON.stringify(consumedSourceComponents), "utf8") > 512 * 1024)
     throw forbidden("Managed OpenCode consumed source set exceeds its bound");
+  await captureNativeBlockedHumanInteraction(db, { companyId: claims.company_id, issueId: run.nativeIssueId!,
+    runId: run.id, agentId: run.agentId });
   await assertNativeManagedConsumedSourceSetCurrent(db, { companyId: claims.company_id, issueId: run.nativeIssueId!,
     runId: claims.run_id, actor: sourceActor, components: consumedSourceComponents,
     sourceSet: { policy: parsedPolicy.data, inputs: parsedInputs.data } });
@@ -2213,6 +2215,8 @@ export function workerModelGateway(db: Db, options: Options) {
                 eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
               )).for("share");
               if (!launch) throw forbidden("The Native source receipt cannot bind this model dispatch");
+              await captureNativeBlockedHumanInteraction(tx as unknown as Db, { companyId: run.companyId,
+                issueId: run.nativeIssueId, runId: run.id, agentId: run.agentId });
               await assertNativeManagedConsumedSourceSetCurrent(tx as unknown as Db, {
                 companyId: run.companyId, issueId: run.nativeIssueId, runId: run.id,
                 actor: { type: "agent", source: "agent_jwt", companyId: run.companyId,
@@ -2458,6 +2462,8 @@ export function workerModelGateway(db: Db, options: Options) {
                 prior.some((entry) => entry && typeof entry === "object" && !Array.isArray(entry) &&
                   (entry as Record<string, unknown>).reservationId === receipt.reservationId))
                 throw forbidden("The Native source receipt cannot bind this model dispatch");
+              await captureNativeBlockedHumanInteraction(tx as unknown as Db, { companyId: run.companyId,
+                issueId: run.nativeIssueId!, runId: run.id, agentId: run.agentId });
               const authority = managedRecord(profile.nativeOpenCodeSourceAuthority);
               const promptBindings = Array.isArray(authority.promptSourceBindings)
                 ? authority.promptSourceBindings.map(managedRecord).filter((binding) =>
@@ -2484,7 +2490,7 @@ export function workerModelGateway(db: Db, options: Options) {
                 ...(conversation ? { agentId: claims.sub, conversationModelBinding: conversation.conversation_model } : {}),
                 reservationId: receipt.reservationId, callId: receipt.callId,
                 requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint,
-                method: receipt.method, sourcePolicyHash, sourceDispatchDigest,
+                method: receipt.method, sourcePolicyHash, sourceDispatchDigest, toolSchemasHash: authority.toolSchemasHash,
                 sourceSetHash: requestSourceBinding.sourceSetHash,
                 consumedSourceSet: requestSourceBinding.consumedSourceSet,
                 consumedSourceSetHash: nativeSha256(requestSourceBinding.consumedSourceSet),

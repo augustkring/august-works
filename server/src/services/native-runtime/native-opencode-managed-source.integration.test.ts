@@ -236,6 +236,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const memoryAKey = randomUUID(), memoryBKey = randomUUID();
     let bindingId = "", bindingKey = "", privateTaskId = "", privateRootMemoryId = "";
     let memoryARecordId = "", memoryBRecordId = "";
+    let memoryAInvocationId = "", memoryBInvocationId = "";
     let humanMemoryActor: MemoryMutationActor | null = null;
     let bobMemoryActor: MemoryMutationActor | null = null;
     let aliceSessionId = "", bobSessionId = "", aliceUserId = "";
@@ -343,10 +344,23 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         const nested = outer.result && typeof outer.result === "object" ? outer.result as Record<string, unknown> : outer;
         const data = nested.data && typeof nested.data === "object" ? nested.data as Record<string, unknown> : nested;
         const record = data.record && typeof data.record === "object" ? data.record as Record<string, unknown> : {};
-        if (outer.status !== "completed" || typeof record.id !== "string")
+        if ((outer.status !== "completed" && outer.status !== "replayed") || outer.tool !== "paperclip-self:remember" ||
+            typeof outer.invocationId !== "string" || typeof record.id !== "string")
           throw new Error("managed_source_memory_result_not_completed");
-        if (parameters.idempotencyKey === memoryAKey) memoryARecordId = record.id;
-        if (parameters.idempotencyKey === memoryBKey) memoryBRecordId = record.id;
+        const expectedCallId = parameters.idempotencyKey === memoryAKey ? memoryAId
+          : parameters.idempotencyKey === memoryBKey ? memoryBId : null;
+        if (!expectedCallId || call.idempotencyKey !== `aw-native-tool:${runId}:${expectedCallId}`)
+          throw new Error("managed_source_memory_invocation_binding_mismatch");
+        const [invocation] = await db.select({ id: toolInvocations.id, runId: toolInvocations.runId,
+          toolName: toolInvocations.toolName, idempotencyKey: toolInvocations.idempotencyKey,
+          status: toolInvocations.status }).from(toolInvocations).where(and(
+          eq(toolInvocations.id, outer.invocationId), eq(toolInvocations.runId, runId),
+          eq(toolInvocations.idempotencyKey, call.idempotencyKey)));
+        if (!invocation || invocation.id !== outer.invocationId || invocation.status !== "succeeded" ||
+            invocation.toolName !== "paperclip-self:remember")
+          throw new Error("managed_source_memory_invocation_result_mismatch");
+        if (parameters.idempotencyKey === memoryAKey) { memoryARecordId = record.id; memoryAInvocationId = invocation.id; }
+        else { memoryBRecordId = record.id; memoryBInvocationId = invocation.id; }
       },
       driveScheduler: async ({ actor, companyId, agentId, heartbeat }) => {
         if (!actor.userId) throw new Error("managed_source_run_human_missing");
@@ -398,6 +412,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         expect(invocations.map(value => value.toolName)).toEqual(expect.arrayContaining([
           "paperclip-self:remember", "read_context", "write_document",
         ]));
+        expect(invocations.map(value => value.id)).toEqual(expect.arrayContaining([memoryAInvocationId, memoryBInvocationId]));
         const [memoryA] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, memoryARecordId));
         expect(memoryA?.reviewState).toBe("accepted");
         expect(contextResultContent).toContain(privateRootContent);
@@ -428,10 +443,10 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     // before rewriting the assertions; each replay reuses the captured closure.
     const callId = `source-memory-replay-${randomUUID()}`, idempotencyKey = randomUUID();
     let replay: (() => Promise<unknown>) | null = null, initialResult: unknown = null;
-    let memoryId = "", issueId = "", companyId = "", agentId = "", replayDone = false;
+    let memoryId = "", issueId = "", companyId = "", agentId = "", runId = "", invocationId = "", replayDone = false;
     let bindingKey = "";
     let humanMemoryActor: MemoryMutationActor | null = null;
-    let providerResponses = 0, completedToolResults = 0;
+    let providerResponses = 0, successfulToolResults = 0;
     let observedToolResult = false, toolResultIsError = false, replaySourceChecked = false;
     const outcome = await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 180,
       prepareNativeRuntimeContext: async ({ db: currentDb, actor, companyId: currentCompanyId, agentId: currentAgentId }) => {
@@ -459,17 +474,31 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       afterSuccessfulAssignedToolResult: async ({ call, result, replay: exactReplay }) => {
         if (call.tool !== "paperclip-self:remember" || call.parameters === null || typeof call.parameters !== "object" ||
           (call.parameters as Record<string, unknown>).idempotencyKey !== idempotencyKey) return;
-        completedToolResults++;
+        successfulToolResults++;
         initialResult = result; replay = exactReplay;
         const outer = result && typeof result === "object" ? result as Record<string, unknown> : {};
         const nested = outer.result && typeof outer.result === "object" ? outer.result as Record<string, unknown> : outer;
         const data = nested.data && typeof nested.data === "object" ? nested.data as Record<string, unknown> : nested;
         const record = data.record && typeof data.record === "object" ? data.record as Record<string, unknown> : {};
-        if (outer.status !== "completed" || typeof record.id !== "string") throw new Error("source_replay_output_missing");
+        if ((outer.status !== "completed" && outer.status !== "replayed") || outer.tool !== "paperclip-self:remember" ||
+            typeof outer.invocationId !== "string" || typeof record.id !== "string" ||
+            call.idempotencyKey !== `aw-native-tool:${runId}:${callId}`)
+          throw new Error("source_replay_output_missing");
+        const [invocation] = await db.select({ id: toolInvocations.id, runId: toolInvocations.runId,
+          issueId: toolInvocations.issueId, toolName: toolInvocations.toolName,
+          idempotencyKey: toolInvocations.idempotencyKey, status: toolInvocations.status })
+          .from(toolInvocations).where(and(eq(toolInvocations.id, outer.invocationId),
+            eq(toolInvocations.runId, runId), eq(toolInvocations.issueId, issueId),
+            eq(toolInvocations.idempotencyKey, call.idempotencyKey)));
+        if (!invocation || invocation.id !== outer.invocationId || invocation.status !== "succeeded" ||
+            invocation.toolName !== "paperclip-self:remember")
+          throw new Error("source_replay_invocation_result_mismatch");
+        invocationId = invocation.id;
         memoryId = record.id;
       },
-      beforeManagedModelRequest: async ({ body, runId, issueId: currentIssueId }) => {
-        if (!runId || !currentIssueId) throw new Error("source_replay_run_binding_missing");
+      beforeManagedModelRequest: async ({ body, runId: currentRunId, issueId: currentIssueId }) => {
+        if (!currentRunId || !currentIssueId) throw new Error("source_replay_run_binding_missing");
+        runId = currentRunId;
         issueId = currentIssueId;
         const current = await db.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, currentIssueId));
         companyId = current[0]?.companyId ?? "";
@@ -481,10 +510,10 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         toolResultIsError = blocks.some(block => block.type === "tool_result" && block.tool_use_id === callId && block.is_error === true);
         if (!replay || !memoryId || !initialResult) throw new Error("source_replay_exact_call_not_captured");
         const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson,
-          responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+          responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns).where(eq(heartbeatRuns.id, currentRunId));
         const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" ? run.runnerProfileJson as Record<string, unknown> : {};
         const receipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
-        expect(receipt.binding).toMatchObject({ companyId, issueId: currentIssueId, runId });
+        expect(receipt.binding).toMatchObject({ companyId, issueId: currentIssueId, runId: currentRunId });
         const snapshot = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
           .where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, memoryId))).then(rows => rows[0]?.payloadSourceSnapshot);
         const parsed = nativePayloadSourceSnapshotSchema.parse(snapshot);
@@ -492,20 +521,22 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         if (dispatchIndex < 0 || dispatchIndex !== parsed.inputs.length - 1) throw new Error("source_replay_dispatch_prefix_missing");
         if (!run || !agentId || !humanMemoryActor) throw new Error("source_replay_run_actor_missing");
         const agentActor = { type: "agent" as const, source: "none" as const, companyId,
-          agentId, runId, onBehalfOfUserId: run.responsibleUserId ?? "" };
-        await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: currentIssueId, runId, actor: agentActor,
+          agentId, runId: currentRunId, onBehalfOfUserId: run.responsibleUserId ?? "" };
+        await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: currentIssueId, runId: currentRunId, actor: agentActor,
           policy: parsed.policy, inputs: parsed.inputs.slice(0, dispatchIndex) });
         replaySourceChecked = true;
         const firstReplay = await replay() as Record<string, unknown>;
-        expect(firstReplay).toMatchObject({ status: "replayed", result: (initialResult as Record<string, unknown>).result });
-        const invocationKey = `aw-native-tool:${runId}:${callId}`;
+        expect(firstReplay).toMatchObject({ invocationId, tool: "paperclip-self:remember", status: "replayed",
+          result: (initialResult as Record<string, unknown>).result });
+        const invocationKey = `aw-native-tool:${currentRunId}:${callId}`;
         const [beforeRevoke] = await db.select().from(toolInvocations).where(and(
           eq(toolInvocations.companyId, companyId), eq(toolInvocations.idempotencyKey, invocationKey)));
+        expect(beforeRevoke?.id).toBe(invocationId);
         expect(beforeRevoke?.status).toBe("succeeded");
         await memoryService(db).reviewCandidate(companyId, memoryId, { decision: "accept" }, humanMemoryActor!);
         await memoryService(db).revoke(companyId, memoryId,
           { reason: "Human revoked this output during its exact managed replay check." }, humanMemoryActor!);
-        await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: currentIssueId, runId, actor: agentActor,
+        await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: currentIssueId, runId: currentRunId, actor: agentActor,
           policy: parsed.policy, inputs: parsed.inputs.slice(0, dispatchIndex) });
         await expect(replay()).rejects.toMatchObject({ reasonCode: "native_memory_capture_invalid" });
         const invocations = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
@@ -525,7 +556,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           runErrorCode: bound.run.errorCode === null ? "none" : ["configuration_incomplete", "native_session_interrupted",
             "native_session_failed", "native_session_timeout", "native_input_changed", "paid_transport_unqualified"]
               .includes(bound.run.errorCode) ? bound.run.errorCode : "other",
-          providerResponses: Math.min(999, providerResponses), completedToolResults: Math.min(999, completedToolResults),
+          providerResponses: Math.min(999, providerResponses), successfulToolResults: Math.min(999, successfulToolResults),
           observedToolResult, toolResultIsError: observedToolResult ? toolResultIsError : null,
           replayCaptured: replay !== null, memoryCaptured: memoryId.length > 0, replaySourceChecked, replayDone }));
         return { ...bound, companyId: context.companyId, providerCallCount: context.factsForRun(bound.wake.id).providerCallCount };

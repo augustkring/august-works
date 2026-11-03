@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "5cb32724d7da7202d246c1d31465450cd750616083fafaa09c5ca77b0f73bebe"
+      "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -262,7 +262,7 @@
     },
     {
       "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
-      "sha256": "c951c2cfaeac101bc899cab955a8cc8fd55ad11099e9c36aebc8b5c01d7bd840"
+      "sha256": "e9d7efe73869514f2397e6a04a47775575856267b41e3d88e5e4f3bfdba75a0a"
     },
     {
       "path": "server/src/__tests__/tool-gateway-service.test.ts",
@@ -358,7 +358,7 @@
     },
     {
       "path": "server/src/services/issues.ts",
-      "sha256": "dc3a0f8d487913795164457d436773ca8577401dc01d378d2850dad962db4ca7"
+      "sha256": "ab995a34a8896082d5d2edd554ed00ee64ca9a5c8ed3097a3b8d893d17b2ddea"
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",
@@ -370,19 +370,19 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "53788f506fbb85841333cbf8f61ccfca0ff99692d646273fa8afd0a4dd2a1ce2"
+      "sha256": "e32b3a22d0bb5318a9861c113c52c1d14a03af4c0dd1d2e109b81127edc8a50f"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-      "sha256": "8f18932945ce7abea19ee42f41bae8f306ea971a8af88e99e947a4cad8ebac11"
+      "sha256": "483759b16940f7214fbffa058e86d99204fa55ba3183a96cffd6045211dbb5c4"
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "b79f5e8b83351b31fcf580ed1660935d9fc841838abe3047ec86c20ffad8bee7"
+      "sha256": "3063cc758ab63d4989452da7b7b5ba4c99d2cfe5cb8f34e71068c4e40ba89ff6"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "e8cac40f9a50dd3af45a2b1bac7026bfdd5387a8b42936ecf445a79670f5f606"
+      "sha256": "05ba04e1b40dcd91d68055cedaa973dd00fcd1bad4a83eca9be59106bf4dc00b"
     },
     {
       "path": "server/src/services/notification-preference-proposals.ts",
@@ -390,7 +390,7 @@
     },
     {
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "644e7d7be679bc7b83c23c1431a3f9739c2ffa92f417d5d9a494717ff11b0ca8"
+      "sha256": "1554b625817f17fefb5d9f8a37f7900ef1240c4021708cf4751165358dd1a7a2"
     },
     {
       "path": "server/src/services/process-findings.ts",

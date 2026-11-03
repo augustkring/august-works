@@ -446,6 +446,8 @@ async function withHireRunLock<T>(key: string, fn: () => Promise<T>): Promise<T>
 export function agentRoutes(
   db: Db,
   options: {
+    /** Existing server-owned instance for composed applications; never request-controlled. */
+    heartbeat?: ReturnType<typeof heartbeatService>;
     chatRunRetries?: Pick<ChatChannelService, "prepareFailedChatRunRetry" | "processFailedChatRunRetry">;
     pluginWorkerManager?: PluginWorkerManager;
     /** The active deployment mode. The confidential transport guard reads it. */
@@ -750,7 +752,7 @@ export function agentRoutes(
     }
     return runRedactions.redactForRuns(companyId,runs.filter(run=>readableRunIds.has(run.id)));
   }
-  const heartbeat = heartbeatService(db, {
+  const heartbeat = options.heartbeat ?? heartbeatService(db, {
     pluginWorkerManager: options.pluginWorkerManager,
   });
   const providerTraces = providerTraceStore(db);

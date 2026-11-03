@@ -1,3 +1,4 @@
+import { captureNativeBlockedHumanInteraction, type NativeBlockedHumanInteraction } from "./native-direct-input.js";
 import { formatNativeWorkspaceCoordination, recordNativeWorkspaceCoordination, exactNativeWorkspaceCoordination, composeNativeWorkspaceCoordinationMap,
   type NativeWorkspaceCoordinationCapture, type WorkspaceCoordinationReadDb } from "./native-runtime/native-workspace-coordination-source.js";
 import { isResourceAdmissionDeferred } from "./resource-governance.js";
@@ -49,6 +50,14 @@ import {
   adapterExecutionControls,
   captureAdapterStopOwnership,
   createAdapterExecutionControl,
+  classifyAdapterExecutionOutcome,
+  joinProcessRunCancellation,
+  registerProcessRunCancellation,
+  settleProcessRunCancellation,
+  finishProcessRunCancellationExecution,
+  processRunCancellationSettlements,
+  failedProcessRunCancellations,
+  type RunSessionOutcome,
   registerAdapterExecutionControl,
   waitForAdapterStop,
 } from "./adapter-execution-control.js";
@@ -1383,25 +1392,6 @@ const SESSIONED_LOCAL_ADAPTERS = new Set([
 // Routes and the scheduler construct separate heartbeatService instances, but
 // they must agree on in-process adapter executions when reaping stale runs.
 const activeRunExecutions = new Set<string>();
-// A legacy process adapter's signal exit can race the operator cancellation CAS while
-// its owned process group is still being joined. Keep that exit from becoming
-// a successful result (or a competing failure) before Stop settles. This is an
-// in-process ordering barrier, not durable cancellation or provider authority.
-// Embedded adapters use their own cancellation control and acknowledgement.
-const processRunCancellationSettlements = new Map<
-  string,
-  {
-    settled: Promise<void>;
-    failed: boolean;
-    error?: unknown;
-  }
->();
-// Keep failed Stop evidence until the exact executor exits, independently of
-// the active owner barrier. A later Stop may retry a still-owned live child.
-const failedProcessRunCancellations = new Map<
-  string,
-  { settled: Promise<void>; failed: boolean; error?: unknown }
->();
 // Background heartbeat executions are dispatched fire-and-forget (see
 // startNextQueuedRunForAgent), so the promise that resolves once a run's DB
 // writes are fully flushed is otherwise unobservable. Track those promises here
@@ -9254,9 +9244,6 @@ export function normalizeSessionParams(
   if (!params) return null;
   return Object.keys(params).length > 0 ? params : null;
 }
-
-type RunSessionOutcome =
-  "succeeded" | "interrupted" | "failed" | "cancelled" | "timed_out";
 
 type SkillTestHeartbeatCompletion = {
   outcome: "failed" | "cancelled";
@@ -23798,6 +23785,7 @@ export function heartbeatService(
         let nativeBootstrapRetainedRunSource: ReturnType<typeof nativeRetainedRunResumeWitness> | null = null;
         let nativeBootstrapSourceClosure: NativeBootstrapSourceClosure | null = null;
         let nativeBootstrapContinuationCapture: import("./execution-continuation.js").NativeTaskContinuationCapture | null = null;
+        let nativeBootstrapBlockedHumanInteraction: { capture: NativeBlockedHumanInteraction; wake: unknown } | null = null;
         let selectedNativeEnvironment: Record<string, string> | null = null;
         let nativeBootstrapAttachmentSourceClosureFactory: Parameters<typeof executePaperclipNativeSession>[0]["prepareBootstrapSourceClosure"];
         const nativeBootstrapInteractionSources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
@@ -24425,12 +24413,17 @@ export function heartbeatService(
               wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
               capture: continuationCaptureForWake }) : null;
             nativeBootstrapContinuationCapture = closedTaskContinuation;
+            const blockedHumanInteraction = issueRef && parseObject(context.paperclipWake).dependencyBlockedInteraction === true
+              ? await captureNativeBlockedHumanInteraction(db, { companyId: agent.companyId, issueId: issueRef.id,
+                  runId: run.id, agentId: agent.id }) : null;
+            nativeBootstrapBlockedHumanInteraction = blockedHumanInteraction
+              ? { capture: blockedHumanInteraction, wake: context.paperclipWake } : null;
             const nativeTaskWakeCapture: Parameters<typeof captureNativeTaskWakeSource>[0] | null =
               capturedTaskSource?.input.kind === "task" && issueRef ? {
                 companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion, agentId: agent.id,
                 workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
-                workspaceCoordinationCapture: originalCoordinationCapture,
+                workspaceCoordinationCapture: originalCoordinationCapture, blockedHumanInteraction,
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
                 continuationCapture: closedTaskContinuation,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
@@ -24516,9 +24509,16 @@ export function heartbeatService(
                   ...(nativeBootstrapRetainedRunSource ? [nativeBootstrapRetainedRunSource.source] : []),
                   nativeBootstrapWorkspaceSource,
                 ],
+                taskWakeDependencyCandidates: blockedHumanInteraction?.blockers.map(blocker => ({ kind: "task" as const,
+                  id: blocker.source.issueId, input: blocker.source, payloadSourceSnapshot: blocker.payloadSourceSnapshot })),
                 taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
                   ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
                       input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) : [],
+                ...(blockedHumanInteraction ? { taskWakeCommentCandidates: [
+                  ...(nativeTaskWakeSource && closedTaskContinuation ? closedTaskContinuation.commentSources : []),
+                  ...(nativeTaskWakeSource ? blockedHumanInteraction.commentSourceSnapshots : []),
+                ].map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
+                  input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) } : {}),
                 taskWakeDocumentCandidates: nativeTaskWakeSource && closedTaskContinuation?.summary
                   ? [{ kind: "document_revision" as const, id: closedTaskContinuation.summary.source.input.revisionId,
                     input: closedTaskContinuation.summary.source.input, payloadSourceSnapshot: closedTaskContinuation.summary.source.payloadSourceSnapshot }] : [],
@@ -24715,6 +24715,8 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture.value, nativeBootstrapAncestorSources,
                     ...(originalCoordinationCapture ? { nativeWorkspaceCoordinationCapture: originalCoordinationCapture } : {}) }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskMarkdownSourceMap }),
+                  ...(lockedProfile.nativeExecutionInput || !nativeBootstrapBlockedHumanInteraction ? {} : {
+                    nativeBootstrapBlockedHumanInteraction }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInlineWakeCommentSources: inlineWakeCommentSourceCaptures }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapWakeCommentSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContinuationCommentSources: continuationCommentSources }),
@@ -25876,33 +25878,14 @@ export function heartbeatService(
           processRunCancellationSettlements.get(run.id) ??
           failedProcessRunCancellations.get(run.id);
         await processCancellation?.settled;
-        let outcome: RunSessionOutcome;
         const latestRun = await getRun(run.id);
-        if (isHeartbeatRunTerminalStatus(latestRun?.status)) {
-          outcome = latestRun.status;
-        } else if (executionControl.controller.signal.aborted) {
-          outcome = "cancelled";
-        } else if (adapterResult.nativeFinalization) {
-          const nativeTerminal =
-            adapterResult.nativeFinalization.terminal.runTerminalState;
-          outcome =
-            nativeTerminal === "succeeded"
-              ? "succeeded"
-              : nativeTerminal === "cancelled"
-                ? "cancelled"
-                : "failed";
-        } else if (adapterResult.timedOut) {
-          outcome = "timed_out";
-        } else if (
-          (adapterResult.exitCode ?? 0) === 0 &&
-          !adapterResult.errorMessage &&
-          !adapterResult.signal &&
-          !processCancellation?.failed
-        ) {
-          outcome = "succeeded";
-        } else {
-          outcome = "failed";
-        }
+        const outcome = classifyAdapterExecutionOutcome(
+          latestRun,
+          executionControl,
+          adapterResult,
+          processCancellation,
+          isHeartbeatRunTerminalStatus,
+        );
 
         const nextSessionState = resolveNextSessionState({
           adapterType: agent.adapterType,
@@ -27275,7 +27258,7 @@ export function heartbeatService(
         // A failed owned Stop remains visible until this exact executor settles,
         // including a graceful exit result arriving after the cancellation error.
         // It is never retained beyond the active execution's cleanup.
-        failedProcessRunCancellations.delete(run.id);
+        finishProcessRunCancellationExecution(run.id);
         executionControl.finish();
         if (adapterExecutionControls.get(run.id) === executionControl) {
           adapterExecutionControls.delete(run.id);
@@ -30316,13 +30299,9 @@ export function heartbeatService(
     const agent = await getAgent(run.agentId);
     const errorCode = options.errorCode ?? "cancelled";
 
-    const pendingProcessCancellation = processRunCancellationSettlements.get(
-      run.id,
-    );
+    const pendingProcessCancellation = joinProcessRunCancellation(run.id);
     if (pendingProcessCancellation) {
-      await pendingProcessCancellation.settled;
-      if (pendingProcessCancellation.failed)
-        throw pendingProcessCancellation.error;
+      await pendingProcessCancellation;
       return getRun(run.id);
     }
     const running = runningProcesses.get(run.id);
@@ -30369,28 +30348,14 @@ export function heartbeatService(
       : options.resultJson;
 
     try {
-      let releaseProcessCancellation: (() => void) | undefined;
-      const processCancellationSettlement =
+      const processCancellationOwner =
         run.runtimeMode !== "native" &&
         !control &&
         running
-          ? {
-              settled: new Promise<void>((resolve) => {
-                releaseProcessCancellation = resolve;
-              }),
-              failed: false,
-              error: undefined as unknown,
-            }
+          ? registerProcessRunCancellation(run.id)
           : undefined;
-      if (processCancellationSettlement) {
-        // No await between joining an existing owner above and registering ours.
-        processRunCancellationSettlements.set(
-          run.id,
-          processCancellationSettlement,
-        );
-      }
-      const cancellation = await (async () => {
-        try {
+      const processCancellationSettlement = processCancellationOwner?.settlement;
+      const performCancellation = async () => {
           if (control) {
             await db
               .update(heartbeatRuns)
@@ -30524,33 +30489,15 @@ export function heartbeatService(
                 : {}),
             },
           );
-        } catch (error) {
-          if (processCancellationSettlement) {
-            processCancellationSettlement.failed = true;
-            processCancellationSettlement.error = error;
-            if (activeRunExecutions.has(run.id)) {
-              failedProcessRunCancellations.set(
-                run.id,
-                processCancellationSettlement,
-              );
-            }
-          }
-          throw error;
-        } finally {
-          if (processCancellationSettlement) {
-            if (
-              processRunCancellationSettlements.get(run.id) ===
-              processCancellationSettlement
-            ) {
-              processRunCancellationSettlements.delete(run.id);
-            }
-            // Always settle waiters, including termination and DB errors. A
-            // failed Stop remains an error to its caller, never a cancellation
-            // receipt; the signal-bearing executor may then record failure.
-            releaseProcessCancellation?.();
-          }
-        }
-      })();
+      };
+      const cancellation = processCancellationOwner
+        ? await settleProcessRunCancellation(
+            run.id,
+            processCancellationOwner,
+            performCancellation,
+            () => activeRunExecutions.has(run.id),
+          )
+        : await performCancellation();
       const cancelled = cancellation.run;
 
       if (cancellation.updated && cancelled) {

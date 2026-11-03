@@ -1,8 +1,7 @@
-9175ecb3a3db8270a7812188edb1738cee3068b37af8f19971074e39c5466cef  doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/README.md
-cd326df9b733887f54e4bc969e86955337981e06ea58728c47702372bbe71673  doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/phase-matrix.json
-660235e2f417cc8813561d42ce3701e80aea5717dbe50dfd6086ca04f0822850  doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/stage-list.txt
-9d8c0bc38d5a04f9f4522dcbf6301ca78f3d9cc7b5f157bfb33467e4de5c71fd  scripts/check-v10-169-migration-phase-register.mjs
-9e957bb415e9ea2d42218af5f0971feadb66dcaa36a725903e79820375f44511  scripts/check-v10-169-migration-phase-register.test.mjs
-4301b567c6d01fcec186d027327d1e60cfd98ac37fa0bc02f6d742439c3b031b  scripts/lib/v10-169-migration-phase-register.mjs
-1ade0a815658469950b49e1d3251e9ae531df87d162b9c9ccb1fe18f1ae10ea3  package.json
-4c8c0e842af06895fcd813770d88c9e287b871e3619ca4221ff6445fc9a8aea1  .github/workflows/aw-v9-coverage.yml
+79e03782b02bc1922ec3c28798221139382d90b0273e202f72477f366c3d9097  README.md
+cd326df9b733887f54e4bc969e86955337981e06ea58728c47702372bbe71673  historical-phase-matrix-2026-10-30.json
+9175ecb3a3db8270a7812188edb1738cee3068b37af8f19971074e39c5466cef  historical-readme-2026-10-30.md
+88afe54c70716ec4c7af4b854ca854c3da3f9bb5f4b566225af945c26f598fb4  phase-matrix.json
+087d1aab4d44fbc0fdbf6a10898a49c4b46fc4537ed0e7fb492e9c21f6cbb245  register-consistency-evidence-b1-20261103.tar.gz
+76347e4540604f31ef9dff4923bfb57c2d4e0078af5a90942faae7f6c220fed0  source-revision-ledger.json
+9555fe64747766f1e67d3e0f62a14e05aca3ed7b7dad84ff007797d73264052a  stage-list.txt

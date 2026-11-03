@@ -1,0 +1,26 @@
+# V10-169 current migration phase index — 2026-10-30
+
+This dated register supplements, and does not overwrite, the historical 169-row reconciliation at `doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json`. That original V10-169 row remains `historical_partial_evidence_open`. The new JSON indexes every affected migration SQL file added since source-base commit `81d3445b98b1cd80ff400ede6bd44ea71d88d735` (0502–0565, 64 journal-delta/current-diff files at capture), cross-checking the current migration journal before assigning each to an owner group, records durable state/writer/compatibility/recovery expectations, pins the source inputs, and links concrete PostgreSQL test cases.
+
+The register is intentionally a phase index, not a whole migration or release qualification. Its current source pins are interim and must not be used as the final source receipt. The published 0565 migration group is qualified for the exact corrected source bundle recorded in the matrix. Earlier 16/16 and generated-migration receipts are superseded; the corrected bundle records the final 17/17 PostgreSQL suite and 1/1 generated migration apply. No backfill is introduced by 0565. Its pointer-cache restore/retirement behavior and operator drain are not qualified. It does not claim hosted rollout, arbitrary backup restore, provider behavior, old/new binary fleet compatibility, operator execution, or Human acceptance. Current software refuses old or unknown provenance when it cannot prove the owner binding; operators must drain or keep admission closed where an old writer cannot preserve current bindings. No universal N-1 or zero-downtime promise is made. Use the state-specific gates in `phase-matrix.json`; do not run down migrations or rewrite migration history. Where old code is not valid against current durable state, pause/isolate and roll forward or restore into quarantine under the existing recovery owner.
+
+The source-base diff includes: 0502 board-key security-event audit fields/constraints; 0503 issue/project access grants, privacy lineage and private visibility; and 0504 bounded Memory/Project source provenance. These earlier migrations are in the authentication, privacy-lineage and Native provenance groups respectively. The current journal now contains 0565 (`0565_first_gorgon`), with its published portable qualification bundle at `doc/operations/aw-v10-evidence/responsibility-scan-0565-2026-10-30/qualification.tar.gz` (SHA-256 `758c9101bb788155f5ca716bbee2ceaee52b3eebcde08208fbc4cded6aebaa41`), source commit `a0b495464`. The final bundle records 17/17 Native PostgreSQL tests including preservation of unrelated contact holders and exact four-claim retry bounds, 1/1 generated migration apply from 0564, server TSC, Oxc 1,002, UI 10/10 plus UI TSC, and exact hash/migration guards. These are software-only receipts; no hosted/Provider/Human qualification is claimed. Phase pins are refreshed to the corrected 0565 source but remain interim until private Quality 0566 publication and Native freeze. 0566 remains private/unpublished/unqualified.
+
+Concrete software cases linked by phase include:
+
+- **Add/expand:** payload snapshot binding retained across operational updates and immutable gated trust grants.
+- **Backfill/reconcile:** invalid legacy Memory snapshot is invalidated during migration; expired imports reconcile in bounded batches.
+- **Cutover/drain and rollback:** operational guidance is linked, while the actual deployed writer fleet and chosen drain window remain operator evidence.
+- **Restart/retry:** import worker death before receipt, restart-inconclusive cancellation, and Native cleanup admission while an executor settles.
+- **Restore:** derived Memory tombstones replay after restore, late restored writes stay blocked, and pre-V9 erasure receipts upgrade to immutable identities.
+- **Unknown provenance:** old payloads remain unknown, current body bytes do not upgrade unknown Context, and uncertain import effects remain reconcilable rather than replayed.
+
+The source check discovers migration SQL from the source-base git diff plus journal entries added since that base; it does not infer the lower bound from a fixed migration number. Thus 0565 is included even while its published SQL worktree payload remains untracked. The test suite covers missing affected migration mapping, missing SQL owner, changed source pin, omission or duplication of required phases, and an unsupported `qualified` promotion. The exact stage list is `stage-list.txt`; package scripts and the existing V10 coverage workflow run both checks.
+
+Run the lightweight consistency guard with:
+
+```sh
+node scripts/check-v10-169-migration-phase-register.mjs
+```
+
+It fails if a migration SQL file added/changed since the pinned source base or newly journaled after that base is missing/duplicated, its owner/test source is absent or no longer matches its pin, a phase lacks concrete cases or carries an unsupported status, pending 0566 appears in the journal without a refreshed register, or a broader qualification claim is introduced without replacing the guardrails. It does not execute those DB tests; use their own source-pinned qualification records for results.

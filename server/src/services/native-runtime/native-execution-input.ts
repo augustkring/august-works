@@ -1,3 +1,4 @@
+import type { NativeBlockedHumanInteraction } from "../native-direct-input.js";
 import { exactNativeWorkspaceCoordination, type NativeWorkspaceCoordinationCapture } from "./native-workspace-coordination-source.js";
 import { issueExecutionStateSchema } from "@paperclipai/shared";
 import { createHash } from "node:crypto";
@@ -539,6 +540,8 @@ export function captureNativeTaskWakeSource(input: {
   workspaceCapture?: { execution: NativeExecutionInput;
     source: Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> } | null;
   workspaceCoordinationCapture?: NativeWorkspaceCoordinationCapture | null;
+  /** Independent current source-owner capture, never a wake flag. */
+  blockedHumanInteraction?: NativeBlockedHumanInteraction | null;
   task: { id: string; identifier: string | null; title: string; description: string | null; status: string;
     priority: string; workMode: string };
   /** Read from the persisted heartbeat run, independently of the rendered
@@ -588,6 +591,15 @@ export function captureNativeTaskWakeSource(input: {
     wakeupRequestId: input.wakeupRequestId, wakeReason: input.persistedWakeReason, capture: input.continuationCapture, stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources });
   const governedWake = closedContinuation?.governedInteractions?.length || closedContinuation?.acceptedPlanReview
     ? closedContinuation.wake.interaction ?? null : null;
+  const blocked = input.blockedHumanInteraction;
+  const blockedBinding = blocked && blocked.companyId === input.companyId && blocked.issueId === input.issueId &&
+    blocked.runId === input.runId && blocked.agentId === input.agentId && blocked.wakeupRequestId === input.wakeupRequestId &&
+    blocked.responsibleUserId === input.responsibleUserId && ["issue_commented", "issue_comment_mentioned"].includes(input.persistedWakeReason ?? "") &&
+    closedContinuation?.wake.requestedByActorType === "user" && closedContinuation.wake.requestedByActorId === blocked.requestedByUserId &&
+    isDeepStrictEqual([...closedContinuation.wake.originCommentIds].sort(),
+      [...new Set(blocked.commentSources.map(source => source.commentId))].sort()) &&
+    blocked.commentSources.length > 0 && blocked.blockers.length > 0 &&
+    isDeepStrictEqual([...blocked.unresolvedBlockerIssueIds].sort(), blocked.blockers.map(value => value.summary.id).sort());
   const checks: Record<string, boolean> = {
     reason: payload.reason === input.persistedWakeReason,
     executionWorkspace: !Object.hasOwn(payload, "executionWorkspace") || exactNativeTaskWakeWorkspaceHint({
@@ -634,6 +646,13 @@ export function captureNativeTaskWakeSource(input: {
       : payload.planReviewContext === null, documentReviewContext: payload.documentReviewContext === null,
     truncated: payload.truncated === false, fallbackFetchNeeded: payload.fallbackFetchNeeded === false,
   };
+  if (blocked) {
+    checks.dependencyBlockedInteraction = Boolean(blockedBinding && payload.dependencyBlockedInteraction === true);
+    checks.unresolvedBlockerIssueIds = Boolean(blockedBinding && Array.isArray(payload.unresolvedBlockerIssueIds) &&
+      isDeepStrictEqual([...payload.unresolvedBlockerIssueIds].sort(), blocked.unresolvedBlockerIssueIds));
+    checks.unresolvedBlockerSummaries = Boolean(blockedBinding &&
+      isDeepStrictEqual(payload.unresolvedBlockerSummaries, blocked.blockers.map(value => value.summary)));
+  }
   const failedChecks = Object.keys(checks).filter(key => !checks[key]);
   if (failedChecks.length) return reject("wake_fields_invalid", failedChecks);
   const commentIds = payload.commentIds as string[];
@@ -693,6 +712,7 @@ export function buildNativeBootstrapSourceSet(input: {
   runtimeInputs: readonly NativePayloadSourceInput[] | null;
   additionalInputs?: readonly NativePayloadSourceInput[] | null;
   taskWakeCommentCandidates?: readonly NativePreparedSourceCandidate[];
+  taskWakeDependencyCandidates?: readonly NativePreparedSourceCandidate[];
   taskWakeInteractionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[];
   taskWakeDocumentCandidates?: readonly NativePreparedSourceCandidate[];
   additionalPolicy?: NativePayloadSourcePolicy | null;
@@ -784,6 +804,13 @@ export function buildNativeBootstrapSourceSet(input: {
     if (candidate.kind !== "comment" || candidate.input.kind !== "comment" ||
       candidate.input.commentId !== candidate.id || candidate.input.issueId !== input.issueId ||
       !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "comment", id: candidate.id })) return reject("source_snapshot_invalid");
+    append(candidate.input);
+  }
+  for (const candidate of input.taskWakeDependencyCandidates ?? []) {
+    if (candidate.kind !== "task" || candidate.input.kind !== "task" || candidate.input.issueId !== candidate.id ||
+      candidate.id === input.issueId || input.additionalInputs?.filter(source => source.kind === "native_task_wake" &&
+        source.runId === input.runId && source.issueId === input.issueId).length !== 1 ||
+      !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "issue", id: candidate.id })) return reject("source_snapshot_invalid");
     append(candidate.input);
   }
   if ((input.taskWakeInteractionSources?.length ?? 0) > 0 &&

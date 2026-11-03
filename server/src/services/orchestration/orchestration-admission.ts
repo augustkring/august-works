@@ -51,7 +51,7 @@ async function admit(tx: Db, input: { companyId: string; issueId: string; actor:
   const [worker] = await tx.select().from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId, input.companyId), eq(orchestrationWorkers.id, binding.worker.id)));
   if (!task || !worker || ["done", "cancelled"].includes(task.status) || task.assigneeAgentId !== worker.agentId) throw forbidden("Worker no longer has the plan's canonical assignment");
   if (plan.budgets.maxModelCostMinor !== null) {
-    const qualified = await qualifyNativeDraftWorker(rootDb!, tx, plan, worker, (plan.executionPrincipal as { type: "user"; userId: string }).userId);
+    const qualified = await qualifyNativeDraftWorker(rootDb!, tx, plan, worker, (plan.executionPrincipal as { type: "user"; userId: string }).userId, input.runId);
     if (plan.modelCostReserved + qualified.maximumMinor > plan.budgets.maxModelCostMinor || !nativeDraftToolActionBudgetFits(plan.toolActionsUsed, plan.budgets.maxToolActions, qualified.minimumToolActions))
       throw forbidden("The remaining budget cannot admit the declared draft");
   }

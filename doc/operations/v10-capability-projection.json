@@ -23,7 +23,7 @@
     },
     {
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "67edaf4af0708fb0252107143e325ec2470b90fa6ce9ac90e92f9cd4a4855bd5"
+      "sha256": "e1d99c712d53e3325bb9afaf66c7b6294f76fe1481290523ffb13ffdfa2b5e29"
     }
   ],
   "inputDisposition": [
@@ -7763,6 +7763,28 @@
       "ownerDisposition": "declared",
       "uiSource": "ui/src/pages/WorkflowBuilder.tsx",
       "sourceAnchor": "workflowsApi.publish",
+      "qualification": "operation_mapping_not_capability_readiness"
+    },
+    {
+      "id": "member.responsibility.preflight",
+      "kind": "human_ui_action",
+      "source": "doc/operations/agent-native-ui-operation-coverage.json",
+      "disposition": "human_ui_only",
+      "canonicalOwner": "server/src/routes/access.ts",
+      "ownerDisposition": "declared",
+      "uiSource": "ui/src/pages/CompanyAccess.tsx",
+      "sourceAnchor": "getMemberResponsibilityPreflight",
+      "qualification": "operation_mapping_not_capability_readiness"
+    },
+    {
+      "id": "company.responsibility.contacts.read",
+      "kind": "human_ui_action",
+      "source": "doc/operations/agent-native-ui-operation-coverage.json",
+      "disposition": "human_ui_only",
+      "canonicalOwner": "server/src/routes/companies.ts",
+      "ownerDisposition": "declared",
+      "uiSource": "ui/src/pages/CompanySettings.tsx",
+      "sourceAnchor": "companiesApi.responsibilityContacts",
       "qualification": "operation_mapping_not_capability_readiness"
     }
   ],

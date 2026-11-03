@@ -1,3 +1,4 @@
+import { captureNativeBlockedHumanInteraction, NATIVE_BLOCKED_INTERACTION_READ_TOOLS, type NativeBlockedHumanInteraction } from "../native-direct-input.js";
 import { nativeStageCommentApiCallSchema, nativeStageCommentApiDecisionCurrent, readNativeManagedStageCommentCapture, type NativeManagedStageCommentCapture } from "../native-stage-comment-api.js";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { publicChatTaskUrl } from "../chat-task-url.js";
@@ -152,6 +153,8 @@ type Binding = {
   managedNativeContextReadCapture?: { value: NativeContextReadBinding | null };
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
+  /** Exact source-owner capture created by the server, never tool arguments. */
+  blockedHumanInteraction?: NativeBlockedHumanInteraction;
   companyId: string;
   issueId: string;
   runId: string;
@@ -432,6 +435,9 @@ export class PaperclipRunnerToolAuthority {
   }
 
   definitions(): Array<Record<string, unknown>> {
+    if (this.binding.blockedHumanInteraction) return CAPABILITY_SEMANTIC_TOOL_CATALOG
+      .filter(tool => NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(tool.operationId))
+      .map(tool => ({ name: tool.operationId, description: tool.description, inputSchema: tool.inputSchema }));
     if (this.binding.nativeReview) {
       // Scope Paperclip control-plane actions. Provider file and shell access
       // still follow the configured agent/environment policy, including tests.
@@ -556,6 +562,9 @@ export class PaperclipRunnerToolAuthority {
     onManagedStageCommentToolResult?: (capture: NativeManagedStageCommentCapture) => Promise<void>;
     nativeToolCallIdentity?: NativeBackendToolCallIdentity;
   } = {}): Promise<unknown> {
+    const dependencyInteraction = await captureNativeBlockedHumanInteraction(this.db, this.binding, this.binding.blockedHumanInteraction);
+    if (dependencyInteraction && !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(call.tool))
+      throw forbidden("Dependency interactions cannot perform task work or external effects");
     const nativeCall = options.nativeToolCallIdentity;
     const boundNativeCall = nativeCall && nativeCall.tool === call.tool && nativeCall.callId === call.callId &&
       typeof nativeCall.turnId === "string"

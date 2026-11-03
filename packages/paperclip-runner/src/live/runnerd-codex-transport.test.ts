@@ -1073,6 +1073,72 @@ it.each(["before", "after"] as const)(
   },
 );
 
+it.each(["rejected", "pending"] as const)(
+  "keeps an exact %s process cleanup completion unsettled after durable suspension",
+  async (cleanupCompletion) => {
+    const directory = await mkdtemp(join(tmpdir(), "runnerd-close-completion-"));
+    const steps: string[] = [];
+    let process: ReturnType<typeof spawn> | undefined;
+    let physicalExit: Promise<void> | undefined;
+    const runnerState = async () => JSON.parse(await readFile(
+      join(directory, "runner", "runner-state.json"), "utf8"));
+    const bundle = createCapabilityRunnerdCodexTransport({
+      runnerBinary: defaultCapabilityRunnerdBinary(),
+      codexCommand: fakeCodex,
+      codexArgs: fakeCodexArgs(directory),
+      stateDirectory: directory,
+      lifecyclePolicy: { mode: "warm", idleTimeoutMs: 60_000 },
+      closeGraceMs: 4_000,
+      readRunnerState: runnerState,
+      controlPlaneRegistration: async (authority) => {
+        await authority.start();
+        return {
+          release: () => { steps.push("release"); },
+          checkpoint: async (settlement) => {
+            expect((await runnerState()).lifecycle).toBe("suspended");
+            steps.push(`checkpoint:${settlement}`);
+          },
+        };
+      },
+      runnerProcessLauncher: (spec) => {
+        const child = spawn(spec.command, [...spec.args], {
+          cwd: spec.cwd, env: spec.environment, stdio: "ignore",
+        });
+        process = child;
+        physicalExit = new Promise<void>((resolveExit) => {
+          child.once("exit", () => resolveExit());
+        });
+        // Like the remote launcher, physical child exit precedes completion
+        // of its original awaited broker Stop. Neither a rejected nor a still
+        // pending cleanup promise can establish that Stop's acknowledgement.
+        const completion = new Promise<durableControlPlane.RunnerProcessResult>((_resolve, reject) => {
+          child.once("error", reject);
+          child.once("exit", () => {
+            if (cleanupCompletion === "rejected") reject(new Error("fixed_cleanup_ack_unavailable"));
+          });
+        });
+        return { child, completion };
+      },
+    });
+    try {
+      await bundle.transport.request("thread/start", { cwd: directory, dynamicTools: [] });
+      const close = bundle.transport.close();
+      await expect(close).rejects.toMatchObject({ code: "native_session_close_unrecoverable" });
+      expect(bundle.transport.close()).toBe(close);
+      expect(steps).toEqual(["release", "checkpoint:unsettled"]);
+      await physicalExit;
+      expect(process?.exitCode).not.toBeNull();
+      expect((await runnerState()).lifecycle).toBe("suspended");
+    } finally {
+      await bundle.transport.close().catch(() => undefined);
+      process?.kill("SIGKILL");
+      await physicalExit;
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  20_000,
+);
+
 it("quiesces the control route before checkpoint and containment regardless of process completion", async () => {
   const settledSteps: string[] = [];
   await runnerdRecoveryInternals.releaseRunnerProcessOwnership({

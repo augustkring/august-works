@@ -911,6 +911,7 @@ export async function createApp(
   });
   api.use(
     agentRoutes(db, {
+      heartbeat: opts.heartbeat,
       chatRunRetries: chatChannels,
       pluginWorkerManager: workerManager,
       deploymentMode: opts.deploymentMode,

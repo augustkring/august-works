@@ -1,3 +1,4 @@
+import { captureNativeBlockedHumanInteraction, NATIVE_BLOCKED_INTERACTION_READ_TOOLS } from "../native-direct-input.js";
 import { nativeStageCommentApiCallSchema, nativeStageCommentApiEligible, nativeStageCommentApiDecisionCurrent, nativeStageCommentApiToolDefinition, readNativeManagedStageCommentCapture, type NativeManagedStageCommentCapture } from "../native-stage-comment-api.js";
 import { configuredNativeProviderPackInstallRoot, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT } from "./native-artifact-preparation.js";
 import { REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_PINS, REMOTE_PROVIDER_PACK_PROFILE_DIGESTS, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "./native-artifact-preparation.js";
@@ -13191,6 +13192,11 @@ export function createRemoteRunnerProcessLauncher(input: {
         // this is not a workload-stop receipt or an actual process exit code.
         if (!observed.timedOut && (observed.exitCode === 3 || identityMismatch))
           launchedIdentity = null;
+        // Losing the exact process identity cannot acknowledge the original
+        // managed-model owner's Stop. The signal identity was revoked above;
+        // reject without sending a Stop against the mismatched process.
+        if (input.managedModelSession && identityMismatch)
+          throw new Error("runner_remote_process_identity_mismatch");
         if (input.managedModelSession && !identityMismatch) {
           const stopped = await runner.execute({
             command: "sh",
@@ -13454,6 +13460,41 @@ export async function createRunnerdBackend(input: {
   }
 }
 
+/** Order this backend's one-shot commands through their original receipts. */
+export function serializeNativeRemoteCommands(runner: CommandManagedRuntimeRunner) {
+  let previous: Promise<void> = Promise.resolve();
+  const execute = (command: Parameters<CommandManagedRuntimeRunner["execute"]>[0]) => {
+    const deadline = command.timeoutMs && command.timeoutMs > 0
+      ? Date.now() + command.timeoutMs : Number.POSITIVE_INFINITY;
+    let clearWaiting: () => void = () => {};
+    const operation = previous.then(async () => {
+      clearWaiting();
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error("exec_timeout");
+      return await runner.execute({ ...command,
+        ...(Number.isFinite(deadline) ? { timeoutMs: remaining } : {}) });
+    });
+    // The original operation, NOT its caller's queue-timeout race, owns
+    // this position. A rejected original operation grants no claim clearance:
+    // every successor still enters the unchanged current Source/claim guard.
+    previous = operation.then(() => undefined, () => undefined);
+    return new Promise<Awaited<ReturnType<CommandManagedRuntimeRunner["execute"]>>>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      clearWaiting = () => {
+        if (timer !== undefined) clearTimeout(timer);
+      };
+      const waitDeadline = () => {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) { clearWaiting(); reject(new Error("exec_timeout")); }
+        else timer = setTimeout(waitDeadline, Math.min(remaining, 2_147_483_647));
+      };
+      if (Number.isFinite(deadline)) waitDeadline();
+      operation.then(result => { clearWaiting(); resolve(result); }, error => { clearWaiting(); reject(error); });
+    });
+  };
+  return { ...runner, execute };
+}
+
 async function createRunnerdBackendWithinSessionClaim(
   input: Parameters<typeof createRunnerdBackend>[0],
   sessionScopeId: string,
@@ -13484,7 +13525,7 @@ async function createRunnerdBackendWithinSessionClaim(
           spec: remoteTarget.spec,
           defaultCwd: remoteTarget.remoteCwd,
         })
-      : remoteTarget.runner
+      : serializeNativeRemoteCommands(remoteTarget.runner)
     : null;
   if (remoteTarget && !remoteCommandRunner) {
     throw new Error(
@@ -13567,7 +13608,11 @@ async function createRunnerdBackendWithinSessionClaim(
     && input.execution.provider.kind === "opencode"
     ? nativeMcpLaunchBinding(input.runnerEnvironment ?? {})
     : null;
+  const blockedHumanInteraction = await captureNativeBlockedHumanInteraction(input.db, input.execution.binding);
+  if (blockedHumanInteraction && input.execution.provider.kind !== "opencode")
+    throw new Error("native_dependency_interaction_requires_managed_opencode");
   const authority = new PaperclipRunnerToolAuthority(input.db, {
+    ...(blockedHumanInteraction ? { blockedHumanInteraction } : {}),
     managementToolsEnabled: !nativeReview && await nativeManagementToolsAvailable(input.db,input.execution.binding,reviewRun?.responsibleUserId??null),
     ...(nativeReview ? { nativeReview } : {}),
     connectorAssignments: connectorAssignments.filter((assignment) => pinnedSkills.has(assignment.skillKey)),
@@ -13702,7 +13747,7 @@ async function createRunnerdBackendWithinSessionClaim(
       for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
         if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
       }
-      if (!allowedNames.has(name)) return [];
+      if (!allowedNames.has(name) || (blockedHumanInteraction && !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) return [];
       if (name === "create_project" && !input.nativeModelOutputCapture) return [];
       const schema = structuredClone(raw);
       if (name === "call_api") {
@@ -13757,9 +13802,9 @@ async function createRunnerdBackendWithinSessionClaim(
       return providerTool;
     }));
     const names = schemas.map((tool) => tool.name);
-    if (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
+    if ((!blockedHumanInteraction && (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
       (input.nativeModelOutputCapture && !names.includes("self_remember")) ||
-      (input.nativeModelOutputCapture && !names.includes("read_context")) ||
+      (input.nativeModelOutputCapture && !names.includes("read_context")))) ||
       !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
       throw new Error("managed_opencode_source_profile_tools_incomplete");
     managedOpenCodeTools = schemas;
@@ -13771,10 +13816,11 @@ async function createRunnerdBackendWithinSessionClaim(
         "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
-      !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name)) ||
-      (input.nativeModelOutputCapture && !resumeToolNames.includes("create_project")) ||
-      (input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
-      (input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
+      (!blockedHumanInteraction && !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name))) ||
+      (!blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("create_project")) ||
+      (!blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
+      (!blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
+      (blockedHumanInteraction && resumeToolNames.some(name => !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) ||
       resumeToolNames.some(name => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
         "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
@@ -15551,7 +15597,8 @@ async function createRunnerdBackendWithinSessionClaim(
     input.restartRecovery?.kind === "reattach_remote_runner"
       ? await verifyRemoteRunnerReattachment({
           claim: input.restartRecovery,
-          target,
+          target: target.kind === "remote" && target.transport === "sandbox" && remoteCommandRunner
+            ? { ...target, runner: remoteCommandRunner } : target,
           identity: durableIdentity ?? {},
           runId: input.execution.binding.runId,
           normalizedSessionId: nativeSessionKey(input.execution),

@@ -12438,7 +12438,7 @@ export function issueService(db: Db) {
               payloadSourceSnapshotSql = sql`(
                 with payload as (select jsonb_build_object('version',1,
                   'owner',jsonb_build_object('kind','issue','companyId',${receiptExisting.companyId}::text,
-                    'id',${receiptExisting.id}::text,'contentHash',${body.nextHash}),
+                    'id',${receiptExisting.id}::text,'contentHash',${body.nextHash}::text),
                   'policy',${JSON.stringify(snapshot.policy)}::jsonb,'inputs',${JSON.stringify(snapshot.inputs)}::jsonb,
                   'transforms',${JSON.stringify(transforms)}::jsonb) as value)
                 select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
