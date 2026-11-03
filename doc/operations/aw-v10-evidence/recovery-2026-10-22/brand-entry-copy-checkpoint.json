@@ -1,0 +1,36 @@
+{
+  "scope": "Partial V10\u00a76 ordinary product-name migration at four entry/runtime/billing pages",
+  "sources": {
+    "ui/src/pages/Auth.tsx": "4c0f0b08fe40972b597d3944b8bfc12f98f5a077348d32889ad6f94241035544",
+    "ui/src/pages/Activation.tsx": "04686c5d40f539507aa3e67451506a2690d34d306eb454e4b15b96038e3aec2e",
+    "ui/src/pages/SaasWelcome.tsx": "b49ba010f55cfed21348e5d9c9e47e021084149c5abf556a69b33638f066c062",
+    "ui/src/pages/SaasBilling.tsx": "7c001d9a44e58742f5697770ce758221f0c17dbd0b5f0de9381db936df5e6b10",
+    "ui/src/i18n/experience/en.json": "5ec59ac871604c68dfa6814da0815469fc753b1fc9d9d8ad48dd87352e030cc9",
+    "ui/src/i18n/experience/da.json": "c0a9ec9fd9f74dde3590586c59c1773518bf787dedd0a7cfc4aa22a4f6cbae47"
+  },
+  "localeValues": {
+    "ui/src/i18n/experience/en.json": [
+      "authFlow.signInTitle",
+      "authFlow.legacySignInTitle",
+      "authFlow.legacyCreateTitle"
+    ],
+    "ui/src/i18n/experience/da.json": [
+      "authFlow.signInTitle",
+      "authFlow.legacySignInTitle",
+      "authFlow.legacyCreateTitle"
+    ]
+  },
+  "validation": {
+    "tokenGatesActualExit": 0,
+    "log": "brand-entry-copy.log",
+    "localeJsonParses": true,
+    "localeKeysUnchanged": true,
+    "onlyExpectedAuthValuesChanged": true
+  },
+  "limits": [
+    "Copy/wordmark change only; no full brand leakage gate, browser/render/a11y proof or product-wide coverage.",
+    "Existing styles/tokens/auth state/billing behavior unchanged. Legal attribution, compatibility, technical package identities and feedback-sharing copy left for their actual owner review.",
+    "No new tests for simple reversible copy; full current workspace release checks remain open."
+  ],
+  "assistance": "OpenAI gpt-6-luna low, bounded six-file edit; Root reviewed exact diff and independently verified locale changes."
+}

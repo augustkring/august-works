@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { companies, companyMemberships, createDb, issues } from "@paperclipai/db";
+import { authUsers, companies, companyMemberships, createDb, issues } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -56,6 +56,9 @@ describeEmbeddedPostgres("issue identifier routes", () => {
   }
 
   async function seedCloudTenantMember(companyId: string) {
+    const now = new Date();
+    await db.insert(authUsers).values({ id: "cloud-user-1", name: "Cloud tenant member", email: "cloud-user-1@fixture.invalid",
+      emailVerified: true, createdAt: now, updatedAt: now }).onConflictDoNothing();
     await db.insert(companyMemberships).values({
       companyId,
       principalType: "user",

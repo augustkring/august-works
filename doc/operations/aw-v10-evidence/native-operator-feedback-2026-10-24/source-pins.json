@@ -1,0 +1,11 @@
+{
+  "server/src/__tests__/v7-agent-packages.integration.test.ts": "92b96185ae03c98709ac780eed0f9e9da364bd4d66381dffe4a0e23b225c2cc0",
+  "server/src/__tests__/v9-customer-feedback.integration.test.ts": "57cfed6c37c0297e2d34d4d8f79f843dc56751ca82fc065dc04a6c93795add48",
+  "server/src/__tests__/v9-feedback-images.integration.test.ts": "166f105b850ebec9eaecd6ae0c02255eee96caa156dd2f3738e01be428e4753d",
+  "server/src/__tests__/v9-feedback-restore-migration.integration.test.ts": "5772c15c032e28dc291793187b41eb1de611f08d169afbe52c8ecbc36095e5c9",
+  "server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts": "3015161d334005ba401df9a1f829925c31cdaaaeece713850cb498a44acb92c3",
+  "server/src/services/agent-packages/package-service.ts": "6250da1848151624ab744ce9fb0490f48c17045acd52ce0edcb3be9092c22ff6",
+  "server/src/services/customer-feedback-retention-erasure.ts": "b314340ec558cc77831a0e2b72daa0068ead49a63c21067d777edae3d901f3a4",
+  "server/src/services/customer-feedback-retention.ts": "293c6a143c5750c2e351baf8acf5dd9b6d4582d26c8df2cdb325071ba92c19e5",
+  "server/src/services/customer-feedback.ts": "60dd5584ad2db2c3872982a3b05aebec79093afd8be6c5bec4d58481b60fb289"
+}

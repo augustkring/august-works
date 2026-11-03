@@ -1,0 +1,66 @@
+{
+  "checkpoint": "Native support browser reload and invite URL redaction",
+  "recordedAt": "2026-10-23",
+  "result": "Final production UI build and actual authenticated HTTP/embedded PostgreSQL browser test: 1 passed, exit 0. Actual process closed; SIGTERM drained server and stopped its isolated PostgreSQL, with no remaining port54329 socket.",
+  "sourcePins": "support-browser-redacted.sources",
+  "coverage": [
+    "Same actual Work heading DOM node remains connected through Help and return; focus returns to Help.",
+    "Actual native POST commits before response abort. Reload performs receipt GET and finds original one-event case without duplicate POST.",
+    "Complementary POST aborted before native acceptance. Reload performs only GETs; explicit retry uses original request key and creates exactly one second logical case.",
+    "No submitted description in browser history, sessionStorage or localStorage.",
+    "Actual mounted invite URL now redacted in successful HTTP log; final raw log contains zero invite bearer token URLs."
+  ],
+  "runHistory": [
+    {
+      "run": "support-browser-initial",
+      "originalLogSha256": "b065b62f350bde6b7091401bec3aadecd7d3213c89c059c3c2135486e0996b84",
+      "archivedLogSha256": "6b62a48d829ce49edd11b128c064f4705b74bdf001c6f43493adb7f3b33e6452",
+      "inviteTokenReplacements": 1,
+      "exitCode": 0
+    },
+    {
+      "run": "support-browser-production",
+      "originalLogSha256": "c7482832505b92049753d5ed69c4167715fc97da6d3d98c280b05bed84961a2a",
+      "archivedLogSha256": "c7482832505b92049753d5ed69c4167715fc97da6d3d98c280b05bed84961a2a",
+      "inviteTokenReplacements": 0,
+      "exitCode": 1
+    },
+    {
+      "run": "support-browser-final",
+      "originalLogSha256": "fad22a5d7a0bafe45e34aa13982f32f5b964ad3690645edc0f59116bd75004ce",
+      "archivedLogSha256": "fad22a5d7a0bafe45e34aa13982f32f5b964ad3690645edc0f59116bd75004ce",
+      "inviteTokenReplacements": 0,
+      "exitCode": 130
+    },
+    {
+      "run": "support-browser-reviewed",
+      "originalLogSha256": "b80347f7a5c695484742832e1306f05b2857e4339bb8fa070e6fb264722e7025",
+      "archivedLogSha256": "b80347f7a5c695484742832e1306f05b2857e4339bb8fa070e6fb264722e7025",
+      "inviteTokenReplacements": 0,
+      "exitCode": 130
+    },
+    {
+      "run": "support-browser-verified",
+      "originalLogSha256": "7b3ef0553b2771489bf4138f5a128969aaa0f7adedceb80aa49e18626f25974f",
+      "archivedLogSha256": "aec7712ee7d01fed80739e70eec8096f4e301376313d79e51c5e0a6c665f660c",
+      "inviteTokenReplacements": 1,
+      "exitCode": 0
+    },
+    {
+      "run": "support-browser-redacted",
+      "originalLogSha256": "3b92a964f13e6ca26d99a6322847589f96a3604678139086b16fe95d59f198dc",
+      "archivedLogSha256": "3b92a964f13e6ca26d99a6322847589f96a3604678139086b16fe95d59f198dc",
+      "inviteTokenReplacements": 0,
+      "exitCode": 0
+    }
+  ],
+  "retainedFailures": [
+    "Production attempt failed on a stale socket left by earlier shutdown. Root verified isolated test data path, defunct original PostgreSQL process and refused TCP connection before removing only its socket and lock. Native graceful SIGTERM shutdown was added; final runs cleaned up.",
+    "Two intermediate runs stopped with exit130 after root found incorrect new fixture button labels. Correct selectors match actual EN resources; original stopped source captures retained."
+  ],
+  "limits": [
+    "Earlier initial pass covered only response loss after acceptance; verified and final redacted runs cover both phases.",
+    "No physical process crash, real task-composer draft, hosted provider, external delivery, manual accessibility or full SUP/V10 acceptance qualification.",
+    "Archived log copies redact synthetic invitation bearer tokens. Raw scratch logs remain outside repository; raw and archived hashes and exact replacement counts are recorded."
+  ]
+}

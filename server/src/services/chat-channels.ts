@@ -1,5 +1,4 @@
 import type { NativeNotificationChannelGateway } from "./notifications/channel-delivery.js";
-import { instanceSettings } from "@paperclipai/db";
 import { v9FeatureEnabled } from "@paperclipai/shared";
 import { safeCardForPublication } from "./chat-card-rendering.js";
 import { withSlackBoardLease } from "./slack-board-lease.js";
@@ -258,7 +257,8 @@ import {
   queueIssueAssignmentWakeup,
   type IssueAssignmentWakeupDeps,
 } from "./issue-assignment-wakeup.js";
-import { issueService } from "./issues.js";
+import { issueService, lockIssuePrivacyTree } from "./issues.js";
+import { canActorReadIssuePrivacy, type AuthorizationActor } from "./authorization.js";
 import {
   authorizeNativeChatReviewPresentation,
   NativeChatReviewPresentationContentionError,
@@ -10501,9 +10501,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     },
   ): Promise<void> {
     if (input.v9Confirmation) {
-      const [settings] = await tx.select({ experimental: instanceSettings.experimental })
-        .from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")).for("share");
-      if (!v9FeatureEnabled(settings?.experimental ?? {}, "action_cards_v9"))
+      const experimental = await instanceSettingsService(tx).getExperimental({ db: tx, lock: "share" });
+      if (!v9FeatureEnabled(experimental, "action_cards_v9"))
         throw forbidden("This chat action is no longer authorized", { code: "chat_action_authorization_changed" });
     }
     const endpoint = await runtimeCallbackEndpoint(
@@ -11279,7 +11278,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       // empty turn that contains no usable bytes.
       await tx
         .update(issueComments)
-        .set({ body: visibleFailure, updatedAt: new Date() })
+        .set({ body: visibleFailure, updatedAt: new Date(),
+          payloadSourceSnapshot: sql`case when ${issueComments.body} is distinct from ${visibleFailure} then null else ${issueComments.payloadSourceSnapshot} end`,
+        })
         .where(
           and(
             eq(issueComments.id, input.commentId),
@@ -30558,6 +30559,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     clientIdempotencyKey: string,
     userId: string,
     attachmentIds: string[] = [],
+    manualInputActor?: AuthorizationActor,
   ) {
     const emailBoundary = await endpointRecord(endpointId);
     if (emailBoundary?.endpoint.publicationMode === "explicit")
@@ -30620,6 +30622,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         if (!existing && !rejected) await runtimeFor(record.endpoint);
       }
     }
+    let manualInputSourcePublication: ActivityPublication | null = null;
     const publication = await db.transaction(async (tx) => {
       const conversation = await tx
         .select()
@@ -30703,11 +30706,16 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         // addComment inserts before binding attachments. Roll back that insert
         // in a savepoint, then commit only the exact terminal rejection below.
         comment = await tx.transaction((inner) =>
-          issueService(inner as unknown as Db).addComment(
+          issueService(db).addComment(
             conversation.issueId,
             body,
             { userId },
-            { authorType: "user", attachmentIds },
+            { authorType: "user", attachmentIds,
+              ...(manualInputActor?.type === "board" && manualInputActor.source === "session" &&
+                manualInputActor.userId === userId ? {
+                  manualInputActor,
+                  onManualInputSourcePublication: (activity) => { manualInputSourcePublication = activity; },
+                } : {}) },
             inner,
           ),
         );
@@ -30851,6 +30859,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       });
       return terminalPublication;
     });
+    if (manualInputSourcePublication) {
+      try { publishActivity(manualInputSourcePublication); }
+      catch (err) { logger.warn({ err }, "Failed to publish committed Board comment source activity"); }
+    }
     if ("rejection" in publication) {
       throw conflict(
         "Selected attachments are already bound to another comment",
@@ -31465,6 +31477,23 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     );
   }
 
+  async function teamsBoardAuthorCanReadTask(
+    tx: DbTransaction,
+    companyId: string,
+    userId: string,
+    issueId: string,
+  ) {
+    if (!(await teamsBoardAuthorIsCurrent(tx, companyId, userId))) return false;
+    // Reuse the current native Task privacy/source resolver after provider
+    // waits; an active company membership alone does not authorize a private
+    // source payload.
+    return canActorReadIssuePrivacy(
+      tx,
+      { type: "board", source: "session", userId, companyIds: [companyId], ignoreInstanceAdmin: true },
+      { id: issueId, companyId },
+    );
+  }
+
   function teamsBoardFileIntentPayload(
     scope: NonNullable<Awaited<ReturnType<typeof teamsFileCurrentScope>>>,
     source: NonNullable<Awaited<ReturnType<typeof teamsFileSourceBinding>>>,
@@ -31586,10 +31615,11 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         !scope.comment.authorUserId ||
         scope.comment.authorAgentId ||
         scope.comment.createdByRunId ||
-        !(await teamsBoardAuthorIsCurrent(
+        !(await teamsBoardAuthorCanReadTask(
           tx,
           scope.endpoint.companyId,
           scope.comment.authorUserId,
+          scope.conversation.issueId,
         ))
       )
         return null;
@@ -31879,6 +31909,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
               runtime.get(expected.endpointId))
         )
           throw denied();
+        await lockIssuePrivacyTree(tx, expected.companyId);
         const [publication] = await tx
           .select()
           .from(chatPublications)
@@ -33852,6 +33883,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
   } | null> {
     return db.transaction(async (tx) => {
       await input.credentialLease.assertOwned(tx);
+      // Recheck retained private Task sources under the source-lifecycle lock
+      // order before locking the publication receipt or claiming provider I/O.
+      if (input.publication.commentId)
+        await lockIssuePrivacyTree(tx, input.publication.companyId);
       const currentPublication = await tx
         .select({ id: chatPublications.id })
         .from(chatPublications)
@@ -33997,15 +34032,33 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         return null;
       }
       let authorizationActionId: string | null = null;
+      const inboundWakeKey = input.publication.idempotencyKey.startsWith("wake:")
+        ? parseInboundWakePublicationKey(input.publication.idempotencyKey)
+        : null;
+      const isInboundWakePublication = input.publication.idempotencyKey.startsWith("wake:");
+      const isRemovedWakeNotice = inboundWakeKey?.state === "removed";
+      let authorizedInboundWake = false;
+      if (isRemovedWakeNotice) {
+        // Validate the exact removal receipt and visible prior queue notice
+        // before allowing the deleted source through the linked-author check.
+        authorizedInboundWake = await authorizeInboundWakePublication(tx, input.publication);
+        if (!authorizedInboundWake) return null;
+      }
       if (endpoint.provider === "slack") {
         const credentials = await resolveCredentials(endpoint, tx);
-        if (!await authorizeSlackBoardPublication(tx, endpoint, conversation, input.publication, credentials.botToken ?? "", fetchImpl)) return null;
+        if (!await authorizeSlackBoardPublication(tx, endpoint, conversation, input.publication,
+          credentials.botToken ?? "", fetchImpl, {
+            // A removed wake notice edits the already-published queue notice.
+            // Its exact wake receipt, current destination, owner and visible
+            // prior notice were validated above; tolerate only that source's
+            // soft deletion while rechecking the linked author below.
+            allowDeletedSource: Boolean(authorizedInboundWake && isRemovedWakeNotice),
+          })) return null;
       }
-      if (
-        input.publication.idempotencyKey.startsWith("wake:") &&
-        !(await authorizeInboundWakePublication(tx, input.publication))
-      )
-        return null;
+      if (isInboundWakePublication && !authorizedInboundWake) {
+        authorizedInboundWake = await authorizeInboundWakePublication(tx, input.publication);
+        if (!authorizedInboundWake) return null;
+      }
       // A native response alongside an older completion review has its own
       // narrow authorization. Recheck that exact proof, review and original
       // requester at the transport claim, including file publications whose

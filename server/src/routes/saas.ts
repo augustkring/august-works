@@ -7,17 +7,21 @@ import { activationConnectionConsentService } from "../services/saas/activation-
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
 import { Router, type Request, type Response } from "express";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   authSecurityEvents,
   authSessions,
   authUsers,
+  agents,
+  companies,
   companyMemberships,
   companyDeletionOperations,
   runtimeHosts,
   runtimeCapacityProfiles,
   runtimeVersionCatalog,
+  runtimeSandboxBindings,
   supportSessions,
+  jevDecisionSettings,
   deploymentRecords,
   platformSchedulerLeases,
   platformAdminAudit,
@@ -37,12 +41,17 @@ import {
   type PermissionKey,
   type V6FeatureKey,
 } from "@paperclipai/shared";
-import { badRequest, conflict, forbidden, notFound, unauthorized } from "../errors.js";
+import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from "../errors.js";
 import { accessService } from "../services/access.js";
 import { logActivity } from "../services/activity-log.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
 import { assertCompanyAccess } from "./authz.js";
 import { publicJson } from "../services/saas/crypto.js";
+import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
+import { supportCaseOperatorBodySchema, supportCaseOperatorReceiptSchema, supportCaseOperatorService } from "../services/saas/support-case-operator.js";
+import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
+import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
+import { projectSaasModelDependencyInventory } from "../services/experience/model-dependency-inventory.js";
 
 export function saasRoutes(db: Db, platform: SaasPlatform) {
   const router = Router();
@@ -67,6 +76,14 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         code: "ACCOUNT_CHANGED",
       });
     return row;
+  }
+  async function operatorRead<T>(req: Request, read: (reader: Db) => Promise<T>): Promise<T> {
+    return db.transaction(async tx => {
+      await assertConfiguredOperatorAuthentication(tx, req.actor, platform.config.operatorUserIds, { requireRecent: false });
+      const result = await read(tx as unknown as Db);
+      await assertConfiguredOperatorAuthentication(tx, req.actor, platform.config.operatorUserIds, { requireRecent: false });
+      return result;
+    });
   }
   async function company(
     req: Request,
@@ -107,7 +124,20 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     platform.support.operator(actor.id);
     if (!actor.emailVerified)
       throw forbidden("Verified operator account required");
+    await assertConfiguredOperatorAuthentication(db, req.actor, platform.config.operatorUserIds, {
+      requireRecent: req.method !== "GET" && req.method !== "HEAD",
+    });
     next();
+  });
+  router.post("/saas/internal/support-cases/:caseId/respond", async (req, res) => {
+    await gate("admin_support_v6");
+    const actor = req.actor;
+    z.strictObject({}).parse(req.query);
+    const body = supportCaseOperatorBodySchema.parse(req.body);
+    const result = await supportCaseOperatorService(db, platform.config.operatorUserIds).respond(actor, {
+      ...body, caseId: z.uuid().toLowerCase().parse(req.params.caseId),
+    });
+    res.set("Cache-Control", "private, no-store").json(supportCaseOperatorReceiptSchema.parse(result));
   });
   router.get("/saas/capabilities", async (_req, res) => {
     res.set("Cache-Control", "no-store");
@@ -497,27 +527,27 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     },
   );
   router.get("/saas/internal/support/:sessionId/status", async (req, res) => {
-    const actor = await user(req);
+    await user(req);
     await gate("admin_support_v6");
     res
       .set("Cache-Control", "no-store")
       .json(
         publicJson(
-          await platform.support.status(String(req.params.sessionId), actor.id),
+          await platform.support.status(String(req.params.sessionId), req.actor),
         ),
       );
   });
   router.post(
     "/saas/internal/support/:sessionId/overrides",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       res
         .status(201)
         .json(
           await platform.support.override(
             String(req.params.sessionId),
-            actor.id,
+            req.actor,
             req.body,
           ),
         );
@@ -546,12 +576,12 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res
       .status(202)
       .set("Cache-Control", "no-store")
-      .json(await platform.accountDeletion.request(actor.id, req.body));
+      .json(await platform.accountDeletion.request(actor.id, req.body, new Date(), req.actor));
   });
   router.post(
     "/saas/internal/support/:sessionId/runtime-cells/:cellId/operations",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       const input = runtimeOperationSchema.parse(req.body);
       if (!["stop", "backup", "rotate_gateway"].includes(input.action))
@@ -562,7 +592,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           publicJson(
             await platform.support.runtimeAction(
               String(req.params.sessionId),
-              actor.id,
+              req.actor,
               String(req.params.cellId),
               input,
             ),
@@ -573,7 +603,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
   router.get(
     "/saas/internal/support/:sessionId/runtime-cells/:cellId/backups",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       res
         .set("Cache-Control", "no-store")
@@ -581,7 +611,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           publicJson(
             await platform.support.backupStatus(
               String(req.params.sessionId),
-              actor.id,
+              req.actor,
               String(req.params.cellId),
             ),
           ),
@@ -596,7 +626,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       .status(201)
       .json(
         await platform.catalog.candidate(
-          actor.id,
+          req.actor,
           runtimeVersionCandidateSchema.parse(req.body),
         ),
       );
@@ -607,7 +637,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     await gate("admin_support_v6");
     res.json(
       await platform.catalog.transition(
-        actor.id,
+        req.actor,
         runtimeVersionTransitionSchema.parse(req.body),
       ),
     );
@@ -621,7 +651,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       .json(
         publicJson(
           await platform.catalog.qualifyCapacity(
-            actor.id,
+            req.actor,
             runtimeCapacityQualificationSchema.parse(req.body),
           ),
         ),
@@ -630,7 +660,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
   router.post(
     "/saas/internal/support/:sessionId/canary-runtime",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       await gate("hosted_openclaw_v6");
       const input = runtimeCellCreateSchema.parse(req.body);
@@ -640,7 +670,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         await gate("runtime_dedicated_vm_v6");
       const result = await platform.support.canaryRuntime(
         String(req.params.sessionId),
-        actor.id,
+        req.actor,
         input,
       );
       res
@@ -654,86 +684,119 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
-    const [jobs, hosts, profiles, versions, support, deployments, queues] =
-      await Promise.all([
-        db
-          .select({
-            jobKey: platformSchedulerLeases.jobKey,
-            leaseUntil: platformSchedulerLeases.leaseUntil,
-            lastSuccessAt: platformSchedulerLeases.lastSuccessAt,
-            lastErrorCode: platformSchedulerLeases.lastErrorCode,
-          })
-          .from(platformSchedulerLeases)
-          .limit(100),
-        db
-          .select({
-            id: runtimeHosts.id,
-            status: runtimeHosts.status,
-            region: runtimeHosts.region,
-            lastHeartbeatAt: runtimeHosts.lastHeartbeatAt,
-            fencedAt: runtimeHosts.fencedAt,
-            cpuTotalMillis: runtimeHosts.cpuTotalMillis,
-            cpuReservedMillis: runtimeHosts.cpuReservedMillis,
-          })
-          .from(runtimeHosts)
-          .orderBy(desc(runtimeHosts.createdAt))
-          .limit(200),
-        db
-          .select({
-            key: runtimeCapacityProfiles.key,
-            commercialProductKey: runtimeCapacityProfiles.commercialProductKey,
-            cpuMillis: runtimeCapacityProfiles.cpuMillis,
-            memoryBytes: runtimeCapacityProfiles.memoryBytes,
-            diskBytes: runtimeCapacityProfiles.diskBytes,
-            qualified: runtimeCapacityProfiles.qualified,
-          })
-          .from(runtimeCapacityProfiles)
-          .limit(100),
-        db
-          .select({
-            imageDigest: runtimeVersionCatalog.imageDigest,
-            providerVersion: runtimeVersionCatalog.providerVersion,
-            stateFormat: runtimeVersionCatalog.stateFormat,
-            status: runtimeVersionCatalog.status,
-            approvedAt: runtimeVersionCatalog.approvedAt,
-          })
-          .from(runtimeVersionCatalog)
-          .orderBy(desc(runtimeVersionCatalog.createdAt))
-          .limit(100),
-        db
-          .select({
-            id: supportSessions.id,
-            companyId: supportSessions.companyId,
-            scopes: supportSessions.scopes,
-            expiresAt: supportSessions.expiresAt,
-          })
-          .from(supportSessions)
-          .where(
-            and(
-              eq(supportSessions.operatorUserId, actor.id),
-              isNull(supportSessions.revokedAt),
-              gt(supportSessions.expiresAt, new Date()),
-            ),
-          )
-          .limit(100),
-        db
-          .select({
-            sourceSha: deploymentRecords.sourceSha,
-            imageDigest: deploymentRecords.imageDigest,
-            schemaVersion: deploymentRecords.schemaVersion,
-            environment: deploymentRecords.environment,
-            verificationResult: deploymentRecords.verificationResult,
-            deployedAt: deploymentRecords.deployedAt,
-          })
-          .from(deploymentRecords)
-          .orderBy(desc(deploymentRecords.deployedAt))
-          .limit(10),
-        db.execute<{ domain: string; status: string; count: string }>(
-          sql`select 'email' as domain,status,count(*)::text as count from email_deliveries group by status union all select 'billing_webhook',status,count(*)::text from billing_webhook_events group by status union all select 'checkout',status,count(*)::text from billing_checkout_intents group by status union all select 'runtime_operation',status,count(*)::text from runtime_operations group by status union all select 'provider_operation',status,count(*)::text from runtime_host_provider_operations group by status union all select 'deletion',status,count(*)::text from company_deletion_operations group by status union all select 'account_deletion',status,count(*)::text from account_deletion_operations group by status`,
-        ),
-      ]);
-    res.set("Cache-Control", "no-store").json(
-      publicJson({
+    const snapshot = await operatorRead(req, async reader => {
+      const modelAgents = await reader.select({
+        id: agents.id, companyId: agents.companyId, adapterType: agents.adapterType,
+        adapterConfig: sql<Record<string, unknown>>`jsonb_build_object(
+          'provider', ${agents.adapterConfig}->'provider',
+          'model', ${agents.adapterConfig}->'model',
+          'workerModelProfileId', ${agents.adapterConfig}->'workerModelProfileId',
+          'maxOutputTokens', ${agents.adapterConfig}->'maxOutputTokens',
+          'lifecycleMode', ${agents.adapterConfig}->'lifecycleMode',
+          'env', case when coalesce(${agents.adapterConfig}->'env', '{}'::jsonb) = '{}'::jsonb
+            then '{}'::jsonb else '{"configured":true}'::jsonb end,
+          'aiConnection', case when jsonb_exists(${agents.adapterConfig}, 'aiConnection') then 'configured' else null end,
+          'managedAiConnection', case when jsonb_exists(${agents.adapterConfig}, 'managedAiConnection') then 'configured' else null end
+        )`,
+        runtimeConfig: sql<Record<string, unknown>>`jsonb_build_object(
+          'provider', ${agents.runtimeConfig}->'provider',
+          'model', ${agents.runtimeConfig}->'model'
+        )`,
+      }).from(agents).innerJoin(companies, and(eq(companies.id, agents.companyId), eq(companies.status, "active")))
+        .where(and(ne(agents.status, "terminated"),
+          ne(agents.status, "pending_approval"))).limit(10001);
+      if (modelAgents.length > 10000)
+        throw new HttpError(503, "The bounded model dependency inventory is unavailable", {
+          code: "model_dependency_inventory_unavailable",
+          retryable: true,
+        });
+      const jevSettings = await reader.select({ companyId: jevDecisionSettings.companyId, mode: jevDecisionSettings.mode,
+        allowBackground: jevDecisionSettings.allowBackground, connectionId: jevDecisionSettings.connectionId, grantId: jevDecisionSettings.grantId })
+        .from(jevDecisionSettings).limit(10001);
+      if (jevSettings.length > 10000)
+        throw new HttpError(503, "The bounded model dependency inventory is unavailable", {
+          code: "model_dependency_inventory_unavailable",
+          retryable: true,
+        });
+      const [jobs, hosts, profiles, versions, support, deployments, queues] =
+        await Promise.all([
+          reader
+            .select({
+              jobKey: platformSchedulerLeases.jobKey,
+              leaseUntil: platformSchedulerLeases.leaseUntil,
+              lastSuccessAt: platformSchedulerLeases.lastSuccessAt,
+              lastErrorCode: platformSchedulerLeases.lastErrorCode,
+            })
+            .from(platformSchedulerLeases)
+            .limit(100),
+          reader
+            .select({
+              id: runtimeHosts.id,
+              status: runtimeHosts.status,
+              region: runtimeHosts.region,
+              lastHeartbeatAt: runtimeHosts.lastHeartbeatAt,
+              fencedAt: runtimeHosts.fencedAt,
+              cpuTotalMillis: runtimeHosts.cpuTotalMillis,
+              cpuReservedMillis: runtimeHosts.cpuReservedMillis,
+            })
+            .from(runtimeHosts)
+            .orderBy(desc(runtimeHosts.createdAt))
+            .limit(200),
+          reader
+            .select({
+              key: runtimeCapacityProfiles.key,
+              commercialProductKey: runtimeCapacityProfiles.commercialProductKey,
+              cpuMillis: runtimeCapacityProfiles.cpuMillis,
+              memoryBytes: runtimeCapacityProfiles.memoryBytes,
+              diskBytes: runtimeCapacityProfiles.diskBytes,
+              qualified: runtimeCapacityProfiles.qualified,
+            })
+            .from(runtimeCapacityProfiles)
+            .limit(100),
+          reader
+            .select({
+              imageDigest: runtimeVersionCatalog.imageDigest,
+              providerVersion: runtimeVersionCatalog.providerVersion,
+              stateFormat: runtimeVersionCatalog.stateFormat,
+              status: runtimeVersionCatalog.status,
+              approvedAt: runtimeVersionCatalog.approvedAt,
+            })
+            .from(runtimeVersionCatalog)
+            .orderBy(desc(runtimeVersionCatalog.createdAt))
+            .limit(100),
+          reader
+            .select({
+              id: supportSessions.id,
+              companyId: supportSessions.companyId,
+              scopes: supportSessions.scopes,
+              expiresAt: supportSessions.expiresAt,
+            })
+            .from(supportSessions)
+            .where(
+              and(
+                eq(supportSessions.operatorUserId, actor.id),
+                isNull(supportSessions.revokedAt),
+                gt(supportSessions.expiresAt, new Date()),
+              ),
+            )
+            .limit(100),
+          reader
+            .select({
+              sourceSha: deploymentRecords.sourceSha,
+              imageDigest: deploymentRecords.imageDigest,
+              schemaVersion: deploymentRecords.schemaVersion,
+              environment: deploymentRecords.environment,
+              verificationResult: deploymentRecords.verificationResult,
+              deployedAt: deploymentRecords.deployedAt,
+            })
+            .from(deploymentRecords)
+            .orderBy(desc(deploymentRecords.deployedAt))
+            .limit(10),
+          reader.execute<{ domain: string; status: string; count: string }>(
+            sql`select 'email' as domain,status,count(*)::text as count from email_deliveries group by status union all select 'billing_webhook',status,count(*)::text from billing_webhook_events group by status union all select 'checkout',status,count(*)::text from billing_checkout_intents group by status union all select 'runtime_operation',status,count(*)::text from runtime_operations group by status union all select 'provider_operation',status,count(*)::text from runtime_host_provider_operations group by status union all select 'deletion',status,count(*)::text from company_deletion_operations group by status union all select 'account_deletion',status,count(*)::text from account_deletion_operations group by status`,
+          ),
+        ]);
+      return publicJson({
         environment: platform.config.environment,
         jobs,
         hosts,
@@ -742,29 +805,42 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         support,
         deployments,
         queues: Array.from(queues),
-      }),
-    );
+        modelDependencies: projectSaasModelDependencyInventory({
+          agents: modelAgents,
+          workerProfiles: platform.config.workerModelProfiles ?? [],
+          readOnlyProfiles: platform.config.readOnlyModelProfiles ?? [],
+          supportProfiles: platform.config.firstPartySupportModelProfiles ?? [],
+          jevProfiles: platform.config.jevSkillSuggestionProfiles ?? [],
+          jevSettings,
+          workerProfilesConfigured: Boolean(platform.config.workerModelProfiles?.length),
+          readOnlyProfilesConfigured: Boolean(platform.config.readOnlyModelProfiles?.length),
+          supportProfilesConfigured: Boolean(platform.config.firstPartySupportModelProfiles?.length),
+          jevProfilesConfigured: Boolean(platform.config.jevSkillSuggestionProfiles?.length),
+        }),
+      });
+    });
+    res.set("Cache-Control", "private, no-store").json(snapshot);
   });
   router.get("/saas/internal/costs", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
-    res.set("Cache-Control", "no-store").json(await platform.costs.latest());
+    res.set("Cache-Control", "private, no-store").json(await operatorRead(req, async reader => platform.costs.latest(reader)));
   });
   router.post("/saas/internal/costs", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
     await gate("billing_usage_v6");
-    res.status(201).json(await platform.costs.record(actor.id, req.body));
+    res.set("Cache-Control", "private, no-store").status(201).json(await platform.costs.record(req.actor, req.body));
   });
   router.get("/saas/internal/fleet", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("runtime_host_agent_v6");
     res.set("Cache-Control", "no-store").json(
-      publicJson({
-        hosts: await db
+      await operatorRead(req, async reader => publicJson({
+        hosts: await reader
           .select({
             id: runtimeHosts.id,
             status: runtimeHosts.status,
@@ -777,15 +853,15 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           })
           .from(runtimeHosts)
           .limit(200),
-        versions: await db.select().from(runtimeVersionCatalog).limit(100),
-      }),
+        versions: await reader.select().from(runtimeVersionCatalog).limit(100),
+      })),
     );
   });
   router.get("/saas/internal/fleet/inventory", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
-    const [report] = await db
+    const [report] = await operatorRead(req, async reader => reader
       .select({
         observedAt: platformAdminAudit.createdAt,
         report: platformAdminAudit.safeDetails,
@@ -798,7 +874,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         ),
       )
       .orderBy(desc(platformAdminAudit.createdAt))
-      .limit(1);
+      .limit(1));
     res.set("Cache-Control", "no-store").json(report ?? null);
   });
   router.post("/saas/internal/fleet/hosts", async (req, res) => {
@@ -818,7 +894,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         publicJson(
           await platform.fleet.requestHost(
             input.profileKey,
-            actor.id,
+            req.actor,
             input.companyId,
           ),
         ),
@@ -828,7 +904,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("runtime_host_agent_v6");
-    res.json(await platform.fleet.drain(String(req.params.hostId), actor.id));
+    res.json(await platform.fleet.drain(String(req.params.hostId), req.actor));
   });
   router.post("/saas/internal/fleet/hosts/:hostId/fence", async (req, res) => {
     const actor = await user(req);
@@ -837,7 +913,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res
       .status(202)
       .json(
-        await platform.fleet.requestFence(String(req.params.hostId), actor.id),
+        await platform.fleet.requestFence(String(req.params.hostId), req.actor),
       );
   });
   router.post("/saas/internal/fleet/hosts/:hostId/retire", async (req, res) => {
@@ -847,7 +923,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res
       .status(202)
       .json(
-        await platform.fleet.requestRetire(String(req.params.hostId), actor.id),
+        await platform.fleet.requestRetire(String(req.params.hostId), req.actor),
       );
   });
   router.get("/saas/account/sessions", async (req, res) => {
@@ -1029,6 +1105,32 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         !["stop", "delete", "backup", "rotate_gateway"].includes(input.action)
       )
         await gate("hosted_openclaw_v6");
+      if (input.action === "stop") {
+        const [activeSandbox] = await db.select().from(runtimeSandboxBindings).where(and(
+          eq(runtimeSandboxBindings.companyId, companyId),
+          eq(runtimeSandboxBindings.runtimeCellId, String(req.params.cellId)),
+          inArray(runtimeSandboxBindings.status, ["admitting", "running", "stopping", "quarantined"]),
+        )).orderBy(desc(runtimeSandboxBindings.createdAt)).limit(1);
+        if (activeSandbox) {
+          const service = executionSandboxService(db, {
+            operatorUserIds: platform.config.operatorUserIds,
+            backendFor: (binding, actor) => {
+              const prover = platform.config.runtime.openshellProver;
+              if (binding.backend !== "openshell" || !prover) return undefined;
+              return openShellBackend({
+                identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
+                boundary: binding.boundaryPolicy,
+                bridge: platform.sandboxHosts.bridge(actor),
+                evidenceKind: "protected_host_report",
+                prover,
+              });
+            },
+            assertRuntimeStartAdmission: (tx, input) => platform.runtime.assertSandboxStartAdmission(tx, input),
+            recordRuntimeWorkloadState: (tx, input) => platform.runtime.recordSandboxWorkloadState(tx, input),
+          });
+          await service.stop(req.actor, companyId, activeSandbox.id, input.idempotencyKey);
+        }
+      }
       res
         .status(202)
         .json(

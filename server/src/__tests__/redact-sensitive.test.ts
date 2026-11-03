@@ -231,4 +231,27 @@ describe("stripSecretBearingUrlParts", () => {
       ),
     ).toBe("/api/tools/oauth/callback");
   });
+
+  it("redacts invite bearer path segments while retaining route suffixes", () => {
+    expect(
+      stripSecretBearingUrlParts(
+        "/api/invites/pcp_invite_path-canary/accept?source=private#fragment",
+      ),
+    ).toBe("/api/invites/:token/accept");
+    expect(stripSecretBearingUrlParts("/invites/pcp_invite_path-canary/accept")).toBe(
+      "/invites/:token/accept",
+    );
+    expect(
+      stripSecretBearingUrlParts(
+        "https://example.test/invite/pcp_invite_path-canary/onboarding?source=private",
+      ),
+    ).toBe("https://example.test/invite/:token/onboarding");
+    expect(stripSecretBearingUrlParts("/api/issues/task-123?view=private")).toBe(
+      "/api/issues/task-123",
+    );
+    expect(stripSecretBearingUrlParts("/api/invites")).toBe("/api/invites");
+    expect(stripSecretBearingUrlParts("/api/issues/invite/task-123")).toBe(
+      "/api/issues/invite/task-123",
+    );
+  });
 });

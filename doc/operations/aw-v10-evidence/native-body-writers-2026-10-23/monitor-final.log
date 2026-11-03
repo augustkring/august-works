@@ -1,0 +1,34 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[21:55:44] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"85e2bc9f-20ee-4920-a108-8163025a78a1","agentId":"1580788a-6d7b-4a1d-8cf7-bbbff5e78da9","runId":"14ed94df-8b9e-499a-9946-f47104cdb23f","adapterType":"process"}[39m
+[21:55:44] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"85e2bc9f-20ee-4920-a108-8163025a78a1","agentId":"1580788a-6d7b-4a1d-8cf7-bbbff5e78da9","runId":"14ed94df-8b9e-499a-9946-f47104cdb23f"}[39m
+[21:55:47] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"85e2bc9f-20ee-4920-a108-8163025a78a1","agentId":"1580788a-6d7b-4a1d-8cf7-bbbff5e78da9","runId":"cee6773f-063e-4ac5-ad07-b07bfb04794a","adapterType":"process"}[39m
+[21:55:47] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"85e2bc9f-20ee-4920-a108-8163025a78a1","agentId":"1580788a-6d7b-4a1d-8cf7-bbbff5e78da9","runId":"cee6773f-063e-4ac5-ad07-b07bfb04794a"}[39m
+[21:55:52] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"1e18a543-735b-4fdd-83a9-3b2ce07b50c1","agentId":"ed7fb07e-3781-46b1-8c51-06e36aee852a","runId":"839eb64e-62e9-4c77-8ac9-319da4ea6c92","adapterType":"process"}[39m
+[21:55:52] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"1e18a543-735b-4fdd-83a9-3b2ce07b50c1","agentId":"ed7fb07e-3781-46b1-8c51-06e36aee852a","runId":"839eb64e-62e9-4c77-8ac9-319da4ea6c92"}[39m
+[21:55:54] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"33b8bcbe-abc3-4c6b-88fe-31d9b1752fcf","agentId":"8e8afdd1-eb80-4dff-a70c-c44dfbe54531","runId":"00523147-12c2-47d8-bed9-0722385f02d1","adapterType":"process"}[39m
+[21:55:54] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"33b8bcbe-abc3-4c6b-88fe-31d9b1752fcf","agentId":"8e8afdd1-eb80-4dff-a70c-c44dfbe54531","runId":"00523147-12c2-47d8-bed9-0722385f02d1"}[39m
+[21:55:56] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"33b8bcbe-abc3-4c6b-88fe-31d9b1752fcf","agentId":"8e8afdd1-eb80-4dff-a70c-c44dfbe54531","runId":"1ce828be-f922-4734-acc3-2aa2bea225e3","adapterType":"process"}[39m
+[21:55:56] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"33b8bcbe-abc3-4c6b-88fe-31d9b1752fcf","agentId":"8e8afdd1-eb80-4dff-a70c-c44dfbe54531","runId":"1ce828be-f922-4734-acc3-2aa2bea225e3"}[39m
+[21:55:59] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"595e5e23-f89c-4b54-8943-944e34904401","agentId":"2a21aca9-8e2c-4edd-99a8-be19af2b2062","runId":"5cc7b581-1386-4fba-a532-d9840c907772","adapterType":"process"}[39m
+[21:55:59] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"595e5e23-f89c-4b54-8943-944e34904401","agentId":"2a21aca9-8e2c-4edd-99a8-be19af2b2062","runId":"5cc7b581-1386-4fba-a532-d9840c907772"}[39m
+[21:56:00] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"595e5e23-f89c-4b54-8943-944e34904401","agentId":"2a21aca9-8e2c-4edd-99a8-be19af2b2062","runId":"60d1e502-fec0-4e4c-866f-8ded18e22d22","adapterType":"process"}[39m
+[21:56:00] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"595e5e23-f89c-4b54-8943-944e34904401","agentId":"2a21aca9-8e2c-4edd-99a8-be19af2b2062","runId":"60d1e502-fec0-4e4c-866f-8ded18e22d22"}[39m
+[21:56:03] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"c0c709ab-84e3-41c6-aee1-aae526fdf2e1","agentId":"2dcd200e-6e23-4c61-a83a-1a83093ffe71","runId":"3b387281-37ec-4bd9-bed3-d983e2ebc820","adapterType":"process"}[39m
+[21:56:03] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"c0c709ab-84e3-41c6-aee1-aae526fdf2e1","agentId":"2dcd200e-6e23-4c61-a83a-1a83093ffe71","runId":"3b387281-37ec-4bd9-bed3-d983e2ebc820"}[39m
+[21:56:06] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"c0c709ab-84e3-41c6-aee1-aae526fdf2e1","agentId":"2dcd200e-6e23-4c61-a83a-1a83093ffe71","runId":"49e5eb28-f7f4-40a3-be43-c3b132a5791b","adapterType":"process"}[39m
+[21:56:06] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"c0c709ab-84e3-41c6-aee1-aae526fdf2e1","agentId":"2dcd200e-6e23-4c61-a83a-1a83093ffe71","runId":"49e5eb28-f7f4-40a3-be43-c3b132a5791b"}[39m
+[21:56:11] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"2c7d2f8c-a07c-4bdb-be3f-b90cf250dae0","agentId":"e776e9d9-9e93-4220-9d3e-eb5426a2c0e0","runId":"8aef64d6-2ca0-43cf-bc8f-afa4978014dc","adapterType":"process"}[39m
+[21:56:11] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"2c7d2f8c-a07c-4bdb-be3f-b90cf250dae0","agentId":"e776e9d9-9e93-4220-9d3e-eb5426a2c0e0","runId":"8aef64d6-2ca0-43cf-bc8f-afa4978014dc"}[39m
+[21:56:13] [33mWARN[39m: [36mlocal agent jwt secret missing or invalid; running without injected PAPERCLIP_API_KEY[39m [90m{"companyId":"2c7d2f8c-a07c-4bdb-be3f-b90cf250dae0","agentId":"e776e9d9-9e93-4220-9d3e-eb5426a2c0e0","runId":"3159158b-0be5-4081-a8c4-2b0143185739","adapterType":"process"}[39m
+[21:56:13] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"2c7d2f8c-a07c-4bdb-be3f-b90cf250dae0","agentId":"e776e9d9-9e93-4220-9d3e-eb5426a2c0e0","runId":"3159158b-0be5-4081-a8c4-2b0143185739"}[39m
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  21:54:58
+   Duration  77.24s (transform 23.70s, setup 124ms, import 35.64s, tests 41.21s, environment 0ms)
+

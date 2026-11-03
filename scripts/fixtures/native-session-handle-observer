@@ -1,0 +1,8 @@
+#!/bin/sh
+# Fixed CI operation only. sudo supplies the original UID before env is cleared.
+set -eu
+[ "$#" -eq 0 ] || exit 126
+case "${SUDO_UID-}" in ''|*[!0-9]*|0) exit 126 ;; esac
+[ "${#SUDO_UID}" -le 10 ] || exit 126
+[ "$(/usr/bin/id -u)" = 0 ] || exit 126
+exec /usr/bin/env -i PATH=/usr/bin:/bin PAPERCLIP_FIXTURE_ORIGINAL_UID="$SUDO_UID" /usr/local/libexec/paperclip-erasure-test-node/node --no-addons --disable-proto=throw /usr/local/libexec/paperclip-fixture-observers/native-session-handles-v1.mjs

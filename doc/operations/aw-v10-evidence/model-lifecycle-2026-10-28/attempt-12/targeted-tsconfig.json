@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/types/express.d.ts",
+    "src/services/agents.ts",
+    "src/services/agents/model-routing-snapshots.ts",
+    "src/services/agents/authoring-publication.ts",
+    "src/services/agents/authoring-runtime-candidates.ts",
+    "src/services/experience/model-retirement-notices.ts",
+    "src/routes/announcements.ts"
+  ],
+  "exclude": []
+}

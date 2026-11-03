@@ -1,0 +1,31 @@
+{
+  "baseCheckpoint": "R68 / Host60",
+  "baseHost60SourcePinsSha256": "5c3aa8eb95c8eb351bb2cb00aa9f16b9b568fcd0f92f9c9b3384ade1518134c4",
+  "candidateHost61SourcePinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+  "sourcePathCounts": {
+    "base": 105,
+    "candidate": 107,
+    "added": 2,
+    "deleted": 0,
+    "changed": 1
+  },
+  "added": [
+    {
+      "path": "server/src/__tests__/native-selected-provider-preparation.integration.test.ts",
+      "candidateSha256": "23e209dc9a703f91cc8bcf8dce17238174d6c965a0ca00badf9d689318cce1db"
+    },
+    {
+      "path": "server/src/services/native-runtime/prepare-native-run.ts",
+      "candidateSha256": "4f86a9d81eb048a87fe9da387a9192ad738550ec47791eed4218d6e8daf6145e"
+    }
+  ],
+  "deleted": [],
+  "changed": [
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "baseSha256": "6b46bf4b78a81d4ee05dda192e6ad522de40617487c26ab597231653895621fa",
+      "candidateSha256": "61035078d069a2df31df00289417db7038f9b30c0f1c6990c9e6b92a78ecf87e",
+      "bytes": 223146
+    }
+  ]
+}

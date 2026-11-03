@@ -1,0 +1,423 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stdout | src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=true)
+Actual native Memory INSERT binding blocker { holderPid: 52109, waiterPid: 52108 }
+
+ ❯ |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts (2 tests | 2 failed) 12447ms
+     × rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=false) 618ms
+     × rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=true) 479ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=false)
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=true)
+AssertionError: expected { …(1) } to match object { error: { status: 403 } }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "error": {
+-     "status": 403,
++   "error": HttpError {
++     "status": 404,
+    },
+  }
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:73:28
+     71|       }
+     72|       const outcome=await operation;
+     73|       expect.soft(outcome).toMatchObject({error:{status:403}});
+       |                            ^
+     74|       expect.soft(await db.select().from(memoryRecords).where(and(eq(m…
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=false)
+AssertionError: expected [ { …(44) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "bindingId": "9b8d50b0-ac9b-4950-b225-e4cde1a8078c",
++     "companyId": "7092e3bb-1b7a-4a54-b4ad-2273eacfa77c",
++     "confidenceScore": 0.5,
++     "content": "Own fresh input",
++     "createdAt": 2026-10-22T23:07:47.342Z,
++     "createdByActorId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++     "createdByActorType": "agent",
++     "createdByOperationId": "cd4a8e71-5b36-4ef7-b157-c44b68086dcd",
++     "deletedAt": null,
++     "expiresAt": null,
++     "id": "982b82a8-69f9-4e12-910d-c850f296280c",
++     "importance": 50,
++     "memoryType": "lesson",
++     "metadata": {
++       "privateOperationFingerprint": "9101fe0bc88c420e051c14af4bb640a456af2a5d75dd9fafabf1b9f5645f3f7d",
++     },
++     "observedAt": 2026-10-22T23:07:47.286Z,
++     "ownerAgentId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++     "privateOwnerUserId": "02b59c8b-a68b-4e75-9d66-dfdd217f8aa9",
++     "providerKey": "local",
++     "retentionPolicy": "standard",
++     "retentionState": "active",
++     "reviewState": "accepted",
++     "revocationReason": null,
++     "revokedAt": null,
++     "revokedByActorId": null,
++     "revokedByActorType": null,
++     "scopeId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++     "scopeType": "agent",
++     "sensitivityLabel": "internal",
++     "sourceFoundationRevisionIds": [],
++     "sourceIssueIds": [
++       "f5569bc9-d63a-422b-b4f5-149641607f83",
++     ],
++     "sourceMemoryIds": [],
++     "sourceProjectIds": [],
++     "sourceProvenanceQualified": true,
++     "sourceRunIds": [
++       "321d6432-2ec1-45a4-a3c1-e75e6113bc8f",
++     ],
++     "subjectId": null,
++     "subjectType": null,
++     "summary": null,
++     "supersededByRecordId": null,
++     "supersedesRecordId": null,
++     "title": "Attempted private lesson",
++     "updatedAt": 2026-10-22T23:07:47.342Z,
++     "validFrom": null,
++     "validUntil": null,
++     "verificationState": "unverified",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:74:159
+     72|       const outcome=await operation;
+     73|       expect.soft(outcome).toMatchObject({error:{status:403}});
+     74|       expect.soft(await db.select().from(memoryRecords).where(and(eq(m…
+       |                                                                                                                                                               ^
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=false)
+AssertionError: expected [ { …(15) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "citationJson": {
++       "label": "Current input",
++     },
++     "companyId": "7092e3bb-1b7a-4a54-b4ad-2273eacfa77c",
++     "createdAt": 2026-10-22T23:07:47.301Z,
++     "excerptHash": "18375a2b16d8be0434a12513c54ebed17f9ac5697ba381153a5540baeb29f50e",
++     "id": "67a9781f-e81e-4207-b056-9fe5a6d2aa18",
++     "memoryRecordId": "982b82a8-69f9-4e12-910d-c850f296280c",
++     "observedAt": 2026-10-22T23:07:47.286Z,
++     "sourceClass": "task",
++     "sourceProvider": "native_fixture",
++     "sourceRef": "issue://f5569bc9-d63a-422b-b4f5-149641607f83",
++     "sourceType": "outcome",
++     "sourceUpdatedAt": null,
++     "sourceVersion": "1",
++     "supportsOrContradicts": "supports",
++     "trustLevel": "low",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:75:105
+     73|       expect.soft(outcome).toMatchObject({error:{status:403}});
+     74|       expect.soft(await db.select().from(memoryRecords).where(and(eq(m…
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+       |                                                                                                         ^
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+     77|       expect(events).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=false)
+AssertionError: expected [ { …(12) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "action": "memory.private_created",
++     "actorId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++     "actorType": "agent",
++     "agentId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++     "companyId": "7092e3bb-1b7a-4a54-b4ad-2273eacfa77c",
++     "createdAt": 2026-10-22T23:07:47.301Z,
++     "details": {
++       "memoryType": "lesson",
++       "ownerAgentId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++     },
++     "entityId": "982b82a8-69f9-4e12-910d-c850f296280c",
++     "entityType": "memory_record",
++     "id": "fee64fab-b5eb-4f4d-b46c-5dfcca48854a",
++     "responsibleUserId": "02b59c8b-a68b-4e75-9d66-dfdd217f8aa9",
++     "runId": "321d6432-2ec1-45a4-a3c1-e75e6113bc8f",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:76:152
+     74|       expect.soft(await db.select().from(memoryRecords).where(and(eq(m…
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+       |                                                                                                                                                        ^
+     77|       expect(events).toEqual([]);
+     78|     } finally {releaseHolder?.();await holder;unsubscribe();}
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=false)
+AssertionError: expected [ { id: 1, …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "companyId": "7092e3bb-1b7a-4a54-b4ad-2273eacfa77c",
++     "createdAt": "2026-10-22T23:07:47.542Z",
++     "id": 1,
++     "payload": {
++       "action": "memory.private_created",
++       "actorId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++       "actorType": "agent",
++       "agentId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++       "details": {
++         "memoryType": "lesson",
++         "ownerAgentId": "dba16ef2-0c86-4d67-8d16-f045b131d439",
++       },
++       "entityId": "982b82a8-69f9-4e12-910d-c850f296280c",
++       "entityType": "memory_record",
++       "responsibleUserId": "02b59c8b-a68b-4e75-9d66-dfdd217f8aa9",
++       "runId": "321d6432-2ec1-45a4-a3c1-e75e6113bc8f",
++     },
++     "type": "activity.logged",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:77:22
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+     77|       expect(events).toEqual([]);
+       |                      ^
+     78|     } finally {releaseHolder?.();await holder;unsubscribe();}
+     79|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=true)
+AssertionError: expected [ { …(44) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "bindingId": "6d457169-b7d6-47b7-8c7d-9b5bd53a1808",
++     "companyId": "280d44c0-3ec5-41bc-b316-8612ee59d556",
++     "confidenceScore": 0.5,
++     "content": "Own fresh input",
++     "createdAt": 2026-10-22T23:07:47.896Z,
++     "createdByActorId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++     "createdByActorType": "agent",
++     "createdByOperationId": "c7fdd6a1-9bf5-429e-a1be-8b738874a6cb",
++     "deletedAt": null,
++     "expiresAt": null,
++     "id": "0cf593c5-f37b-4e64-b125-3bee8fcab992",
++     "importance": 50,
++     "memoryType": "lesson",
++     "metadata": {
++       "privateOperationFingerprint": "a725ce49a352958d8fa987e82b6c3593cf273adede34c369813789c34b22cb94",
++     },
++     "observedAt": 2026-10-22T23:07:47.871Z,
++     "ownerAgentId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++     "privateOwnerUserId": "b3b9c515-7f9e-4f64-8791-352495b62c9b",
++     "providerKey": "local",
++     "retentionPolicy": "standard",
++     "retentionState": "active",
++     "reviewState": "accepted",
++     "revocationReason": null,
++     "revokedAt": null,
++     "revokedByActorId": null,
++     "revokedByActorType": null,
++     "scopeId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++     "scopeType": "agent",
++     "sensitivityLabel": "internal",
++     "sourceFoundationRevisionIds": [],
++     "sourceIssueIds": [
++       "3e4cce3f-6b41-4fe4-a604-4a95dc71c5cb",
++     ],
++     "sourceMemoryIds": [],
++     "sourceProjectIds": [],
++     "sourceProvenanceQualified": true,
++     "sourceRunIds": [
++       "c7406024-0113-4ffa-a088-bc8b5fb6f7bb",
++     ],
++     "subjectId": null,
++     "subjectType": null,
++     "summary": null,
++     "supersededByRecordId": null,
++     "supersedesRecordId": null,
++     "title": "Attempted private lesson",
++     "updatedAt": 2026-10-22T23:07:47.896Z,
++     "validFrom": null,
++     "validUntil": null,
++     "verificationState": "unverified",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:74:159
+     72|       const outcome=await operation;
+     73|       expect.soft(outcome).toMatchObject({error:{status:403}});
+     74|       expect.soft(await db.select().from(memoryRecords).where(and(eq(m…
+       |                                                                                                                                                               ^
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=true)
+AssertionError: expected [ { …(15) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "citationJson": {
++       "label": "Current input",
++     },
++     "companyId": "280d44c0-3ec5-41bc-b316-8612ee59d556",
++     "createdAt": 2026-10-22T23:07:47.873Z,
++     "excerptHash": "18375a2b16d8be0434a12513c54ebed17f9ac5697ba381153a5540baeb29f50e",
++     "id": "84ef396a-bcde-4e0a-baf6-9e3bacaf28af",
++     "memoryRecordId": "0cf593c5-f37b-4e64-b125-3bee8fcab992",
++     "observedAt": 2026-10-22T23:07:47.871Z,
++     "sourceClass": "task",
++     "sourceProvider": "native_fixture",
++     "sourceRef": "issue://3e4cce3f-6b41-4fe4-a604-4a95dc71c5cb",
++     "sourceType": "outcome",
++     "sourceUpdatedAt": null,
++     "sourceVersion": "1",
++     "supportsOrContradicts": "supports",
++     "trustLevel": "low",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:75:105
+     73|       expect.soft(outcome).toMatchObject({error:{status:403}});
+     74|       expect.soft(await db.select().from(memoryRecords).where(and(eq(m…
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+       |                                                                                                         ^
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+     77|       expect(events).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=true)
+AssertionError: expected [ { …(12) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "action": "memory.private_created",
++     "actorId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++     "actorType": "agent",
++     "agentId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++     "companyId": "280d44c0-3ec5-41bc-b316-8612ee59d556",
++     "createdAt": 2026-10-22T23:07:47.873Z,
++     "details": {
++       "memoryType": "lesson",
++       "ownerAgentId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++     },
++     "entityId": "0cf593c5-f37b-4e64-b125-3bee8fcab992",
++     "entityType": "memory_record",
++     "id": "679b5f1a-517b-40b1-b3e1-32434b11ef99",
++     "responsibleUserId": "b3b9c515-7f9e-4f64-8791-352495b62c9b",
++     "runId": "c7406024-0113-4ffa-a088-bc8b5fb6f7bb",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:76:152
+     74|       expect.soft(await db.select().from(memoryRecords).where(and(eq(m…
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+       |                                                                                                                                                        ^
+     77|       expect(events).toEqual([]);
+     78|     } finally {releaseHolder?.();await holder;unsubscribe();}
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-paused-producer.integration.test.ts > Original private Memory producer checks current authority before effects > rejects a paused Agent without Memory, evidence, audit or events (after actual binding wait=true)
+AssertionError: expected [ { id: 2, …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "companyId": "280d44c0-3ec5-41bc-b316-8612ee59d556",
++     "createdAt": "2026-10-22T23:07:48.069Z",
++     "id": 2,
++     "payload": {
++       "action": "memory.private_created",
++       "actorId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++       "actorType": "agent",
++       "agentId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++       "details": {
++         "memoryType": "lesson",
++         "ownerAgentId": "002a0cd4-3e51-4b8f-8479-729c30a2605a",
++       },
++       "entityId": "0cf593c5-f37b-4e64-b125-3bee8fcab992",
++       "entityType": "memory_record",
++       "responsibleUserId": "b3b9c515-7f9e-4f64-8791-352495b62c9b",
++       "runId": "c7406024-0113-4ffa-a088-bc8b5fb6f7bb",
++     },
++     "type": "activity.logged",
++   },
++ ]
+
+ ❯ src/__tests__/memory-paused-producer.integration.test.ts:77:22
+     75|       expect.soft(await db.select().from(memoryEvidence).where(eq(memo…
+     76|       expect.soft(await db.select().from(activityLog).where(and(eq(act…
+     77|       expect(events).toEqual([]);
+       |                      ^
+     78|     } finally {releaseHolder?.();await holder;unsubscribe();}
+     79|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  23:07:23
+   Duration  24.88s (transform 6.76s, setup 244ms, import 11.65s, tests 12.45s, environment 0ms)
+

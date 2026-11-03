@@ -4,10 +4,12 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   agents,
   agentWakeupRequests,
+  authUsers,
+  companyMemberships,
   companies,
   completionContracts,
   createDb,
@@ -68,6 +70,7 @@ import {
 import * as activityLog from "../services/activity-log.js";
 import { dismissObsoleteNativePolicyReviews } from "../services/native-runtime/obsolete-policy-reviews.js";
 import { issueService } from "../services/issues.js";
+import { normalizeIssueExecutionPolicy } from "../services/issue-execution-policy.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -384,6 +387,8 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
     db = createDb(temporary.connectionString);
     await db.insert(companies).values({ id: companyId, name: "Status corpus", issuePrefix: "PSC" });
     await db.insert(companies).values({ id: outsideCompanyId, name: "Outside corpus", issuePrefix: "OUT" });
+    await db.insert(authUsers).values({ id: "status-corpus-board", name: "Status corpus Human", email: "status-corpus@example.test", emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "status-corpus-board", membershipRole: "owner", status: "active" });
     await db.insert(agents).values([
       {
         id: agentId,
@@ -431,6 +436,7 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
       status: priorStatus,
       assigneeAgentId: agentId,
       workMode: "standard",
+      ...(fixture.id === "current-track-blocker-without-alternative" ? { payloadSourceProtocolVersion: 1 } : {}),
     });
     if (!nativeRecords) return {
       issueId,
@@ -561,6 +567,18 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
   ): Promise<FixtureObservation> {
     const completionState = String(fixture.given.completionState ?? "");
     const seeded = await seedFixture(fixture);
+    if (fixture.id === "current-track-blocker-without-alternative") {
+      // Structural snapshot for the mutation guard only; this corpus fixture
+      // does not claim an authenticated source capture.
+      await db.execute(sql`update issues target set payload_source_snapshot=(
+        select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue','companyId',target.company_id,
+            'id',target.id,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(target))),
+            'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+              'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+        ) body
+      ) where target.company_id=${companyId}::uuid and target.id=${seeded.issueId}::uuid`);
+    }
     const consumerExecutions: ConsumerExecution[] = [];
     const materializedEffects = new Set<string>();
     const operationalEffects = new Set<string>();
@@ -1531,6 +1549,8 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
         checkoutRunId: issues.checkoutRunId,
         executionRunId: issues.executionRunId,
         unblockDescriptor: issues.unblockDescriptor,
+        payloadSourceSnapshot: issues.payloadSourceSnapshot,
+        payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
       })
         .from(issues).where(eq(issues.id, seeded.issueId)).then((rows) => rows[0] ?? null),
       db.select({
@@ -1608,6 +1628,10 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
       expect(persistedIssue?.executionRunId, `${fixture.id}:execution released`).toBeNull();
     }
     if (persistedEffects.includes("bind_blocker")) expect(persistedIssue?.unblockDescriptor, `${fixture.id}:blocker target`).not.toBeNull();
+    if (fixture.id === "current-track-blocker-without-alternative") {
+      expect(persistedIssue?.payloadSourceSnapshot).toBeNull();
+      expect(persistedIssue?.payloadSourceSnapshotInvalidated).toBe(true);
+    }
     if (materializedEffects.has("accept_replacement_turn")) expect(persistedRun?.continuationAttempt, `${fixture.id}:replacement target`).toBeGreaterThan(0);
     if (persistedEffects.includes("release_run_resources")) {
       expect(persistedRun?.processPid, `${fixture.id}:pid released`).toBeNull();
@@ -2043,6 +2067,87 @@ describe("P6-31 Section 18.13 executable status-authority corpus", () => {
     });
     return { ...seeded, decision: decision!, interaction: interaction! };
   }
+
+  it("projects Native completion through the configured review stage and publishes its assignment wake", async () => {
+    const fixture = corpus.fixtures.find((candidate) => candidate.id === "native-mechanical-completion")!;
+    const seeded = await seedFixture({ ...fixture, id: `native-stage-completion-${randomUUID()}` });
+    const policy = normalizeIssueExecutionPolicy({
+      stages: [{
+        id: randomUUID(),
+        type: "review",
+        participants: [{ id: randomUUID(), type: "agent", agentId: delegateAgentId }],
+      }],
+    })!;
+    await db.update(issues).set({ executionPolicy: policy }).where(eq(issues.id, seeded.issueId));
+    await db.update(completionContracts).set({ risk: "low", completionAuthority: "agent_claim_policy" })
+      .where(eq(completionContracts.id, seeded.contractId!));
+    await db.insert(workspaceOperations).values({
+      companyId, heartbeatRunId: seeded.runId, issueId: seeded.issueId,
+      phase: "workspace_finalize", status: "succeeded", exitCode: 0,
+      cwd: process.cwd(), finishedAt: new Date(),
+    });
+
+    const finalized = await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    const decisions = await db.select().from(statusDecisions).where(eq(statusDecisions.runId, seeded.runId));
+    const [decision] = decisions;
+    const wakes = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, delegateAgentId));
+    const stageWakes = wakes.filter((candidate) => candidate.idempotencyKey?.startsWith(`issue.execution_stage:${seeded.issueId}:`));
+    const [wake] = stageWakes;
+
+    expect(issue).toMatchObject({
+      status: "in_review",
+      assigneeAgentId: delegateAgentId,
+      executionState: expect.objectContaining({ status: "pending", currentStageType: "review" }),
+      executionRunId: null,
+    });
+    expect(decision).toMatchObject({ toStatus: "in_review", reasonCode: "execution_policy_stage_pending" });
+    expect(finalized).toMatchObject({ phase: "committed" });
+    expect(stageWakes).toHaveLength(1);
+    expect(decisions.filter((candidate) => candidate.toStatus === "in_review")).toHaveLength(1);
+    expect(decisions.filter((candidate) => candidate.toStatus === "done")).toHaveLength(0);
+    expect(wake).toBeDefined();
+    expect((wake!.payload as Record<string, unknown>)._paperclipWakeContext).toMatchObject({
+      source: "issue.execution_stage",
+      statusDecisionSource: "native_status_decision",
+      wakeReason: "execution_review_requested",
+    });
+    expect(wake).toMatchObject({
+      source: "assignment",
+      reason: "execution_review_requested",
+      requestedByActorType: "agent",
+      requestedByActorId: agentId,
+    });
+    expect(await db.select().from(statusDecisions).where(and(
+      eq(statusDecisions.issueId, seeded.issueId), eq(statusDecisions.toStatus, "done"),
+    ))).toHaveLength(0);
+  }, 30_000);
+
+  it("persists execution-policy completion metadata when Native completion auto-skips a self-only stage", async () => {
+    const fixture = corpus.fixtures.find((candidate) => candidate.id === "native-mechanical-completion")!;
+    const seeded = await seedFixture({ ...fixture, id: `native-stage-self-skip-${randomUUID()}` });
+    const policy = normalizeIssueExecutionPolicy({
+      stages: [{
+        id: randomUUID(),
+        type: "review",
+        participants: [{ id: randomUUID(), type: "agent", agentId }],
+      }],
+    })!;
+    await db.update(issues).set({ executionPolicy: policy }).where(eq(issues.id, seeded.issueId));
+    await db.update(completionContracts).set({ risk: "low", completionAuthority: "agent_claim_policy" })
+      .where(eq(completionContracts.id, seeded.contractId!));
+    await db.insert(workspaceOperations).values({
+      companyId, heartbeatRunId: seeded.runId, issueId: seeded.issueId,
+      phase: "workspace_finalize", status: "succeeded", exitCode: 0,
+      cwd: process.cwd(), finishedAt: new Date(),
+    });
+
+    await finalizeNativeRun({ db, runId: seeded.runId, workspaceFinalizeStatus: "succeeded" });
+    const [issue] = await db.select().from(issues).where(eq(issues.id, seeded.issueId));
+    expect(issue!.status).toBe("done");
+    expect(issue!.executionState).toMatchObject({ status: "completed", completedStageIds: [policy.stages[0]!.id] });
+  }, 30_000);
 
   async function seedAutomaticReview() {
     const seeded = await seedPolicyReview();

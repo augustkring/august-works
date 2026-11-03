@@ -1,0 +1,29 @@
+{
+  "baseCommit": "f0d3ab70d",
+  "sources": {
+    "ui/src/pages/CustomerSupportCases.tsx": "4f571817d3bae45d7e4713f77b51ec3aa4021e79eff70e8192a249baf6f6c4c3",
+    "ui/src/pages/CustomerSupportCases.test.tsx": "c710ed13de9b48ebb86c902a9b1f778d4677b6cd25b47d0fecde47601cbf4538"
+  },
+  "originalPageSha256": "949858db7ddab88a4739122dd056864b60e1b731f88e4d121703d65825426fd5",
+  "baseline": {
+    "result": "1FAIL/1PASS/18filtered17.57s;actual exit1. Same-user session replacement retains old draft; original account replacement still passes.",
+    "log": "baseline.log"
+  },
+  "final": {
+    "result": "20PASS10.56s;actual exit0. Parameterized existing late-ack regression preserves assertions for both principal and same-principal session replacement.",
+    "log": "final.log"
+  },
+  "uiCompiler": {
+    "result": "actual exit0, process closed",
+    "log": "ui-types.log"
+  },
+  "tokenGates": {
+    "result": "actual exit0;all gates clean",
+    "log": "token-gates.log"
+  },
+  "limits": [
+    "Controlled React/query/router identity and API fixtures; not actual cookie replacement or browser session qualification.",
+    "No draft persistence across modal dismissal is implemented; no browser storage introduced.",
+    "No complete support/V10/PR qualification."
+  ]
+}

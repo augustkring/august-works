@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-26",
+  "matrixSourceHead": "76d7cc8f3bfa365438a0bb892b5b1e9e5da45040",
+  "matrixQualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "providerRegressionSourceHead": "76d7cc8f3bfa365438a0bb892b5b1e9e5da45040",
+  "providerQualificationBaseCommit": "886014cae5a7d6ed5a9ab99d62613ec7646308cb",
+  "snapshotExit": 0,
+  "syntaxPreflightExit": 0,
+  "matrixExit": 0,
+  "currentMatrix": {
+    "typedTaskPrivateSources": {
+      "passed": 19,
+      "exit": 0,
+      "log": "current2-typed-task-private-sources.integration.log.gz"
+    },
+    "privatePayload": {
+      "passed": 32,
+      "exit": 0,
+      "log": "current2-v10-private-payload.integration.log.gz"
+    },
+    "privateLiveEvents": {
+      "passed": 16,
+      "exit": 0,
+      "log": "current2-v10-private-live-events.integration.log.gz"
+    },
+    "memoryPrivateLiveEvents": {
+      "passed": 1,
+      "exit": 0,
+      "log": "current2-memory-private-live-events.integration.log.gz"
+    },
+    "activitySourcePrivacy": {
+      "passed": 10,
+      "exit": 0,
+      "log": "current2-activity-native-source-privacy.integration.log.gz"
+    },
+    "derivedTaskSourcePrivacy": {
+      "passed": 1,
+      "exit": 0,
+      "log": "current2-issue-native-memory-source-privacy.integration.log.gz"
+    }
+  },
+  "currentMatrixTotalPassed": 79,
+  "providerRegressions": {
+    "exit": 0,
+    "passed": 2,
+    "slack": "Private Routine Task owner sends one; open Task control sends; after native source erasure the queued publication is cancelled and the local Slack posts list remains empty.",
+    "teams": "Private Task explicit grant author is readable; after consent and grant withdrawal, transfer state stays unchanged and local upload/file-card effects remain zero.",
+    "qualification": "Mocked local provider runtimes only; no real Slack/Teams tenant or SharePoint qualification.",
+    "log": "current2-provider-regressions.log.gz"
+  },
+  "historicalTemporalFailures": "The temporal source suite was not included in this current matrix. Previously retained failures are not current-run results and remain unresolved until a fresh run.",
+  "limits": "PostgreSQL-backed software integration tests on the qualification workspace; no dependency install/build. Snapshot and syntax preflight ran under the shared host lock."
+}

@@ -1,0 +1,14 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:35:09] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"f83e1e0b-4d84-4da5-8702-10b0eadb6029","actorAgentId":"183d135d-b5e3-4b0d-aea0-c498053606ed","responsibleUserId":"f030f2ea-047b-413e-9b31-e9c9e382db71"}[39m
+[20:35:09] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"e9db70f6-aa5c-4e2a-9916-92f6b622407e","actorAgentId":"6be74fa4-003f-40fd-aa3e-4be3a6f6719d","responsibleUserId":"432eb3eb-8fed-484b-866a-8e201f0869eb"}[39m
+
+ Test Files  2 passed (2)
+      Tests  13 passed | 3 skipped (16)
+   Start at  20:34:24
+   Duration  45.59s (transform 8.42s, setup 274ms, import 17.96s, tests 26.70s, environment 0ms)
+

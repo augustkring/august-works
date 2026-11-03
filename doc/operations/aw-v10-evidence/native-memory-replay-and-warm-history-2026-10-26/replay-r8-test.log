@@ -1,0 +1,58 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-opencode-managed-source.integration.test.ts > managed OpenCode source-closure binary integration > replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output
+native_memory_replay_receipt_test_failure {"reason":"output_owner_or_snapshot_binding_mismatch"}
+
+stderr | src/services/native-runtime/native-opencode-managed-source.integration.test.ts > managed OpenCode source-closure binary integration > replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output
+native_memory_replay_receipt_test_failure {"reason":"output_owner_or_snapshot_binding_mismatch"}
+
+stderr | src/services/native-runtime/native-opencode-managed-source.integration.test.ts > managed OpenCode source-closure binary integration > replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output
+native_memory_replay_receipt_test_failure {"reason":"output_owner_or_snapshot_binding_mismatch"}
+
+stderr | src/services/native-runtime/native-opencode-managed-source.integration.test.ts > managed OpenCode source-closure binary integration > replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output
+native_memory_replay_receipt_test_failure {"reason":"output_owner_or_snapshot_binding_mismatch"}
+
+stderr | src/services/native-runtime/native-opencode-managed-source.integration.test.ts > managed OpenCode source-closure binary integration > replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output
+native_memory_replay_receipt_test_failure {"reason":"output_owner_or_snapshot_binding_mismatch"}
+
+stderr | src/services/native-runtime/native-opencode-managed-source.integration.test.ts > managed OpenCode source-closure binary integration > replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output
+native_memory_replay_receipt_test_failure {"reason":"output_owner_or_snapshot_binding_mismatch"}
+
+ ❯ src/services/native-runtime/native-opencode-managed-source.integration.test.ts (4 tests | 1 failed | 3 skipped) 90733ms
+     × replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output 86300ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-source.integration.test.ts > managed OpenCode source-closure binary integration > replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output
+AssertionError: the actual replay probe must not fail: {"phase":"matching_replay","name":"Error","code":"native_memory_capture_invalid","message":"Managed Memory output is no longer current"}: expected { phase: 'matching_replay', …(3) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "code": "native_memory_capture_invalid",
+  "message": "Managed Memory output is no longer current",
+  "name": "Error",
+  "phase": "matching_replay",
+}
+
+ ❯ runManagedNativeOpenCodeFixture src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts:2227:142
+    2225|           const denied = brokerRequests.some(value => value.includes("…
+    2226|           expect(nativeMemoryReplayProbeToolResultObserved, "the exact…
+    2227|           expect(nativeMemoryReplayProbeFailure, `the actual replay pr…
+       |                                                                                                                                              ^
+    2228|           expect(nativeMemoryReplayProbeCompleted, "the probe must suc…
+    2229|           expect(denied, "revoked Memory output must stop the next man…
+ ❯ src/services/native-runtime/native-opencode-managed-source.integration.test.ts:255:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 skipped (4)
+   Start at  08:56:01
+   Duration  106.99s (transform 11.75s, setup 89ms, import 16.04s, tests 90.73s, environment 0ms)
+
+Vitest executed zero tests (all skipped or summary missing)

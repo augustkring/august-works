@@ -1,0 +1,30 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 25 skipped) 248135ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 26868ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+AssertionError: expected 'queued' to be 'succeeded' // Object.is equality
+
+Expected: "succeeded"
+Received: "queued"
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:807:45
+    805|         eq(memoryJobs.companyId, facts.companyId), eq(memoryJobs.jobKe…
+    806|       )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
+    807|       expect(runtimeErasureReceipt?.status).toBe("succeeded");
+       |                                             ^
+    808|       expect((runtimeErasureReceipt?.sourceRefJson as Record<string, u…
+    809|       expect(await db.select().from(orchestrationModelReservations).wh…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed | 25 skipped (31)
+   Start at  18:25:41
+   Duration  264.01s (transform 11.07s, setup 90ms, import 15.65s, tests 248.14s, environment 0ms)
+

@@ -1,0 +1,7 @@
+{
+  "actualServerCompilerExit": 0,
+  "log": "up03-run-receipt-replay-server-types.log",
+  "sourcePins": "up03-run-receipt-replay-server-types-pins.txt",
+  "sourcesUnchanged": true,
+  "scope": "Collector and source-reviewed bootstrap handoff only; final dispatch binding, current permission and full native receipt production are not qualified"
+}

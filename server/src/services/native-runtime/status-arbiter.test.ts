@@ -617,3 +617,18 @@ describe("native status authority", () => {
   });
 
 });
+
+
+it("preserves the already blocked Task only for a verified read-only Human dependency response", () => {
+  const bounded = { priorIssueStatus: "blocked" as const, hasUnresolvedIssueBlockers: true,
+    assessment: assessment({ reportedDisposition: "blocked", objectiveClaimSatisfied: false, objectiveSatisfied: false,
+      allCriteriaSatisfied: false, hasBlockingRemainingWork: true }) };
+  expect(arbitrate({ ...bounded, readonlyDependencyInteraction: true })).toMatchObject({
+    statusAction: "preserve", toStatus: "blocked", reasonCode: "durable_dependency_blocker_bound", unblockDescriptor: null, effects: [] });
+  // Ordinary blocked work still uses its existing durable blocker projection.
+  expect(arbitrate(bounded)).toMatchObject({ statusAction: "blocked", toStatus: "blocked", reasonCode: "durable_dependency_blocker_bound" });
+  expect(arbitrate({ ...bounded, readonlyDependencyInteraction: true, priorIssueStatus: "in_progress" }))
+    .toMatchObject({ statusAction: "blocked", toStatus: "blocked" });
+  expect(arbitrate({ ...bounded, readonlyDependencyInteraction: true,
+    assessment: assessment({ reportedDisposition: "done" }) })).toMatchObject({ statusAction: "blocked", toStatus: "blocked" });
+});

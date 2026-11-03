@@ -1,0 +1,26 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "9510257a7f4c9f65ee043b9c4dc08145e9ccc0d9",
+  "meaning": "Exact selected authored Skill/Memory and materialized instruction/runtime Skill references at original preparation boundary, not dispatch/consumption/source completeness. Both full original files26PASS. Current cross-slice compiler/whole V10 gates remain open.",
+  "logs": [
+    {
+      "name": "native-prepared-asset-inputs",
+      "exitCode": 0,
+      "rawSha256": "54e7cbe575d430fc7aa49735624efe7c8fed1eaf96cd08c43df69f16d8ff3fa7",
+      "sanitizedSha256": "54e7cbe575d430fc7aa49735624efe7c8fed1eaf96cd08c43df69f16d8ff3fa7",
+      "archiveSha256": "b530f5c8d899b1d933181dd8f25f173adec0c76da93086ef2db81c0ea6656c86",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  26 passed (26)",
+        "Duration  32.87s (transform 9.09s, setup 134ms, import 15.70s, tests 16.80s, environment 0ms)"
+      ]
+    }
+  ]
+}

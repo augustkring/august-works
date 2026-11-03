@@ -1,0 +1,29 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/external-chat-wait.integration.test.ts (142 tests | 142 skipped) 30052ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/external-chat-wait.integration.test.ts > native external-chat response wait
+Error: Hook timed out in 30000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ src/services/native-runtime/external-chat-wait.integration.test.ts:85:3
+     83|   let db: ReturnType<typeof createDb>;
+     84|
+     85|   beforeAll(async () => {
+       |   ^
+     86|     if (externalTestDatabaseUrl) {
+     87|       db = createDb(externalTestDatabaseUrl);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  142 skipped (142)
+   Start at  10:28:57
+   Duration  70.89s (transform 26.83s, setup 228ms, import 40.12s, tests 30.05s, environment 0ms)
+

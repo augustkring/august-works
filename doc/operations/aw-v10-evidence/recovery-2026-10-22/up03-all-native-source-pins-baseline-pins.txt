@@ -1,0 +1,2 @@
+1e6418ce2e545beaf041d4c9293e7960e75c9bd43f75c044f9060064819d7cdd  server/src/services/authorization.ts
+8f01d5ede09397bf0670fa242cac215e691183dbe2142b2241f52e157b501595  server/src/__tests__/foundation-read-source-authority.integration.test.ts

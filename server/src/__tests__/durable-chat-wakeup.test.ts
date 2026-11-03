@@ -27,6 +27,7 @@ import {
   toolConnections,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import {
   authorizeFailedChatRunRetryWake,
@@ -51,6 +52,7 @@ describe("durable inbound chat scheduler receipts", () => {
   let db: ReturnType<typeof createDb>;
   const liveRunIds = new Set<string>();
   const unregisterAuthorities: Array<() => void> = [];
+  let restoreApiUrl: (() => void) | null = null;
   const execute = vi.fn<ServerAdapterModule["execute"]>(async (input) => {
     const issueId = String(input.context.issueId);
     await db.insert(issueComments).values({
@@ -72,6 +74,7 @@ describe("durable inbound chat scheduler receipts", () => {
     };
   });
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     temporary = await startEmbeddedPostgresTestDatabase(
       "chat-wakeup-receipts-",
     );
@@ -95,6 +98,7 @@ describe("durable inbound chat scheduler receipts", () => {
   });
   afterAll(async () => {
     unregisterServerAdapter("durable_chat_retry_test");
+    restoreApiUrl?.();
     await temporary.cleanup();
   });
 
@@ -110,6 +114,7 @@ describe("durable inbound chat scheduler receipts", () => {
       defaultResponsibleUserId: "board-user",
       requireBoardApprovalForNewAgents: false,
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "board-user", "owner");
     await db.insert(agents).values({
       id: agentId,
       companyId,

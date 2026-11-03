@@ -1,0 +1,12 @@
+bdf16a941b22a13925136ac7eeed8d75541e2697a8c70ed46b2267ea132b5e8f  doc/operations/service-health/qualification-2026-10-28/README.md
+eb5385ecd90ae85cde7e010349a9ee6852d8fb8f1d759e131a39a527590ed2c1  doc/operations/service-health/qualification-2026-10-28/source-pins.json
+89a4e5f29af023abab415d30e49ba7c42edf75c8573490dfccb52081498dbda2  doc/operations/service-health/qualification-2026-10-28/server-test.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/service-health/qualification-2026-10-28/server-test.exit
+39785e3a5693a63f9249680655136430ec72d270d030a1d6f04eeb931a2add8f  doc/operations/service-health/qualification-2026-10-28/ui-test.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/service-health/qualification-2026-10-28/ui-test.exit
+c47f06f0d0dffb55e4f3dadec85e6a00b3fff0ab7f926f19030fef28062d9fd5  doc/operations/service-health/qualification-2026-10-28/shared-typecheck.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/service-health/qualification-2026-10-28/shared-typecheck.exit
+95d09526415f43fb0567543e66baf52e473a4f2dedb40ab03dc04279fd41a946  doc/operations/service-health/qualification-2026-10-28/ui-typecheck.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/service-health/qualification-2026-10-28/ui-typecheck.exit
+f0598685172bdaf2c0bef2b00e1f1c15a68a16356817004b13632c2ab6192f70  doc/operations/service-health/qualification-2026-10-28/token-gates.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/service-health/qualification-2026-10-28/token-gates.exit

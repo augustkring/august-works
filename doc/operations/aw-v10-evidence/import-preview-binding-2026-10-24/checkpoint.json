@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-10-24T20:56:45.643470+00:00",
+  "implementationCommit": "334ed5822",
+  "requirements": [
+    "CE-08",
+    "V10-021",
+    "V10-022"
+  ],
+  "status": "in_progress",
+  "checks": {
+    "import-preview-shared": {
+      "exit": 0,
+      "log": "import-preview-shared.log"
+    },
+    "import-preview-native": {
+      "exit": 1,
+      "log": "import-preview-native.log"
+    },
+    "import-preview-rejection": {
+      "exit": 0,
+      "log": "import-preview-rejection.log"
+    },
+    "import-preview-checked": {
+      "exit": 0,
+      "log": "import-preview-checked.log"
+    },
+    "workspace-typecheck-2026-10-24": {
+      "exit": 0,
+      "log": "workspace-typecheck-2026-10-24.log"
+    }
+  },
+  "observations": [
+    "Original native preview hashes canonical normalized resolved file bytes. App passes that expected source fingerprint through JSON, ZIP and chunked-transfer import meta. Native owner rejects changed source before domain effects; hash is consistency metadata, not source permission or complete-input proof. Legacy non-UI API requests without fingerprint remain compatible, not qualified as confirmed-preview imports.",
+    "A native typed error is the sole pre-effect proof accepted by original route to release/reject instead of treating ordinary post-invocation exceptions as unknown. Durable fixed safe error category guides a fresh preview. No generic error-message/code inference establishes non-application.",
+    "Final103/103 across5 suites includes actual inline import/physical child SIGKILL, changed files at unchanged mocked GitHub URL with zero actual Agent creations and unchanged actual target company, native original route/transfer controls, and UI fingerprint submission. Remote GitHub transport is controlled; this is not hosted/provider source qualification. First102-case run had one stale new test response-field assertion; separate corrected rejection1/1 and final103/103 retained.",
+    "Full workspace typecheck exit0 is an actual checkpoint during this slice, before subsequent responsibility/Help completion. It is not the final V10 workspace gate.",
+    "Per-effect checkpoint/ID mapping, preview-plan/selection confirmation, immutable remote commit identity, all-effect current authority, cancellation/reconciliation and complete V10/CE-08 remain open. No PR-ready, merge, deployment or release claim."
+  ]
+}

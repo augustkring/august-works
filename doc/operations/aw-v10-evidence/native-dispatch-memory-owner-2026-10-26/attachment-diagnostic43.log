@@ -1,0 +1,49 @@
+Copied and verified source files 120
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+attachment stage checks {
+  event: true,
+  attempt: true,
+  inputs: true,
+  baseDigest: false,
+  captureDigest: false,
+  stageDigest: false,
+  snapshotDigest: true,
+  assetRow: true,
+  taskCanonical: true,
+  capturesCanonical: true
+}
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 5688ms
+     × qualifies only the current PG attachment bytes staged by executor admission 1466ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_attachment_stage_rejected
+ ❯ src/services/native-runtime/native-session-executor.ts:7615:11
+    7613|     // Keep only our finite control errors; never propagate raw DB dia…
+    7614|     const message = error instanceof Error ? error.message : "";
+    7615|     throw new Error([
+       |           ^
+    7616|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7617|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7415:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9665:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9580:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9572:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8552:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:348:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:42:03
+   Duration  19.66s (transform 10.07s, setup 94ms, import 13.72s, tests 5.69s, environment 0ms)
+

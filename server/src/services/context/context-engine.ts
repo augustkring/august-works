@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, is, sql } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import { issues } from "@paperclipai/db";
 import {
@@ -23,7 +24,8 @@ import {
   resolveEvidenceAuthority,
 } from "./context-authority.js";
 import { fitEvidenceToBudget } from "./context-budget.js";
-import { contextManifestService } from "./context-manifest.js";
+import { contextManifestService, type DelegatedContextExecutionBindingInput } from "./context-manifest.js";
+import type { NativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
 import {
   connectedKnowledgeContextProvider,
   createConnectedKnowledgeRegistry,
@@ -39,9 +41,35 @@ import { retrieveEligibleMemory } from "../memory/memory-retrieval.js";
 import { cognitiveContextProvider } from "../memory/cognitive-context.js";
 import { derivedMemoryContextProvider } from "../memory/derived-context.js";
 import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import { authorizationService, isActiveNativeDelegatedContextSource, type AuthorizationActor, type NativeContextInspectionOwner,
+  type NativeDelegatedContextSource } from "../authorization.js";
+import { cognitiveMemoryActor } from "../memory/cognitive-memory.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
 export const DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS = 900;
+const CONTEXT_FINALIZATION_RESERVE_MS = 350;
+const MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS = 8_000;
+/** The retained multi-Run source graph takes about 5s across provider and
+ * final owner review. Native bootstraps use the existing 8s review envelope;
+ * generic Context and shorter caller deadlines retain their own limits. */
+export const NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS = MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS;
+export function contextTotalDeadlineMs(requestedDeadlineMs?: number, nativeBootstrap = false): number {
+  const requested = requestedDeadlineMs ?? (nativeBootstrap
+    ? NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS : DEFAULT_CONTEXT_TOTAL_DEADLINE_MS);
+  if (!Number.isFinite(requested) || requested <= 0 || requested > 30_000)
+    throw unprocessable("Context total deadline must be between 1 and 30000 ms");
+  return nativeBootstrap ? Math.min(requested, NATIVE_CONTEXT_BOOTSTRAP_TOTAL_DEADLINE_MS) : requested;
+}
+export function contextMemoryProviderTimeoutMs(totalDeadlineMs: number): number {
+  return Math.min(MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS,
+    Math.max(0, totalDeadlineMs - CONTEXT_FINALIZATION_RESERVE_MS));
+}
+export function contextTaskProviderTimeoutMs(totalDeadlineMs: number, nativeBootstrap = false): number {
+  return nativeBootstrap
+    ? Math.min(MAX_CONTEXT_MEMORY_PROVIDER_TIMEOUT_MS,
+      Math.max(0, totalDeadlineMs - CONTEXT_FINALIZATION_RESERVE_MS))
+    : DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS;
+}
 
 export const DEFAULT_CONTEXT_BUDGET: ContextBudget = {
   maxItems: 24,
@@ -89,6 +117,8 @@ export interface AssembleContextInput {
   responsibleUserId?: string | null;
   enforceResponsibleUserIntersection?: boolean;
   runId?: string | null;
+  /** Server-only exact cross-company execution binding; never accepted from HTTP input. */
+  delegatedExecution?: DelegatedContextExecutionBindingInput;
   issueId?: string | null;
   projectId?: string | null;
   subjectRefs?: string[];
@@ -102,12 +132,18 @@ export interface AssembleContextInput {
   budget?: ContextBudget;
   authorityPolicy?: ContextAuthorityPolicy;
   totalDeadlineMs?: number;
+  /** Set only by the read-only human inspection entry point. */
+  authorizationActor?: AuthorizationActor;
+  /** Native read-scope capability; server-created only and valid in one callback. */
+  authorizationDecision?: NativeContextInspectionOwner["decide"];
 }
 
 export interface ContextProviderInput {
   request: AssembleContextInput;
   signal: AbortSignal;
   deadlineAt: number;
+  /** The provider's own deadline, bounded by the total Context deadline. */
+  providerDeadlineAt: number;
 }
 
 export interface ContextProviderResult {
@@ -131,6 +167,17 @@ export interface ContextAssemblyResult {
   packet: ContextPacket;
   decisions: ContextAuthorityDecision[];
   markdown: string;
+  inspection?: { policySnapshotHash: string; sourceSnapshotHash: string };
+  /** Additional evidence inspected for a bounded decision such as readiness,
+   * kept separate from the normal Context packet budget. */
+  inspectionEvidence?: EvidenceItem[];
+  /** Internal native-bootstrap token; never included in serialized Context packets. */
+  nativeBootstrapWitness?: NativeBootstrapContextWitness;
+}
+
+export interface ContextInspectionHooks<T> {
+  addEvidence?: (db: Db, authority: NativeContextInspectionOwner) => Promise<EvidenceItem[]>;
+  complete?: (assembly: ContextAssemblyResult, db: Db) => Promise<T>;
 }
 
 class ProviderDeadlineError extends Error {
@@ -195,9 +242,9 @@ export async function runContextProviders(
   providers: ContextProvider[],
   request: AssembleContextInput,
   deadlineAt: number,
+  transactionScoped = false,
 ): Promise<ContextProviderRunResult> {
-  const outcomes = await Promise.all(
-    providers.map(async (provider) => {
+  const runOne = async (provider: ContextProvider) => {
       const timeoutMs = Math.min(
         provider.timeoutMs ?? DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS,
         Math.max(0, deadlineAt - Date.now()),
@@ -205,7 +252,8 @@ export async function runContextProviders(
       try {
         const result = await withProviderDeadline(
           provider.key,
-          (signal) => provider.retrieve({ request, signal, deadlineAt }),
+          (signal) => provider.retrieve({ request, signal, deadlineAt,
+            providerDeadlineAt: Math.min(deadlineAt, Date.now() + timeoutMs) }),
           timeoutMs,
         );
         const evidence = evidenceItemsSchema.parse(result.evidence);
@@ -242,8 +290,12 @@ export async function runContextProviders(
         };
         return { evidence: [] as EvidenceItem[], warnings: [warning] };
       }
-    }),
-  );
+    };
+  const outcomes: Array<{ evidence: EvidenceItem[]; warnings: ContextProviderWarning[] }> = [];
+  if (request.authorizationActor?.type === "board" || transactionScoped) {
+    // Reads sharing one transaction connection must not overlap savepoints.
+    for (const provider of providers) outcomes.push(await runOne(provider));
+  } else outcomes.push(...await Promise.all(providers.map(runOne)));
   return {
     evidence: outcomes.flatMap((outcome) => outcome.evidence),
     warnings: outcomes.flatMap((outcome) => outcome.warnings),
@@ -361,10 +413,10 @@ function foundationProvider(db: Db): ContextProvider {
   return {
     key: "foundation",
     requirement: "optional",
-    async retrieve({ request }) {
-      const decision = await access.decide({
+    async retrieve({ request, signal, providerDeadlineAt }) {
+      const decision = await (request.authorizationDecision ?? access.decide)({
         enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
-        actor: {
+        actor: request.authorizationActor ?? {
           type: "agent",
           agentId: request.agentId,
           companyId: request.companyId,
@@ -389,7 +441,7 @@ function foundationProvider(db: Db): ContextProvider {
         query: request.query.slice(0, 500),
         limit: 12,
         scope: "approved",
-      },{type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},"task");
+      },request.authorizationActor ?? {type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},"task");
       const observedAt = new Date().toISOString();
       return {
         evidence: rows.map((row) => ({
@@ -447,12 +499,15 @@ function memoryValidUntil(
   ).toISOString();
 }
 
-function memoryContextProvider(db: Db): ContextProvider {
+function memoryContextProvider(db: Db, totalDeadlineMs: number): ContextProvider {
   const settings = instanceSettingsService(db);
   return {
     key: "memory",
     requirement: "optional",
-    async retrieve({ request }) {
+    // Source qualification has its own bounded slice; reserve time for
+    // manifest finalization inside this invocation's fixed total deadline.
+    timeoutMs: contextMemoryProviderTimeoutMs(totalDeadlineMs),
+    async retrieve({ request, signal, providerDeadlineAt }) {
       const experimental = await settings.getExperimental();
       const allowShared = experimental.enableCollectiveMemoryV1 === true;
       const allowPrivate = experimental.enablePrivateAgentMemoryV1 === true;
@@ -461,6 +516,7 @@ function memoryContextProvider(db: Db): ContextProvider {
       const ranked = await retrieveEligibleMemory(db, {
         companyId: request.companyId,
         agentId: request.agentId,
+        ...(request.authorizationActor ? { actor: cognitiveMemoryActor(request.authorizationActor) } : {}),
         runId: request.runId ?? null,
         responsibleUserId: request.responsibleUserId ?? null,
         projectId: request.projectId ?? null,
@@ -471,6 +527,8 @@ function memoryContextProvider(db: Db): ContextProvider {
         asOf: request.asOf ?? new Date(),
         topK: 24,
         sensitivityCeiling: request.sensitivityCeiling ?? "internal",
+        signal,
+        deadlineAt: providerDeadlineAt,
       });
 
       return {
@@ -518,21 +576,36 @@ function memoryContextProvider(db: Db): ContextProvider {
   };
 }
 
-function taskProvider(db: Db): ContextProvider {
+function taskProvider(db: Db, timeoutMs = DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS): ContextProvider {
   return {
     key: "task",
     requirement: "mandatory",
-    async retrieve({ request }) {
+    timeoutMs,
+    async retrieve({ request, signal, providerDeadlineAt }) {
       const issueId = request.issueId;
       if (!issueId) return { evidence: [] };
 
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        // Native retained-source privacy predicates do not benefit from JIT.
+        await txDb.execute(sql`set local jit='off'`);
+        const refreshStatementBudget = async () => {
+          if (signal.aborted || providerDeadlineAt <= Date.now())
+            throw signal.reason ?? new ProviderDeadlineError("task");
+          const remainingMs = Math.min(8_000, providerDeadlineAt - Date.now());
+          await txDb.execute(sql`select set_config('statement_timeout',
+            case when current_setting('statement_timeout')='0' then ${remainingMs}::text||'ms'
+             else least(${remainingMs}::numeric,extract(epoch from current_setting('statement_timeout')::interval)*1000)::bigint::text||'ms' end,true)`);
+          if (signal.aborted || providerDeadlineAt <= Date.now())
+            throw signal.reason ?? new ProviderDeadlineError("task");
+        };
+        await refreshStatementBudget();
         const access = accessService(txDb);
 
         // Read only the minimum authorization shape before touching task prose.
         // This keeps sensitive title/description content outside the retrieval
         // universe until issue:read has succeeded for this principal.
+        await refreshStatementBudget();
         const issueScope = await txDb
           .select({
             id: issues.id,
@@ -549,16 +622,15 @@ function taskProvider(db: Db): ContextProvider {
           .then((rows) => rows[0] ?? null);
         if (!issueScope) throw notFound("Context task not found");
 
-        const decision = await access.decide({
+        const sourceActor = request.authorizationActor ?? {
+          type: "agent" as const, source: "agent_jwt" as const, companyId: request.companyId,
+          agentId: request.agentId, runId: request.runId ?? null,
+          onBehalfOfUserId: request.responsibleUserId ?? null,
+        };
+        await refreshStatementBudget();
+        const decision = await (request.authorizationDecision ?? access.decide)({
         enforceResponsibleUserIntersection: request.enforceResponsibleUserIntersection,
-          actor: {
-            type: "agent",
-            agentId: request.agentId,
-            companyId: request.companyId,
-            runId: request.runId ?? null,
-            onBehalfOfUserId: request.responsibleUserId ?? null,
-            source: "agent_jwt",
-          },
+          actor: sourceActor,
           action: "issue:read",
           resource: {
             type: "issue",
@@ -580,7 +652,9 @@ function taskProvider(db: Db): ContextProvider {
           });
         }
 
-        await assertAnalyticalContextPayloadAccess(txDb,request.companyId,{type:"agent",source:"agent_jwt",companyId:request.companyId,agentId:request.agentId,runId:request.runId??undefined,onBehalfOfUserId:request.responsibleUserId??null},{issueId:issueScope.id},"task");
+        await assertAnalyticalContextPayloadAccess(txDb,request.companyId,sourceActor,{issueId:issueScope.id},"task",
+          { privacyLockMode: "read", signal, deadlineAt: providerDeadlineAt });
+        await refreshStatementBudget();
         const issue = await txDb
           .select({
             id: issues.id,
@@ -596,6 +670,8 @@ function taskProvider(db: Db): ContextProvider {
           .where(and(eq(issues.companyId, request.companyId), eq(issues.id, issueScope.id)))
           .then((rows) => rows[0] ?? null);
         if (!issue) throw notFound("Context task not found");
+
+        await refreshStatementBudget();
 
         const updatedAt = issue.updatedAt.toISOString();
         return {
@@ -662,32 +738,36 @@ export function defaultConnectedKnowledgeContextProviders(
 }
 
 export function contextEngineService(db: Db, options: { providers?: ContextProvider[] } = {}) {
-  const manifests = contextManifestService(db);
-  const access = accessService(db);
-
-  return {
-    assemble: async (rawInput: AssembleContextInput): Promise<ContextAssemblyResult> => {
+  const assemble = async (rawInput: AssembleContextInput, inspectionActor?: AuthorizationActor,
+    activeDb: Db = db, inspectionAuthority?: NativeContextInspectionOwner,
+    inspectionHooks?: ContextInspectionHooks<unknown>, delegatedSource?: NativeDelegatedContextSource,
+    nativeBootstrap = false): Promise<ContextAssemblyResult> => {
+      const manifests = contextManifestService(activeDb);
+      const access = accessService(activeDb);
       if (rawInput.sourceScope !== undefined && rawInput.sourceScope !== "task_only")
         throw unprocessable("Unknown context source scope");
       const query = rawInput.query.trim();
       if (!query) throw unprocessable("Context query is required");
-      const totalDeadlineMs = rawInput.totalDeadlineMs ?? DEFAULT_CONTEXT_TOTAL_DEADLINE_MS;
-      if (!Number.isFinite(totalDeadlineMs) || totalDeadlineMs <= 0 || totalDeadlineMs > 30_000) {
-        throw unprocessable("Context total deadline must be between 1 and 30000 ms");
-      }
+      const totalDeadlineMs = contextTotalDeadlineMs(rawInput.totalDeadlineMs, nativeBootstrap);
 
-      const input = { ...rawInput, query };
+      if (delegatedSource && (!isActiveNativeDelegatedContextSource(activeDb, delegatedSource) || inspectionActor ||
+        !rawInput.delegatedExecution || delegatedSource.actor.type !== "agent" ||
+        delegatedSource.actor.companyId !== rawInput.companyId || delegatedSource.actor.agentId !== rawInput.agentId ||
+        delegatedSource.actor.onBehalfOfUserId !== rawInput.responsibleUserId))
+        throw forbidden("Delegated Context providers require their active original authorization owner.");
+      const input = { ...rawInput, query, authorizationActor: delegatedSource?.actor ?? inspectionActor ?? rawInput.authorizationActor,
+        authorizationDecision: delegatedSource?.decide ?? inspectionAuthority?.decide };
+      if (inspectionActor && input.delegatedExecution) throw forbidden("Human Context inspection cannot create delegated runtime provenance");
       const asOf = rawInput.asOf ?? new Date();
       const sensitivityCeiling = rawInput.sensitivityCeiling ?? "internal";
       const budget = rawInput.budget ?? DEFAULT_CONTEXT_BUDGET;
       const authorityPolicy = rawInput.authorityPolicy ?? DEFAULT_CONTEXT_AUTHORITY_POLICY;
       const deadlineAt = Date.now() + totalDeadlineMs;
-
-      const principalDecision = await withContextStageDeadline(
+      const decidePrincipal = () => withContextStageDeadline(
         "authorization",
-        () => access.decide({
+        () => (input.authorizationDecision ?? access.decide)({
           enforceResponsibleUserIntersection: input.enforceResponsibleUserIntersection,
-          actor: {
+          actor: input.authorizationActor ?? {
             type: "agent",
             agentId: input.agentId,
             companyId: input.companyId,
@@ -700,22 +780,26 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         }),
         deadlineAt,
       );
+      const principalDecision = await decidePrincipal();
       if (!principalDecision.allowed) {
         throw forbidden(principalDecision.explanation, {
           code: "permission_denied",
           reason: principalDecision.reason,
         });
       }
-
       const providers = options.providers ?? [
-        ...(input.issueId ? [taskProvider(db)] : []),
+        ...(input.issueId ? [taskProvider(activeDb, contextTaskProviderTimeoutMs(totalDeadlineMs, nativeBootstrap))] : []),
         ...(input.sourceScope === "task_only" ? [] : [
-          ...(input.includeFoundation === false ? [] : [foundationProvider(db)]),
-          memoryContextProvider(db), cognitiveContextProvider(db), derivedMemoryContextProvider(db),
-          ...defaultConnectedKnowledgeContextProviders(db, input),
+          ...(input.includeFoundation === false ? [] : [foundationProvider(activeDb)]),
+          memoryContextProvider(activeDb, totalDeadlineMs), cognitiveContextProvider(activeDb), derivedMemoryContextProvider(activeDb),
+          ...(!inspectionActor ? defaultConnectedKnowledgeContextProviders(activeDb, input) : []),
         ]),
       ];
-      const providerResult = await runContextProviders(providers, input, deadlineAt);
+      if (inspectionActor && options.providers)
+        throw forbidden("Human Context inspection cannot use an unscoped provider override");
+      const providerResult = await runContextProviders(providers, input, deadlineAt, is(activeDb, PgTransaction));
+      if (inspectionActor && input.issueId) providerResult.warnings.push({ providerKey: "connected_knowledge",
+        code: "source_unavailable", message: "External Context was withheld because no accountable execution binds this Human inspection." });
       const eligibility = filterEligibleEvidence(dedupeEvidence(providerResult.evidence), {
         asOf,
         sensitivityCeiling,
@@ -724,6 +808,15 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         resolveEvidenceAuthority(eligibility.eligible, authorityPolicy),
       );
       const budgeted = fitEvidenceToBudget(ordered, budget);
+      let inspectionEvidence: EvidenceItem[] = [];
+      if (inspectionActor && inspectionHooks?.addEvidence) {
+        if (!inspectionAuthority) throw forbidden("Human Context inspection authority is unavailable");
+        inspectionEvidence = await inspectionHooks.addEvidence(activeDb, inspectionAuthority);
+      }
+      const inspectedExtra = inspectionEvidence.length
+        ? filterEligibleEvidence(dedupeEvidence(inspectionEvidence), { asOf, sensitivityCeiling }).eligible
+        : [];
+      const inspectedExtraDecisions = resolveEvidenceAuthority(inspectedExtra, authorityPolicy);
 
       const remainingMs = deadlineAt - Date.now();
       if (remainingMs <= 0) {
@@ -733,14 +826,14 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         });
       }
 
-      const manifestResult = await withContextStageDeadline(
-        "context_manifest",
-        () => manifests.create({
+      const contextSourceInput = {
           companyId: input.companyId,
           runId: input.runId ?? null,
           agentId: input.agentId,
           issueId: input.issueId ?? null,
           responsibleUserId: input.responsibleUserId ?? null,
+          ...(input.authorizationActor ? { authorizationActor: input.authorizationActor } : {}),
+          ...(input.delegatedExecution ? { delegatedExecution: input.delegatedExecution } : {}),
           projectId: input.projectId ?? null,
           query: input.query,
           policySnapshot: {
@@ -757,7 +850,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
             subjectRefs: [...new Set(input.subjectRefs ?? [])].sort(),
             asOf: asOf.toISOString(),
           },
-          selected: budgeted.selected.map((decision) => {
+          selected: [...budgeted.selected, ...inspectedExtraDecisions].map((decision) => {
             const rawScore = decision.evidence.metadata.retrievalScore;
             const retrievalScore =
               typeof rawScore === "number" && Number.isFinite(rawScore)
@@ -765,19 +858,28 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
                 : null;
             return { decision, retrievalScore };
           }),
-        }),
-        deadlineAt,
-      );
+        };
+      const bootstrapPacket = nativeBootstrap ? packetFromDecisions(budgeted.selected, {
+        sensitivityCeiling, asOf, warnings: providerResult.warnings, manifest: null,
+        selectedEstimatedTokens: budgeted.selectedEstimatedTokens,
+      }) : null;
+      const bootstrapMarkdown = bootstrapPacket ? serializeContextPacket(bootstrapPacket) : null;
+      const manifestResult = inspectionActor ? null : await withContextStageDeadline(
+        "context_manifest", signal => manifests.create(contextSourceInput,
+          nativeBootstrap && bootstrapMarkdown !== null ? { renderedMarkdown: bootstrapMarkdown } : undefined,
+          { signal, deadlineAt }), deadlineAt);
+      const inspectionResult = inspectionActor ? await withContextStageDeadline(
+        "context_inspection", () => manifests.inspectReadOnly(contextSourceInput, inspectionActor, inspectionAuthority!), deadlineAt) : null;
 
       const packet = packetFromDecisions(budgeted.selected, {
         sensitivityCeiling,
         asOf,
         warnings: providerResult.warnings,
-        manifest: {
+        manifest: manifestResult ? {
           id: manifestResult.manifest.id,
           queryHash: manifestResult.manifest.queryHash,
           policySnapshotHash: manifestResult.manifest.policySnapshotHash,
-        },
+        } : null,
         selectedEstimatedTokens: budgeted.selectedEstimatedTokens,
       });
 
@@ -790,10 +892,10 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
           ]),
       );
       const auditRemainingMs = deadlineAt - Date.now();
-      if (auditRemainingMs > 0) {
+      if (manifestResult && auditRemainingMs > 0) {
         await withProviderDeadline(
           "context_audit",
-          () => logActivity(db, {
+          () => logActivity(activeDb, {
             companyId: input.companyId,
             actorType: "agent",
             actorId: input.agentId,
@@ -820,11 +922,56 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         ).catch(() => undefined);
       }
 
-      return {
+      const renderedMarkdown = serializeContextPacket(packet);
+      if (nativeBootstrap && bootstrapMarkdown !== renderedMarkdown)
+        throw forbidden("Native bootstrap Context rendering changed after its source pin.");
+      const result: ContextAssemblyResult = {
         packet,
         decisions: budgeted.selected,
-        markdown: serializeContextPacket(packet),
+        markdown: renderedMarkdown,
+        ...(inspectionResult ? { inspection: inspectionResult } : {}),
+        ...(inspectionEvidence.length ? { inspectionEvidence: inspectedExtra } : {}),
+        ...(manifestResult?.nativeBootstrapWitness ? { nativeBootstrapWitness: manifestResult.nativeBootstrapWitness } : {}),
       };
+      if (inspectionActor && inspectionHooks?.complete) {
+        if (!inspectionAuthority || !inspectionResult) throw forbidden("Human Context inspection authority is unavailable");
+        await inspectionHooks.complete(result, activeDb);
+        // Re-read every exact source after assessment persistence. Native
+        // source locks remain held until the enclosing owner callback exits.
+        const current = await manifests.inspectReadOnly(contextSourceInput, inspectionActor, inspectionAuthority);
+        if (current.policySnapshotHash !== inspectionResult.policySnapshotHash ||
+          current.sourceSnapshotHash !== inspectionResult.sourceSnapshotHash)
+          throw forbidden("Context evidence changed before readiness was recorded");
+      }
+      return result;
+  };
+  return {
+    assemble: (rawInput: AssembleContextInput) => assemble(rawInput),
+    /** Server-only entry for a live original delegated-source callback. */
+    assembleDelegated: (rawInput: AssembleContextInput, source: NativeDelegatedContextSource) =>
+      assemble(rawInput, undefined, db, undefined, undefined, source),
+    assembleNativeBootstrap: async (rawInput: AssembleContextInput): Promise<ContextAssemblyResult> => {
+      return assemble(rawInput, undefined, db, undefined, undefined, undefined, true);
     },
+    inspectReadOnly: async <T = ContextAssemblyResult>(rawInput: AssembleContextInput, actor: AuthorizationActor,
+      hooks?: ContextInspectionHooks<T>): Promise<T> => db.transaction(async rawTx => {
+      const txDb = rawTx as unknown as Db;
+      if (actor.type !== "board") throw forbidden("Read-only Context inspection requires its original Human actor");
+      return authorizationService(txDb).withReadContextInspection(rawInput.companyId, rawInput.agentId,
+        rawInput.issueId ? [rawInput.issueId] : [], rawInput.projectId ? [rawInput.projectId] : [], actor,
+        async authority => {
+          let completion: T | undefined;
+          let didComplete = false;
+          const internalHooks: ContextInspectionHooks<unknown> | undefined = hooks ? {
+            addEvidence: hooks.addEvidence,
+            complete: hooks.complete ? async (assembly, sourceDb) => {
+              completion = await hooks.complete!(assembly, sourceDb);
+              didComplete = true;
+            } : undefined,
+          } : undefined;
+          const assembly = await assemble(rawInput, actor, txDb, authority, internalHooks);
+          return didComplete ? completion as T : assembly as T;
+        });
+    }),
   };
 }

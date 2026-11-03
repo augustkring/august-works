@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/routine-responsibility-attention.integration.test.ts (1 test | 1 failed) 3627ms
+     × shows a source-safe owner action only to a current manager and removes it after native responsibility recovery 41ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/routine-responsibility-attention.integration.test.ts > current native routine responsibility attention > shows a source-safe owner action only to a current manager and removes it after native responsibility recovery
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/routine-responsibility-attention.integration.test.ts:35:32
+     33|       { type: "board", source: "session", userId }, companyId, new Abo…
+     34|     const attention = await read(owner);
+     35|     expect(attention.needsYou).toHaveLength(1);
+       |                                ^
+     36|     expect(experienceCardSchema.safeParse(attention.needsYou[0]).succe…
+     37|     expect(JSON.stringify(attention)).not.toContain(canary);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  20:54:55
+   Duration  7.53s (transform 2.29s, setup 70ms, import 3.72s, tests 3.63s, environment 0ms)
+

@@ -1,0 +1,26 @@
+{
+  "scope": "Independent full-file CI regression suites; each has its own exact source snapshot. Not aggregate final-head/release acceptance.",
+  "cohorts": [
+    {
+      "name": "heartbeat-comment-batching-r2-20261029",
+      "passed": 29
+    },
+    {
+      "name": "heartbeat-liveness-full-r1-20261029",
+      "passed": 15
+    },
+    {
+      "name": "durable-chat-full-r1-20261029",
+      "passed": 41
+    },
+    {
+      "name": "native-session-resumption-full-r3-20261029",
+      "passed": 13
+    },
+    {
+      "name": "tool-authority-full-r3-20261029",
+      "passed": 45
+    }
+  ],
+  "changes": "Current Human authority and API URL fixtures, preserving immutable run admissions and exact original completion-contract assertions. Production guards remain enforced."
+}

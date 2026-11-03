@@ -1,0 +1,9 @@
+UP-13 focused monitor OS-process recovery test summary (not raw stdout)
+
+Test: `server/src/__tests__/issue-monitor-scheduler.test.ts` — “recovers a direct-writer monitor deadline after OS restart and dispatches one effect”.
+Command: `pnpm-9 --dir server exec vitest run src/__tests__/issue-monitor-scheduler.test.ts -t "recovers a direct-writer monitor deadline after OS restart"`.
+Toolchain: pinned `/workspace/v10-preparation/pnpm-9` (pnpm 9.15.4) with `/workspace/v10-preparation/v10-pg-tests.lock`.
+Observed tool output: `Test Files 1 passed (1); Tests 1 passed | 10 skipped (11); Duration 31.84s`.
+Exit: 0. Captured across functions.exec session 10406.
+
+The test uses the existing `registerScheduledWork` fixture with `heartbeatService.tickIssueMonitors`: a real child restores its saved deadline; a direct SQL writer changes it; the child reconciles, is SIGKILLed; two fresh child processes restore the due persisted monitor and only one wakeup/heartbeat effect is recorded. This is an original-owner software fixture, not a full index.ts process restart or provider qualification.

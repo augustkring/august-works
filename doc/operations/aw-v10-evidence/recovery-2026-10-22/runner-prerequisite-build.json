@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-22",
+  "command": "GOMEMLIMIT=4GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=4096 CARGO_BUILD_JOBS=2 CARGO_NET_OFFLINE=true pnpm --filter @paperclipai/paperclip-runner build",
+  "result": "PASS",
+  "rust": "1.97.1",
+  "observations": [
+    "Normal protocol/eval-kernel/TypeScript prerequisites ran",
+    "Actual release Rust compile completed in 19m35s; existing warnings retained",
+    "Replay golden snapshots and parity summaries are current"
+  ],
+  "log": {
+    "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/recovery-runner-build-1.log.txt",
+    "sha256": "29d4ce18b83b46e2348d3f0016c5f72c860f315328a747b407198259b487bf1f",
+    "sizeBytes": 15688
+  },
+  "limitations": [
+    "Runner source unchanged from branch base; no whole-graph upfront source pin claimed",
+    "Prerequisite build is not physical workload, browser, live model or native qualification",
+    "Whole-repository required checks remain pending"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

@@ -180,6 +180,13 @@ function createTransportBackedNativeSessionBackend(
       environment: options.environment,
       workingDirectoryAuthority: options.workingDirectoryAuthority,
       driverIdentity,
+      // Only the server-managed OpenCode model profile sends a complete
+      // source-receipted Native envelope. Preserve those exact bytes through
+      // the Codex-compatible Runnerd facade without changing task-mode tool or
+      // completion-result semantics.
+      verbatimNativeEnvelope: input.provider.kind === "opencode" && Boolean(
+        (options.environment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim(),
+      ),
       capabilities: isCodex
         ? {}
         : { steering: false, goals: false, threadLineage: false },

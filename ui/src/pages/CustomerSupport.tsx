@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { customerSupportHistorySchema } from "@paperclipai/shared";
+import { customerSupportHistorySchema, FEEDBACK_CONTACTS } from "@paperclipai/shared";
 import { api } from "../api/client";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useCompany } from "../context/CompanyContext";
@@ -221,7 +221,7 @@ export function CustomerSupportHistory({
         </Link>
       </div>
       <a
-        href="mailto:support@blentera.com"
+        href={FEEDBACK_CONTACTS.support}
         data-support-focus="contact"
         className="inline-flex min-h-11 items-center underline"
       >

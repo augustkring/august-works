@@ -396,7 +396,7 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
     return false;
   }
 
-  it.each(["mcp-oauth", "mcp-api-key"])("connects Fireflies through %s with vaulted credentials and its stable meeting tools", async (methodKey) => {
+  it.each(["mcp-oauth", "mcp-api-key"])("retains Fireflies %s setup/discovery while refusing unqualified opaque meeting invocation", async (methodKey) => {
     // Keep the real catalog method and governance identity; redirect only its
     // transport URL to the deterministic protocol fixture.
     const method = APP_DEFINITIONS.find((app) => app.slug === "fireflies")!.methods.find((entry) => entry.key === methodKey)!;
@@ -442,10 +442,12 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
         access: { agentIds: [agent!.id] },
       }, { actorType: "user", actorId: "board-user" });
       const gateway = createToolGatewayService(db, { toolActionSigningSecret: "fireflies-test-only-signing-secret" });
+      const beforeOpaqueMeetings = fixture.requestsTo("/mcp").length;
       for (const toolName of names) {
         await expect(gateway.executeTestCall({ companyId: company.id, connectionId: connected.connectionId, agentId: agent!.id, userId: "board-user", toolName, parameters: {} }))
-          .resolves.toMatchObject({ decision: "allowed", result: { data: { structuredContent: { meeting_id: "meeting-1" } } } });
+          .rejects.toMatchObject({ reasonCode: "tool_model_effect_unqualified" });
       }
+      expect(fixture.requestsTo("/mcp")).toHaveLength(beforeOpaqueMeetings);
       const policy = toolAccessPolicyService(db);
       const entry = refreshed.catalog.find((item) => item.toolName === "fireflies_share_meeting")!;
       // Re-authentication must retain both Off and Ask first selections.
@@ -462,8 +464,10 @@ describeEmbeddedPostgres("generic remote MCP connections", () => {
         expect(reconnected.connection.id).toBe(connected.connectionId);
       }
       await service.refreshCatalog(connected.connectionId, { actorType: "user", actorId: "board-user" });
+      const beforeOpaqueCall = fixture.requestsTo("/mcp").length;
       await expect(gateway.executeTestCall({ companyId: company.id, connectionId: connected.connectionId, agentId: agent!.id, userId: "board-user", toolName: "fixture_new_read", parameters: {} }))
-        .resolves.toMatchObject({ decision: "allowed" });
+        .rejects.toMatchObject({ reasonCode: "tool_model_effect_unqualified" });
+      expect(fixture.requestsTo("/mcp")).toHaveLength(beforeOpaqueCall);
       await expect(policy.decide({ companyId: company.id, actor: { actorType: "agent", actorId: agent!.id, agentId: agent!.id }, request: { connectionId: connected.connectionId, catalogEntryId: entry.id, toolName: entry.toolName } }))
         .resolves.toMatchObject({ allowed: false, decision: "require_approval" });
       const offEntry = refreshed.catalog.find((item) => item.toolName === "fireflies_move_meeting")!;

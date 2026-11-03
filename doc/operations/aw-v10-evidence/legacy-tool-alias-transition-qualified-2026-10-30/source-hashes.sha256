@@ -1,0 +1,4 @@
+bb02c816cc9d505f600b0164619c0fbe342abb50783d0fdcd8eca7679aac5ad4  doc/operations/agent-native-tool-alias-compatibility.json
+7beefb4611e1c82f2836ba2ab6a99cc95a4347ffcf68236724b4be4791817237  scripts/check-agent-native-tool-alias-compatibility.mjs
+3bb95fd62ea815422987e93634301b97af87efca739df3ce9d2e69fae261f0e4  scripts/check-agent-native-tool-alias-compatibility.test.mjs
+631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7  package.json

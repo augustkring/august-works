@@ -24,8 +24,15 @@ import {
   issues,
   pluginManagedResources,
   plugins,
+  principalPermissionGrants,
   projects,
+  routineDocuments,
+  routineRevisions,
+  routineRuns,
+  routineTriggers,
+  routines,
 } from "@paperclipai/db";
+import type { PaperclipPluginManifestV1 } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -33,6 +40,8 @@ import {
 import { buildHostServices } from "../services/plugin-host-services.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { routineService } from "../services/routines.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -113,11 +122,17 @@ describeEmbeddedPostgres("plugin orchestration APIs", () => {
     await db.delete(issueAttachments);
     await db.delete(assets);
     await db.delete(approvals);
+    await db.delete(routineRuns);
+    await db.delete(routineTriggers);
+    await db.delete(routineDocuments);
+    await db.delete(routineRevisions);
+    await db.delete(routines);
     await db.delete(issues);
     await db.delete(executionWorkspaces);
     await db.delete(pluginManagedResources);
     await db.delete(projects);
     await db.delete(plugins);
+    await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(agents);
     await db.delete(companies);
@@ -312,18 +327,51 @@ describeEmbeddedPostgres("plugin orchestration APIs", () => {
   });
 
   it("creates plugin operation issues with the generic operation origin", async () => {
-    const { companyId } = await seedCompanyAndAgent();
-    const services = buildHostServices(db, "plugin-record-id", "paperclip.missions", createEventBusStub());
+    const companyId = randomUUID(), pluginId = randomUUID(), userId = randomUUID(), pluginKey = "paperclip.missions";
+    await db.insert(companies).values({ id: companyId, name: "Plugin operation source", issuePrefix: issuePrefix(companyId), defaultResponsibleUserId: userId });
+    const sourceActor = await seedCurrentHumanSourceActor(db, [companyId], userId);
+    const pluginManifest: PaperclipPluginManifestV1 = {
+      id: pluginKey, apiVersion: 1, version: "0.1.0", displayName: "Mission operations", description: "Operation source fixture",
+      author: "Paperclip", categories: ["automation"], capabilities: ["agents.managed", "projects.managed", "routines.managed"],
+      entrypoints: { worker: "./dist/worker.js" },
+      agents: [{ agentKey: "mission-agent", displayName: "Mission agent", role: "engineer", adapterType: "process", adapterConfig: { command: "true" } }],
+      projects: [{ projectKey: "mission-project", displayName: "Mission project", description: "Operation owner", status: "in_progress" }],
+      routines: [{
+        routineKey: "mission-operation", title: "Mission operation", description: "Produces operation-bound Tasks",
+        assigneeRef: { resourceKind: "agent", resourceKey: "mission-agent" },
+        projectRef: { resourceKind: "project", resourceKey: "mission-project" },
+        status: "active", priority: "medium", concurrencyPolicy: "coalesce_if_active", catchUpPolicy: "skip_missed",
+        activityGatePolicy: "require_external_activity", activityGateScope: "project",
+        triggers: [{ kind: "schedule", label: "Scheduled operation", cronExpression: "0 3 * * *", timezone: "UTC" }],
+        issueTemplate: { surfaceVisibility: "plugin_operation", originId: "mission-alpha:operation-1" },
+      }],
+    };
+    await db.insert(plugins).values({ id: pluginId, pluginKey, packageName: "@paperclipai/plugin-missions-test", version: pluginManifest.version,
+      apiVersion: pluginManifest.apiVersion, categories: pluginManifest.categories, manifestJson: pluginManifest, status: "ready", installOrder: 1 });
+    const services = buildHostServices(db, pluginId, pluginKey, createEventBusStub(), undefined, { manifest: pluginManifest });
+    await expect(services.issues.create({ companyId, title: "Unbound operation", surfaceVisibility: "plugin_operation",
+      originId: "mission-alpha:operation-1" })).rejects.toMatchObject({ status: 422 });
+    expect(await db.select().from(issues).where(eq(issues.companyId, companyId))).toHaveLength(0);
 
-    const issue = await services.issues.create({
-      companyId,
-      title: "Background operation",
-      surfaceVisibility: "plugin_operation",
+    const canonicalProject = await createCanonicalHumanProject(db, companyId, sourceActor, "Mission project");
+    await db.insert(pluginManagedResources).values({ companyId, pluginId, pluginKey, resourceKind: "project",
+      resourceKey: "mission-project", resourceId: canonicalProject.id, defaultsJson: {} });
+    const agent = await services.agents.managedReconcile({ companyId, agentKey: "mission-agent" });
+    const project = await services.projects.reconcileManaged({ companyId, projectKey: "mission-project" });
+    const routine = await services.routines.managedReconcile({ companyId, routineKey: "mission-operation" });
+    const run = await routineService(db, { heartbeat: { wakeup: async () => ({ id: randomUUID() }) }, sourceActor })
+      .runRoutine(routine.routineId!, { source: "manual" }, { userId });
+    expect(run.status).toBe("issue_created");
+    const [issue] = await db.select().from(issues).where(eq(issues.id, run.linkedIssueId!));
+    expect(issue).toBeDefined();
+
+    expect(issue).toMatchObject({
+      originKind: "plugin:paperclip.missions:operation",
       originId: "mission-alpha:operation-1",
+      originRunId: run.id,
+      projectId: project.projectId,
+      createdByUserId: userId,
     });
-
-    expect(issue.originKind).toBe("plugin:paperclip.missions:operation");
-    expect(issue.originId).toBe("mission-alpha:operation-1");
   });
 
   it("lets bootstrap-style actions initialize required local folders from an empty root", async () => {

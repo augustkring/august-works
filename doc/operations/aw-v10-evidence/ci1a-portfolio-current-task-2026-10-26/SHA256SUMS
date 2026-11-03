@@ -1,0 +1,12 @@
+749f43d26247cc9780bb7cd32e223e0bc898923dc0912567e0d9e8de69c95627  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/README.md
+f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/binary.path
+dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/binary.sha256
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/exit
+7a800e0788ef2b32ffd191da0bac0552d8c471c5f5e4c515f485aaa008160e37  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/runner.txt
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/snapshot.exit
+75186de64824adf5b9a4d5a9303731fec10b70bdc5eeeaa1827da3fc00846533  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/snapshot.log
+43c9e2afa98ba9670a75da35179c77f214b3b370b6647df10e6ff473f2fab542  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/source-pins.json
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/syntax.exit
+5215532ec1ea165dfefed5a42c697785d6e73da885e38bb635cd790175628e26  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/syntax.log
+9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/test.exit
+7e9d1896507030f9cabc5b3d0f3f15ded1a513fc542f4b14bb3d33239785289a  doc/operations/aw-v10-evidence/ci1a-portfolio-current-task-2026-10-26/vitest.log.gz

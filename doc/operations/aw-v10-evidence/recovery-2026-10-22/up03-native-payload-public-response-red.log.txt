@@ -1,0 +1,419 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[05:48:39] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"e9468eb7-9598-4bc8-b398-da0648d21d01","actorType":"board","actorIdentityHash":"8PJROO4q0hrGaMfj","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"Qfccvr77ycJxhrhc","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":486,"statusCode":200,"responseBytes":2993,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+ ❯ |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts (3 tests | 3 failed) 18890ms
+     × keeps Task list and detail payloads public while retaining their actual DB proof 1654ms
+     × omits Project proofs from list and detail while retaining their actual DB proof 353ms
+     × omits Memory proofs from detail, list and export and preserves arbitrary user metadata 248ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps Task list and detail payloads public while retaining their actual DB proof
+AssertionError: expected { …(100) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:59:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps Task list and detail payloads public while retaining their actual DB proof
+AssertionError: expected { …(100) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "8076616705e642bdc475298a2f0eeb80196b9b3fe80f099191e12c975ac6ef68",
+  "inputs": [],
+  "owner": {
+    "companyId": "e9468eb7-9598-4bc8-b398-da0648d21d01",
+    "contentHash": "db03c0e54a06d82ce4a746cfb6671779753eb765208594a3c70f712f98f03ad8",
+    "id": "978d4322-5b82-41b7-8c94-adcfc9d680d5",
+    "kind": "issue",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:59:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps Task list and detail payloads public while retaining their actual DB proof
+AssertionError: expected { …(86) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:61:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > keeps Task list and detail payloads public while retaining their actual DB proof
+AssertionError: expected { …(86) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "8076616705e642bdc475298a2f0eeb80196b9b3fe80f099191e12c975ac6ef68",
+  "inputs": [],
+  "owner": {
+    "companyId": "e9468eb7-9598-4bc8-b398-da0648d21d01",
+    "contentHash": "db03c0e54a06d82ce4a746cfb6671779753eb765208594a3c70f712f98f03ad8",
+    "id": "978d4322-5b82-41b7-8c94-adcfc9d680d5",
+    "kind": "issue",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:61:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Project proofs from list and detail while retaining their actual DB proof
+AssertionError: expected { …(33) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:70:82
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Project proofs from list and detail while retaining their actual DB proof
+AssertionError: expected { …(33) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "a863473ea7351da0abf65f9452dadc4021ecead74c096dd84e7ec618b584ba7a",
+  "inputs": [],
+  "owner": {
+    "companyId": "f01e8e42-9ae5-4437-a725-fd4be2965ee6",
+    "contentHash": "ddf5348ac9c3881d292c5638d54b6da8b1084f1d2b39bc891f7673d66ce141a0",
+    "id": "d9e78f1e-ede8-46d9-90af-c38fa642f3ba",
+    "kind": "project",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:70:82
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Project proofs from list and detail while retaining their actual DB proof
+AssertionError: expected { …(35) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:72:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Project proofs from list and detail while retaining their actual DB proof
+AssertionError: expected { …(35) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "a863473ea7351da0abf65f9452dadc4021ecead74c096dd84e7ec618b584ba7a",
+  "inputs": [],
+  "owner": {
+    "companyId": "f01e8e42-9ae5-4437-a725-fd4be2965ee6",
+    "contentHash": "ddf5348ac9c3881d292c5638d54b6da8b1084f1d2b39bc891f7673d66ce141a0",
+    "id": "d9e78f1e-ede8-46d9-90af-c38fa642f3ba",
+    "kind": "project",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:72:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Memory proofs from detail, list and export and preserves arbitrary user metadata
+AssertionError: expected { …(46) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:85:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Memory proofs from detail, list and export and preserves arbitrary user metadata
+AssertionError: expected { …(46) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "5c93d635483d911ee506253371bc3ca94234b0f83494dfa45ab046af060ceea4",
+  "inputs": [],
+  "owner": {
+    "companyId": "86b12251-ca71-4de7-bfd5-2f498ce518a1",
+    "contentHash": "3f8f247012a561703d9c19d0ec1d539434493594ac0ef81bb2061edb8cd71fce",
+    "id": "b0cf8929-a7df-4f04-ba65-c4eaa578b774",
+    "kind": "memory_record",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:85:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Memory proofs from detail, list and export and preserves arbitrary user metadata
+AssertionError: expected { …(46) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:87:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Memory proofs from detail, list and export and preserves arbitrary user metadata
+AssertionError: expected { …(46) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "5c93d635483d911ee506253371bc3ca94234b0f83494dfa45ab046af060ceea4",
+  "inputs": [],
+  "owner": {
+    "companyId": "86b12251-ca71-4de7-bfd5-2f498ce518a1",
+    "contentHash": "3f8f247012a561703d9c19d0ec1d539434493594ac0ef81bb2061edb8cd71fce",
+    "id": "b0cf8929-a7df-4f04-ba65-c4eaa578b774",
+    "kind": "memory_record",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:87:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Memory proofs from detail, list and export and preserves arbitrary user metadata
+AssertionError: expected { …(46) } to not have property "payloadSourceProtocolVersion"
+
+- Expected:
+undefined
+
++ Received:
+1
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:49:26
+     47|   function publicRow(row: Record<string, unknown>, id: string) {
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+       |                          ^
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+     51|   }
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:89:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/14]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-public-response.integration.test.ts > Native payload proofs stay on the server at public response boundaries > omits Memory proofs from detail, list and export and preserves arbitrary user metadata
+AssertionError: expected { …(46) } to not have property "payloadSourceSnapshot"
+
+- Expected:
+undefined
+
++ Received:
+{
+  "digest": "5c93d635483d911ee506253371bc3ca94234b0f83494dfa45ab046af060ceea4",
+  "inputs": [],
+  "owner": {
+    "companyId": "86b12251-ca71-4de7-bfd5-2f498ce518a1",
+    "contentHash": "3f8f247012a561703d9c19d0ec1d539434493594ac0ef81bb2061edb8cd71fce",
+    "id": "b0cf8929-a7df-4f04-ba65-c4eaa578b774",
+    "kind": "memory_record",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ publicRow src/__tests__/native-payload-public-response.integration.test.ts:50:26
+     48|     expect(row.id).toBe(id);
+     49|     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion"…
+     50|     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+       |                          ^
+     51|   }
+     52|
+ ❯ src/__tests__/native-payload-public-response.integration.test.ts:89:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed (3)
+   Start at  05:47:37
+   Duration  62.73s (transform 30.35s, setup 156ms, import 43.34s, tests 18.89s, environment 0ms)
+

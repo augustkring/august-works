@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { useEffect, useState } from "react";
 import { useAccountIdentity } from "@/api/companies-query";
 import type { HealthStatus } from "@/api/health";
@@ -6,6 +7,8 @@ import { useDialogState } from "@/context/DialogContext";
 import { useOptionalToastActions, useOptionalToastState } from "@/context/ToastContext";
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { AnnouncementCard } from "./AnnouncementCard";
+import { MandatoryProductNotices } from "./MandatoryProductNotices";
+import { CapabilityLifecycleNotices } from "./CapabilityLifecycleNotices";
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "@/i18n";
 
@@ -42,19 +45,26 @@ export function AnnouncementWell({ health }: { health?: HealthStatus }) {
     }),
   });
   const modalOpen = useModalOpen(Boolean(announcement));
-  if (!announcement || modalOpen || (toasts?.length ?? 0) > 0) return null;
+  const showOptional = Boolean(announcement && !modalOpen && (toasts?.length ?? 0) === 0);
+  const mandatoryUserId = health?.deploymentMode === "local_trusted" ? null : settled ? accountId : null;
+  const showMandatory = Boolean(mandatoryUserId && !loading && selectedCompanyId);
+  if (!showMandatory && !showOptional) return null;
   return (
-    <aside aria-label="Paperclip announcements" className="announcement-well shrink-0 border-t bg-background p-2 pb-(--announcement-mobile-bottom) md:px-3 md:pb-2">
-      <details key={announcement.id} className="group">
-        <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <ChevronDown className="size-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
-          <span className="shrink-0 font-semibold">{t("announcement.summary")}</span>
-          <span className="truncate text-muted-foreground">{announcement.title}</span>
-        </summary>
-        <div className="max-h-(--announcement-expanded-max-height) overflow-y-auto py-2">
-          <AnnouncementCard key={announcement.id} announcement={announcement} onDismiss={() => dismiss(announcement.id)} className="mx-auto" />
-        </div>
-      </details>
-    </aside>
+    <>
+      {showMandatory && <CapabilityLifecycleNotices companyId={selectedCompanyId} enabled={Boolean(mandatoryUserId)} />}
+      {showMandatory && <MandatoryProductNotices companyId={selectedCompanyId} userId={mandatoryUserId} />}
+      {showOptional && announcement && <aside aria-label={`${PRODUCT_IDENTITY.productName} announcements`} className="announcement-well shrink-0 border-t bg-background p-2 pb-(--announcement-mobile-bottom) md:px-3 md:pb-2">
+        <details key={announcement.id} className="group">
+          <summary className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ChevronDown className="size-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
+            <span className="shrink-0 font-semibold">{t("announcement.summary")}</span>
+            <span className="truncate text-muted-foreground">{announcement.title}</span>
+          </summary>
+          <div className="max-h-(--announcement-expanded-max-height) overflow-y-auto py-2">
+            <AnnouncementCard key={announcement.id} announcement={announcement} onDismiss={() => dismiss(announcement.id)} className="mx-auto" />
+          </div>
+        </details>
+      </aside>}
+    </>
   );
 }

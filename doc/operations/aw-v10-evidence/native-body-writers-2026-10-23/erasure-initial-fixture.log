@@ -1,0 +1,113 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (15 tests | 3 failed | 12 skipped) 7954ms
+     × erases a captured derived issue through the original transactional purge 180ms
+     × erases a captured derived comment through the original transactional purge 193ms
+     × erases a captured derived document_revision through the original transactional purge 40ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured derived issue through the original transactional purge
+Error: Failed query: update "issues" target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',$1::text,'companyId',target.company_id,'id',target.id,
+          'contentHash',public.aw_native_payload_body_hash($2,to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) actual_body
+    ) where target.id=$3::uuid
+params: issue,issue,eb0d0489-a747-4896-af55-4fba3ce003f2
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ bindOwner src/__tests__/native-payload-source-binding.integration.test.ts:40:5
+     38|
+     39|   async function bindOwner(table: string, kind: string, id: string) {
+     40|     await db.execute(sql`update ${sql.identifier(table)} target set pa…
+       |     ^
+     41|       select content || jsonb_build_object('digest',encode(sha256(conv…
+     42|         select jsonb_build_object('version',1,'owner',jsonb_build_obje…
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:253:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" target set payload_source_snapshot=(\n      select content || jsonb_build_object(\'digest\',encode(sha256(convert_to(content::text,\'UTF8\')),\'hex\')) from (\n        select jsonb_build_object(\'version\',1,\'owner\',jsonb_build_object(\'kind\',$1::text,\'companyId\',target.company_id,\'id\',target.id,\n          \'contentHash\',public.aw_native_payload_body_hash($2,to_jsonb(target))),\n          \'policy\',jsonb_build_object(\'issueIds\',\'[]\'::jsonb,\'projectIds\',\'[]\'::jsonb,\'runIds\',\'[]\'::jsonb,\n            \'memoryIds\',\'[]\'::jsonb,\'foundationRevisionIds\',\'[]\'::jsonb),\'inputs\',\'[]\'::jsonb) as content\n      ) actual_body\n    ) where target.id=$3::uuid', parameters: [ 'issue', 'issue', 'eb0d0489-a747-4896-af55-4fba3ce003f2' ], args: [ 'issue', 'issue', 'eb0d0489-a747-4896-af55-4fba3ce003f2' ], types: [ 25, 25, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured derived comment through the original transactional purge
+AssertionError: expected { owner: { …(4) }, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "digest": "7a1a1587759406e7ec3f54127073c8cfeda05f05712a55881a479ad0626b8dc9",
+  "inputs": [],
+  "owner": {
+    "companyId": "a2b2d0aa-543c-4034-a13a-5f3e68a6fe5c",
+    "contentHash": "46cc72edde4f1e2a8c53c13fd623d5d9396ba40424f2ce9701e18ac5c25047d7",
+    "id": "b0a6e35e-60f8-4820-ab5d-ae1198abe5e1",
+    "kind": "comment",
+  },
+  "policy": {
+    "foundationRevisionIds": [],
+    "issueIds": [],
+    "memoryIds": [],
+    "projectIds": [],
+    "runIds": [],
+  },
+  "version": 1,
+}
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:268:30
+    266|       from ${sql.identifier(table)} r where r.company_id=${companyId}:…
+    267|     expect(erased!.body).not.toContain("PRIVATE");
+    268|     expect(erased!.captured).toBeNull(); expect(erased!.invalidated).t…
+       |                              ^
+    269|     expect((await db.select().from(issues).where(eq(issues.id, unrelat…
+    270|     await expect(bindOwner(table, kind, id)).rejects.toMatchObject({ c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured derived document_revision through the original transactional purge
+Error: Failed query: update "document_revisions" target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',$1::text,'companyId',target.company_id,'id',target.id,
+          'contentHash',public.aw_native_payload_body_hash($2,to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) actual_body
+    ) where target.id=$3::uuid
+params: document_revision,document_revision,5d92ef60-14a5-441c-a0ee-1f45af88a246
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ bindOwner src/__tests__/native-payload-source-binding.integration.test.ts:40:5
+     38|
+     39|   async function bindOwner(table: string, kind: string, id: string) {
+     40|     await db.execute(sql`update ${sql.identifier(table)} target set pa…
+       |     ^
+     41|       select content || jsonb_build_object('digest',encode(sha256(conv…
+     42|         select jsonb_build_object('version',1,'owner',jsonb_build_obje…
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:253:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "document_revisions" target set payload_source_snapshot=(\n      select content || jsonb_build_object(\'digest\',encode(sha256(convert_to(content::text,\'UTF8\')),\'hex\')) from (\n        select jsonb_build_object(\'version\',1,\'owner\',jsonb_build_object(\'kind\',$1::text,\'companyId\',target.company_id,\'id\',target.id,\n          \'contentHash\',public.aw_native_payload_body_hash($2,to_jsonb(target))),\n          \'policy\',jsonb_build_object(\'issueIds\',\'[]\'::jsonb,\'projectIds\',\'[]\'::jsonb,\'runIds\',\'[]\'::jsonb,\n            \'memoryIds\',\'[]\'::jsonb,\'foundationRevisionIds\',\'[]\'::jsonb),\'inputs\',\'[]\'::jsonb) as content\n      ) actual_body\n    ) where target.id=$3::uuid', parameters: [ 'document_revision', 'document_revision', '5d92ef60-14a5-441c-a0ee-1f45af88a246' ], args: [ 'document_revision', 'document_revision', '5d92ef60-14a5-441c-a0ee-1f45af88a246' ], types: [ 25, 25, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 12 skipped (15)
+   Start at  21:56:27
+   Duration  37.66s (transform 20.63s, setup 103ms, import 29.41s, tests 7.95s, environment 0ms)
+

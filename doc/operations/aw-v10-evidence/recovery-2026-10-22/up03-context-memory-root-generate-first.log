@@ -1,0 +1,23 @@
+
+> paperclip@ db:generate /workspace/blentera-v10
+> pnpm --filter @paperclipai/db generate
+
+
+> @paperclipai/db@0.3.1 generate /workspace/blentera-v10/packages/db
+> pnpm run check:migrations && pnpm run clean && tsc -p tsconfig.json && drizzle-kit generate && pnpm run prune:snapshots
+
+
+> @paperclipai/db@0.3.1 check:migrations /workspace/blentera-v10/packages/db
+> tsx src/check-migration-numbering.ts && tsx src/check-migration-safety.ts
+
+Migration safety check passed: 20 historical finding(s) covered by baseline (1 stale baseline id(s) ignored).
+
+> @paperclipai/db@0.3.1 clean /workspace/blentera-v10/packages/db
+> rm -rf dist
+
+src/native-run-input-source-receipt.test.ts(35,108): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'JSONValue'.
+  Type 'Record<string, unknown>' is missing the following properties from type 'Date': toDateString, toTimeString, toLocaleDateString, toLocaleTimeString, and 38 more.
+/workspace/blentera-v10/packages/db:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/db@0.3.1 generate: `pnpm run check:migrations && pnpm run clean && tsc -p tsconfig.json && drizzle-kit generate && pnpm run prune:snapshots`
+Exit status 2
+ ELIFECYCLE  Command failed with exit code 2.

@@ -1,0 +1,41 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+stderr | src/__tests__/auth-session-route.test.ts > actorMiddleware authenticated session profile > trusts Cloud tenant identity headers and seeds board access
+AUTH SESSION TEST ERROR TypeError: tx.update is not a function
+    at /workspace/blentera-v10/server/src/services/principal-access-compatibility.ts:87:14
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+ ❯ src/__tests__/auth-session-route.test.ts (13 tests | 1 failed | 12 skipped) 42ms
+     × trusts Cloud tenant identity headers and seeds board access 40ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/auth-session-route.test.ts > actorMiddleware authenticated session profile > trusts Cloud tenant identity headers and seeds board access
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/auth-session-route.test.ts:183:24
+    181|       .set("x-paperclip-cloud-stack-role", "owner");
+    182|
+    183|     expect(res.status).toBe(200);
+       |                        ^
+    184|     expect(res.body).toMatchObject({
+    185|       type: "board",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 12 skipped (13)
+   Start at  11:12:25
+   Duration  17.31s (transform 12.17s, setup 87ms, import 17.03s, tests 42ms, environment 0ms)
+
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/__tests__/auth-session-route.test.ts -t trusts Cloud tenant identity headers

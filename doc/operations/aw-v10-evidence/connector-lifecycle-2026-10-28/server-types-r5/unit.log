@@ -1,0 +1,18 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > projects current grant scopes, scope hash, expiry and provider verification without credentials 12ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > requires reauthorization and keeps explicit revocation distinct from health 0ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > separates refreshable access expiry from expired refresh credentials 0ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > denies a healthy label for malformed grant expiry and preserves grant-over-config precedence 0ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > projects configured secret-reference expiry without returning secret identifiers 0ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > uses the current Vercel Connect grant's expiry and verification metadata over connection fallbacks 0ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > does not claim verified GitHub health while access or webhook proof is pending 0ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > treats GitHub repository access invalidation as a refresh action, never as webhook-complete sync 0ms
+ ✓ src/services/tool-connection-lifecycle.test.ts > tool connection lifecycle projection > does not call an unverified or unhealthy connection healthy and exposes paused state 1ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  12:56:06
+   Duration  284ms (transform 57ms, setup 88ms, import 47ms, tests 17ms, environment 0ms)
+

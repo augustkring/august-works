@@ -21,6 +21,9 @@ import {
 } from "@paperclipai/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { stageNativeRunnerAttachmentBytes } from "./native-runner-file-handoff.js";
 import {
@@ -41,6 +44,10 @@ describe("native external chat workspace boundary", () => {
   const issueB = "01000000-0000-4000-8000-000000000004";
   const boardIssue = "01000000-0000-4000-8000-000000000005";
   const runB = "01000000-0000-4000-8000-000000000006";
+  const conversationIssue = "01000000-0000-4000-8000-000000000007";
+  const conversationRun = "01000000-0000-4000-8000-000000000008";
+  const conversationUserId = "user-native-chat-owner";
+  const taskOwnerUserId = "user-native-task-owner";
   const scopeInput = (issueId: string) => ({
     adapterType: "paperclip_runner",
     environmentDriver: "local",
@@ -66,6 +73,8 @@ describe("native external chat workspace boundary", () => {
       issuePrefix: "NCW",
       issueCounter: 3,
     });
+    await seedCurrentHumanSourceActor(db, [companyId], conversationUserId);
+    await seedCurrentHumanSourceActor(db, [companyId], taskOwnerUserId);
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -89,6 +98,7 @@ describe("native external chat workspace boundary", () => {
       id: runB,
       companyId,
       agentId,
+      responsibleUserId: taskOwnerUserId,
       nativeIssueId: issueB,
       runtimeMode: "native",
       status: "running",
@@ -100,6 +110,35 @@ describe("native external chat workspace boundary", () => {
       .update(issues)
       .set({ executionRunId: runB })
       .where(eq(issues.id, issueB));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId: runB,
+      responsibleUserId: taskOwnerUserId, requireExisting: false }, blenteraPlatformContractHashes());
+    await db.insert(issues).values({
+      id: conversationIssue,
+      companyId,
+      issueNumber: 4,
+      identifier: "NCW-4",
+      title: "Authenticated native conversation",
+      status: "in_progress",
+      assigneeAgentId: agentId,
+      conversationAgentId: agentId,
+      conversationUserId,
+      conversationState: "active",
+      conversationSessionGeneration: 3,
+      originKind: "manual",
+    });
+    await db.insert(heartbeatRuns).values({
+      id: conversationRun,
+      companyId,
+      agentId,
+      nativeIssueId: conversationIssue,
+      responsibleUserId: conversationUserId,
+      runtimeMode: "native",
+      status: "running",
+      invocationSource: "assignment",
+      triggerDetail: "system",
+      contextSnapshot: { issueId: conversationIssue, conversationSessionGeneration: 3 },
+    });
+    await db.update(issues).set({ executionRunId: conversationRun }).where(eq(issues.id, conversationIssue));
     scopeA = (await findNativeChatWorkspaceScope(db, scopeInput(issueA)))!;
     scopeB = (await findNativeChatWorkspaceScope(db, scopeInput(issueB)))!;
   });
@@ -146,7 +185,7 @@ describe("native external chat workspace boundary", () => {
     );
   });
 
-  it("leaves ordinary Board tasks, legacy adapters, and remote sandbox realization unchanged", async () => {
+  it("keeps ordinary Board tasks and legacy adapters out while resolving chat scope for sandbox execution", async () => {
     expect(
       await findNativeChatWorkspaceScope(db, scopeInput(boardIssue)),
     ).toBeNull();
@@ -156,18 +195,31 @@ describe("native external chat workspace boundary", () => {
         adapterType: "codex_local",
       }),
     ).toBeNull();
-    expect(
-      await findNativeChatWorkspaceScope(db, {
-        ...scopeInput(issueA),
-        environmentDriver: "sandbox",
-      }),
-    ).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, {
+      ...scopeInput(issueA),
+      environmentDriver: "sandbox",
+    })).toMatchObject({ companyId, agentId, issueId: issueA });
     await expect(
       findNativeChatWorkspaceScope(db, {
         ...scopeInput(issueA),
         companyId: "01000000-0000-4000-8000-000000000099",
       }),
     ).rejects.toThrow("native_chat_workspace_issue_unavailable");
+  });
+
+  it("selects a canonical projectless conversation only for its exact current Human, generation, and Run", async () => {
+    const input = {
+      ...scopeInput(conversationIssue),
+      runId: conversationRun,
+      responsibleUserId: conversationUserId,
+      conversationSessionGeneration: 3,
+    };
+    const scope = await findNativeChatWorkspaceScope(db, input);
+    expect(scope).toMatchObject({ companyId, agentId, issueId: conversationIssue, projectId: null });
+    expect(await findNativeChatWorkspaceScope(db, { ...input, responsibleUserId: "foreign-human" })).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, { ...input, conversationSessionGeneration: 4 })).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, { ...input, runId: runB })).toBeNull();
+    expect(await findNativeChatWorkspaceScope(db, scopeInput(conversationIssue))).toBeNull();
   });
 
   it("does not expose another active task's staged inbound files or register its generated file", async () => {

@@ -6,6 +6,13 @@ import { useCompany } from "@/context/CompanyContext";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/lib/router";
+
+function deletionStageLabel(stage: string) {
+  if (stage === "revoke") return "Revoking access";
+  if (stage === "revoke_finalizing") return "Stopping active work";
+  return stage.replaceAll("_", " ");
+}
+
 export function SaasDeletionPage() {
   const { selectedCompanyId } = useCompany();
   const identity = useAccountIdentity();
@@ -52,7 +59,7 @@ function SaasDeletionForm() {
           <h2 className="saas-subtitle">
             Deletion: {deletion.data.status.replaceAll("_", " ")}
           </h2>
-          <p>Current step: {deletion.data.stage.replaceAll("_", " ")}</p>
+          <p>Current step: {deletionStageLabel(deletion.data.stage)}</p>
           {deletion.data.status === "waiting_retention" && (
             <p>
               Work has stopped. Retained backups must reach their deletion date

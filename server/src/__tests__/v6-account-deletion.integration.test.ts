@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { hashPassword } from "better-auth/crypto";
@@ -8,9 +8,12 @@ import {
   accountDeletionOperations,
   activityLog,
   authAccounts,
+  authPasskeys,
   authRateLimits,
   authSessions,
+  authTwoFactors,
   authUsers,
+  authVerifications,
   billingAccounts,
   billingSubscriptions,
   boardApiKeys,
@@ -19,18 +22,25 @@ import {
   companySecrets,
   companySecretVersions,
   emailDeliveries,
+  humanWorkflowCoverages,
   principalPermissionGrants,
+  supportCaseDeletionMarkers,
+  supportCaseEvents,
+  supportCases,
   userSecretDefinitions,
+  workflowRevisions,
+  workflows,
   createDb,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { accountDeletionService } from "../services/saas/account-deletion.js";
+import { accountDeletionService as nativeAccountDeletionService } from "../services/saas/account-deletion.js";
 import { saasRoutes } from "../routes/saas.js";
 import { saasCommercialGuard } from "../middleware/saas-commercial-guard.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -52,6 +62,14 @@ const support = await getEmbeddedPostgresTestSupport();
         db.delete(companySecrets).where(eq(companySecrets.id, id)),
       cancelRun: async () => {},
     };
+    const fixtureActors = new Map<string, Extract<AuthorizationActor, { type: "board" }>>();
+    // These fixtures exercise the real domain owner with actual stored native
+    // session IDs. Provider ceremonies are covered in native-two-factor tests.
+    function accountDeletionService(reader: typeof db, callbacks: Parameters<typeof nativeAccountDeletionService>[1]) {
+      const service = nativeAccountDeletionService(reader, callbacks);
+      return { ...service, request: (id: string, raw: unknown, now = new Date(), actor = fixtureActors.get(id)) =>
+        service.request(id, raw, now, actor) };
+    }
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase(
         "aw-v6-account-delete-",
@@ -83,6 +101,12 @@ const support = await getEmbeddedPostgresTestSupport();
         createdAt: now,
         updatedAt: now,
       });
+      const [principal] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      const sessionId = randomUUID();
+      await db.insert(authSessions).values({ id: sessionId, userId: id, token: randomUUID(), createdAt: now, updatedAt: now,
+        expiresAt: new Date(now.getTime()+3600_000), authenticationMethod: "password", authenticatedAt: now,
+        authenticatorVersion: principal.authenticatorVersion });
+      fixtureActors.set(id, { type: "board", source: "session", userId: id, sessionId });
     }
     async function organization(
       owners: string[],
@@ -107,6 +131,57 @@ const support = await getEmbeddedPostgresTestSupport();
         })),
       );
       return company!.id;
+    }
+    const supportDataPolicy = {
+      schemaVersion: 1,
+      policyVersion: "support-account-test-v1",
+      recipientName: "Blentera Support",
+      privacyNoticeUrl: "https://example.test/privacy",
+      processingRegion: "eu",
+      retentionTrigger: "after_last_customer_or_support_message",
+      retentionDays: 30,
+      backupMaxDays: 7,
+      restoreLagDays: 1,
+      deletionMarkerDays: 30,
+      legalHoldPolicyId: "support-account-test-v1",
+    } as const;
+    async function createSupportCase(
+      companyId: string,
+      openerUserId: string,
+      options: { legalHold?: boolean; deliveryState?: "pending" | "unknown" } = {},
+    ) {
+      const createdAt = new Date();
+      const [supportCase] = await db
+        .insert(supportCases)
+        .values({
+          companyId,
+          openedByUserId: openerUserId,
+          subject: "Account deletion support fixture",
+          description: "Private support case fixture",
+          dataPolicy: supportDataPolicy,
+          legalHold: options.legalHold ?? false,
+          holdReason: options.legalHold ? "Account deletion fixture hold" : null,
+          createdAt,
+          updatedAt: createdAt,
+          lastMessageAt: createdAt,
+          expiresAt: new Date(createdAt.getTime() + 86400000),
+        })
+        .returning();
+      const [event] = await db
+        .insert(supportCaseEvents)
+        .values({
+          companyId,
+          caseId: supportCase!.id,
+          authorUserId: openerUserId,
+          kind: "request",
+          body: "Private support event fixture",
+          customerStatus: "RECEIVED",
+          requestKey: randomUUID(),
+          requestHash: "a".repeat(64),
+          deliveryState: options.deliveryState ?? "pending",
+        })
+        .returning();
+      return { supportCase: supportCase!, event: event! };
     }
     it("requires exact confirmation and the current password, preserving a durable failed-attempt budget", async () => {
       await user("password-owner");
@@ -157,6 +232,7 @@ const support = await getEmbeddedPostgresTestSupport();
           source: req.header("x-fixture-local") ? "local_implicit" : "session",
           userId: "http-user",
           companyIds: [],
+          sessionId: fixtureActors.get("http-user")?.sessionId,
         };
         next();
       });
@@ -307,6 +383,16 @@ const support = await getEmbeddedPostgresTestSupport();
         principalId: "member-delete",
         membershipRole: "member",
       });
+      const workflowId = randomUUID(), revisionId = randomUUID();
+      await db.transaction(async tx => {
+        await tx.insert(workflows).values({ id: workflowId, companyId: id, name: "Deletion coverage fixture", status: "active", publishedRevisionId: revisionId });
+        await tx.insert(workflowRevisions).values({ id: revisionId, companyId: id, workflowId, revisionNumber: 1,
+          state: "published", graph: { version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} },
+          createdByUserId: "coworker" });
+      });
+      const [coverage] = await db.insert(humanWorkflowCoverages).values({ requestId: randomUUID(), companyId: id, principalUserId: "member-delete",
+        delegateeUserId: "coworker", workflowId, workflowRevisionId: revisionId, scopeType: "manual", taskId: null,
+        startsAt: now, expiresAt: new Date(now.getTime() + 86400_000), reason: "Private personal leave detail" }).returning();
       await db.insert(authSessions).values({
         id: randomUUID(),
         userId: "member-delete",
@@ -382,6 +468,8 @@ const support = await getEmbeddedPostgresTestSupport();
         now,
       );
       expect(accepted.status).toBe("requested");
+      expect(await db.select().from(humanWorkflowCoverages).where(eq(humanWorkflowCoverages.id, coverage!.id)))
+        .toMatchObject([{ revokedAt: expect.any(Date), reason: "Revoked during account deletion" }]);
       expect(
         await service.request(
           "member-delete",
@@ -503,6 +591,280 @@ const support = await getEmbeddedPostgresTestSupport();
             .where(eq(activityLog.actorId, "member-delete"))
         )[0]!.action,
       ).toBe("fixture.audit");
+    });
+    it("erases local support content with deletion markers before completing personal account erasure", async () => {
+      await user("support-local-delete");
+      await user("support-local-coworker");
+      const companyId = await organization([
+        "support-local-delete",
+        "support-local-coworker",
+      ]);
+      const { supportCase, event } = await createSupportCase(
+        companyId,
+        "support-local-delete",
+      );
+      const service = accountDeletionService(db, effects);
+
+      const accepted = await service.request(
+        "support-local-delete",
+        input("support-local-delete-fixture-001"),
+      );
+      expect(accepted.status).toBe("requested");
+      expect(
+        await db
+          .select()
+          .from(supportCases)
+          .where(eq(supportCases.id, supportCase.id)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(supportCaseEvents)
+          .where(eq(supportCaseEvents.id, event.id)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(supportCaseDeletionMarkers)
+          .where(eq(supportCaseDeletionMarkers.caseId, supportCase.id)),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            subjectId: supportCase.id,
+            targetKind: "case",
+          }),
+          expect.objectContaining({
+            subjectId: event.id,
+            targetKind: "event",
+          }),
+        ]),
+      );
+
+      await service.processOne(new Date(Date.now() + 1000));
+      expect(
+        await db
+          .select()
+          .from(authUsers)
+          .where(eq(authUsers.id, "support-local-delete")),
+      ).toHaveLength(0);
+      expect(
+        (
+          await db
+            .select()
+            .from(accountDeletionOperations)
+            .where(eq(accountDeletionOperations.userId, "support-local-delete"))
+        )[0],
+      ).toMatchObject({ status: "completed", completedAt: expect.any(Date) });
+    });
+    it("keeps held support ownership as a scrubbed principal and leaves account erasure pending", async () => {
+      await user("support-held-delete");
+      await user("support-held-coworker");
+      await db
+        .update(authUsers)
+        .set({ locale: "da" })
+        .where(eq(authUsers.id, "support-held-delete"));
+      const companyId = await organization([
+        "support-held-delete",
+        "support-held-coworker",
+      ]);
+      const { supportCase, event } = await createSupportCase(
+        companyId,
+        "support-held-delete",
+        { legalHold: true, deliveryState: "unknown" },
+      );
+      const now = new Date();
+      await db.insert(authSessions).values({ id: randomUUID(), userId: "support-held-delete", token: randomUUID(),
+        createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60000) });
+      const service = accountDeletionService(db, effects);
+
+      const accepted = await service.request(
+        "support-held-delete",
+        input("support-held-delete-fixture-001"),
+      );
+      expect(accepted.status).toBe("requested");
+      expect(
+        (
+          await db
+            .select()
+            .from(authUsers)
+            .where(eq(authUsers.id, "support-held-delete"))
+        )[0],
+      ).toMatchObject({
+        name: "Deleted account",
+        image: null,
+        emailVerified: false,
+        locale: null,
+      });
+      expect(
+        await db
+          .select()
+          .from(companyMemberships)
+          .where(eq(companyMemberships.principalId, "support-held-delete")),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(supportCases)
+          .where(eq(supportCases.id, supportCase.id)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(supportCaseEvents)
+          .where(eq(supportCaseEvents.id, event.id)),
+      ).toHaveLength(1);
+
+      expect(await db.select().from(authSessions).where(eq(authSessions.userId, "support-held-delete"))).toEqual([]);
+      expect(await db.select().from(authAccounts).where(eq(authAccounts.userId, "support-held-delete"))).toEqual([]);
+      await service.processOne(new Date(Date.now() + 1000));
+      expect(
+        await db
+          .select()
+          .from(authUsers)
+          .where(eq(authUsers.id, "support-held-delete")),
+      ).toHaveLength(1);
+      expect(
+        (
+          await db
+            .select()
+            .from(accountDeletionOperations)
+            .where(eq(accountDeletionOperations.userId, "support-held-delete"))
+        )[0],
+      ).toMatchObject({
+        status: "processing",
+        completedAt: null,
+        errorCode: "account_erasure_pending",
+      });
+      await db.update(supportCases).set({ legalHold: false, holdReason: null }).where(eq(supportCases.id, supportCase.id));
+      await service.processOne(new Date(Date.now() + 61000));
+      expect(await db.select().from(supportCases).where(eq(supportCases.id, supportCase.id))).toHaveLength(1);
+      expect((await db.select().from(accountDeletionOperations)
+        .where(eq(accountDeletionOperations.userId, "support-held-delete")))[0])
+        .toMatchObject({ completedAt: null, errorCode: "account_erasure_pending" });
+    });
+    it("retains an authored local event when its other support case has uncertain sibling delivery", async () => {
+      await user("support-event-author");
+      await user("support-case-opener");
+      await user("support-event-coworker");
+      const companyId = await organization([
+        "support-event-author",
+        "support-case-opener",
+        "support-event-coworker",
+      ]);
+      const { supportCase } = await createSupportCase(
+        companyId,
+        "support-case-opener",
+      );
+      const [authoredEvent] = await db
+        .insert(supportCaseEvents)
+        .values({
+          companyId,
+          caseId: supportCase.id,
+          authorUserId: "support-event-author",
+          kind: "customer_reply",
+          body: "Private authored reply fixture",
+          customerStatus: "RECEIVED",
+          requestKey: randomUUID(),
+          requestHash: "b".repeat(64),
+          deliveryState: "pending",
+        })
+        .returning();
+      await db.insert(supportCaseEvents).values({
+        companyId,
+        caseId: supportCase.id,
+        authorUserId: "support-case-opener",
+        kind: "support_message",
+        body: "Provider outcome is uncertain",
+        customerStatus: "INVESTIGATING",
+        requestKey: randomUUID(),
+        requestHash: "c".repeat(64),
+        deliveryState: "unknown",
+      });
+      const service = accountDeletionService(db, effects);
+
+      await service.request(
+        "support-event-author",
+        input("support-event-author-fixture-001"),
+      );
+      expect(
+        await db
+          .select()
+          .from(supportCaseEvents)
+          .where(eq(supportCaseEvents.id, authoredEvent!.id)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(authUsers)
+          .where(eq(authUsers.id, "support-event-author")),
+      ).toHaveLength(1);
+      expect(
+        (
+          await db
+            .select()
+            .from(accountDeletionOperations)
+            .where(eq(accountDeletionOperations.userId, "support-event-author"))
+        )[0],
+      ).toMatchObject({ status: "requested", completedAt: null });
+    });
+    it("accepts the full supported Unicode password for irreversible account confirmation", async () => {
+      const id = "unicode-password-offboarding", unicodePassword = "🚀".repeat(128);
+      await user(id);
+      await db.update(authAccounts).set({ password: await hashPassword(unicodePassword) })
+        .where(eq(authAccounts.userId, id));
+      const now = new Date(), sessionId = randomUUID();
+      const [principal] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      await db.insert(authSessions).values({ id: sessionId, userId: id, token: randomUUID(), createdAt: now, updatedAt: now,
+        expiresAt: new Date(now.getTime()+300_000), authenticationMethod: "password", authenticatedAt: now,
+        authenticatorVersion: principal.authenticatorVersion });
+      fixtureActors.set(id, { type: "board", source: "session", userId: id, sessionId });
+      await expect(accountDeletionService(db, effects).request(id, {
+        ...input("unicode-password-offboarding-001"), password: unicodePassword,
+      })).resolves.toMatchObject({ status: "requested" });
+    });
+    it("erases native authenticators when offboarding retains a scrubbed user row", async () => {
+      const id = "native-authenticator-erasure";
+      await user(id);
+      // Structural provider records only; this test qualifies erasure, not an
+      // MFA ceremony or an operator authentication policy.
+      await db.insert(authTwoFactors).values({
+        id: randomUUID(), userId: id, secret: "fixture-encrypted-totp",
+        backupCodes: "fixture-encrypted-recovery", verified: true,
+      });
+      await db.update(authUsers).set({ twoFactorEnabled: true, phishingResistantRequired: true })
+        .where(eq(authUsers.id, id));
+      const [passkey] = await db.insert(authPasskeys).values({
+        id: randomUUID(), userId: id, publicKey: "fixture-public-key", credentialID: randomUUID(),
+        counter: 1, deviceType: "singleDevice", backedUp: false,
+      }).returning();
+      await expect(db.delete(authPasskeys).where(eq(authPasskeys.id, passkey.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      const now = new Date();
+      const [challenge] = await db.insert(authVerifications).values({ id: randomUUID(), identifier: randomUUID(),
+        value: JSON.stringify({ type: "registration", expectedChallenge: randomUUID(),
+          userData: { id, name: "Private challenge name", displayName: "Private display name" }, context: null }),
+        expiresAt: new Date(now.getTime()+300_000), createdAt: now, updatedAt: now }).returning();
+      const reauthKey = "password-reauth:" + createHash("sha256").update(id).digest("hex");
+      await db.insert(authRateLimits).values({ id: randomUUID(), key: reauthKey, count: 3, lastRequest: 0 });
+      const factorKey = "factor-reauth:" + createHash("sha256").update(id).digest("hex");
+      await db.insert(authRateLimits).values({ id: randomUUID(), key: factorKey, count: 2, lastRequest: 0 });
+      // Structural native proof only. Actual TOTP/recovery ceremonies are
+      // exercised in native-two-factor.integration.test.ts.
+      const [principal] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      const proofId = randomUUID();
+      await db.insert(authSessions).values({ id: proofId, userId: id, token: randomUUID(),
+        createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime()+300_000),
+        authenticationMethod: "passkey", authenticatedAt: now, authenticatorVersion: principal.authenticatorVersion });
+      await accountDeletionService(db, effects).request(id, input("native-authenticator-erasure-001"), now,
+        { type: "board", source: "session", userId: id, sessionId: proofId });
+      expect(await db.select().from(authVerifications).where(eq(authVerifications.id, challenge.id))).toEqual([]);
+      expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, factorKey))).toEqual([]);
+      expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, reauthKey))).toEqual([]);
+      expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, id))).toEqual([]);
+      expect(await db.select().from(authPasskeys).where(eq(authPasskeys.userId, id))).toEqual([]);
+      const [retained] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      expect(retained).toMatchObject({ name: "Deleted account", emailVerified: false,
+        twoFactorEnabled: false, phishingResistantRequired: true });
     });
   },
 );

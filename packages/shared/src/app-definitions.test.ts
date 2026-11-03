@@ -8,6 +8,8 @@ import {
   APP_STORE_HIDDEN_SLUGS,
   CONNECTABLE_APP_DEFINITIONS,
   appSupportsCatalogSetup,
+  connectionMethodAcceptsCustomerOAuthClient,
+  connectionMethodSupportsAutomaticOAuth,
   getAvailableConnectionMethod,
   getAppDefinitionForUrl,
   getRecommendedConnectionMethod,
@@ -24,7 +26,7 @@ import {
   SELF_SERVE_MCP_CANDIDATES,
   SELF_SERVE_MCP_RESEARCH,
 } from "./self-serve-mcp-research.js";
-import { appDefinitionsSchema } from "./validators/app-definition.js";
+import { appDefinitionSchema, appDefinitionsSchema } from "./validators/app-definition.js";
 
 const googleScope = (scope: string) =>
   `https://www.googleapis.com/auth/${scope}`;
@@ -242,8 +244,45 @@ describe("AppDefinition catalog", () => {
     expect(getAvailableConnectionMethod(anthropic, "api-key")).toBeNull();
   });
 
+  it("keeps Slack's managed path preferred and own-app OAuth as the explicit fallback", () => {
+    const slack = APP_DEFINITIONS.find((app) => app.slug === "slack")!;
+    const managed = slack.methods.find((method) => method.key === "managed-oauth")!;
+    const ownApp = slack.methods.find((method) => method.key === "mcp-oauth")!;
+    expect(managed.ownershipModes).toEqual(["platform_shared"]);
+    expect(managed.defaults?.scopesHint).toEqual([
+      "channels:history",
+      "channels:read",
+      "chat:write",
+      "groups:history",
+      "groups:read",
+      "im:history",
+      "im:read",
+      "mpim:history",
+      "mpim:read",
+      "search:read.im",
+      "search:read.mpim",
+      "search:read.private",
+      "search:read.public",
+    ]);
+    expect(managed.defaults?.authorizationEndpoint).toBe("https://slack.com/oauth/v2_user/authorize");
+    expect(managed.defaults?.tokenEndpoint).toBe("https://slack.com/api/oauth.v2.user.access");
+    expect(managed.grantKinds).toEqual(["user", "organization"]);
+    expect(managed.defaultGrantKind).toBe("user");
+    expect(connectionMethodSupportsAutomaticOAuth(managed)).toBe(true);
+    expect(connectionMethodAcceptsCustomerOAuthClient(managed)).toBe(false);
+    expect(connectionMethodAcceptsCustomerOAuthClient(ownApp)).toBe(true);
+    expect(ownApp.grantKinds).toEqual(["user", "organization"]);
+    expect(ownApp.defaultGrantKind).toBe("user");
+    expect(getRecommendedConnectionMethod([managed, ownApp])).toBe(managed);
+  });
+
   it("validates all Wave 1 definitions", () =>
     expect(() => appDefinitionsSchema.parse(APP_DEFINITIONS)).not.toThrow());
+  it("requires the declared OAuth grant default to be an allowed grant", () => {
+    const slack = structuredClone(APP_DEFINITIONS.find((app) => app.slug === "slack")!);
+    slack.methods[0]!.defaultGrantKind = "agent";
+    expect(() => appDefinitionSchema.parse(slack)).toThrow(/Default grant kind must be allowed/);
+  });
   it("contains every established provider plus the reviewed self-serve catalog", () => {
     expect(APP_DEFINITIONS.map((app) => app.slug)).toEqual(
       expect.arrayContaining([

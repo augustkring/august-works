@@ -268,13 +268,14 @@ describeEmbeddedPostgres("agent service clearError", () => {
       },
     ]);
 
-    await expect(agentService(db).clearError(terminatedAgentId)).rejects.toMatchObject({
-      status: 409,
-      message: "Cannot clear error on terminated agent",
-    });
-    await expect(agentService(db).clearError(pendingAgentId)).rejects.toMatchObject({
-      status: 409,
-      message: "Pending approval agents cannot have errors cleared",
-    });
+    const terminatedError = await agentService(db).clearError(terminatedAgentId).catch((error: unknown) => error);
+    expect(terminatedError).toBeInstanceOf(Error);
+    expect(terminatedError).toMatchObject({ status: 409 });
+    expect((terminatedError as Error).message).toBe("Cannot clear error on terminated agent");
+    const pendingError = await agentService(db).clearError(pendingAgentId).catch((error: unknown) => error);
+    expect(pendingError).toBeInstanceOf(Error);
+    expect(pendingError).toMatchObject({ status: 409 });
+    expect((pendingError as Error).message).toBe("Pending approval agents cannot be cleared");
   });
+
 });

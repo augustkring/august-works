@@ -23,7 +23,8 @@ import { REDACTED_EVENT_VALUE } from "../redaction.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { secretRoutes } from "../routes/secrets.js";
 import { secretService } from "../services/secrets.js";
-import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
+import { createRunSecretRedactionRegistry, runContextWithoutSecretRedactionRegistry } from "../services/run-secret-redaction.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -247,6 +248,48 @@ describeEmbeddedPostgres("agent secret routes", () => {
       paperclipSecretRedactions: [expect.objectContaining({ fingerprintSha256: expect.any(String) })],
     });
     expect((run.contextSnapshot as { paperclipSecretRedactions: unknown[] }).paperclipSecretRedactions).toHaveLength(1);
+  });
+
+  it("keeps conversation authority stable across real token redaction registration while retaining semantic context", async () => {
+    const fixture = await seedAgentRun();
+    const registry = createRunSecretRedactionRegistry(db);
+    const context = {
+      conversationGeneration: 1,
+      wakeCommentId: randomUUID(),
+      source: { paperclipSecretRedactions: "semantic nested value" },
+    };
+    await db.update(heartbeatRuns).set({ contextSnapshot: context })
+      .where(eq(heartbeatRuns.id, fixture.heartbeatRunId));
+    const authorityHash = (value: unknown) => nativeSha256({
+      run: { id: fixture.heartbeatRunId, contextSnapshot: runContextWithoutSecretRedactionRegistry(value) },
+    });
+    const before = authorityHash(context);
+    const firstToken = "synthetic-model-token-first";
+    const rotatedToken = "synthetic-model-token-rotated";
+    await registry.register(fixture.companyId, fixture.heartbeatRunId, firstToken);
+    await registry.register(fixture.companyId, fixture.heartbeatRunId, rotatedToken);
+    const [registered] = await db.select().from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, fixture.heartbeatRunId));
+    expect(registered.contextSnapshot).toMatchObject({
+      ...context,
+      paperclipSecretRedactions: [expect.any(Object), expect.any(Object)],
+    });
+    // The former whole-context hash changes, while the authority projection remains stable.
+    expect(nativeSha256(registered.contextSnapshot)).not.toBe(nativeSha256(context));
+    expect(authorityHash(registered.contextSnapshot)).toBe(before);
+    expect(await registry.redactForRun(fixture.companyId, fixture.heartbeatRunId,
+      `${firstToken} ${rotatedToken}`)).toBe(`${REDACTED_EVENT_VALUE} ${REDACTED_EVENT_VALUE}`);
+    for (const semanticChange of [
+      { ...registered.contextSnapshot, conversationGeneration: 2 },
+      { ...registered.contextSnapshot, newAuthorityField: true },
+      { ...registered.contextSnapshot, source: { paperclipSecretRedactions: "changed nested authority" } },
+    ]) {
+      await db.update(heartbeatRuns).set({ contextSnapshot: semanticChange })
+        .where(eq(heartbeatRuns.id, fixture.heartbeatRunId));
+      const [changed] = await db.select().from(heartbeatRuns)
+        .where(eq(heartbeatRuns.id, fixture.heartbeatRunId));
+      expect(authorityHash(changed.contextSnapshot)).not.toBe(before);
+    }
   });
 
   it("redacts batched runs from projected registries and enforces company scope", async () => {

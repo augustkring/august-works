@@ -1,0 +1,3 @@
+Feedback now supports optional, consented satisfaction and effort ratings with separate distributions and explicit missingness. The submitter can withdraw stored values; immutable consent and content-free withdrawal receipts remain. Native Feedback/account/retention/company erasure owners delete rating bytes.
+
+Qualification: official generated0566 migration, PostgreSQL44/44, server typecheck, shared7/7 plus metadata2/2, UI37/37 and UI typecheck passed. The archive preserves exact original logs, source pins and qualification stage list. publication-pin-map.json maps historical journal/pruned snapshot labels to preserved Git blobs. This does not claim final workspace, live provider or Human qualification.

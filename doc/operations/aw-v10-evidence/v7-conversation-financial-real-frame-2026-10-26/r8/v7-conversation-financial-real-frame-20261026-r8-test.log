@@ -1,0 +1,47 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 2 failed | 25 skipped) 181559ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 16850ms
+     × retains an actual unknown conversation hold and blocks canonical company purge 88204ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_offboarding_purge_incomplete:{"stage":"purge","status":"processing","nativeStop":{"runPresent":true,"runStatus":"succeeded","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"released","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ❯ purgeConversationCompany src/__tests__/v7-model-reservations.integration.test.ts:476:15
+    474|       const completed = await offboarding.get(facts.companyId);
+    475|       if (!completed || completed.id !== operation.id || completed.sta…
+    476|         throw new Error(`conversation_offboarding_purge_incomplete:${J…
+       |               ^
+    477|           status: completed?.status ?? null, nativeStop: await nativeS…
+    478|       return completed!;
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:591:31
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:433:7
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:587:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+Error: conversation_offboarding_not_ready:{"stage":"retention","status":"processing","nativeStop":{"runPresent":true,"runStatus":"failed","processPidPresent":false,"processGroupPresent":false,"controllerLeasePresent":false,"finalizationPhase":"committed","finalizationLeaseHeld":false,"nativeLocalStopReceipt":true,"leases":[{"provider":"local","status":"failed","cleanupStatus":null,"released":true,"remoteTerminationReceipt":false}]}}
+ ❯ startConversationOffboarding src/__tests__/v7-model-reservations.integration.test.ts:467:15
+    465|       const operation = await offboarding.get(companyId);
+    466|       if (!operation || operation.stage !== "purge" || operation.statu…
+    467|         throw new Error(`conversation_offboarding_not_ready:${JSON.str…
+       |               ^
+    468|           status: operation?.status ?? null, nativeStop: await nativeS…
+    469|       return { offboarding, operation: operation! };
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:695:31
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:433:7
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:690:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed | 25 skipped (31)
+   Start at  15:21:00
+   Duration  199.78s (transform 12.85s, setup 81ms, import 18.01s, tests 181.56s, environment 0ms)
+

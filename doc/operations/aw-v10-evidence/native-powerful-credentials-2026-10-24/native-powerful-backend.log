@@ -1,0 +1,78 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/cli-auth-routes.test.ts (22 tests | 2 failed) 84025ms
+     × creates a CLI auth challenge with approval metadata 30012ms
+     × bounds anonymous create and poll independently without trusting spoofed forwarding headers 15734ms
+[06:14:14] [33mWARN[39m: [36mFailed to publish committed CLI approval activity[39m 
+    err: {
+      "type": "Error",
+      "message": "Injected publication failure",
+      "stack":
+          Error: Injected publication failure
+              at EventEmitter.<anonymous> (/workspace/blentera-v10/server/src/services/board-auth.test.ts:408:67)
+              at EventEmitter.emit (node:events:514:28)
+              at publishLiveEvent (/workspace/blentera-v10/server/src/services/live-events.ts:34:11)
+              at publishActivity (/workspace/blentera-v10/server/src/services/activity-log.ts:152:3)
+              at Object.approveCliAuthChallenge (/workspace/blentera-v10/server/src/services/board-auth.ts:542:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/services/board-auth.test.ts:411:24
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[06:14:15] [33mWARN[39m: [36mFailed to publish committed CLI approval activity[39m 
+    err: {
+      "type": "Error",
+      "message": "Synthetic publication failure",
+      "stack":
+          Error: Synthetic publication failure
+              at EventEmitter.<anonymous> (/workspace/blentera-v10/server/src/services/board-auth.test.ts:487:67)
+              at EventEmitter.emit (node:events:514:28)
+              at publishLiveEvent (/workspace/blentera-v10/server/src/services/live-events.ts:34:11)
+              at publishActivity (/workspace/blentera-v10/server/src/services/activity-log.ts:152:3)
+              at Object.approveCliAuthChallenge (/workspace/blentera-v10/server/src/services/board-auth.ts:542:13)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/routes/access.ts:2876:24
+    }
+[06:14:41] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:14:46] [31mERROR[39m: [36mNative authentication request failed[39m [90m{"component":"native-authentication"}[39m
+[06:15:11] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:15:11] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:15:12] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[06:15:16] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/cli-auth-routes.test.ts > cli auth routes > creates a CLI auth challenge with approval metadata
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/cli-auth-routes.test.ts:106:6
+    104|   });
+    105|
+    106|   it.sequential("creates a CLI auth challenge with approval metadata",…
+       |      ^
+    107|     mockBoardAuthService.createCliAuthChallenge.mockResolvedValue({
+    108|       challenge: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/cli-auth-routes.test.ts > cli auth routes > bounds anonymous create and poll independently without trusting spoofed forwarding headers
+AssertionError: expected "vi.fn()" to be called 2 times, but got 3 times
+ ❯ src/__tests__/cli-auth-routes.test.ts:155:57
+    153|     expect(blocked.headers["cache-control"]).toBe("no-store");
+    154|     expect(blocked.headers["referrer-policy"]).toBe("no-referrer");
+    155|     expect(mockBoardAuthService.createCliAuthChallenge).toHaveBeenCall…
+       |                                                         ^
+    156|     const path = "/api/cli-auth/challenges/12345678-1234-4123-8123-123…
+    157|     for (let i = 0; i < 2; i++) expect((await request(app).get(path).s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  2 failed | 79 passed (81)
+   Start at  06:12:27
+   Duration  169.02s (transform 39.76s, setup 435ms, import 29.96s, tests 137.30s, environment 1ms)
+

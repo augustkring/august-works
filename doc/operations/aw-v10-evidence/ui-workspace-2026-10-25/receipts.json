@@ -1,0 +1,26 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "d01093d5619bc07a2edef8f8ee84619098d41d3d",
+  "meaning": "Whole UI workspace suite8155PASS/821files. UI/shared sources were unchanged during this run; bounded backend edits overlapped. No complete server/workspace test or V10 claim.",
+  "logs": [
+    {
+      "name": "v10-current-ui-suite",
+      "exitCode": 0,
+      "rawSha256": "a846e8293462a6fea19bdc8beb93b76e2b3773d183bcff268ae2239315d4d97a",
+      "sanitizedSha256": "a846e8293462a6fea19bdc8beb93b76e2b3773d183bcff268ae2239315d4d97a",
+      "archiveSha256": "e39119bb71bb8e3672cdd7e0326caa6af7e9aff68973969bc86729e547f01439",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  821 passed (821)",
+        "Tests  8155 passed (8155)",
+        "Duration  1325.14s (transform 36.56s, setup 3.67s, import 663.97s, tests 279.77s, environment 278.84s)"
+      ]
+    }
+  ]
+}

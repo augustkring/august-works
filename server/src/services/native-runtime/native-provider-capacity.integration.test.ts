@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
   companies,
@@ -13,26 +13,17 @@ import {
   nativeRunFinalizations,
 } from "@paperclipai/db";
 import type {
-  ControlPlanePort,
   NativeExecutionInputV1,
   PrpEvent,
 } from "@paperclipai/paperclip-runner";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 
-const provider = vi.hoisted(() => ({ execute: vi.fn() }));
-vi.mock("../../vendor/paperclip-runner/index.js", async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import("../../vendor/paperclip-runner/index.js")
-  >()),
-  executeNativeSession: provider.execute,
-}));
-
-import { executePaperclipNativeSession } from "./native-session-executor.js";
+import { claimNativeExecutionCoordinator, recordNativeSessionExecutionFailure } from "./native-session-executor.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { prepareNativeHeartbeatRun } from "./prepare-native-run.js";
 
-describe("native provider capacity failure persistence", () => {
+describe("native provider capacity failure coordinator component", () => {
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   const companyId = randomUUID();
@@ -116,8 +107,8 @@ describe("native provider capacity failure persistence", () => {
         issueId,
         phase: "observed",
       });
-      // A real terminal follows provider session establishment. Keep the
-      // recovery evidence explicit; this must not be a bootstrap retry.
+      // Seed the durable checkpoint evidence needed to exercise recovery-mode
+      // classification. This component test does not claim a provider process ran.
       await db
         .update(heartbeatRuns)
         .set({
@@ -201,8 +192,8 @@ describe("native provider capacity failure persistence", () => {
         sourceInstanceId: native.runnerInstanceId,
       };
       if (replayed) {
-        // Model a controller crash after the event commit but before its
-        // observational callback or failure coordinator could run.
+        // Model a prior owner committing the event before its failure
+        // coordinator write; the current owner must observe the duplicate.
         const priorPort = new PaperclipControlPlanePort(db, {
           companyId,
           issueId,
@@ -219,41 +210,37 @@ describe("native provider capacity failure persistence", () => {
           "committed",
         );
       }
-      provider.execute
-        .mockReset()
-        .mockImplementation(
-          async (options: { controlPlane: ControlPlanePort }) => {
-            await options.controlPlane.openRun(openInput);
-            const appended = await options.controlPlane.appendEvent(event);
-            expect(appended.disposition).toBe(
-              replayed ? "duplicate" : "committed",
-            );
-            // Production reports the provider terminal through the event, not by
-            // pattern-matching this exception's arbitrary message.
-            throw new Error("provider turn stopped");
-          },
-        );
-      await expect(
-        executePaperclipNativeSession({
-          db,
-          execution,
-          runnerInstanceId: native.runnerInstanceId,
-          backend: {
-            descriptor: async () => {
-              throw new Error(
-                "Unexpected provider descriptor call in capacity test",
-              );
-            },
-            openSession: async () => {
-              throw new Error(
-                "Unexpected provider session call in capacity test",
-              );
-            },
-          },
-        }),
-      ).rejects.toThrow("provider turn stopped");
+      const claim = await claimNativeExecutionCoordinator({
+        db,
+        execution,
+        runnerInstanceId: native.runnerInstanceId,
+      });
+      const port = new PaperclipControlPlanePort(db, {
+        companyId,
+        issueId,
+        runId,
+        agentId,
+        sessionId: native.normalizedSessionId,
+        sourceInstanceId: native.runnerInstanceId,
+        controlPlaneSourceInstanceId: `${native.runnerInstanceId}:control`,
+        completionContractId: contract.id,
+        completionContractSha256: contract.canonicalSha256,
+      });
+      await port.openRun(openInput);
+      const appended = await port.appendEvent(event);
+      expect(appended.disposition).toBe(replayed ? "duplicate" : "committed");
+      const terminalRunToReport = await recordNativeSessionExecutionFailure({
+        db,
+        execution,
+        error: new Error("provider turn stopped"),
+        ...claim,
+        providerUsageLimitEventKey: {
+          sourceInstanceId: event.sourceInstanceId,
+          sourceEventId: event.sourceEventId,
+        },
+      });
+      expect(terminalRunToReport?.id).toBe(runId);
 
-      expect(provider.execute).toHaveBeenCalledTimes(1);
       const [coordinator] = await db
         .select()
         .from(nativeRunFinalizations)
@@ -270,6 +257,7 @@ describe("native provider capacity failure persistence", () => {
         .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, runId));
+      expect(failedRun.status).toBe("failed");
       expect(failedRun.errorCode).toBe("native_provider_usage_limit");
       const [recovery] = await db
         .select()

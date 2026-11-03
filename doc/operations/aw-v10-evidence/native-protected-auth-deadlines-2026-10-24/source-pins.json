@@ -1,0 +1,13 @@
+{
+  "server/src/auth/authenticator-assurance.ts": "cd05f0913ee54171f9aca03c2c8bc1ecc2c7eb63a90d8acd5314bab28811d28e",
+  "server/src/auth/native-two-factor.ts": "7ebb6b8bcea476e6ed5dbd1411cf6c132a10a305a5d45f0d67263d03d7518c4e",
+  "server/src/auth/native-passkey.ts": "67497719a3bd486ad4c95e2f38eac66f4f14daa7da36e9dcdb9853f37ec0aeb8",
+  "server/src/auth/native-authentication-transaction.ts": "c0ca28353832e9228a52922177302775ef6a64e16e1b22e43f5a80868cbeb111",
+  "server/src/auth/better-auth.ts": "a6748be247b8530c01e877612b989af27454d0f5275198c35f6ba2ee095b4a34",
+  "server/src/__tests__/native-two-factor.integration.test.ts": "e8b0ae12dde257a178b71e2608c6b86018dab093a83be18b9af3c6fe1cad2551",
+  "server/src/__tests__/authenticator-lifetime.integration.test.ts": "7c5c847d773a9976c176c04a2b9e6dce6b1caf6bdaa94e86a06d80d198079f87",
+  "server/src/__tests__/better-auth-credential-signup.integration.test.ts": "220768307c4b35f58d34bbb95b63fce3e7e69fb667c5106eeeaca0102a149d4d",
+  "tests/e2e/aw-v10-native-auth.spec.ts": "0c599d8d61a68fedad3b5a0070bff419d62c88cbb4b59417870c3b1fa2457e03",
+  "tests/e2e/aw-v10-native-auth.config.ts": "6cae7be75201ec1681482ac8fa19124ab58230f705dc1fb492dfbf7145a15be6",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

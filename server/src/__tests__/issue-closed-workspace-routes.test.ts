@@ -18,6 +18,7 @@ const mockIssueService = vi.hoisted(() => ({
   update: vi.fn(),
   checkout: vi.fn(),
   addComment: vi.fn(),
+  findMentionedAgents: vi.fn(async () => []),
 }));
 
 const mockExecutionWorkspaceService = vi.hoisted(() => ({
@@ -28,6 +29,7 @@ const mockExecutionWorkspaceService = vi.hoisted(() => ({
 }));
 
 const mockAccessService = vi.hoisted(() => ({
+  decide: vi.fn(async () => ({ allowed: true })),
   canUser: vi.fn(),
   hasPermission: vi.fn(),
 }));
@@ -39,6 +41,14 @@ const mockHeartbeatService = vi.hoisted(() => ({
   getActiveRunForAgent: vi.fn(async () => null),
   cancelRun: vi.fn(async () => null),
 }));
+const mockEnvironmentRuntimeService = vi.hoisted(() => ({
+  destroyReusableSandboxLeases: vi.fn(async () => undefined),
+}));
+const mockExternalObjectService = vi.hoisted(() => ({
+  syncCommentSafely: vi.fn(async () => undefined),
+  syncIssueSafely: vi.fn(async () => undefined),
+  syncDocumentSafely: vi.fn(async () => undefined),
+}));
 
 const mockProjectService = vi.hoisted(() => ({
   getById: vi.fn(async () => null),
@@ -49,9 +59,23 @@ const mockRunnerGoalService = vi.hoisted(() => ({
 }));
 
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
+const mockDb = vi.hoisted(() => ({
+  // The local-implicit route fixture has no database-backed conversation
+  // shell. It still needs the route's transaction boundary to execute, where
+  // the shell guard returns false before issuing any SQL.
+  transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback({})),
+}));
 
 function registerServiceMocks() {
   vi.doMock("../routes/authz.js", async () => vi.importActual("../routes/authz.js"));
+  vi.doMock("../services/authorization.js", async () => ({
+    ...(await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js")),
+    canActorReadIssuePrivacy: vi.fn(async () => true),
+  }));
+  vi.doMock("../services/analytical-context-authority.js", async () => ({
+    ...(await vi.importActual<typeof import("../services/analytical-context-authority.js")>("../services/analytical-context-authority.js")),
+    assertAnalyticalContextPayloadAccess: vi.fn(async () => undefined),
+  }));
 
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
@@ -75,11 +99,20 @@ function registerServiceMocks() {
     STALE_REOPEN_PENDING_CONSUMPTION_GRACE_MS: 5 * 60 * 1000,
   }));
 
+  vi.doMock("../services/environment-runtime.js", () => ({
+    environmentRuntimeService: () => mockEnvironmentRuntimeService,
+  }));
+
+  vi.doMock("../services/external-objects.js", () => ({
+    externalObjectService: () => mockExternalObjectService,
+  }));
+
   vi.doMock("../services/heartbeat.js", () => ({
     heartbeatService: () => mockHeartbeatService,
   }));
 
-  vi.doMock("../services/issues.js", () => ({
+  vi.doMock("../services/issues.js", async () => ({
+    ...(await vi.importActual<typeof import("../services/issues.js")>("../services/issues.js")),
     issueService: () => mockIssueService,
   }));
 
@@ -229,13 +262,17 @@ describe.sequential("closed isolated workspace issue routes", () => {
       };
       next();
     });
-    app.use("/api", issueRoutes({} as any, {} as any));
+    app.use("/api", issueRoutes(mockDb as any, {} as any));
     app.use(errorHandler);
     return app;
   }
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDb.transaction.mockImplementation(async (callback) => callback({}));
+    mockIssueService.findMentionedAgents.mockResolvedValue([]);
+    mockEnvironmentRuntimeService.destroyReusableSandboxLeases.mockResolvedValue(undefined);
+    mockAccessService.decide.mockResolvedValue({ allowed: true });
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockExecutionWorkspaceService.getById.mockResolvedValue(makeClosedWorkspace());
     mockExecutionWorkspaceService.refreshReopenPendingConsumption.mockResolvedValue({ refreshed: true });
@@ -259,13 +296,13 @@ describe.sequential("closed isolated workspace issue routes", () => {
       .post(`/api/issues/${issueId}/comments`)
       .send({ body: "hello" });
 
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(mockExecutionWorkspaceService.reopenClosedIsolatedExecutionWorkspaceForIssue).toHaveBeenCalledWith({
       workspaceId: closedWorkspaceId,
       issue: { id: issueId, companyId: "company-1", projectId: null },
-      actor: expect.objectContaining({ actorType: "user" }),
+      actor: expect.objectContaining({ type: "board", source: "local_implicit", userId: "local-board" }),
     });
     // The closed-workspace dead end is gone: the comment is accepted.
-    expect(res.status).toBe(201);
   });
 
   it("reopens the closed isolated workspace and accepts a comment update", async () => {
@@ -434,7 +471,7 @@ describe.sequential("closed isolated workspace issue routes", () => {
       workspace: { ...makeClosedWorkspace(), status: "active", closedAt: null },
       generation: 4,
     });
-    mockIssueService.checkout.mockResolvedValue(null);
+    mockIssueService.checkout.mockResolvedValue({ ...makeIssue(), status: "in_progress" });
 
     const res = await request(createApp())
       .post(`/api/issues/${issueId}/checkout`)

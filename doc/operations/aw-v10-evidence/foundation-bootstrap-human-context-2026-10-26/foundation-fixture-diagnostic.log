@@ -1,0 +1,15 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > creates one canonical Task under concurrent idempotent starts and rejects key reuse 112ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > creates evidence-linked drafts with separate canonical approval and replay-safe publication 113ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > requires answers before draft publication and makes stale versions fail 87ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > rejects fabricated citations, changed evidence and cross-company access 83ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > fences agent candidate writes to the current live checked-out worker attempt 895ms
+ ✓ src/__tests__/v7-foundation-bootstrap.integration.test.ts > V7 Foundation discovery on migrated PostgreSQL > marks external assertions untrusted and cannot lower evidence sensitivity 7ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  00:55:16
+   Duration  18.70s (transform 9.68s, setup 85ms, import 13.62s, tests 4.87s, environment 0ms)
+

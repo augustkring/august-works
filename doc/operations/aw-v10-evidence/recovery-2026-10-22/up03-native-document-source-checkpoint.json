@@ -1,0 +1,57 @@
+{
+  "scope": "Original Document/TaskPlan selected revision collectors; partial native bootstrap handoff only",
+  "sources": {
+    "server/src/services/documents.ts": "232e943ed5730c7f4e9b00118313137545d0b56db564fe38b0633631f4017697",
+    "server/src/services/task-plan-context.ts": "45e5fece006ceb30f391ea97ace74406889d35096076db1aad14d6bd171e32bd",
+    "server/src/services/heartbeat.ts": "af0236d3a76615e633e8ab02acf924d60316105d5aab75595e5cabf62bda8695",
+    "server/src/services/issue-continuation-summary.ts": "7c7a4b9a3b410185eedf7d0a42b00fe07cf462b495b3c8101d79e2fb0786cb30",
+    "server/src/__tests__/documents-service.test.ts": "33f3fb8de188f0c9273faba234c83899a316438e744575bb95429a9e936653a6",
+    "server/src/__tests__/agent-conversations.test.ts": "653d94e7f4eadad201ff658ba60a07911a2873e1a30a4964e6e13e394a9f828b"
+  },
+  "documentBaseline": {
+    "actualExit": 1,
+    "failed": 2,
+    "filtered": 5,
+    "durationSeconds": 35.37,
+    "log": "up03-document-revision-capture-red.log"
+  },
+  "fixtureFailure": {
+    "actualExit": 1,
+    "passed": 6,
+    "failed": 1,
+    "durationSeconds": 36.69,
+    "log": "up03-document-revision-capture-green.log",
+    "reason": "Original DB binding correctly rejected body change retaining an old snapshot. Fixture now explicitly clears that snapshot; no production guard changed."
+  },
+  "documentBeforeSummary": {
+    "actualExit": 0,
+    "passed": 7,
+    "durationSeconds": 30.69,
+    "log": "up03-document-revision-capture-final.log",
+    "sourceNote": "Before summary wrapper/test addition; current complete source verified below."
+  },
+  "currentDocumentsAndSummary": {
+    "actualExit": 0,
+    "passed": 12,
+    "durationSeconds": 38.36,
+    "log": "up03-document-source-current.log"
+  },
+  "taskPlan": {
+    "checkpoint": "up03-task-plan-source-receipt.json",
+    "actualExit": 0,
+    "passed": 3,
+    "filtered": 34,
+    "durationSeconds": 71.53
+  },
+  "currentServerCompiler": {
+    "actualExit": 0,
+    "log": "up03-document-source-server-types.log",
+    "all6PinsUnchanged": true
+  },
+  "limits": [
+    "Callbacks preserve public DTOs and return unknown for unbound mutable bodies; selected NULL snapshots remain unknown.",
+    "Summary callback reuses original document owner; actual source selection proven, not full rendered wake/continuation capture.",
+    "Heartbeat first-input task-plan/planning capture compiled and traced, not exercised through native dispatch/recovery. Review/workflow replacement excludes ordinary plan prompt; planningContext has separate capture.",
+    "No protocol constructors or complete Run receipt enabled. Final redacted bytes, all input families, current source permissions, retained history, effect copying and original private Memory/temporal regressions remain open."
+  ]
+}

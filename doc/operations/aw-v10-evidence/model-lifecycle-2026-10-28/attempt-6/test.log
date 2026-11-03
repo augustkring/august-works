@@ -1,0 +1,48 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ × |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > constructs a body-free selectable proposal and preserves Original configuration, bindings and liabilities 171ms
+   → Failed query: insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, default, default, default, default)
+params: 0bdb1892-83ca-491b-af1b-4ef29247a9f4,60a634f2-500e-4861-8b7a-3ad535c38ff3,08cc6b65-112b-4773-9c5e-e0ae8e619368,1,published,{"version":1,"nodes":[{"id":"agent-step","type":"agent","name":"Fixture agent","position":{"x":0,"y":0},"config":{"agentId":"379260db-3e52-4168-ad36-6ab9833758e3"}}],"edges":[],"variables":[],"settings":{}}
+ ✓ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > reports an unresolved current profile reference without inventing a replacement or dependency link 167ms
+ ✓ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > reconciles concurrent original creation without another candidate or activity 143ms
+ ✓ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > recovers the exact creation slot after flag rollback and never treats absence as refusal 179ms
+ ✓ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > refuses a stale expected version, wrong selector and changed virtual configuration without allocating a proposal 139ms
+ ✓ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > uses verified current author/configuration authority without an instance-admin bypass 148ms
+ ✓ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > does not expose another tenant or substitute a candidate from another draft 170ms
+ ✓ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > saves only a canonical own candidate selection while the Original live configuration stays unchanged 138ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > constructs a body-free selectable proposal and preserves Original configuration, bindings and liabilities
+Error: Failed query: insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, default, default, default, default)
+params: 0bdb1892-83ca-491b-af1b-4ef29247a9f4,60a634f2-500e-4861-8b7a-3ad535c38ff3,08cc6b65-112b-4773-9c5e-e0ae8e619368,1,published,{"version":1,"nodes":[{"id":"agent-step","type":"agent","name":"Fixture agent","position":{"x":0,"y":0},"config":{"agentId":"379260db-3e52-4168-ad36-6ab9833758e3"}}],"edges":[],"variables":[],"settings":{}}
+ ❯ PostgresJsPreparedQuery.queryWithCache ../../v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/v9-runtime-candidates.integration.test.ts:63:5
+     61|     const workflowId = randomUUID(), revisionId = randomUUID();
+     62|     await db.insert(workflows).values({ id: workflowId, companyId: f.h…
+     63|     await db.insert(workflowRevisions).values({ id: revisionId, compan…
+       |     ^
+     64|       graph: { version: 1, nodes: [{ id: "agent-step", type: "agent", …
+     65|         config: { agentId: f.presence.id } }], edges: [], variables: […
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: 'insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, default, default, default, default)', params: [ '0bdb1892-83ca-491b-af1b-4ef29247a9f4', '60a634f2-500e-4861-8b7a-3ad535c38ff3', '08cc6b65-112b-4773-9c5e-e0ae8e619368', 1, 'published', '{"version":1,"nodes":[{"id":"agent-step","type":"agent","name":"Fixture agent","position":{"x":0,"y":0},"config":{"agentId":"379260db-3e52-4168-ad36-6ab9833758e3"}}],"edges":[],"variables":[],"settings":{}}' ] }
+Caused by: PostgresError: published workflow revision is not the workflow published pointer
+ ❯ ErrorResponse ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_check_workflow_revision_backref() line 28 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'insert into "workflow_revisions" ("id", "company_id", "workflow_id", "revision_number", "state", "graph_json", "input_schema", "output_schema", "change_summary", "created_by_user_id", "created_by_agent_id", "created_by_run_id", "created_at") values ($1, $2, $3, $4, $5, $6, default, default, default, default, default, default, default)', parameters: [ '0bdb1892-83ca-491b-af1b-4ef29247a9f4', '60a634f2-500e-4861-8b7a-3ad535c38ff3', '08cc6b65-112b-4773-9c5e-e0ae8e619368', '1', 'published', '{"version":1,"nodes":[{"id":"agent-step","type":"agent","name":"Fixture agent","position":{"x":0,"y":0},"config":{"agentId":"379260db-3e52-4168-ad36-6ab9833758e3"}}],"edges":[],"variables":[],"settings":{}}' ], args: [ '0bdb1892-83ca-491b-af1b-4ef29247a9f4', '60a634f2-500e-4861-8b7a-3ad535c38ff3', '08cc6b65-112b-4773-9c5e-e0ae8e619368', 1, 'published', '{"version":1,"nodes":[{"id":"agent-step","type":"agent","name":"Fixture agent","position":{"x":0,"y":0},"config":{"agentId":"379260db-3e52-4168-ad36-6ab9833758e3"}}],"edges":[],"variables":[],"settings":{}}' ], types: [ 2950, 2950, 2950, 23, 25, 3802 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  10:12:00
+   Duration  19.69s (transform 9.98s, setup 80ms, import 14.07s, tests 5.41s, environment 0ms)
+

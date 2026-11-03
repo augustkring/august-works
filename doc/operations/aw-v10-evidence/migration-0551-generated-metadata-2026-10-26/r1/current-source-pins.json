@@ -1,0 +1,19 @@
+{
+  "head": "523617d4338a92372054ec6bc9b33308d2cd4422",
+  "qualification": "static metadata/order/safety only; actual legacy-bundle purge integration remains open",
+  "sqlCorrection": "JSON containment operands parenthesized after actual PostgreSQL 42883 operator precedence failure; original publication receipt retained unchanged",
+  "files": [
+    {
+      "path": "packages/db/src/migrations/0551_native_runtime_erasure_receipt_merge.sql",
+      "sha256": "799a85e7ad270d17485790dcde0d9cf92c4d9c8968ccd202e3e986ef3ecbe220"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0551_snapshot.json",
+      "sha256": "b535ffdc77d1806e0a3c9f4622ba6f2967102b91d01ec401d0150b222d502e5c"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/_journal.json",
+      "sha256": "fb5bf1fa27ad88bf563d6c1bc0cb335e3f5cc6cbebcb485a040eedc87edcf663"
+    }
+  ]
+}

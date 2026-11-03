@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts (16 tests | 1 failed | 15 skipped) 10036ms
+     × applies Memory source authority before both eligible and reviewable result limits 747ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > applies Memory source authority before both eligible and reviewable result limits
+AssertionError: expected [] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+- [
+-   "7437f456-f7a3-4a79-bb5b-85caf3924f79",
+- ]
++ []
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:270:96
+    268|       updatedAt:new Date(now.getTime()+i+1),createdByActorType:"user" …
+    269|     const actor={principal:{type:"user" as const,userId:otherId}};
+    270|     expect((await memoryService(db).listEligible(companyId,{limit:1},a…
+       |                                                                                                ^
+    271|     expect((await memoryService(db).listReviewable(companyId,{limit:1}…
+    272|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 skipped (16)
+   Start at  21:02:26
+   Duration  25.00s (transform 8.34s, setup 170ms, import 14.51s, tests 10.04s, environment 0ms)
+

@@ -1,0 +1,56 @@
+{
+  "capturePlan": "Small R63 delta against Host33 pins in R62. Capture changed/new Host37 source files only, full Host37 pins and frozen runners; compact closed Host35/36 status/restore; derived scoped 19-row report summary; updated freeze plan/R4 README/root note/aggregate helper; and new storage receipts only. Large R62/PG/dedup archives are referenced by SHA.",
+  "baseR62ArchiveSha256": "9c65435228a5436e895b805598eaac5cabd8d632afbf056c837dd10a63963932",
+  "baseHost33PinsSha256": "44a599d932b2fa3ab23ef00c6b169ed64001f5a85c9f7fb9d06eb6105b83e1a2",
+  "candidateHost37PinsSha256": "6a77db9fccf5063c0ab8062ed483a160d6ca4015cd15093b6392da10e35a539c",
+  "changedPaths": [
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    "server/src/services/execution-sandbox/sandbox-service.ts"
+  ],
+  "addedPaths": [
+    "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+    "server/src/services/execution-sandbox/qualification.ts"
+  ],
+  "deletedPaths": [],
+  "inputs": {
+    "delta/host37-delta.json": "/workspace/v10-preparation/r63-recovery-prepared-nov01.building/host37-delta.json",
+    "final-freeze/PLAN.md": "/workspace/v10-preparation/final-freeze-sequence-nov01/PLAN.md",
+    "final-freeze/SHA256SUMS": "/workspace/v10-preparation/final-freeze-sequence-nov01/SHA256SUMS",
+    "host35-closed/db-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/db-build.exit",
+    "host35-closed/host-session-node.exit": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/host-session-node.exit",
+    "host35-closed/managed-source-target-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/managed-source-target-vitest.exit",
+    "host35-closed/qualification-clock-vitest.exit": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/qualification-clock-vitest.exit",
+    "host35-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/restore.log",
+    "host35-closed/result-before-restore.json": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/result-before-restore.json",
+    "host35-closed/server-tsc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/server-tsc.exit",
+    "host35-closed/shared-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/shared-build.exit",
+    "host35-closed/source-oxc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.35-qualification-clock-private/qualification-r14.38.4.35-targeted/source-oxc.exit",
+    "host36-closed/db-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.36-probe-failclosed-private/qualification-r14.38.4.36-targeted/db-build.exit",
+    "host36-closed/restore.log": "/workspace/v10-preparation/v10-149-r14.38.4.36-probe-failclosed-private/qualification-r14.38.4.36-targeted/restore.log",
+    "host36-closed/server-tsc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.36-probe-failclosed-private/qualification-r14.38.4.36-targeted/server-tsc.exit",
+    "host36-closed/shared-build.exit": "/workspace/v10-preparation/v10-149-r14.38.4.36-probe-failclosed-private/qualification-r14.38.4.36-targeted/shared-build.exit",
+    "host36-closed/source-oxc.exit": "/workspace/v10-preparation/v10-149-r14.38.4.36-probe-failclosed-private/qualification-r14.38.4.36-targeted/source-oxc.exit",
+    "host37-delta/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/files/server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+    "host37-delta/files/server/src/__tests__/v7-sandbox-qualification-faults.test.ts": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/files/server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+    "host37-delta/files/server/src/services/execution-sandbox/qualification.ts": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/files/server/src/services/execution-sandbox/qualification.ts",
+    "host37-delta/files/server/src/services/execution-sandbox/sandbox-service.ts": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/files/server/src/services/execution-sandbox/sandbox-service.ts",
+    "host37/qualify-r14.38.4.37-targeted.sh": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/qualify-r14.38.4.37-targeted.sh",
+    "host37/qualify-r14.38.4.37.sh": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/qualify-r14.38.4.37.sh",
+    "host37/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/source-pins.json",
+    "host37/source-pins.predecessor-r14.38.4.36.json": "/workspace/v10-preparation/v10-149-r14.38.4.37-diagnostic-scope-private/source-pins.predecessor-r14.38.4.36.json",
+    "r4-refresh/README.md": "/workspace/v10-preparation/r4-final-refresh-procedure-nov01/README.md",
+    "r4-refresh/SHA256SUMS": "/workspace/v10-preparation/r4-final-refresh-procedure-nov01/SHA256SUMS",
+    "root/root-continuation-20261101-current.md": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+    "root/run-final-workspace-aggregate-20261101.sh": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh",
+    "storage/closed-host-source-r17-35-dedup-receipt.json": "/workspace/v10-preparation/durable-closed-host-source-r17-35-recovery-20261101/receipt.json",
+    "storage/closed-pg-r29-32-receipt.json": "/workspace/v10-preparation/native-closed-pg-r29-32-lossless-20261101/receipt.json"
+  },
+  "excluded": [
+    "active Host37 qualification outputs",
+    "unchanged Host37 source files and full base source bundle",
+    "large PG/source-dedup archive payloads (SHA-referenced)",
+    "MAIN/MIRROR/Git mutations",
+    "dependency/build/provider artifacts",
+    "raw qualification logs beyond hash-referenced Host35 report source"
+  ]
+}

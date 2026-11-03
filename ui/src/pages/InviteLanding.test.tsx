@@ -3,7 +3,7 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InviteLandingPage } from "./InviteLanding";
 import { queryKeys } from "../lib/queryKeys";
@@ -26,11 +26,17 @@ vi.mock("../api/access", () => ({
 
 vi.mock("../api/auth", () => ({
   authApi: {
+    authenticationMethods: async () => ({ passkey: false }),
     getSession: () => getSessionMock(),
     signInEmail: (input: unknown) => signInEmailMock(input),
     signUpEmail: (input: unknown) => signUpEmailMock(input),
   },
 }));
+
+function AuthChallengeDestination() {
+  const location = useLocation();
+  return <div data-testid="auth-challenge-state">{JSON.stringify(location.state)}</div>;
+}
 
 vi.mock("../api/health", () => ({
   healthApi: {
@@ -200,7 +206,7 @@ describe("InviteLandingPage", () => {
     await flushReact();
     await flushReact();
 
-    expect(container.textContent).toContain("You've been invited to join Paperclip");
+    expect(container.textContent).toContain("You've been invited to join Blentera");
     expect(container.textContent).toContain("Join Acme Robotics");
     expect(container.textContent).toContain("Create account");
     expect(container.textContent).toContain("I already have an account");
@@ -228,7 +234,7 @@ describe("InviteLandingPage", () => {
       inputValueSetter!.call(emailInput, "jane@example.com");
       emailInput!.dispatchEvent(new Event("input", { bubbles: true }));
       emailInput!.dispatchEvent(new Event("change", { bubbles: true }));
-      inputValueSetter!.call(passwordInput, "supersecret");
+      inputValueSetter!.call(passwordInput, "long-enough-password");
       passwordInput!.dispatchEvent(new Event("input", { bubbles: true }));
       passwordInput!.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -246,7 +252,7 @@ describe("InviteLandingPage", () => {
     expect(signUpEmailMock).toHaveBeenCalledWith({
       name: "Jane Example",
       email: "jane@example.com",
-      password: "supersecret",
+      password: "long-enough-password",
     });
     expect(container.textContent).toContain("An account already exists for jane@example.com. Sign in below to continue with this invite.");
     expect(container.querySelector('input[name="name"]')).toBeNull();
@@ -451,7 +457,7 @@ describe("InviteLandingPage", () => {
       password: "wrongpass",
     });
     expect(container.textContent).toContain(
-      "That email and password did not match an existing Paperclip account. Check both fields, or create an account first if you are new here.",
+      "That email and password did not match an existing Blentera account. Check both fields, or create an account first if you are new here.",
     );
 
     await act(async () => {
@@ -516,7 +522,7 @@ describe("InviteLandingPage", () => {
       nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
       inputValueSetter!.call(emailInput, "jane@example.com");
       emailInput!.dispatchEvent(new Event("input", { bubbles: true }));
-      inputValueSetter!.call(passwordInput, "supersecret");
+      inputValueSetter!.call(passwordInput, "long-enough-password");
       passwordInput!.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
@@ -534,7 +540,7 @@ describe("InviteLandingPage", () => {
     expect(signUpEmailMock).toHaveBeenCalledWith({
       name: "Jane Example",
       email: "jane@example.com",
-      password: "supersecret",
+      password: "long-enough-password",
     });
     expect(acceptInviteMock).toHaveBeenCalledWith("pcp_invite_test", { requestType: "human" });
     expect(setSelectedCompanyIdMock).toHaveBeenCalledWith("company-1", { source: "manual" });
@@ -613,6 +619,47 @@ describe("InviteLandingPage", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("hands a native sign-in challenge to AuthPage and remembers the invite return without putting its token in router state", async () => {
+    signInEmailMock.mockResolvedValueOnce({ userId: "human", twoFactorRedirect: true, twoFactorMethods: ["totp"] });
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={["/invite/pcp_invite_test"]}>
+          <QueryClientProvider client={queryClient}>
+            <Routes>
+              <Route path="/invite/:token" element={<InviteLandingPage />} />
+              <Route path="/auth" element={<AuthChallengeDestination />} />
+            </Routes>
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+    });
+    await flushReact(); await flushReact();
+
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    const existingAccount = [...container.querySelectorAll("button")].find(button => button.textContent === "I already have an account");
+    await act(async () => { existingAccount!.click(); });
+    await flushReact();
+    const email = container.querySelector('input[name="email"]') as HTMLInputElement;
+    const password = container.querySelector('input[name="password"]') as HTMLInputElement;
+    await act(async () => {
+      setter.call(email, "jane@example.com"); email.dispatchEvent(new Event("input", { bubbles: true }));
+      setter.call(password, "original-secret"); password.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector('[data-testid="invite-inline-auth"]')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact(); await flushReact();
+
+    await vi.waitFor(() => expect(container.querySelector('[data-testid="auth-challenge-state"]')?.textContent).toBe(JSON.stringify({
+      twoFactorChallenge: { userId: "human", twoFactorRedirect: true, twoFactorMethods: ["totp"] },
+    })));
+    expect(container.textContent).not.toContain("original-secret");
+    expect(localStorage.getItem("paperclip:pending-invite-token")).toBe("pcp_invite_test");
+    expect(acceptInviteMock).not.toHaveBeenCalled();
+    expect(listCompaniesMock).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
   });
 
   it("auto-completes a previously accepted human invite after sign-in", async () => {

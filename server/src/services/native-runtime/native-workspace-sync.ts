@@ -606,7 +606,9 @@ async function writeRemoteStamp(input: {
       "-c",
       `umask 077; mkdir -p ${shellQuote(runtimeDir)} && printf %s ${shellQuote(encoded)} | base64 -d > ${shellQuote(tempPath)} && mv ${shellQuote(tempPath)} ${shellQuote(stampPath)}`,
     ],
-    cwd: "/",
+    // RuntimeControl binds conversation commands to the exact private Task
+    // workspace. The stamp itself lives under that workspace's runtime root.
+    cwd: input.target.remoteCwd,
     timeoutMs: 15_000,
     bypassSession: true,
   });
@@ -618,6 +620,7 @@ async function writeRemoteStamp(input: {
 async function remoteStampMatches(input: {
   target: Extract<AdapterExecutionTarget, { transport: "sandbox" }>;
   expected: Record<string, unknown>;
+  nativeWorkspacePreparation?: boolean;
 }): Promise<boolean> {
   if (!input.target.runner) return false;
   const stampPath = path.posix.join(
@@ -632,9 +635,10 @@ async function remoteStampMatches(input: {
       "-c",
       `test -f ${shellQuote(stampPath)} && cat ${shellQuote(stampPath)}`,
     ],
-    cwd: "/",
+    cwd: input.target.remoteCwd,
     timeoutMs: 15_000,
     bypassSession: true,
+    ...(input.nativeWorkspacePreparation ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
   });
   if (result.timedOut || result.exitCode !== 0) return false;
   try {
@@ -689,6 +693,8 @@ async function prepareRuntime(input: {
   mode: WorkspaceInboundMode;
   baseline?: DirectorySnapshot;
   gitSnapshot?: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
+  nativeWorkspacePreparation?: boolean;
   durableSeed?: WorkspaceDurableSeedPaths;
 }): Promise<PreparedAdapterExecutionTargetRuntime> {
   return prepareAdapterExecutionTargetRuntime({
@@ -701,6 +707,8 @@ async function prepareRuntime(input: {
     workspaceDurableSeed: input.durableSeed,
     workspaceBaseline: input.baseline,
     workspaceGitSnapshot: input.gitSnapshot,
+    workspaceRepositoryMode: input.workspaceRepositoryMode,
+    nativeWorkspacePreparation: input.nativeWorkspacePreparation === true || input.workspaceRepositoryMode === "server_verified_none",
   });
 }
 
@@ -752,6 +760,10 @@ export async function prepareNativeWorkspaceSync(input: {
   restartRecovery?: NativeRestartRecoveryClaim;
   sameRunRecovery?: boolean;
   resourceDisposition?: NativeWorkspaceResourceDisposition;
+  /** Set only by heartbeat after exact private projectless task-root verification. */
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
+  /** Bound to the existing managed Native source authority before staging. */
+  nativeWorkspacePreparation?: boolean;
 }): Promise<PreparedNativeWorkspaceSync | null> {
   if (input.target?.kind !== "remote" || input.target.transport !== "sandbox") {
     return null;
@@ -823,6 +835,8 @@ export async function prepareNativeWorkspaceSync(input: {
       mode,
       baseline: existing.baseline,
       gitSnapshot: existing.descriptor.gitSnapshot,
+      workspaceRepositoryMode: input.workspaceRepositoryMode,
+      nativeWorkspacePreparation: input.nativeWorkspacePreparation,
       durableSeed,
     });
     descriptor = {
@@ -855,6 +869,8 @@ export async function prepareNativeWorkspaceSync(input: {
         workspaceArchivePath: seedPaths.workspaceArchivePath,
         gitArchivePath: seedPaths.gitArchivePath,
       },
+      workspaceRepositoryMode: input.workspaceRepositoryMode,
+      nativeWorkspacePreparation: input.nativeWorkspacePreparation,
     });
     const currentSnapshot = runtime.workspaceSyncSnapshot;
     if (!currentSnapshot) {
@@ -866,7 +882,7 @@ export async function prepareNativeWorkspaceSync(input: {
       );
       const verifiedWarmAdoption =
         priorStamp.hostSha256 === currentHostSha256 &&
-        (await remoteStampMatches({ target, expected: priorStamp }));
+        (await remoteStampMatches({ target, expected: priorStamp, nativeWorkspacePreparation: input.nativeWorkspacePreparation }));
       if (verifiedWarmAdoption) {
         mode = "adopt_remote";
       } else {
@@ -878,6 +894,8 @@ export async function prepareNativeWorkspaceSync(input: {
           mode,
           baseline: currentSnapshot.baseline,
           gitSnapshot: currentSnapshot.gitSnapshot,
+          workspaceRepositoryMode: input.workspaceRepositoryMode,
+          nativeWorkspacePreparation: input.nativeWorkspacePreparation,
           durableSeed: {
             workspaceArchivePath: seedPaths.workspaceArchivePath,
             gitArchivePath: seedPaths.gitArchivePath,

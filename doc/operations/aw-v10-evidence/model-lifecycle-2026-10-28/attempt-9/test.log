@@ -1,0 +1,29 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts (8 tests | 1 failed) 5048ms
+     × constructs a body-free selectable proposal and preserves Original configuration, bindings and liabilities 196ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v9-runtime-candidates.integration.test.ts > Canonical saved runtime proposals have no live effect > constructs a body-free selectable proposal and preserves Original configuration, bindings and liabilities
+ReferenceError: current is not defined
+ ❯ src/__tests__/v9-runtime-candidates.integration.test.ts:69:67
+     67|     });
+     68|     const catalog = await service.catalog(f.actor, f.home, draft.id);
+     69|     expect(catalog.lifecycleInventory).toMatchObject({ profileId: curr…
+       |                                                                   ^
+     70|       status: "migration_required", replacementProfileId: profile.id, …
+     71|       publishedWorkflows: [{ workflowId, revisionId, name: "Fixture wo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  10:20:30
+   Duration  18.93s (transform 9.63s, setup 74ms, import 13.68s, tests 5.05s, environment 0ms)
+

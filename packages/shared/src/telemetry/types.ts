@@ -24,7 +24,9 @@ export interface TelemetryBackoffConfig {
 }
 
 export interface TelemetryConfig {
+  /** Affirmative operator choice; a valid explicit endpoint is also required. */
   enabled: boolean;
+  /** HTTP(S) ingest URL without credentials, query parameters or a fragment. */
   endpoint?: string;
   app?: string;
   schemaVersion?: string;

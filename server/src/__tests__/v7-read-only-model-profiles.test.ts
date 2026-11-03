@@ -112,6 +112,13 @@ describe("deployment-pinned read-only model qualifications", () => {
         assertReadOnlyModelProfileCurrent(altered, sourceSha, protectedOrigin),
       ).toThrow("qualification_unavailable");
   });
+  it("blocks an explicitly retired model at runtime admission", () => {
+    const p = profile();
+    expect(() => assertReadOnlyModelProfileCurrent({ ...p, lifecycle: { status: "retired", owner: "reviewer",
+      retirementAt: null, replacementProfileId: null, regionOrRoutingProfile: "fixture-region", dataUseProfile: "fixture-no-training",
+      supportedInputOutput: ["text"], toolUseCapability: false, rateLimits: { requestsPerMinute: 10, tokensPerMinute: 1000 } } }, sourceSha, protectedOrigin))
+      .toThrow("model_lifecycle_profile_unavailable");
+  });
   it("requires an explicit API-key grant and refuses an extra endpoint, raw key or unsupported contract", () => {
     const p = profile();
     expect(

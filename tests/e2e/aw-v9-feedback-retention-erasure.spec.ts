@@ -13,14 +13,15 @@ async function json(response: APIResponse) {
 // qualify the actual operator, policy and erasure owners. No hosted auth proof.
 test("erasure uses separate keyboard C3, reads an unknown reply, survives account recheck and recovers its original command after reload", async ({ page, request }, info) => {
   const flags = await json(await request.get("/api/instance/settings/experimental"));
+  const nativeSession = await json(await request.get("/api/auth/get-session"));
+  const expectedUserId = encodeURIComponent(nativeSession.user.id);
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable erasure UI fixture" } }));
   await json(await request.patch("/api/instance/settings/experimental", { data: { customer_feedback_v9: true, progressive_shell_v9: true, experience_projection_v9: true } }));
   const body = "Owned original feedback text for software erasure UI";
-  const feedback = await json(await request.post(`/api/companies/${company.id}/customer-feedback?expectedUserId=local-board`, { data: {
+  const feedback = await json(await request.post(`/api/companies/${company.id}/customer-feedback?expectedUserId=${expectedUserId}`, { data: {
     idempotencyKey: randomUUID(), category: "BUG", body, omitName: true,
     context: { surfaceKey: "home", locale: "en", timezone: "UTC", viewportClass: "wide" },
   } }));
-  const nativeSession = await json(await request.get("/api/auth/get-session"));
   const session = { ...nativeSession, session: { ...nativeSession.session, localImplicit: false } };
   const base = `/api/internal/customer-feedback/${company.id}`, erase = `${base}/${feedback.id}/retention-erasures`;
   const pending = { id: randomUUID(), companyId: company.id, feedbackId: feedback.id, target: { kind: "case" },
@@ -39,7 +40,7 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
   });
   await page.route(`**${base}**`, async route => {
     const req = route.request(), url = new URL(req.url());
-    expect(url.searchParams.get("expectedUserId")).toBe("local-board");
+    expect(url.searchParams.get("expectedUserId")).toBe(nativeSession.user.id);
     if (url.pathname === erase && req.method() === "POST") {
       const next = req.postDataJSON(); expect(next).toMatchObject({ confirmErasure: true, expectedReviewHash: review.reviewHash, target: { kind: "case" } });
       expect(next.requestKey).toMatch(/^[a-f0-9-]{36}$/); writes++;
@@ -55,6 +56,8 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
     if (url.pathname === base + "/retention-erasures") return route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: command ? [{ receipt: pending, command }] : [] });
     if (url.pathname === erase + "/review") return command ? route.fulfill({ status: 404, json: { error: "Feedback not found" } }) :
       route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: review });
+    // Quality is a read of the disposable Native company, outside the simulated erasure replies.
+    if (url.pathname === `${base}/quality` && req.method() === "GET") return route.continue();
     if (url.pathname === base) return route.fulfill({ json: command ? [] : [summary] });
     if (url.pathname === `${base}/${feedback.id}`) return command ? route.fulfill({ status: 404, json: { error: "Feedback not found" } }) : route.fulfill({ json: detail });
     if (url.pathname.endsWith("/images")) return route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: [] });
@@ -105,7 +108,7 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
     await expect(erasure).toContainText("Erasure confirmed"); expect(writes).toBe(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("v9-erasure-history-mobile.png"), fullPage: true });
-    const native = await json(await request.get(`/api/companies/${company.id}/customer-feedback/${feedback.id}?expectedUserId=local-board`));
+    const native = await json(await request.get(`/api/companies/${company.id}/customer-feedback/${feedback.id}?expectedUserId=${expectedUserId}`));
     expect(native.body).toBe(body); // Software replies did not erase the Native fixture.
     journeyCompleted = true;
   } finally {

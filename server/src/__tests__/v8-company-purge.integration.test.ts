@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { afterAll,beforeAll,describe,expect,it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { activityLog,analyticalLineageManifests,businessMetrics,businessMetricVersions,businessMetricTargets,businessMetricTargetVersions,businessMetricTargetApprovals,
-  companies,createDb,goals,issues,projects,processAnalysisDefinitions,processAnalysisPublications,processAnalysisRuns,processAnalysisVersions,
-  strategyExecutionLinks,strategyExecutionLinkVersions,strategyExecutionLinkApprovals,aiUseCases,aiUseCaseVersions,aiUseCaseAssessments,aiUseCaseChangeEvents,aiUseCaseDeployments,governanceStopActions,governanceObligations,agents,heartbeatRuns,processFindings,processFindingTransitions } from "@paperclipai/db";
+  companies,createDb,goals,issues,processAnalysisDefinitions,processAnalysisPublications,processAnalysisRuns,processAnalysisVersions,
+  strategyExecutionLinks,strategyExecutionLinkVersions,strategyExecutionLinkApprovals,aiUseCases,aiUseCaseVersions,aiUseCaseAssessments,aiUseCaseChangeEvents,aiUseCaseDeployments,governanceStopActions,governanceObligations,agents,heartbeatRuns,processFindings,processFindingTransitions,principalPermissionGrants } from "@paperclipai/db";
 import { businessMetricTargetDefinitionSchema,processAnalysisDefinitionSchema,strategyExecutionLinkDefinitionSchema } from "@paperclipai/shared";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -13,12 +13,13 @@ import { strategyExecutionService } from "../services/strategy-execution/service
 import { businessEventService } from "../services/business-events.js";
 import { processAnalysisService } from "../services/process-analysis.js";
 import { processFindingService } from "../services/process-findings.js";
+import { issueService } from "../services/issues.js";
 import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { analyticalPurpose,metricDefinition } from "./helpers/business-metric-fixture.js";
 import { purpose,oversight,reviews } from "./helpers/governance-fixture.js";
 import { getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject,seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported ? describe :describe.skip;
-const actor={type:"board" as const,source:"local_implicit" as const};
 suite("V8 native analytical ownership during company content purge",()=>{
   let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>;
   beforeAll(async()=>{database=await startEmbeddedPostgresTestDatabase("aw-v8-purge-");db=createDb(database.connectionString);
@@ -26,10 +27,13 @@ suite("V8 native analytical ownership during company content purge",()=>{
       analytical_lineage_v8:true,business_metrics_v8:true,strategy_execution_v8:true,business_events_v8:true,process_intelligence_v8:true});});
   afterAll(async()=>{await database?.cleanup();});
   async function populated() {
-    const companyId=randomUUID(),goalId=randomUUID(),projectId=randomUUID(),issueId=randomUUID();
+    const companyId=randomUUID(),goalId=randomUUID(),issueId=randomUUID();
     await db.insert(companies).values({id:companyId,name:"Private analytical company",issuePrefix:randomUUID()});
-    await db.insert(goals).values({id:goalId,companyId,title:"Private objective"});await db.insert(projects).values({id:projectId,companyId,name:"Private initiative"});
-    await db.insert(issues).values({id:issueId,companyId,projectId,title:"Private task",status:"done",createdAt:new Date("2026-01-01T12:00:00Z")});
+    const actor=await seedCurrentHumanSourceActor(db,[companyId],"local-board");
+    await db.insert(principalPermissionGrants).values({companyId,principalType:"user",principalId:actor.userId!,permissionKey:"audit:view_agent_actions",scope:null,grantedByUserId:actor.userId});
+    await db.insert(goals).values({id:goalId,companyId,title:"Private objective"});
+    const project=await createCanonicalHumanProject(db,companyId,actor,"Private initiative");
+    await issueService(db).create(companyId,{id:issueId,projectId:project.id,title:"Private task",status:"done",createdAt:new Date("2026-01-01T12:00:00Z"),responsibleUserId:"local-board",createdByUserId:"local-board"},db,undefined,{manualInputActor:actor,privacyActor:actor});
     const managementPolicy=analyticalPurpose();managementPolicy.analyticalPurpose!.capabilities=["metrics","strategy"];
     const policyId=(await aiGovernanceService(db).obligation(actor,companyId,managementPolicy)).id;
     const metric=await businessMetricService(db).create(companyId,actor,{key:"completion",definition:metricDefinition(policyId)});
@@ -42,8 +46,8 @@ suite("V8 native analytical ownership during company content purge",()=>{
     await strategyExecutionService(db).approve(companyId,actor,strategy.link.id,{expectedRevision:1,versionId:strategy.version.id,rationale:"Human reviewed existing objective and measurement"});
     const processPolicy=analyticalPurpose();processPolicy.citation="Native process purpose";processPolicy.analyticalPurpose!.purpose="process_intelligence";processPolicy.analyticalPurpose!.capabilities=["process"];
     const processPolicyId=(await aiGovernanceService(db).obligation(actor,companyId,processPolicy)).id;
-    await db.insert(activityLog).values([{companyId,actorType:"user",actorId:"private-person",entityType:"issue",entityId:issueId,action:"issue.created",createdAt:new Date("2026-01-01T12:00:00Z"),details:{status:"todo",projectId}},
-      {companyId,actorType:"user",actorId:"private-person",entityType:"issue",entityId:issueId,action:"issue.updated",createdAt:new Date("2026-01-01T12:01:00Z"),details:{status:"done",projectId}}]);
+    await db.insert(activityLog).values([{companyId,actorType:"user",actorId:"local-board",entityType:"issue",entityId:issueId,action:"issue.created",createdAt:new Date("2026-01-01T12:00:00Z"),details:{status:"todo",projectId:project.id}},
+      {companyId,actorType:"user",actorId:"local-board",entityType:"issue",entityId:issueId,action:"issue.updated",createdAt:new Date("2026-01-01T12:01:00Z"),details:{status:"done",projectId:project.id}}]);
     const period={from:"2026-01-01T00:00:00Z",until:"2026-01-02T00:00:00Z"};
     await businessEventService(db).backfill(companyId,actor,{...period,limit:100,retentionDays:30,governanceObligationRefs:[processPolicyId]});
     const process=await processAnalysisService(db).create(companyId,actor,{key:"process",definition:processAnalysisDefinitionSchema.parse({name:"Private task flow",businessQuestion:"How long did recorded native work take?",ownerUserId:"local-board",reviewFrequencyDays:30,retentionDays:30,

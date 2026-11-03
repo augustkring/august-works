@@ -31,6 +31,7 @@ export function authenticateDeletionLedger(
     !Array.isArray(ledger.businessEvents) ||
     !Array.isArray(ledger.analyticalSources) ||
     !Array.isArray(ledger.feedback) ||
+    !Array.isArray(ledger.supportCases) ||
     !Array.isArray(ledger.identityHomes ?? []) ||
     !Array.isArray(ledger.users ?? []) ||
     ledger.companies.length +
@@ -38,6 +39,7 @@ export function authenticateDeletionLedger(
       ledger.businessEvents.length +
       ledger.analyticalSources.length +
       ledger.feedback.length +
+      ledger.supportCases.length +
       (ledger.identityHomes?.length ?? 0) +
       (ledger.users?.length ?? 0) >
       100000
@@ -91,6 +93,27 @@ export function authenticateDeletionLedger(
       (row.target_kind === "case" && row.subject_id !== row.feedback_id) ||
       !Number.isFinite(Date.parse(row.erased_at)) || Date.parse(row.erased_at) > exportedAt)
       throw Error("Invalid feedback deletion marker");
+  }
+  for (const row of ledger.supportCases) {
+    const keys = row && typeof row === "object" && !Array.isArray(row)
+      ? Object.keys(row).sort()
+      : [];
+    if (
+      keys.join(",") !== "case_id,company_id,erased_at,retain_until,subject_id,target_kind" ||
+      typeof row.subject_id !== "string" || typeof row.company_id !== "string" || typeof row.case_id !== "string" ||
+      !uuid.test(row?.subject_id ?? "") ||
+      !uuid.test(row?.company_id ?? "") ||
+      !uuid.test(row?.case_id ?? "") ||
+      !["case", "event"].includes(row?.target_kind) ||
+      (row.target_kind === "case" && row.subject_id.toLowerCase() !== row.case_id.toLowerCase()) ||
+      (row.target_kind === "event" && row.subject_id.toLowerCase() === row.case_id.toLowerCase()) ||
+      typeof row.erased_at !== "string" || typeof row.retain_until !== "string" ||
+      !Number.isFinite(Date.parse(row.erased_at)) ||
+      Date.parse(row.erased_at) > exportedAt ||
+      !Number.isFinite(Date.parse(row.retain_until)) ||
+      Date.parse(row.retain_until) <= Date.parse(row.erased_at)
+    )
+      throw Error("Invalid support case deletion marker");
   }
   return ledger;
 }

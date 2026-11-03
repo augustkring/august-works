@@ -21,6 +21,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+// Redaction registration rotates independently of the admitted execution context.
+// Only this owner's top-level registry is private bookkeeping; nested context
+// fields remain part of the authority snapshot.
+export function runContextWithoutSecretRedactionRegistry(contextSnapshot: unknown): unknown {
+  const context = asRecord(contextSnapshot);
+  if (!context || !Object.prototype.hasOwnProperty.call(context, REGISTRY_KEY)) return contextSnapshot;
+  return Object.fromEntries(Object.entries(context).filter(([key]) => key !== REGISTRY_KEY));
+}
+
 function registryEntries(contextSnapshot: unknown): RegistryEntry[] {
   const context = asRecord(contextSnapshot);
   const raw = context?.[REGISTRY_KEY];

@@ -1,0 +1,623 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[16:56:33] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:33] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:34] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:34] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:35] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:36] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:36] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:37] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:37] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:38] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:38] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:39] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:39] [32mINFO[39m: [36mskipped completed delegation mention wake[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","agentId":"33333333-3333-4333-8333-333333333333"}[39m
+[16:56:39] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:40] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:40] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:41] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:41] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:41] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:42] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:42] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:43] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:43] [33mWARN[39m: [36mcould not forward delegation mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 801,
+        "column": 76
+      }
+    }
+[16:56:43] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:44] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:44] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:45] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:45] [32mINFO[39m: [36mskipped completed delegation mention wake[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","agentId":"33333333-3333-4333-8333-333333333333"}[39m
+[16:56:45] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:46] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:46] [32mINFO[39m: [36mskipped completed delegation mention wake[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","agentId":"33333333-3333-4333-8333-333333333333"}[39m
+[16:56:46] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:47] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:47] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:48] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:48] [33mWARN[39m: [36mcould not check delegation for mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 790,
+        "column": 58
+      }
+    }
+[16:56:48] [33mWARN[39m: [36mcould not check delegation for mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 790,
+        "column": 58
+      }
+    }
+[16:56:48] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:49] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:49] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:49] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:50] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:50] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:50] [33mWARN[39m: [36mcould not check delegation for mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 785,
+        "column": 67
+      }
+    }
+[16:56:51] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:51] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:51] [32mINFO[39m: [36mskipped completed delegation mention wake[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","agentId":"33333333-3333-4333-8333-333333333333"}[39m
+[16:56:52] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:52] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:53] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:53] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:54] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:54] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:55] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:55] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:56] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:56] [33mWARN[39m: [36mcould not forward delegation mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 801,
+        "column": 76
+      }
+    }
+[16:56:56] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:56] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:57] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:58] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:58] [32mINFO[39m: [36mskipped completed delegation mention wake[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","agentId":"33333333-3333-4333-8333-333333333333"}[39m
+[16:56:58] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:59] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:56:59] [32mINFO[39m: [36mskipped completed delegation mention wake[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","childIssueId":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","agentId":"33333333-3333-4333-8333-333333333333"}[39m
+[16:56:59] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:00] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:00] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:01] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:01] [33mWARN[39m: [36mcould not check delegation for mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 790,
+        "column": 58
+      }
+    }
+[16:57:01] [33mWARN[39m: [36mcould not check delegation for mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 790,
+        "column": 58
+      }
+    }
+[16:57:01] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:02] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:02] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:03] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:03] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:04] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:04] [33mWARN[39m: [36mcould not check delegation for mention[39m [90m{"issueId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 785,
+        "column": 67
+      }
+    }
+[16:57:04] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:05] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:05] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+[16:57:06] [33mWARN[39m: [36mexternal object comment sync failed[39m 
+    err: {
+      "type": "TypeError",
+      "location": {
+        "line": 519,
+        "column": 8
+      }
+    }
+
+ Test Files  1 passed (1)
+      Tests  76 passed (76)
+   Start at  16:56:14
+   Duration  51.73s (transform 13.22s, setup 88ms, import 142ms, tests 51.35s, environment 0ms)
+

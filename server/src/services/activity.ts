@@ -20,9 +20,12 @@ import { hasWorkspaceRestoreFailure, safeWorkspaceRestorePath, ISSUE_CONTINUATIO
 import { logger } from "../middleware/logger.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { classifyRunLiveness } from "./run-liveness.js";
+import { activitySourceReadSqlCondition } from "./activity-privacy.js";
+import type { AuthorizationActor } from "./authorization.js";
 
 export interface ActivityFilters {
   companyId: string;
+  reader?: AuthorizationActor;
   agentId?: string;
   entityType?: string;
   entityId?: string;
@@ -337,8 +340,9 @@ export function activityService(db: Db) {
   }
 
   return {
-    list: (filters: ActivityFilters) => {
-      const conditions = [eq(activityLog.companyId, filters.companyId)];
+    list: async (filters: ActivityFilters) => {
+      const conditions = [eq(activityLog.companyId, filters.companyId),
+        await activitySourceReadSqlCondition(db, filters.reader ?? { type: "none" })];
       const limit = normalizeActivityLimit(filters.limit);
 
       if (filters.agentId) {

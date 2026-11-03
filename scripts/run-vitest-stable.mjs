@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,9 +25,15 @@ const nonServerProjects = [
   "@paperclipai/adapter-utils",
   "@paperclipai/adapter-claude-local",
   "@paperclipai/adapter-codex-local",
+  "@paperclipai/adapter-cursor-cloud",
+  "@paperclipai/adapter-cursor-local",
+  "@paperclipai/adapter-gemini-local",
   "@paperclipai/adapter-grok-local",
+  "@paperclipai/adapter-kimi-local",
+  "@paperclipai/hermes-paperclip-adapter",
   "@paperclipai/adapter-openclaw-gateway",
   "@paperclipai/adapter-opencode-local",
+  "@paperclipai/adapter-pi-local",
   "@paperclipai/plugin-daytona",
   "@paperclipai/plugin-sdk",
   "@paperclipai/create-paperclip-plugin",
@@ -63,6 +69,8 @@ const additionalSerializedServerTests = new Set([
   "server/src/__tests__/routines-e2e.test.ts",
 ]);
 let invocationIndex = 0;
+// One shared finite notice allowance across this job's sequential children.
+let reportingNoticeBudget = 20;
 const serializedModeName = "serialized";
 const generalModeName = "general";
 const allModeName = "all";
@@ -70,7 +78,10 @@ const generalServerGroupName = "general-server";
 const generalServerWithoutChatGroupName = "general-server-without-chat";
 const generalChatGroupName = "general-chat";
 const generalServerNativeRunnerGroupName = "general-server-native-runner";
+const generalServerManagedNativeGroupName = "general-server-managed-native";
 const chatSuite = "server/src/__tests__/chat-channels.integration.test.ts";
+const scheduledWorkServerRestartSuite =
+  "server/src/__tests__/scheduled-work-server-restart.integration.test.ts";
 // This suite rebuilds the Runner release binaries with cargo in beforeAll.
 // Inside the PR workflow's plain server shards, which carry no Rust cache,
 // that build was a ~4m30s cold compile of every third-party crate on each run
@@ -86,10 +97,31 @@ const nativeRunnerSuite =
 // readiness workflows — keeps the suite in the server shards, so a renamed or
 // unknown workflow degrades to today's slower-but-covered behavior rather
 // than dropping the suite.
+// These exact SDK callers and the model-client kernel primitive need fresh
+// per-file processes. PR jobs select one file per shard; other callers retain
+// the complete existing server coverage even if a workflow is renamed.
+const managedNativeSuites = [
+  "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
+  "server/src/__tests__/helpers/managed-native-model-transport.test.ts",
+  "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+  "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+  "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+  "server/src/__tests__/v7-model-reservations.integration.test.ts",
+  "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"
+];
 const prWorkflowName = "PR";
 const nativeRunnerSuiteRunsInRustCachedLane = process.env.GITHUB_WORKFLOW === prWorkflowName;
 const withoutChatExcludedSuites = nativeRunnerSuiteRunsInRustCachedLane
-  ? [chatSuite, nativeRunnerSuite]
+  ? [chatSuite, nativeRunnerSuite, ...managedNativeSuites]
   : [chatSuite];
 const generalWorkspacesAGroupName = "general-workspaces-a";
 const generalWorkspacesBGroupName = "general-workspaces-b";
@@ -101,6 +133,7 @@ const allowedGeneralGroupNames = [
   generalServerWithoutChatGroupName,
   generalChatGroupName,
   generalServerNativeRunnerGroupName,
+  generalServerManagedNativeGroupName,
 ];
 const serializedServerVitestArgs = [
   "--no-file-parallelism",
@@ -247,7 +280,7 @@ function parseCliOptions(argv) {
   const shardAllowed =
     mode === serializedModeName ||
     (mode === generalModeName &&
-      ([generalServerGroupName, generalServerWithoutChatGroupName, generalChatGroupName, generalWorkspacesAGroupName].includes(group)));
+      ([generalServerGroupName, generalServerWithoutChatGroupName, generalServerManagedNativeGroupName, generalChatGroupName, generalWorkspacesAGroupName].includes(group)));
   if (!shardAllowed && shardIndex !== null) {
     fail(
       "--shard-index/--shard-count are only valid with serialized mode or a shardable general server/chat/workspaces-a group.",
@@ -302,9 +335,31 @@ function selectSerializedSuites(routeTests, shardIndex, shardCount) {
   return shardFiles.map((file) => byRepoPath.get(file));
 }
 
-function runVitest(args, label, testShard = null) {
+function prepareBuiltServerRuntime() {
+  for (const commandArgs of [
+    ["--filter", "@paperclipai/server", "build"],
+    ["--filter", "@paperclipai/server", "build:runtime"],
+  ]) {
+    const result = spawnSync("pnpm", commandArgs, {
+      cwd: repoRoot,
+      env: process.env,
+      stdio: "inherit",
+    });
+    if (result.error || result.status !== 0) {
+      fail(`Server runtime preparation failed (${commandArgs.at(-1)}): ${result.error?.message ?? result.status}`);
+    }
+  }
+}
+
+function runVitest(args, label, testShard = null, selectedServerFiles = []) {
   console.log(`\n[test:run] ${label}`);
   invocationIndex += 1;
+  // UP13 starts the actual emitted server bundle. Prepare the ordinary server
+  // build and runtime bundle only for invocations whose selected files include
+  // that process-level integration test; unrelated server shards stay build-free.
+  if (selectedServerFiles.includes(scheduledWorkServerRestartSuite)) {
+    prepareBuiltServerRuntime();
+  }
   // Allow a short disk-backed root on hosts where /tmp has a small tmpfs quota.
   const tempRootParent = process.env.PAPERCLIP_TEST_TMPDIR || (process.platform === "win32" ? os.tmpdir() : "/tmp");
   // Production workspace/security checks reject symlink aliases. In particular
@@ -342,11 +397,44 @@ function runVitest(args, label, testShard = null) {
     console.log(`[test:run] chat shard ${testShard.index + 1}/${testShard.count}: ${selected.tests.length}/${collected.length} tests, ${selected.lines.length} source lines; exact filter coverage verified`);
     args.push("--allowOnly=false");
   }
-  const result = spawnSync("pnpm", ["exec", "vitest", "run", ...sourceOnlyVitestArgs, ...args], {
+  let reportDirectory;
+  const reportingArguments = [];
+  if (process.env.PAPERCLIP_VITEST_REPORT_DIR) {
+    const reportRoot = process.env.PAPERCLIP_VITEST_REPORT_DIR;
+    if (!path.isAbsolute(reportRoot)) fail("Vitest result directory must be absolute");
+    mkdirSync(reportRoot, { recursive: true });
+    reportDirectory = mkdtempSync(path.join(reportRoot, `invocation-${invocationIndex}-`));
+    env.PAPERCLIP_VITEST_INVOCATION_REPORT_DIR = reportDirectory;
+    env.PAPERCLIP_VITEST_REPORT_REPO_ROOT = repoRoot;
+    env.PAPERCLIP_VITEST_NOTICE_BUDGET = String(reportingNoticeBudget);
+    reportingArguments.push("--reporter=default", `--reporter=${path.join(scriptsDir, "vitest-module-results-reporter.mjs")}`);
+    writeFileSync(path.join(reportDirectory, "invocation.json"), JSON.stringify({ invocationIndex, label,
+      args: [...sourceOnlyVitestArgs, ...args, ...reportingArguments], selectedServerFiles, githubSha: env.GITHUB_SHA ?? null, githubRunId: env.GITHUB_RUN_ID ?? null,
+      githubRunAttempt: env.GITHUB_RUN_ATTEMPT ?? null, githubJob: env.GITHUB_JOB ?? null,
+      processExit: "pending" }) + "\n", { mode: 0o600 });
+  }
+  const result = spawnSync("pnpm", ["exec", "vitest", "run", ...sourceOnlyVitestArgs, ...args, ...reportingArguments], {
     cwd: repoRoot,
     env,
     stdio: "inherit",
   });
+  if (reportDirectory) {
+    try {
+      const temporary = path.join(reportDirectory, "exit.json.tmp");
+      writeFileSync(temporary, JSON.stringify({ status: result.status, signal: result.signal,
+        spawnErrorCode: result.error?.code ?? null, processExit: "recorded" }) + "\n", { mode: 0o600 });
+      renameSync(temporary, path.join(reportDirectory, "exit.json"));
+    } catch {
+      console.error("[test:run] Vitest completion record unavailable; process result must not be inferred from module reports");
+    }
+    // Missing/invalid reporting counters conservatively exhaust notices; they
+    // never change the actual child exit code or classify missing tests.
+    try {
+      const count = JSON.parse(readFileSync(path.join(reportDirectory, "notice-count.json"), "utf8")).count;
+      reportingNoticeBudget = Number.isSafeInteger(count) && count >= 0 && count <= reportingNoticeBudget
+        ? reportingNoticeBudget - count : 0;
+    } catch { reportingNoticeBudget = 0; }
+  }
   if (result.error) {
     console.error(`[test:run] Failed to start Vitest: ${result.error.message}`);
     process.exit(1);
@@ -378,33 +466,38 @@ function runProjectGroup(projects, groupName, shardIndex = null, shardCount = nu
 function runGeneralGroup(routeTests, groupName, shardIndex = null, shardCount = null) {
   if (groupName === generalChatGroupName) {
     runVitest(["--project", "@paperclipai/server", ...serializedServerVitestArgs, chatSuite],
-      "chat integration test shard", { index: shardIndex ?? 0, count: shardCount ?? 1 });
+      "chat integration test shard", { index: shardIndex ?? 0, count: shardCount ?? 1 }, [chatSuite]);
     return;
   }
   if (groupName === generalServerNativeRunnerGroupName) {
     runVitest(
       ["--project", "@paperclipai/server", ...serializedServerVitestArgs, nativeRunnerSuite],
       "native runner vertical-slice suite",
+      null,
+      [nativeRunnerSuite],
     );
     return;
   }
-  if (groupName === generalServerGroupName || groupName === generalServerWithoutChatGroupName) {
-    // In the PR workflow the without-chat group also leaves the native-runner
-    // suite to the Rust-cached vitest lane; the full general-server group
-    // (local runs) keeps both.
+  if ([generalServerGroupName, generalServerWithoutChatGroupName, generalServerManagedNativeGroupName].includes(groupName)) {
+    // PR without-chat leaves managed files to fresh per-file jobs and the
+    // native-runner suite to its Rust-cached lane. The full general-server
+    // group and non-PR callers retain the complete existing coverage.
     const withoutChat = groupName === generalServerWithoutChatGroupName;
-    const files = withoutChat
+    const managedNative = groupName === generalServerManagedNativeGroupName;
+    const files = managedNative ? managedNativeSuites : withoutChat
       ? generalServerTestFiles.filter((file) => !withoutChatExcludedSuites.includes(file))
       : generalServerTestFiles;
-    if (shardCount !== null && shardCount > 1) {
+    if (managedNative || (shardCount !== null && shardCount > 1)) {
+      const count = shardCount ?? 1;
+      const index = shardIndex ?? 0;
       const shardFiles = selectGeneralServerShard(
         files,
-        shardIndex,
-        shardCount,
+        index,
+        count,
         generalServerShardDurations,
       );
       console.log(
-        `\n[test:run] general-server shard ${shardIndex + 1}/${shardCount} running ${shardFiles.length} of ${files.length} suites`,
+        `\n[test:run] ${managedNative ? groupName : generalServerGroupName} shard ${index + 1}/${count} running ${shardFiles.length} of ${files.length} suites`,
       );
       if (shardFiles.length === 0) {
         return;
@@ -417,7 +510,9 @@ function runGeneralGroup(routeTests, groupName, shardIndex = null, shardCount = 
           ...serializedServerVitestArgs,
           ...shardFiles,
         ],
-        `${groupName} shard ${shardIndex + 1}/${shardCount}`,
+        `${groupName} shard ${index + 1}/${count}`,
+        null,
+        shardFiles,
       );
       return;
     }
@@ -436,6 +531,8 @@ function runGeneralGroup(routeTests, groupName, shardIndex = null, shardCount = 
         ...excludeRouteArgs,
       ],
       `${groupName} server suites excluding ${routeTests.length} serialized suites`,
+      null,
+      files,
     );
     return;
   }
@@ -473,6 +570,8 @@ function runSerializedSuites(routeTests, shardIndex, shardCount) {
         "--isolate",
       ],
       routeTest.repoPath,
+      null,
+      [routeTest.repoPath],
     );
   }
 }
@@ -521,14 +620,16 @@ if (options.dryRun) {
           options.mode === generalModeName && options.group === generalServerNativeRunnerGroupName
             ? [nativeRunnerSuite]
             : options.mode === generalModeName &&
-                [generalServerGroupName, generalServerWithoutChatGroupName].includes(options.group) &&
-                options.shardCount !== null
+                [generalServerGroupName, generalServerWithoutChatGroupName, generalServerManagedNativeGroupName].includes(options.group) &&
+                (options.shardCount !== null || options.group === generalServerManagedNativeGroupName)
               ? selectGeneralServerShard(
-                  options.group === generalServerWithoutChatGroupName
-                    ? generalServerTestFiles.filter((file) => !withoutChatExcludedSuites.includes(file))
-                    : generalServerTestFiles,
-                  options.shardIndex,
-                  options.shardCount,
+                  options.group === generalServerManagedNativeGroupName
+                    ? managedNativeSuites
+                    : options.group === generalServerWithoutChatGroupName
+                      ? generalServerTestFiles.filter((file) => !withoutChatExcludedSuites.includes(file))
+                      : generalServerTestFiles,
+                  options.shardIndex ?? 0,
+                  options.shardCount ?? 1,
                   generalServerShardDurations,
                 )
               : null,

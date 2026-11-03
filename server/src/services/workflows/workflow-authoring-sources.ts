@@ -1,14 +1,18 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { and, eq, sql } from "drizzle-orm";
-import { authUsers, heartbeatRuns, issues, workflowRuns, workflows, type Db } from "@paperclipai/db";
+import { and, eq, inArray, is, or, sql } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
+import { authUsers, heartbeatRuns, issues, workflowRuns, workflowStepRuns, workflowRevisions, workflows, type Db } from "@paperclipai/db";
 import { z } from "zod";
-import { forbidden } from "../../errors.js";
+import { forbidden, HttpError } from "../../errors.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { assertV5Authorization } from "../v5-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import type { NativeReadScope } from "../analytical-reader.js";
+import { lockAnalyticalCompany, markAnalyticalPrivacyReadLocked } from "../analytical-privacy.js";
+import { lockMemoryPrivacy, canActorReadMemorySources } from "../memory/memory-privacy.js";
 
 const sources = z.array(z.uuid()).max(32);
+const memorySources = z.array(z.uuid()).max(256);
 const review = new AsyncLocalStorage<{ active: Set<string>; deadline: number }>();
 
 /** Compose a bounded batch of Original Source reads without restarting its
@@ -51,13 +55,15 @@ export async function assertWorkflowAuthoringSources(db: Db, companyId: string, 
   await assertV5Authorization(db, { ...actor, isInstanceAdmin: false, ignoreInstanceAdmin: true }, companyId, "workflows:read");
   const state = review.getStore() ?? { active: new Set<string>(), deadline: performance.now() + 8000 };
   const key = `${companyId}:${workflowId}`;
-  if (state.active.has(key) || performance.now() > state.deadline)
-    throw forbidden("Complete workflow source review is cyclic or excessive");
+  if (state.active.has(key)) throw forbidden("Complete workflow source review is cyclic", { code: "workflow_source_review_cyclic" });
+  if (performance.now() > state.deadline)
+    throw forbidden("Complete workflow source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
   const inspect = async () => {
     state.active.add(key);
     try {
       for (const id of ids.data) {
-        if (performance.now() > state.deadline) throw forbidden("Complete workflow source review exceeded its budget");
+        if (performance.now() > state.deadline)
+          throw forbidden("Complete workflow source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
         const [origin] = await db.select({ runId: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
           userId: heartbeatRuns.responsibleUserId, issue: issues }).from(heartbeatRuns)
           .innerJoin(issues, and(eq(issues.companyId, heartbeatRuns.companyId), sql`${issues.id}=coalesce(${heartbeatRuns.nativeIssueId},case
@@ -110,7 +116,8 @@ export async function assertWorkflowRunAuthoringSources(db: Db, companyId: strin
   const state = review.getStore() ?? { active: new Set<string>(), deadline: performance.now() + 8000 };
   const inspect = async () => {
     for (const id of parsed.data) {
-      if (performance.now() > state.deadline) throw forbidden("Complete workflow run source review exceeded its budget");
+      if (performance.now() > state.deadline)
+        throw forbidden("Complete workflow run source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
       await assertWorkflowAuthoringSources(db, companyId, id, actor, readScope);
     }
   };
@@ -118,4 +125,138 @@ export async function assertWorkflowRunAuthoringSources(db: Db, companyId: strin
   const [current] = await db.select({ ids: workflowRuns.authoringSourceWorkflowIds }).from(workflowRuns)
     .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
   if (JSON.stringify(current?.ids) !== JSON.stringify(parsed.data)) throw forbidden("Current workflow run copy provenance changed");
+}
+
+/** Current authorization for the exact workflow-run edge that a Task/Run is
+ * about to read. The callback capability alone is not enough: every stored
+ * run/step Memory reference and the exact executed revision are revalidated. */
+export async function assertWorkflowRunPayloadSourceAccess(db: Db, companyId: string, runId: string,
+  actor: AuthorizationActor, readScope?: NativeReadScope) {
+  const state = review.getStore() ?? { active: new Set<string>(), deadline: performance.now() + 8000 };
+  const key = `run:${companyId}:${runId}`;
+  if (state.active.has(key)) throw forbidden("Workflow source review is cyclic", { code: "workflow_source_review_cyclic" });
+  if (performance.now() > state.deadline)
+    throw forbidden("Workflow source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
+  return review.run(state, async () => {
+    state.active.add(key);
+    try { await inspectWorkflowRunPayloadSourceAccess(db, companyId, runId, actor, readScope); }
+    finally { state.active.delete(key); }
+  });
+}
+
+async function inspectWorkflowRunPayloadSourceAccess(db: Db, companyId: string, runId: string,
+  actor: AuthorizationActor, readScope?: NativeReadScope) {
+  if (!is(db, PgTransaction)) throw forbidden("Workflow source reads require a native transaction");
+  await db.execute(sql`set local statement_timeout='8s'`);
+  // This boundary only verifies current source state. Shared locks preserve
+  // writer exclusion while allowing concurrent complete readers to proceed.
+  await lockAnalyticalCompany(db, companyId, "read");
+  await lockMemoryPrivacy(db, companyId, "read");
+  markAnalyticalPrivacyReadLocked(db as object);
+  const markerBefore = await db.execute<{ erased: boolean }>(sql`select aw_workflow_run_authoring_source_erased(${companyId}::uuid,${runId}::uuid) as erased`);
+  if (markerBefore[0]?.erased !== false) throw forbidden("The workflow run source was erased or withdrawn");
+  const [run] = await db.select({ id: workflowRuns.id, companyId: workflowRuns.companyId, workflowId: workflowRuns.workflowId,
+    revisionId: workflowRuns.workflowRevisionId,
+    authoringSourceWorkflowIds: workflowRuns.authoringSourceWorkflowIds, memoryRecordIds: workflowRuns.memoryRecordIds })
+    .from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId))).for("share", { noWait: true });
+  if (!run) throw forbidden("The workflow run source owner is unavailable");
+  const authoringIds = sources.safeParse(run.authoringSourceWorkflowIds);
+  const runMemoryIds = memorySources.safeParse(run.memoryRecordIds);
+  if (!authoringIds.success || new Set(authoringIds.data).size !== authoringIds.data.length ||
+    !runMemoryIds.success || new Set(runMemoryIds.data).size !== runMemoryIds.data.length)
+    throw forbidden("The complete workflow run source population is unavailable");
+  const [workflow] = await db.select({ id: workflows.id, authoringSourceRunIds: workflows.authoringSourceRunIds })
+    .from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, run.workflowId))).for("share", { noWait: true });
+  const [revision] = await db.select({ id: workflowRevisions.id, workflowId: workflowRevisions.workflowId })
+    .from(workflowRevisions).where(and(eq(workflowRevisions.companyId, companyId),
+      eq(workflowRevisions.workflowId, run.workflowId), eq(workflowRevisions.id, run.revisionId))).for("share", { noWait: true });
+  if (!workflow || !revision) throw forbidden("The exact workflow revision is unavailable");
+  const stepRows = await db.select({ id: workflowStepRuns.id, memoryRecordIds: workflowStepRuns.memoryRecordIds,
+    artifactVersionId: workflowStepRuns.automationArtifactVersionId })
+    .from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, runId)))
+    // A live executor may be committing the step row while an authorized
+    // reader rechecks the same run (for example, an idempotent request replay).
+    // Wait under the surrounding bounded transaction timeout, then inspect
+    // the committed row values. NOWAIT turns ordinary execution into a 500 and
+    // prevents a current-source replay from completing.
+    .orderBy(workflowStepRuns.id).limit(257).for("share");
+  if (stepRows.length > 256) throw forbidden("The complete workflow run source population exceeds its bound");
+  const stepMemoryIds = stepRows.map(step => memorySources.safeParse(step.memoryRecordIds));
+  if (stepMemoryIds.some(ids => !ids.success || new Set(ids.data).size !== ids.data.length))
+    throw forbidden("The complete workflow step source population is unavailable");
+  const allMemoryIds = [...new Set([...runMemoryIds.data, ...stepMemoryIds.flatMap(ids => ids.success ? ids.data : [])])];
+  if (allMemoryIds.length > 256) throw forbidden("The complete workflow Memory source population exceeds its bound");
+  const artifactVersionIds = [...new Set(stepRows.flatMap(step => step.artifactVersionId ? [step.artifactVersionId] : []))];
+  if (artifactVersionIds.length > 256) throw forbidden("The complete workflow Artifact source population exceeds its bound");
+
+  // Pin the exact workflow roots. NOWAIT row locks fail closed on concurrent edits.
+  await assertWorkflowAuthoringSources(db, companyId, run.workflowId, actor, readScope);
+  for (const id of authoringIds.data) await assertWorkflowAuthoringSources(db, companyId, id, actor, readScope);
+  const { learningAssetRoots } = await import("../learning/learning-assets.js");
+  const { learningRetainedAssets } = await import("@paperclipai/db");
+  const learnedAssetRefs = [{ type: "workflow_revision", id: revision.id },
+    ...artifactVersionIds.map(id => ({ type: "automation_artifact_version", id }))];
+  const sourceReviewDeadline = review.getStore()?.deadline ?? performance.now() + 8_000;
+  const readRetainedAssetKeys = async () => {
+    const retained = await db.select({ assetType: learningRetainedAssets.assetType, assetId: learningRetainedAssets.assetId })
+      .from(learningRetainedAssets).where(and(eq(learningRetainedAssets.companyId, companyId), or(
+        and(eq(learningRetainedAssets.assetType, "workflow_revision"), eq(learningRetainedAssets.assetId, revision.id)),
+        artifactVersionIds.length ? and(eq(learningRetainedAssets.assetType, "automation_artifact_version"),
+          inArray(learningRetainedAssets.assetId, artifactVersionIds)) : sql`false`,
+      ))).limit(257);
+    if (retained.length > 256) throw forbidden("The complete Workflow Learning asset population exceeds its bound");
+    return retained.map(row => `${row.assetType}:${row.assetId}`).sort();
+  };
+  const retainedAssetKeysBefore = await readRetainedAssetKeys();
+  const retainedAssetKeySet = new Set(retainedAssetKeysBefore);
+  const readLearnedAssetRoots = async () => {
+    const roots = new Map<string, string>();
+    const { assertLearnedAssetAnalyticalSources } = await import("../learning/learning-analytical-sources.js");
+    for (const asset of learnedAssetRefs) {
+      if (performance.now() > sourceReviewDeadline)
+        throw forbidden("Complete workflow Learning source review exceeded its budget", { code: "workflow_source_review_budget_exceeded" });
+      const hasRetainedAssetRoots = retainedAssetKeySet.has(`${asset.type}:${asset.id}`);
+      if (!hasRetainedAssetRoots) {
+        await assertLearnedAssetAnalyticalSources(db, companyId, asset.type, asset.id, actor, readScope);
+        continue;
+      }
+      let rows;
+      try { rows = await learningAssetRoots(db, companyId, asset.type, asset.id, "task", actor, readScope); }
+      catch (error) {
+        if (error instanceof HttpError && ["workflow_source_review_cyclic", "workflow_source_review_budget_exceeded"]
+          .includes((error.details as { code?: string } | undefined)?.code ?? "")) throw error;
+        if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status))
+          throw forbidden("Current Workflow Learning Memory source is unavailable", { code: "analytical_source_access_lost" });
+        throw error;
+      }
+      for (const root of rows) {
+        if (!await canActorReadMemorySources(db, companyId, actor, root.id))
+          throw forbidden("A current reader cannot access every retained Workflow Learning Memory source");
+        roots.set(`${asset.type}:${asset.id}:${root.id}`, root.expectedVersion);
+      }
+    }
+    return new Map([...roots].sort(([left], [right]) => left.localeCompare(right)));
+  };
+  const learnedRootsBefore = await readLearnedAssetRoots();
+  for (const id of allMemoryIds) {
+    if (performance.now() > (review.getStore()?.deadline ?? 0) || !await canActorReadMemorySources(db, companyId, actor, id))
+      throw forbidden("A current reader cannot access every Workflow Memory source");
+  }
+  const [currentRun] = await db.select({ authoringSourceWorkflowIds: workflowRuns.authoringSourceWorkflowIds,
+    memoryRecordIds: workflowRuns.memoryRecordIds, revisionId: workflowRuns.workflowRevisionId })
+    .from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
+  const currentSteps = await db.select({ id: workflowStepRuns.id, memoryRecordIds: workflowStepRuns.memoryRecordIds,
+    artifactVersionId: workflowStepRuns.automationArtifactVersionId })
+    .from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, runId)))
+    .orderBy(workflowStepRuns.id).limit(257);
+  const learnedRootsAfter = await readLearnedAssetRoots();
+  const retainedAssetKeysAfter = await readRetainedAssetKeys();
+  const [markerAfter] = await db.execute<{ erased: boolean }>(sql`select aw_workflow_run_authoring_source_erased(${companyId}::uuid,${runId}::uuid) as erased`);
+  if (markerAfter?.erased !== false || currentRun?.revisionId !== run.revisionId ||
+    JSON.stringify(currentRun?.authoringSourceWorkflowIds) !== JSON.stringify(authoringIds.data) ||
+    JSON.stringify(currentRun?.memoryRecordIds) !== JSON.stringify(runMemoryIds.data) ||
+    JSON.stringify([...learnedRootsAfter]) !== JSON.stringify([...learnedRootsBefore]) ||
+    JSON.stringify(retainedAssetKeysAfter) !== JSON.stringify(retainedAssetKeysBefore) ||
+    JSON.stringify(currentSteps) !== JSON.stringify(stepRows))
+    throw forbidden("Workflow run source provenance changed during authorization");
 }

@@ -1,0 +1,675 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > serves the merged Activity page at /:company/activity
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > serves organization and entity-scoped run history beneath Activity
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects /:company/audit to Activity with the agent-actions mode preset
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > serves each canonical Audit section under Activity
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects legacy costs and preserves its deep-link filters
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects legacy Audit sections to their canonical destination
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > keeps the company from the URL when /:company/audit is not the selected company
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects the bare /audit deep link through to the prefixed Activity page
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects the bare /tasks post-login target to the real task list
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects a bare legacy section through to the prefixed Audit hub
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > uses the production Activity and Costs routes when Streamlined UI is disabled
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > omits streamlined-only Audit routes when Streamlined UI is disabled
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > does not mount streamlined routes before the experiment setting loads
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+ ❯ |@paperclipai/ui| src/App.activity-routing.test.tsx (13 tests | 13 failed) 26063ms
+     × serves the merged Activity page at /:company/activity 1128ms
+     × serves organization and entity-scoped run history beneath Activity 1016ms
+     × redirects /:company/audit to Activity with the agent-actions mode preset 7805ms
+     × serves each canonical Audit section under Activity 3526ms
+     × redirects legacy costs and preserves its deep-link filters 3315ms
+     × redirects legacy Audit sections to their canonical destination 1157ms
+     × keeps the company from the URL when /:company/audit is not the selected company 1249ms
+     × redirects the bare /audit deep link through to the prefixed Activity page 1073ms
+     × redirects the bare /tasks post-login target to the real task list 1018ms
+     × redirects a bare legacy section through to the prefixed Audit hub 1582ms
+     × uses the production Activity and Costs routes when Streamlined UI is disabled 1124ms
+     × omits streamlined-only Audit routes when Streamlined UI is disabled 1028ms
+     × does not mount streamlined routes before the experiment setting loads 1029ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+stderr | src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > redirects unprefixed /cases to the company-prefixed list page
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > redirects unprefixed /cases/:id to the company-prefixed detail page
+An error occurred in the <App> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+ ❯ |@paperclipai/ui| src/App.cases-routing.test.tsx (2 tests | 2 failed) 2157ms
+     × redirects unprefixed /cases to the company-prefixed list page 1134ms
+     × redirects unprefixed /cases/:id to the company-prefixed detail page 1017ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > serves the merged Activity page at /:company/activity
+AssertionError: expected '' to contain 'ACTIVITY_PAGE@/PAP/activity'
+
+- Expected
++ Received
+
+- ACTIVITY_PAGE@/PAP/activity
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > serves organization and entity-scoped run history beneath Activity
+AssertionError: expected '' to contain 'AUDIT_RUNS@/PAP/activity/runs?entityT…'
+
+- Expected
++ Received
+
+- AUDIT_RUNS@/PAP/activity/runs?entityType=routine&entityId=routine-1
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects /:company/audit to Activity with the agent-actions mode preset
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects the bare /audit deep link through to the prefixed Activity page
+AssertionError: expected '' to contain 'ACTIVITY_PAGE@/PAP/activity?mode=agen…'
+
+- Expected
++ Received
+
+- ACTIVITY_PAGE@/PAP/activity?mode=agents
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > serves each canonical Audit section under Activity
+AssertionError: expected '' to contain 'AUDIT_RUNS@/PAP/activity/runs?agentId…'
+
+- Expected
++ Received
+
+- AUDIT_RUNS@/PAP/activity/runs?agentId=agent-1
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects legacy costs and preserves its deep-link filters
+AssertionError: expected '' to contain 'AUDIT_COSTS@/PAP/activity/costs?range…'
+
+- Expected
++ Received
+
+- AUDIT_COSTS@/PAP/activity/costs?range=30d
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects legacy Audit sections to their canonical destination
+AssertionError: expected '' to contain 'AUDIT_BUDGETS@/PAP/activity/budgets?p…'
+
+- Expected
++ Received
+
+- AUDIT_BUDGETS@/PAP/activity/budgets?projectId=project-1
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > keeps the company from the URL when /:company/audit is not the selected company
+AssertionError: expected '' to contain 'ACTIVITY_PAGE@/ACME/activity?mode=age…'
+
+- Expected
++ Received
+
+- ACTIVITY_PAGE@/ACME/activity?mode=agents
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects the bare /tasks post-login target to the real task list
+AssertionError: expected '' to contain 'TASKS_PAGE@/PAP/issues'
+
+- Expected
++ Received
+
+- TASKS_PAGE@/PAP/issues
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > redirects a bare legacy section through to the prefixed Audit hub
+AssertionError: expected '' to contain 'AUDIT_RUNS@/PAP/activity/runs?runStat…'
+
+- Expected
++ Received
+
+- AUDIT_RUNS@/PAP/activity/runs?runStatus=succeeded
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > uses the production Activity and Costs routes when Streamlined UI is disabled
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > does not mount streamlined routes before the experiment setting loads
+AssertionError: expected '' to contain 'PRODUCTION_ACTIVITY@/PAP/activity'
+
+- Expected
++ Received
+
+- PRODUCTION_ACTIVITY@/PAP/activity
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.activity-routing.test.tsx > App Activity routing (PAP-16302) > omits streamlined-only Audit routes when Streamlined UI is disabled
+AssertionError: expected '' to contain 'PRODUCTION_PLUGIN_FALLBACK'
+
+- Expected
++ Received
+
+- PRODUCTION_PLUGIN_FALLBACK
+
+ ❯ src/App.activity-routing.test.tsx:169:56
+    167|  */
+    168| async function waitForRoute(container: HTMLElement, text: string) {
+    169|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    170| }
+    171|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > redirects unprefixed /cases to the company-prefixed list page
+AssertionError: expected '' to contain 'CASES_LIST_PAGE'
+
+- Expected
++ Received
+
+- CASES_LIST_PAGE
+
+ ❯ src/App.cases-routing.test.tsx:115:56
+    113|  */
+    114| async function waitForRoute(container: HTMLElement, text: string) {
+    115|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    116| }
+    117|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/15]⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > redirects unprefixed /cases/:id to the company-prefixed detail page
+AssertionError: expected '' to contain 'CASE_DETAIL_PAGE'
+
+- Expected
++ Received
+
+- CASE_DETAIL_PAGE
+
+ ❯ src/App.cases-routing.test.tsx:115:56
+    113|  */
+    114| async function waitForRoute(container: HTMLElement, text: string) {
+    115|   await vi.waitFor(() => expect(container.textContent).toContain(text)…
+       |                                                        ^
+    116| }
+    117|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/15]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 16 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "serves the merged Activity page at /:company/activity". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "serves organization and entity-scoped run history beneath Activity". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects /:company/audit to Activity with the agent-actions mode preset". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "serves each canonical Audit section under Activity". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects legacy costs and preserves its deep-link filters". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects legacy Audit sections to their canonical destination". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps the company from the URL when /:company/audit is not the selected company". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects the bare /audit deep link through to the prefixed Activity page". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects the bare /tasks post-login target to the real task list". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects a bare legacy section through to the prefixed Audit hub". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "uses the production Activity and Costs routes when Streamlined UI is disabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "omits streamlined-only Audit routes when Streamlined UI is disabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not mount streamlined routes before the experiment setting loads". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.activity-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not mount streamlined routes before the experiment setting loads". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.cases-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects unprefixed /cases to the company-prefixed list page". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+Error: No QueryClient set, use QueryClientProvider to set one
+ ❯ useQueryClient node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/QueryClientProvider.js:9:21
+ ❯ useBaseQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useBaseQuery.js:16:17
+ ❯ useQuery node_modules/.pnpm/@tanstack+react-query@5.102.8_react@19.2.8/node_modules/@tanstack/react-query/build/modern/useQuery.js:6:9
+ ❯ useAccountIdentity ui/src/api/companies-query.ts:77:49
+ ❯ useV9CurrentAccount ui/src/hooks/useV9CurrentAccount.ts:25:20
+ ❯ App ui/src/App.tsx:942:19
+ ❯ Object.react_stack_bottom_frame node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+
+This error originated in "ui/src/App.cases-routing.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "redirects unprefixed /cases/:id to the company-prefixed detail page". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  15 failed | 11 passed (26)
+     Errors  16 errors
+   Start at  18:28:40
+   Duration  136.64s (transform 58.20s, setup 145ms, import 98.33s, tests 29.38s, environment 7.24s)
+

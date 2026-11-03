@@ -1,0 +1,60 @@
+src/routes/announcements.ts(17,17): error TS2883: The inferred type of 'announcementRoutes' cannot be named without a reference to 'Router' from '../../../../../tmp/node_modules/@types/express-serve-static-core/index.js'. This is likely not portable. A type annotation is necessary.
+src/routes/announcements.ts(24,14): error TS2339: Property 'actor' does not exist on type 'Request<{}, any, any, ParsedQs, Record<string, any>>'.
+src/routes/announcements.ts(31,61): error TS2339: Property 'actor' does not exist on type 'Request<{}, any, any, ParsedQs, Record<string, any>>'.
+src/routes/announcements.ts(36,14): error TS2339: Property 'actor' does not exist on type 'Request<{ companyId: string; }, any, any, ParsedQs, Record<string, any>>'.
+src/routes/announcements.ts(43,84): error TS2339: Property 'actor' does not exist on type 'Request<{ companyId: string; }, any, any, ParsedQs, Record<string, any>>'.
+src/routes/announcements.ts(53,41): error TS2339: Property 'actor' does not exist on type 'Request<{ companyId: string; }, any, any, ParsedQs, Record<string, any>>'.
+src/routes/announcements.ts(121,36): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(18,23): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(19,28): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(27,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(33,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(39,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(42,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(42,52): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(45,28): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(45,53): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(57,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(60,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(69,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(69,52): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(77,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(77,41): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(80,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(80,41): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(81,28): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(82,8): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/authz.ts(104,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(104,41): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(105,34): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(111,31): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(111,74): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(112,30): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(112,54): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/routes/authz.ts(158,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(159,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(159,46): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(160,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(161,15): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(217,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(218,29): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(221,20): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(222,20): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(223,18): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(224,26): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(230,9): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(231,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(232,11): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(233,13): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(238,18): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(239,20): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(241,16): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(287,28): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/authz.ts(287,48): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/routes/openapi.ts(12298,17): error TS2883: The inferred type of 'openApiRoutes' cannot be named without a reference to 'Router' from '../../../../../tmp/node_modules/@types/express-serve-static-core/index.js'. This is likely not portable. A type annotation is necessary.
+src/services/project-tool-context.ts(8,65): error TS2339: Property 'actor' does not exist on type 'Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>'.
+src/services/tool-oauth-grant-metadata.ts(8,72): error TS18046: 'connection.config' is of type 'unknown'.
+src/services/trust-documents.ts(105,35): error TS2339: Property 'actor' does not exist on type 'Request'.
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --pretty false --singleThreaded -p /tmp/requirement-audit-tsconfig.json

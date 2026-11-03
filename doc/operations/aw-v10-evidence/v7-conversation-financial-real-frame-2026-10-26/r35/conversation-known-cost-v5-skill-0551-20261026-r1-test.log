@@ -1,0 +1,29 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 30 skipped) 19873ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 15743ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_provider_frame_missing_for_purge:{"providerCallCount":0,"providerHookInvoked":false,"providerStubFailure":null,"runStatus":"failed","runErrorCode":"native_session_interrupted","runErrorPrefix":"managed_opencode_source_prompt_closure_unavailable","runNativePhase":"retryable_failure","runExecutionStage":"preparing","runRuntimeMode":"native","runSourceProtocol":0,"manifestSkillPins":[{"skillId":"315975da-fa43-4589-80a5-c8b70c7112c2","versionId":"fe77c353-9844-4c7e-90f1-5f4e21d93de0","key":"company/7d3cfada-1cdb-48e0-961d-7134afd0d17a/erasure-fixture-skill"}],"manifestPresent":true,"sourceReceiptPresent":false,"reservationStatus":null}
+ ❯ Object.async.db [as afterRunSettledBeforeTeardown] src/__tests__/v7-model-reservations.integration.test.ts:754:67
+    752|         async facts => {
+    753|           const providerFrame = factsHolder.value;
+    754|           if (!facts.providerHookInvoked || !providerFrame) throw new …
+       |                                                                   ^
+    755|             providerCallCount: facts.providerCallCount,
+    756|             providerHookInvoked: facts.providerHookInvoked,
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:479:19
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:351:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:751:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  21:01:30
+   Duration  36.58s (transform 11.64s, setup 101ms, import 16.44s, tests 19.87s, environment 0ms)
+

@@ -13,6 +13,9 @@ const UNKNOWN_ADAPTER = "unknown";
 const MAX_ERROR_MESSAGE_LENGTH = 4096;
 /** The error code is a short label. Bound it well under the message limit. */
 const MAX_ERROR_CODE_LENGTH = 200;
+const ACP_TOOL_KINDS = new Set(["read", "edit", "delete", "move", "search", "execute", "think", "fetch", "other", "unknown"]);
+const MAX_SAFE_ACP_DIAGNOSTIC_MS = 4 * 60 * 60 * 1000;
+const MAX_SAFE_ACP_DIAGNOSTIC_COUNT = 10_000;
 
 /**
  * Every report that `reportRunFailure` started and has not yet settled.
@@ -40,6 +43,31 @@ function readTaskId(run: HeartbeatRun): string | null {
   if (run.nativeIssueId) return run.nativeIssueId;
   const contextIssueId = run.contextSnapshot?.issueId;
   return typeof contextIssueId === "string" && contextIssueId.length > 0 ? contextIssueId : null;
+}
+
+/** Project only bounded closed ACP watchdog facts into Sentry. Provider titles,
+ * call IDs, inputs, permission outcomes, and arbitrary result JSON are omitted. */
+function readAcpExecutionDiagnostics(value: unknown): Record<string, string | number | boolean> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  const output: Record<string, string | number | boolean> = {};
+  if (typeof source.acpStalledToolKind === "string" && ACP_TOOL_KINDS.has(source.acpStalledToolKind)) {
+    output.acpStalledToolKind = source.acpStalledToolKind;
+  }
+  const silentMs = source.acpStalledToolSilentMs;
+  if (typeof silentMs === "number" && Number.isSafeInteger(silentMs) && silentMs >= 0 && silentMs <= MAX_SAFE_ACP_DIAGNOSTIC_MS) {
+    output.acpStalledToolSilentMs = silentMs;
+  }
+  const permissionRequestArrived = source.acpStalledToolPermissionRequestArrived;
+  if (typeof permissionRequestArrived === "boolean") {
+    output.acpStalledToolPermissionRequestArrived = permissionRequestArrived;
+  }
+  const permissionRequestArrivedCount = source.acpPendingToolPermissionRequestArrivedCount;
+  if (typeof permissionRequestArrivedCount === "number" && Number.isSafeInteger(permissionRequestArrivedCount)
+    && permissionRequestArrivedCount >= 0 && permissionRequestArrivedCount <= MAX_SAFE_ACP_DIAGNOSTIC_COUNT) {
+    output.acpPendingToolPermissionRequestArrivedCount = permissionRequestArrivedCount;
+  }
+  return Object.keys(output).length ? output : undefined;
 }
 
 /**
@@ -90,6 +118,7 @@ async function captureTerminalRunFailure(
           : sanitizeAdapterText(run.errorCode, MAX_ERROR_CODE_LENGTH),
       agentAdapter: agent?.adapterType ?? UNKNOWN_ADAPTER,
       runStatus,
+      executionDiagnostics: readAcpExecutionDiagnostics(run.resultJson),
     });
   } catch (err) {
     logger.warn({ err, runId: run.id }, "failed to report run failure to Sentry");

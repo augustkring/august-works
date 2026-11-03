@@ -15,6 +15,7 @@ import {
   heartbeatRuns,
   issueComments,
   issues,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -23,6 +24,7 @@ import {
 import { heartbeatService } from "../services/heartbeat.ts";
 import { runningProcesses } from "../adapters/index.ts";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const mockAdapterExecute = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -83,8 +85,10 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-heartbeat-responsible-user-");
     db = createDb(tempDb.connectionString);
     heartbeat = heartbeatService(db);
@@ -118,10 +122,12 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     await db.delete(agents);
     await db.delete(companySkills);
     await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
   });
 
   afterAll(async () => {
+    restoreApiUrl?.();
     await tempDb?.cleanup();
   }, 60_000);
 
@@ -136,13 +142,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
       issuePrefix: `R${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       defaultResponsibleUserId: ownerUserId,
     });
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: ownerUserId,
-      membershipRole: "owner",
-      status: "active",
-    });
+    await seedHeartbeatResponsibleHuman(db, companyId, ownerUserId, "owner");
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -161,8 +161,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   it("dispatches an interrupted queue under the clicking operator through the real startup path", async () => {
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Interrupted queue", status: "todo",
       assigneeAgentId: agentId, responsibleUserId: ownerUserId });
     await db.insert(issueComments).values({ id: commentId, companyId, issueId, authorUserId: ownerUserId, body: "Continue the task" });
@@ -190,8 +189,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   it("keeps a board manual wake under its caller even when it adopts someone else's queue", async () => {
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Manual wake", status: "todo",
       assigneeAgentId: agentId, responsibleUserId: ownerUserId });
     await db.insert(issueComments).values({ id: commentId, companyId, issueId, authorUserId: ownerUserId, body: "Pending work" });
@@ -213,8 +211,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   it("keeps the clicking user when a manual wake merges into an older deferred receipt", async () => {
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     await db.insert(issues).values({ id: issueId, companyId, title: "Deferred manual wake", status: "todo",
       assigneeAgentId: agentId, responsibleUserId: ownerUserId });
     let finish!: () => void;
@@ -250,8 +247,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   it("starts an unscoped manual wake with its own user instead of joining another user's run", async () => {
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`;
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId,
-      membershipRole: "operator", status: "active" });
+    await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
     let finish!: () => void;
     const blocked = new Promise<void>(resolve => { finish = resolve; });
     const execute = mockAdapterExecute.getMockImplementation()!;
@@ -298,6 +294,8 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     const { companyId, agentId } = await seedCompany();
     const issueResponsibleUserId = `issue-owner-${randomUUID()}`;
     const commenterUserId = `commenter-${randomUUID()}`;
+    await seedHeartbeatResponsibleHuman(db, companyId, issueResponsibleUserId, "owner");
+    await seedHeartbeatResponsibleHuman(db, companyId, commenterUserId, "owner");
     const issueId = randomUUID();
     await db.insert(issues).values({
       id: issueId,
@@ -354,6 +352,8 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
       const { companyId, agentId } = await seedCompany();
       const issueResponsibleUserId = `issue-owner-${randomUUID()}`;
       const commenterUserId = `commenter-${randomUUID()}`;
+      await seedHeartbeatResponsibleHuman(db, companyId, issueResponsibleUserId, "owner");
+      await seedHeartbeatResponsibleHuman(db, companyId, commenterUserId, "owner");
       const issueId = randomUUID();
       const commentId = randomUUID();
       await db.insert(issues).values({
@@ -397,8 +397,9 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   );
 
   it("uses the triggering user for manual UI/API runs", async () => {
-    const { agentId } = await seedCompany();
+    const { companyId, agentId } = await seedCompany();
     const triggeringUserId = `manual-${randomUUID()}`;
+    await seedHeartbeatResponsibleHuman(db, companyId, triggeringUserId, "owner");
     const run = await heartbeat.wakeup(agentId, {
       source: "on_demand",
       triggerDetail: "manual",

@@ -1,0 +1,34 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > filters durable ownership holds before the bounded resume candidate limit 123ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > wins one database lease for the original result-less run without consulting the flag 19ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > dispatches the persisted run id and lease to the live same-run resume consumer 14ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > uses provider-neutral checkpoint-free bootstrap retry only when durable evidence proves no session existed 9ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > never claims an expired observed coordinator without explicit retryable failure 2ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > blocks ambiguous observed ownership and a live unrelated persisted PID without replacement effects 328ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > does not resume cancelled or exhausted runs and fails closed without a checkpoint 13ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > does not mistake the pre-first-attempt observed coordinator for an orphan 2ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > sends exactly one Sentry event when a sweep resolves a run from running to failed 27ms
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 pre-result native session recovery > sends no Sentry event when a sweep finds a run that is already failed 23ms
+[07:26:07] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"a81614be53c2dfcb","outcome":"success","queueWaitMs":0,"executionMs":4,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:09] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"a81614be53c2dfcb","outcome":"success","queueWaitMs":0,"executionMs":6,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:11] [33mWARN[39m: [36mruntime connection tools could not be delivered[39m [90m{"companyId":"4bebfc0e-1166-4eca-97d0-ed6e0d9fa1a7","agentId":"076d8c20-be4e-4923-a761-704035a10b3b","runId":"9f936441-f8e3-49ad-8dd6-bf478fdb09d4"}[39m
+[07:26:11] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"a81614be53c2dfcb","outcome":"success","queueWaitMs":0,"executionMs":6,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 persisted reaper-to-finalization recovery (unchanged) > preserves the old provider contract and admits newer direction only in a separate turn 5053ms
+[07:26:16] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"76aafae0a7c90690","outcome":"success","queueWaitMs":0,"executionMs":4,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:18] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"76aafae0a7c90690","outcome":"success","queueWaitMs":1,"executionMs":4,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:19] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"76aafae0a7c90690","outcome":"success","queueWaitMs":0,"executionMs":9,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:21] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"76aafae0a7c90690","outcome":"success","queueWaitMs":0,"executionMs":5,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 persisted reaper-to-finalization recovery (newer_active) > preserves the old provider contract and admits newer direction only in a separate turn 6736ms
+[07:26:27] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"f193fd2d515e6dd1","outcome":"success","queueWaitMs":0,"executionMs":8,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:29] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"f193fd2d515e6dd1","outcome":"success","queueWaitMs":0,"executionMs":5,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:30] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"f193fd2d515e6dd1","outcome":"success","queueWaitMs":0,"executionMs":5,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+[07:26:33] [32mINFO[39m: [36mworkspace Git scan completed[39m [90m{"event":"workspace_git_scan","operation":"execution_workspaces.close_readiness_status","workspaceHash":"f193fd2d515e6dd1","outcome":"success","queueWaitMs":0,"executionMs":7,"activeCount":1,"queuedCount":0,"cacheHit":false,"singleFlightJoinCount":0,"exitOutcome":"zero"}[39m
+ ✓ src/__tests__/native-session-resumption.test.ts > P6-25 persisted reaper-to-finalization recovery (stale_idle) > preserves the old provider contract and admits newer direction only in a separate turn 6950ms
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  07:25:43
+   Duration  50.59s (transform 10.04s, setup 68ms, import 14.03s, tests 36.38s, environment 0ms)
+

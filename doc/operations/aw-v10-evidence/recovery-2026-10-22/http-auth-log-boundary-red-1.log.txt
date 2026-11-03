@@ -1,0 +1,100 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts (4 tests | 4 failed) 144ms
+     × keeps credential sentinels out of HTTP 200 logs 100ms
+     × keeps credential sentinels out of HTTP 302 logs 16ms
+     × keeps credential sentinels out of HTTP 403 logs 12ms
+     × keeps credential sentinels out of HTTP 500 logs 13ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > HTTP authentication metadata boundary > keeps credential sentinels out of HTTP 200 logs
+AssertionError: expected '{"level":30,"time":1792695107556,"pid…' not to contain 'tenant-credential-canary'
+
+- Expected
++ Received
+
+- tenant-credential-canary
++ {"level":30,"time":1792695107556,"pid":2273,"hostname":"96e1d066eecd","req":{"id":1,"method":"GET","url":"/api/companies","params":{},"headers":{"host":"[::1]:46143","accept-encoding":"gzip, deflate","x-paperclip-cloud-tenant-token":"tenant-credential-canary","x-paperclip-cloud-session-id":"session-credential-canary","x-paperclip-cloud-runtime-identity":"runtime-assertion-canary","x-paperclip-cloud-control":"control-assertion-canary","x-paperclip-cloud-inspection":"inspection-assertion-canary","x-paperclip-tool-gateway-token":"tool-gateway-credential-canary","x-paperclip-workspace-readiness-token":"readiness-credential-canary","x-paperclip-dev-server-status-token":"dev-status-credential-canary","x-openclaw-token":"openclaw-credential-canary","x-aw-relay-token":"runtime-relay-credential-canary","connection":"close"},"remoteAddress":"::1","remotePort":33492},"res":{"statusCode":200,"headers":{"x-powered-by":"Express","location":"https://client.example/callback?ticket=redirect-credential-canary#private-fragment-canary"}},"responseTime":6,"msg":"GET /api/companies 200"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:40:26
+     38|     const log = JSON.parse(output.trim());
+     39|     for (const [name, sentinel] of Object.entries(headers)) {
+     40|       expect(output).not.toContain(sentinel);
+       |                          ^
+     41|       expect(log.req.headers[name]).toBe("[Redacted]");
+     42|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > HTTP authentication metadata boundary > keeps credential sentinels out of HTTP 302 logs
+AssertionError: expected '{"level":30,"time":1792695107605,"pid…' not to contain 'tenant-credential-canary'
+
+- Expected
++ Received
+
+- tenant-credential-canary
++ {"level":30,"time":1792695107605,"pid":2273,"hostname":"96e1d066eecd","req":{"id":1,"method":"GET","url":"/api/companies","params":{},"headers":{"host":"[::1]:33549","accept-encoding":"gzip, deflate","x-paperclip-cloud-tenant-token":"tenant-credential-canary","x-paperclip-cloud-session-id":"session-credential-canary","x-paperclip-cloud-runtime-identity":"runtime-assertion-canary","x-paperclip-cloud-control":"control-assertion-canary","x-paperclip-cloud-inspection":"inspection-assertion-canary","x-paperclip-tool-gateway-token":"tool-gateway-credential-canary","x-paperclip-workspace-readiness-token":"readiness-credential-canary","x-paperclip-dev-server-status-token":"dev-status-credential-canary","x-openclaw-token":"openclaw-credential-canary","x-aw-relay-token":"runtime-relay-credential-canary","connection":"close"},"remoteAddress":"::1","remotePort":57138},"res":{"statusCode":302,"headers":{"x-powered-by":"Express","location":"https://client.example/callback?ticket=redirect-credential-canary#private-fragment-canary"}},"responseTime":1,"msg":"GET /api/companies 302"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:40:26
+     38|     const log = JSON.parse(output.trim());
+     39|     for (const [name, sentinel] of Object.entries(headers)) {
+     40|       expect(output).not.toContain(sentinel);
+       |                          ^
+     41|       expect(log.req.headers[name]).toBe("[Redacted]");
+     42|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > HTTP authentication metadata boundary > keeps credential sentinels out of HTTP 403 logs
+AssertionError: expected '{"level":40,"time":1792695107619,"pid…' not to contain 'tenant-credential-canary'
+
+- Expected
++ Received
+
+- tenant-credential-canary
++ {"level":40,"time":1792695107619,"pid":2273,"hostname":"96e1d066eecd","req":{"id":1,"method":"GET","url":"/api/companies","params":{},"headers":{"host":"[::1]:43407","accept-encoding":"gzip, deflate","x-paperclip-cloud-tenant-token":"tenant-credential-canary","x-paperclip-cloud-session-id":"session-credential-canary","x-paperclip-cloud-runtime-identity":"runtime-assertion-canary","x-paperclip-cloud-control":"control-assertion-canary","x-paperclip-cloud-inspection":"inspection-assertion-canary","x-paperclip-tool-gateway-token":"tool-gateway-credential-canary","x-paperclip-workspace-readiness-token":"readiness-credential-canary","x-paperclip-dev-server-status-token":"dev-status-credential-canary","x-openclaw-token":"openclaw-credential-canary","x-aw-relay-token":"runtime-relay-credential-canary","connection":"close"},"remoteAddress":"::1","remotePort":60006},"routePath":"/api/companies","res":{"statusCode":403,"headers":{"x-powered-by":"Express","location":"https://client.example/callback?ticket=redirect-credential-canary#private-fragment-canary"}},"responseTime":0,"msg":"GET /api/companies 403"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:40:26
+     38|     const log = JSON.parse(output.trim());
+     39|     for (const [name, sentinel] of Object.entries(headers)) {
+     40|       expect(output).not.toContain(sentinel);
+       |                          ^
+     41|       expect(log.req.headers[name]).toBe("[Redacted]");
+     42|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > HTTP authentication metadata boundary > keeps credential sentinels out of HTTP 500 logs
+AssertionError: expected '{"level":50,"time":1792695107630,"pid…' not to contain 'tenant-credential-canary'
+
+- Expected
++ Received
+
+- tenant-credential-canary
++ {"level":50,"time":1792695107630,"pid":2273,"hostname":"96e1d066eecd","req":{"id":1,"method":"GET","url":"/api/companies","params":{},"headers":{"host":"[::1]:44585","accept-encoding":"gzip, deflate","x-paperclip-cloud-tenant-token":"tenant-credential-canary","x-paperclip-cloud-session-id":"session-credential-canary","x-paperclip-cloud-runtime-identity":"runtime-assertion-canary","x-paperclip-cloud-control":"control-assertion-canary","x-paperclip-cloud-inspection":"inspection-assertion-canary","x-paperclip-tool-gateway-token":"tool-gateway-credential-canary","x-paperclip-workspace-readiness-token":"readiness-credential-canary","x-paperclip-dev-server-status-token":"dev-status-credential-canary","x-openclaw-token":"openclaw-credential-canary","x-aw-relay-token":"runtime-relay-credential-canary","connection":"close"},"remoteAddress":"::1","remotePort":52952},"routePath":"/api/companies","res":{"statusCode":500,"headers":{"x-powered-by":"Express","location":"https://client.example/callback?ticket=redirect-credential-canary#private-fragment-canary"}},"err":{"type":"Error","message":"failed with status code 500","stack":"Error: failed with status code 500\n    at onResFinished (/workspace/blentera-v10/node_modules/.pnpm/pino-http@11.0.0/node_modules/pino-http/logger.js:115:39)\n    at ServerResponse.onResponseComplete (/workspace/blentera-v10/node_modules/.pnpm/pino-http@11.0.0/node_modules/pino-http/logger.js:178:14)\n    at ServerResponse.emit (node:events:526:24)\n    at onFinish (node:_http_outgoing:1140:10)\n    at afterWrite (node:internal/streams/writable:712:5)\n    at afterWriteTick (node:internal/streams/writable:698:10)\n    at processTicksAndRejections (node:internal/process/task_queues:89:21)"},"responseTime":1,"msg":"GET /api/companies 500 — failed with status code 500"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:40:26
+     38|     const log = JSON.parse(output.trim());
+     39|     for (const [name, sentinel] of Object.entries(headers)) {
+     40|       expect(output).not.toContain(sentinel);
+       |                          ^
+     41|       expect(log.req.headers[name]).toBe("[Redacted]");
+     42|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  18:51:44
+   Duration  2.88s (transform 388ms, setup 568ms, import 686ms, tests 144ms, environment 0ms)
+

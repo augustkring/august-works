@@ -1,0 +1,79 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "6e013c6c2bfe115da20761781672c212ec09f2d8",
+  "meaning": "Actual document-result/native-dispatch identity: two native files70PASS, original executor473PASS including fail-before-backend controls. Overlapping server compiler fails only concurrent analytical-context Workflow edits; no current full compiler/Source qualification claim.",
+  "logs": [
+    {
+      "name": "native-document-dispatch-final",
+      "exitCode": 0,
+      "rawSha256": "3b3b51be6cb18925982279d1236841cc033c5250b2fa8d75f517d2793d0de088",
+      "sanitizedSha256": "3b3b51be6cb18925982279d1236841cc033c5250b2fa8d75f517d2793d0de088",
+      "archiveSha256": "95a78f6a4bbff0ca20a02afecbad834815df67d23d928f576ff34126e8c39177",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  70 passed (70)",
+        "Duration  38.03s (transform 8.99s, setup 129ms, import 15.76s, tests 21.91s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-document-dispatch-executor",
+      "exitCode": 0,
+      "rawSha256": "699886298d889f8042ead60c3c14c1d6527c6322edd35adae6e8fe7d9e4af1a6",
+      "sanitizedSha256": "699886298d889f8042ead60c3c14c1d6527c6322edd35adae6e8fe7d9e4af1a6",
+      "archiveSha256": "772dc1a5e5a29c420894b55f1a8766775c37fa87f3ede5a5435381a1084357e4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 471 skipped (473)",
+        "Duration  15.56s (transform 11.27s, setup 72ms, import 15.20s, tests 148ms, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-document-dispatch-executor-full",
+      "exitCode": 0,
+      "rawSha256": "55fdee9c8b2a301a407a926f2cb58f0e59bdbb0135bb8d5f38342eb97bd3e162",
+      "sanitizedSha256": "55fdee9c8b2a301a407a926f2cb58f0e59bdbb0135bb8d5f38342eb97bd3e162",
+      "archiveSha256": "46ac25fbf9e4b6aab33603cd013c0ad8fd7792f7b5a366982df1a563d7e0d9e5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  473 passed (473)",
+        "Duration  22.41s (transform 10.80s, setup 85ms, import 14.40s, tests 7.80s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-document-dispatch-server-check",
+      "exitCode": 1,
+      "rawSha256": "c5ee453da8e6fd9520adc24e42643c3273f8c37ae1ad4302d0191509d2131854",
+      "sanitizedSha256": "c5ee453da8e6fd9520adc24e42643c3273f8c37ae1ad4302d0191509d2131854",
+      "archiveSha256": "dd4bfb3c2afc282f498cd2d374e1aacd4f7dcff4dfb5debe1c166cb7696e2d57",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

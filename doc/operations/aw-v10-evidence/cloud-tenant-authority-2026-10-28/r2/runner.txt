@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/__tests__/cloud-tenant-company-provisioning.test.ts
+test_pattern=authoritative local membership state

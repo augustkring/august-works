@@ -1,0 +1,1 @@
+CREATE INDEX "customer_operations_expired_lease_idx" ON "customer_operations" USING btree ("operation_type","status","lease_expires_at");

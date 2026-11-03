@@ -7,6 +7,8 @@ import {
   specialistEvaluationSchema,
   orchestrationCompletionSchema,
   internalSourceReviewRelease,
+  BLENTERA_MANAGED_STARTER_PROFILE,
+  managedCustomerStarterReleaseCandidate,
 } from "@paperclipai/shared";
 import {
   packageReleaseBlockers,
@@ -117,6 +119,52 @@ describe("first-party specialist candidate release boundaries", () => {
       releaseEvidence: evidence,
     });
     expect(packageReleaseBlockers(release)).toEqual([]);
+  });
+  it("builds the versioned managed starter as a bounded candidate and keeps release qualification closed", () => {
+    const specialistCaseSuite = nativeSha256(SPECIALIST_CANDIDATES[BLENTERA_MANAGED_STARTER_PROFILE.packageKey].cases.map((scenario) => ({
+      caseKey: scenario.key,
+      contract: specialistCompletionContract(BLENTERA_MANAGED_STARTER_PROFILE.packageKey, scenario.key),
+    })));
+    const starterComponents = components.map((component) => component.type === "eval_suite"
+      ? { ...component, key: BLENTERA_MANAGED_STARTER_PROFILE.evaluation.suiteComponentKey,
+          sourceVersion: BLENTERA_MANAGED_STARTER_PROFILE.evaluation.suiteVersion, contentHash: specialistCaseSuite }
+      : component);
+    const release = managedCustomerStarterReleaseCandidate({
+      sourceRevision: "c".repeat(40),
+      components: starterComponents,
+      releaseEvidence: { ...evidence, customerDemand: null },
+    });
+    expect(BLENTERA_MANAGED_STARTER_PROFILE).toMatchObject({
+      profileKey: "v10-managed-customer-starter", version: "1.0.0", packageKey: "blentera-meeting-notes-starter",
+      evaluation: { suiteComponentKey: "starter-evaluations", suiteVersion: "1.0.0",
+        judgments: [
+          "source_fidelity: every factual statement is supported by the supplied meeting notes or marked as uncertain",
+          "commitment_status: distinguish proposed follow-ups from commitments the participants explicitly agreed",
+          "owner_and_deadline: do not invent an owner or deadline; leave unknown fields explicit for Human review",
+        ] },
+      authority: { maximumRisk: "C1", actionClasses: ["internal_draft"], externalCommunication: false, toolsGranted: false },
+      sourceScope: { maximumCharacters: null, testedInputLimitsRequiredBeforeRelease: true, activationIntentCharacters: 4000, retainedMemory: false },
+      defaults: { enabledConnections: [], externalActions: false, automaticScheduling: false },
+      execution: { currentV9ActivationOwnerMaximumModelCostMinor: 0, exactCurrentWorkerModelQualificationRequired: true },
+    });
+    expect(release).toMatchObject({ packageKey: "blentera-meeting-notes-starter", name: "Meeting follow-up drafts", version: "1.0.0", manifest: {
+      audience: "customer", maximumRisk: "C1", actionClasses: ["internal_draft"],
+      purpose: BLENTERA_MANAGED_STARTER_PROFILE.intent,
+      onboardingQuestions: [
+        "Which meeting notes should become an internal follow-up draft?",
+        "Which people or dates should remain explicit placeholders for your review?",
+      ],
+      requiredKnowledge: [], requiredConnections: [], optionalConnections: [],
+      memoryPolicy: "no_persistent_memory", runtimeProviders: ["paperclip_native"],
+    } });
+    expect(packageReleaseBlockers(release)).toContain("Customer release requires separate customerDemand evidence");
+    expect(release.manifest.commercialProductKey).toBe("agent_package_chief_of_staff");
+    expect(release.components.find((component) => component.key === BLENTERA_MANAGED_STARTER_PROFILE.evaluation.suiteComponentKey)?.contentHash)
+      .toBe(specialistCaseSuite);
+    expect(SPECIALIST_CANDIDATES[BLENTERA_MANAGED_STARTER_PROFILE.packageKey].cases.map((scenario) => scenario.invariants[0]))
+      .toEqual([...BLENTERA_MANAGED_STARTER_PROFILE.evaluation.judgments]);
+    expect(release.packageKey).not.toBe("aw-chief-of-staff");
+    expect(packageReleaseBlockers(release)).not.toContain("Specialist release must pin the declared native case-contract suite");
   });
   it("cannot count one review as multiple representative cases", () => {
     const id = randomUUID();

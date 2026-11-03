@@ -1,0 +1,185 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts (307 tests | 3 failed | 304 skipped) 3742ms
+     × native preparation preserves only the current run's reserved admission evidence: required 1705ms
+     × native preparation preserves only the current run's reserved admission evidence: historical 832ms
+     × native preparation preserves only the current run's reserved admission evidence: invalid 784ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > native preparation preserves only the current run's reserved admission evidence: required
+AssertionError: expected { …(6) } to deeply equal { …(10) }
+
+- Expected
++ Received
+
+@@ -6,36 +6,11 @@
+      "phase": "required",
+      "runId": "2d3d8177-9996-4f44-947a-dc9dd4dacb9e",
+      "version": 1,
+      "wakeupRequestId": "f83e4e20-b151-43cd-b5fc-53efbaba68ff",
+    },
+-   "environmentLeaseId": "d89a3b0e-b14c-41d7-a663-2c30ab1efaa6",
+-   "itemId": "78f7b412-4668-42f3-8847-0b1b51ea37c2",
+-   "nativeAttachmentStageSources": [
+-     {
+-       "attempt": 1,
+-       "eventSeq": 7,
+-       "responsibleUserId": null,
+-       "sourceCaptures": [
+-         {
+-           "input": {
+-             "assetId": null,
+-             "attachmentId": "139d8ed2-0446-4164-a538-68cda102cc59",
+-             "byteSize": null,
+-             "commentId": null,
+-             "disposition": "attachment_binding_unavailable",
+-             "issueId": "69b830c0-0e96-4541-9608-9f28c35d1838",
+-             "kind": "attachment",
+-             "sha256": null,
+-           },
+-           "payloadSourceSnapshot": null,
+-         },
+-       ],
+-     },
+-   ],
+-   "nativeBootstrapTaskSource": null,
+-   "nativeExecutionInput": null,
++   "environmentLeaseId": "0d438c87-bf89-484a-9e47-df16aade378f",
++   "itemId": "d8b9f85c-4396-46d9-b00a-47689778a7fb",
+    "provider": "codex",
+    "schema": "paperclip.runner.profile.v1",
+-   "sessionCheckpoint": null,
+-   "turnId": "1372affd-fc10-4e2a-a236-aadf4f657654",
++   "turnId": "ee78a8f9-41a2-481c-b65c-513a6ac05079",
+  }
+
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:12662:40
+    12660|       const repeated = await prepareNativeHeartbeatRun({ db, run: prep…
+    12661|       const [after] = await db.select().from(heartbeatRuns).where(eq(h…
+    12662|       expect(after!.runnerProfileJson).toEqual(latestProfile);
+       |                                        ^
+    12663|       expect(after!.nativeInputSourceProtocolVersion).toBe(0);
+    12664|       expect(repeated).toMatchObject({ turnId: latestProfile.turnId, i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > native preparation preserves only the current run's reserved admission evidence: historical
+AssertionError: expected { …(5) } to deeply equal { …(9) }
+
+- Expected
++ Received
+
+  {
+-   "environmentLeaseId": "df997c31-2f83-4676-a1c4-4a6eff7c3b31",
+-   "itemId": "01fbd25f-534f-4d40-92ea-293f74ca4a35",
+-   "nativeAttachmentStageSources": [
+-     {
+-       "attempt": 1,
+-       "eventSeq": 7,
+-       "responsibleUserId": null,
+-       "sourceCaptures": [
+-         {
+-           "input": {
+-             "assetId": null,
+-             "attachmentId": "9879fcd9-fed1-4a80-8ec0-1997e4e59206",
+-             "byteSize": null,
+-             "commentId": null,
+-             "disposition": "attachment_binding_unavailable",
+-             "issueId": "ec6266a0-9e91-4a2e-b242-e2ad69080e8d",
+-             "kind": "attachment",
+-             "sha256": null,
+-           },
+-           "payloadSourceSnapshot": null,
+-         },
+-       ],
+-     },
+-   ],
+-   "nativeBootstrapTaskSource": null,
+-   "nativeExecutionInput": null,
++   "environmentLeaseId": "12e03fae-c14c-42a3-8b43-aafde71bf85c",
++   "itemId": "92b75623-83d4-491b-846d-9a825006abc9",
+    "provider": "codex",
+    "schema": "paperclip.runner.profile.v1",
+-   "sessionCheckpoint": null,
+-   "turnId": "c6c5eb0c-a378-4491-8f7c-855a143dfbb9",
++   "turnId": "47b6e23b-b3dd-4714-b068-1e0c7b501a26",
+  }
+
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:12662:40
+    12660|       const repeated = await prepareNativeHeartbeatRun({ db, run: prep…
+    12661|       const [after] = await db.select().from(heartbeatRuns).where(eq(h…
+    12662|       expect(after!.runnerProfileJson).toEqual(latestProfile);
+       |                                        ^
+    12663|       expect(after!.nativeInputSourceProtocolVersion).toBe(0);
+    12664|       expect(repeated).toMatchObject({ turnId: latestProfile.turnId, i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > native preparation preserves only the current run's reserved admission evidence: invalid
+AssertionError: expected { …(6) } to deeply equal { …(10) }
+
+- Expected
++ Received
+
+@@ -6,36 +6,11 @@
+      "phase": "required",
+      "runId": "062e02de-963a-40f8-a4a8-68d5ce9c1572",
+      "version": 1,
+      "wakeupRequestId": "39a25bd4-28f5-4ea1-b618-d214af90f4af",
+    },
+-   "environmentLeaseId": "3efdbc01-06c9-43ed-b53e-128535dc7547",
+-   "itemId": "af5b5b76-276f-49b0-87a0-c581ac682dc4",
+-   "nativeAttachmentStageSources": [
+-     {
+-       "attempt": 1,
+-       "eventSeq": 7,
+-       "responsibleUserId": null,
+-       "sourceCaptures": [
+-         {
+-           "input": {
+-             "assetId": null,
+-             "attachmentId": "66057c56-9ad5-49f5-8fb2-815c0a333caa",
+-             "byteSize": null,
+-             "commentId": null,
+-             "disposition": "attachment_binding_unavailable",
+-             "issueId": "2a410e37-a9de-4f0d-b09e-c2e9cb92a646",
+-             "kind": "attachment",
+-             "sha256": null,
+-           },
+-           "payloadSourceSnapshot": null,
+-         },
+-       ],
+-     },
+-   ],
+-   "nativeBootstrapTaskSource": null,
+-   "nativeExecutionInput": null,
++   "environmentLeaseId": "5984bb9d-28b1-4dd7-a0c4-d0d542452121",
++   "itemId": "2cd5604e-6886-48d9-b27d-224f7c3995cb",
+    "provider": "codex",
+    "schema": "paperclip.runner.profile.v1",
+-   "sessionCheckpoint": null,
+-   "turnId": "582c960f-b29c-4bb5-8b20-7faf61949cc1",
++   "turnId": "e4a55115-7726-40ce-a1f7-b0554231f45a",
+  }
+
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:12662:40
+    12660|       const repeated = await prepareNativeHeartbeatRun({ db, run: prep…
+    12661|       const [after] = await db.select().from(heartbeatRuns).where(eq(h…
+    12662|       expect(after!.runnerProfileJson).toEqual(latestProfile);
+       |                                        ^
+    12663|       expect(after!.nativeInputSourceProtocolVersion).toBe(0);
+    12664|       expect(repeated).toMatchObject({ turnId: latestProfile.turnId, i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 304 skipped (307)
+   Start at  12:16:52
+   Duration  99.89s (transform 58.03s, setup 3.77s, import 90.63s, tests 3.74s, environment 0ms)
+

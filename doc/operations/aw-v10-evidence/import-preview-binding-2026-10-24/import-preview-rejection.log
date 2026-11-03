@@ -1,0 +1,13 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:46:01] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-db546747-eae6-4ef7-923f-16d31ba59c3f"}[39m
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 44 skipped (45)
+   Start at  20:45:36
+   Duration  24.67s (transform 14.80s, setup 99ms, import 6.31s, tests 18.08s, environment 0ms)
+

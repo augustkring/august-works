@@ -16,6 +16,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { heartbeatService } from "../services/heartbeat.ts";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -65,8 +66,10 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
   let heartbeat!: ReturnType<typeof heartbeatService>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   let previousAgentJwtSecret: string | undefined;
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     previousAgentJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = "heartbeat-local-environment-test-secret";
     tempDb = await startEmbeddedPostgresTestDatabase("heartbeat-local-environment-");
@@ -108,6 +111,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
     } else {
       process.env.PAPERCLIP_AGENT_JWT_SECRET = previousAgentJwtSecret;
     }
+    restoreApiUrl?.();
   });
 
   it("runs work through the default Local environment lease", async () => {
@@ -122,6 +126,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
 
     await db.insert(agents).values({
       id: agentId,
@@ -181,6 +186,7 @@ describeEmbeddedPostgres("heartbeat local environment lifecycle", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
 
     await db.insert(agents).values({
       id: agentId,

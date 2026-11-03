@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:47:18] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-3f723261-ebe0-49ad-be3f-ab8ea1f2a8b7"}[39m
+[20:47:18] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-2e4bf698-f0b2-4042-b8bc-f16071b03edc"}[39m
+[20:47:18] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-2727ef1f-bcee-4b91-90ae-d4725bd6a0a8"}[39m
+[20:47:18] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"import-79513ba2-8e59-4c16-9d38-088358a3ff59"}[39m
+[20:47:41] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"7e6c8343-6a62-46db-a26b-c7857c73a522"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:847:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:47:41] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"4e1f1b5a-47ea-4593-9735-3f1c23b870b2"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:898:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:47:42] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"478baf94-6b37-4bac-abf7-758404e22891"}[39m
+[20:47:42] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"478baf94-6b37-4bac-abf7-758404e22891"}[39m
+
+ Test Files  5 passed (5)
+      Tests  103 passed (103)
+   Start at  20:46:47
+   Duration  61.66s (transform 16.46s, setup 300ms, import 20.65s, tests 39.18s, environment 751ms)
+

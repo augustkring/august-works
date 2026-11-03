@@ -5,7 +5,7 @@ import express from "express";
 import request from "supertest";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq} from "drizzle-orm";
-import {agents,authUsers,companyMemberships,heartbeatRuns,issues,issueComments,decisions,decisionCausalPins,decisionContexts,decisionContextVersions,decisionEvidenceLinks,decisionCriteria,decisionExpectedOutcomes,analyticalLineageManifests,companies,projects,causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns,createDb} from "@paperclipai/db";
+import {agents,authUsers,companyMemberships,heartbeatRuns,issues,issueComments,decisions,decisionCausalPins,decisionContexts,decisionContextVersions,decisionEvidenceLinks,decisionCriteria,decisionExpectedOutcomes,analyticalLineageManifests,companies,causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns,createDb} from "@paperclipai/db";
 import {decisionContextDefinitionSchema,causalClaimDefinitionSchema,businessMetricDefinitionSchema,type CausalAnalysisEvidenceReference} from "@paperclipai/shared";
 import {decisionService} from "../services/decisions.js";
 import {decisionIntelligenceService} from "../services/decision-intelligence.js";
@@ -21,25 +21,27 @@ import {purgeCompanyContent} from "../services/saas/company-purge.js";
 import {analyticalPurpose,metricDefinition} from "./helpers/business-metric-fixture.js";
 import {causalClaimFixture} from "./helpers/causal-claim-fixture.js";
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
+import {createCanonicalHumanProject,seedCurrentHumanSourceActor} from "./helpers/current-human-source-fixture.js";
+import type {AuthorizationActor} from "../services/authorization.js";
+import {issueService} from "../services/issues.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported?describe:describe.skip;
-const actor={type:"board" as const,source:"local_implicit" as const},rationale="Explicit synthetic human model review, not collected causal or business evidence";
+let actor:AuthorizationActor;const rationale="Explicit synthetic human model review, not collected causal or business evidence";
 const flags={analytical_lineage_v8:true,business_metrics_v8:true,business_experiments_v8:true,causal_claims_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true,causal_provider_dowhy_v8:false};
 suite("Native causal model/review/source owner on migrated PostgreSQL",()=>{
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>,companyId:string,otherId:string,policyId:string;
  beforeAll(async()=>{process.env.PAPERCLIP_DECISION_SIGNING_SECRET="0123456789abcdef0123456789abcdef";database=await startEmbeddedPostgresTestDatabase("aw-v8-causal-owner-");db=createDb(database.connectionString);});afterAll(async()=>database?.cleanup());
- beforeEach(async()=>{await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);companyId=randomUUID();otherId=randomUUID();await db.insert(companies).values([{id:companyId,name:"Native causal fixture",issuePrefix:randomUUID()},{id:otherId,name:"Foreign causal fixture",issuePrefix:randomUUID()}]);const policy=analyticalPurpose();policy.analyticalPurpose!.capabilities=["metrics","causal","decision"];policyId=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id;});
+ beforeEach(async()=>{await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);companyId=randomUUID();otherId=randomUUID();await db.insert(companies).values([{id:companyId,name:"Native causal fixture",issuePrefix:randomUUID()},{id:otherId,name:"Foreign causal fixture",issuePrefix:randomUUID()}]);actor=await seedCurrentHumanSourceActor(db,[companyId,otherId],"local-board");const policy=analyticalPurpose();policy.analyticalPurpose!.capabilities=["metrics","causal","decision"];policyId=(await aiGovernanceService(db).obligation(actor,companyId,policy)).id;});
  const service=()=>causalClaimService(db);
  async function proposal(projectId:string|null=null){const definition=metricDefinition(policyId);if(projectId&&definition.calculation.kind==="native_ratio"){definition.calculation.numerator.projectId=projectId;definition.calculation.denominator.projectId=projectId;}const metric=await businessMetricService(db).create(companyId,actor,{key:`metric_${randomUUID().replaceAll("-","")}`,definition:businessMetricDefinitionSchema.parse(definition)});await businessMetricService(db).publish(companyId,actor,metric.metric.id,{expectedRevision:1,versionId:metric.version.id});const seed=causalClaimFixture().definition;const model=causalClaimDefinitionSchema.parse({...seed,outcomeMetricId:metric.metric.id,outcomeMetricVersionId:metric.version.id,experimentEvidence:null,population:{...seed.population,scope:projectId?{type:"project",id:projectId}:{type:"company",id:null}},governanceObligationRefs:[policyId]});return {model,metric};}
  const create=(model:ReturnType<typeof causalClaimDefinitionSchema.parse>)=>service().create(companyId,actor,{key:`claim_${randomUUID().replaceAll("-","")}`,definition:model});
  async function reviewed(){const f=await proposal(),d=await create(f.model),claim=await service().review(companyId,actor,d.claim.id,{expectedRevision:1,versionId:d.version.id,rationale,graphAndAssumptionsAcknowledged:true});return {...f,...d,claim};}
  function app(){const a=express();a.use(express.json());a.use((req,_res,next)=>{req.actor={...actor,userId:"local-board"};next();});a.use("/api",causalClaimRoutes(db));a.use(errorHandler);return a;}
   async function nativeDecision() {
-    await db.insert(authUsers).values({id:"local-board",name:"Local fixture human",email:"experiment-decision@example.test",createdAt:new Date(),updatedAt:new Date()}).onConflictDoNothing();
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"}).onConflictDoNothing();
     const [agent]=await db.insert(agents).values({companyId,name:"Native fixture proposer",role:"engineer",status:"active",adapterType:"codex_local"}).returning();
-    const [origin]=await db.insert(issues).values({companyId,title:"Native decision origin",status:"done",responsibleUserId:"local-board"}).returning();
-    const [target]=await db.insert(issues).values({companyId,title:"Native decision target",status:"todo",responsibleUserId:"local-board"}).returning();
-    const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent.id,status:"running",responsibleUserId:"local-board",contextSnapshot:{issueId:origin.id}}).returning();
+    const origin=await issueService(db).create(companyId,{title:"Native decision origin",status:"todo",responsibleUserId:"local-board",createdByUserId:"local-board"},db,undefined,{manualInputActor:actor,privacyActor:actor});
+    const target=await issueService(db).create(companyId,{title:"Native decision target",status:"todo",responsibleUserId:"local-board",createdByUserId:"local-board"},db,undefined,{manualInputActor:actor,privacyActor:actor});
+    const [run]=await db.insert(heartbeatRuns).values({companyId,agentId:agent.id,scopeKind:"issue",issueId:origin.id,nativeIssueId:origin.id,runtimeMode:"native",status:"running",responsibleUserId:"local-board",contextSnapshot:{issueId:origin.id}}).returning();
+    await db.update(issues).set({executionRunId:run.id}).where(eq(issues.id,origin.id));
     const owner=decisionService(db,{wakeOriginAgent:async()=>{}});
     const decision=await owner.create({companyId,actor,agentId:agent.id,runId:run.id,title:"Consider this exact retained experiment?",body:rationale,options:[{id:"proceed",label:"Proceed",effects:[{type:"comment_on_issue",targetIssueId:target.id,staleness:"lenient",bodyMarkdown:"Separate human native choice"}]},{id:"defer",label:"Defer",effects:[]}]});
     return {decision,target,owner};
@@ -76,7 +78,7 @@ suite("Native causal model/review/source owner on migrated PostgreSQL",()=>{
   const replacement=causalContext(c.ref);replacement.evidence=[];const revised=await owner.propose(companyId,actor,native.decision.id,{expectedRevision:2,definition:replacement});expect(revised.versions[0].evidence).toEqual([]);await owner.prepare(companyId,actor,native.decision.id,{expectedRevision:3,versionId:revised.versions[0].id,rationale});
  });
  it("erases complete causal-derived context prose while retaining an already chosen canonical decision and effects with V8 rollout off",async()=>{
-  const [source]=await db.insert(projects).values({companyId,name:"Causal-only source scope",status:"in_progress"}).returning(),c=await causalEvidence(source.id),native=await nativeDecision(),owner=decisionIntelligenceService(db),view=await owner.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition:causalContext(c.ref)});await owner.prepare(companyId,actor,native.decision.id,{expectedRevision:1,versionId:view.versions[0].id,rationale});await native.owner.decide({id:native.decision.id,optionId:"proceed",decidedByUserId:"local-board",userActor:actor});
+  const source=await createCanonicalHumanProject(db,companyId,actor,"Causal-only source scope"),c=await causalEvidence(source.id),native=await nativeDecision(),owner=decisionIntelligenceService(db),view=await owner.propose(companyId,actor,native.decision.id,{expectedRevision:0,definition:causalContext(c.ref)});await owner.prepare(companyId,actor,native.decision.id,{expectedRevision:1,versionId:view.versions[0].id,rationale});await native.owner.decide({id:native.decision.id,optionId:"proceed",decidedByUserId:"local-board",userActor:actor});
   await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[source.id]);});expect(await db.select().from(decisionContextVersions).where(eq(decisionContextVersions.decisionId,native.decision.id))).toHaveLength(0);expect(await db.select().from(decisionCausalPins).where(eq(decisionCausalPins.decisionId,native.decision.id))).toHaveLength(0);expect(await db.select().from(causalClaims).where(eq(causalClaims.id,c.claim.id))).toHaveLength(0);expect((await db.select().from(decisions).where(eq(decisions.id,native.decision.id)))[0].chosenOptionId).toBe("proceed");expect(await db.select().from(issueComments).where(eq(issueComments.issueId,native.target.id))).toHaveLength(1);
  });
  it("persists a human question, separates review and abstains without an identified dataset instead of inventing effects",async()=>{
@@ -97,7 +99,7 @@ suite("Native causal model/review/source owner on migrated PostgreSQL",()=>{
   const f=await proposal(),d=await create(f.model);await expect(db.update(causalClaims).set({revision:2,status:"supported"}).where(eq(causalClaims.id,d.claim.id))).rejects.toMatchObject({cause:{code:"23514"}});expect((await service().detail(companyId,actor,d.claim.id)).claim.status).toBe("hypothesis");
  });
  it("erases source-owned causal question, review, run and prose with rollout off and company paused",async()=>{
-  const [project]=await db.insert(projects).values({companyId,name:"Causal governed source scope",status:"in_progress"}).returning(),f=await proposal(project.id),d=await create(f.model);
+  const project=await createCanonicalHumanProject(db,companyId,actor,"Causal governed source scope"),f=await proposal(project.id),d=await create(f.model);
   await service().review(companyId,actor,d.claim.id,{expectedRevision:1,versionId:d.version.id,rationale,graphAndAssumptionsAcknowledged:true});await service().analyze(companyId,actor,d.claim.id,{expectedRevision:2,versionId:d.version.id});
   await disableV8Rollout(db);await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await db.transaction(async raw=>{const tx=raw as unknown as typeof db;await lockMemoryPrivacy(tx,companyId);await eraseAnalyticalSourcesUnderMemory(tx,companyId,"project",[project.id]);});
   for(const table of [causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns])expect(await db.select().from(table).where(eq(table.companyId,companyId))).toHaveLength(0);

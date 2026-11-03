@@ -1,0 +1,12 @@
+{
+  "server/src/services/authorization.ts": "c992c7cc6620f265decf28973a0dceb834c31fc2b4f524971cc26fc1186b59e8",
+  "server/src/__tests__/authorization-service.test.ts": "7ecf07623106b48776b4c630e82fbc4a1716929aea61fb5d0c8c20033125daa1",
+  "server/src/__tests__/issue-created-from-routes.test.ts": "fd104c49d67111fb4646b104d17fbbf1b754e3d687798e29064fa929633dcb74",
+  "server/src/__tests__/issue-create-deduplication-routes.test.ts": "d1e3f5d048dae586cf1940c950165ee8ebc97253c28d499483e8f41d4ef097b9",
+  "server/src/__tests__/manual-task-payload-source.integration.test.ts": "79ebec26286a1efc9271415bdc95763d35d3692c091329df7f66dc94e9348937",
+  "server/src/__tests__/native-payload-public-response.integration.test.ts": "7fa39133adf243a255d56965f5ebc62617531bdef7ba3ff6bd450ceccb184e9f",
+  "server/src/__tests__/typed-task-origin.integration.test.ts": "4ebaaa56a786b3bb20fdfc299e891560b581dd08c7d052327785b6286e33439e",
+  "server/src/__tests__/issue-native-memory-source-privacy.integration.test.ts": "4043b13bd2bde011a152e62d74f0c1df096fef8df7c20cebd5f4ed2ba5587d44",
+  "server/src/__tests__/native-payload-temporal-sources.integration.test.ts": "6beab03e9c6c8f4d0c78415a72ccfcd20ffa40ea1b2493931e24d8833194f1f2",
+  "packages/db/src/migrations/0503_furry_norman_osborn.sql": "9f41bc0b885e6aed121bf5aca49f6aac67d5cd953392a66205ebf968b54a806e"
+}

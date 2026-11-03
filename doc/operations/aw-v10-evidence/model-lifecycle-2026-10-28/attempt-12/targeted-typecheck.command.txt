@@ -1,0 +1,1 @@
+/workspace/v10-preparation/pinned-bin/pnpm --filter @paperclipai/server exec tsc --noEmit --pretty false --singleThreaded -p .requirement-audit-tsconfig.json

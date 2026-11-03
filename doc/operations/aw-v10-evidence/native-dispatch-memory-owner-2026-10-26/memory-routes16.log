@@ -1,0 +1,99 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+-stderr | src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+memory evidence seal tuple diagnostic {"old":[{"kind":"task","issueId":"140a327e-d3e9-4dc4-98df-f50990aaafb0","sourceVersion":"2026-10-26T02:15:46.200Z","contentHash":"64ae8b7186a7b9a4b904f3ae2cf1a1ae741e6f7a5010efa9c50c4bd85d2954ef"}],"next":[{"kind":"task","issueId":"140a327e-d3e9-4dc4-98df-f50990aaafb0","sourceVersion":"2026-10-26T02:15:46.200Z","contentHash":"64ae8b7186a7b9a4b904f3ae2cf1a1ae741e6f7a5010efa9c50c4bd85d2954ef"},{"kind":"task","issueId":"2691fde7-7a67-44fe-b672-9fb12da11140","sourceVersion":"2026-10-26T02:15:46.238Z","contentHash":"dc60d9a4dbe7a64386674e97a6c8f9e2658270312d77d76734f172795f773c59"}]}
+
+stderr | src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+memory route test diagnostic DrizzleQueryError: Failed query: update "memory_records" set "payload_source_snapshot" = (
+    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
+      'kind',$1::text,'companyId',memory_records.company_id::text,'id',memory_records.id::text,
+      'contentHash',public.aw_native_payload_body_hash($2::text,to_jsonb(memory_records))),
+      'policy',$3::jsonb,'inputs',$4::jsonb) as value)
+    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
+  ), "payload_source_snapshot_invalidated" = $5, "source_provenance_qualified" = $6, "source_run_ids" = $7, "source_issue_ids" = $8, "source_project_ids" = $9, "source_memory_ids" = $10, "source_foundation_revision_ids" = $11, "updated_at" = $12 where ("memory_records"."company_id" = $13 and "memory_records"."id" = $14 and "memory_records"."payload_source_protocol_version" = $15 and "memory_records"."payload_source_snapshot_invalidated" = $16 and "memory_records"."created_by_actor_type" = $17) returning "payload_source_snapshot"
+params: memory_record,memory_record,{"issueIds":["140a327e-d3e9-4dc4-98df-f50990aaafb0","2691fde7-7a67-44fe-b672-9fb12da11140"],"projectIds":[],"runIds":[],"memoryIds":[],"foundationRevisionIds":[]},[{"kind":"task","issueId":"140a327e-d3e9-4dc4-98df-f50990aaafb0","sourceVersion":"2026-10-26T02:15:46.200Z","contentHash":"64ae8b7186a7b9a4b904f3ae2cf1a1ae741e6f7a5010efa9c50c4bd85d2954ef"},{"kind":"task","issueId":"2691fde7-7a67-44fe-b672-9fb12da11140","sourceVersion":"2026-10-26T02:15:46.238Z","contentHash":"dc60d9a4dbe7a64386674e97a6c8f9e2658270312d77d76734f172795f773c59"}],false,true,{},{"140a327e-d3e9-4dc4-98df-f50990aaafb0","2691fde7-7a67-44fe-b672-9fb12da11140"},{},{},{},2026-10-26T02:15:48.175Z,508bcd52-0538-40f9-91c6-c73667fe8519,9208f443-3f60-498f-819b-cd46183cce5e,1,true,user
+    at PostgresJsPreparedQuery.queryWithCache (file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/postgres-js/session.js:37:20
+    at inspect (/workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:1123:30)
+    at /workspace/v10-dep-qualification/packages/db/src/work-signals.ts:38:22
+    at async scope (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+    at async sql.begin (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+    at PostgresJsDatabase.connection.transaction (/workspace/v10-dep-qualification/packages/db/src/work-signals.ts:35:22)
+    at runCandidate (/workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:935:23)
+    at Object.createCandidate (/workspace/v10-dep-qualification/server/src/services/memory/memory-service.ts:2022:21) {
+  query: 'update "memory_records" set "payload_source_snapshot" = (\n' +
+    "    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(\n" +
+    "      'kind',$1::text,'companyId',memory_records.company_id::text,'id',memory_records.id::text,\n" +
+    "      'contentHash',public.aw_native_payload_body_hash($2::text,to_jsonb(memory_records))),\n" +
+    "      'policy',$3::jsonb,'inputs',$4::jsonb) as value)\n" +
+    "    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload\n" +
+    '  ), "payload_source_snapshot_invalidated" = $5, "source_provenance_qualified" = $6, "source_run_ids" = $7, "source_issue_ids" = $8, "source_project_ids" = $9, "source_memory_ids" = $10, "source_foundation_revision_ids" = $11, "updated_at" = $12 where ("memory_records"."company_id" = $13 and "memory_records"."id" = $14 and "memory_records"."payload_source_protocol_version" = $15 and "memory_records"."payload_source_snapshot_invalidated" = $16 and "memory_records"."created_by_actor_type" = $17) returning "payload_source_snapshot"',
+  params: [
+    'memory_record',
+    'memory_record',
+    '{"issueIds":["140a327e-d3e9-4dc4-98df-f50990aaafb0","2691fde7-7a67-44fe-b672-9fb12da11140"],"projectIds":[],"runIds":[],"memoryIds":[],"foundationRevisionIds":[]}',
+    '[{"kind":"task","issueId":"140a327e-d3e9-4dc4-98df-f50990aaafb0","sourceVersion":"2026-10-26T02:15:46.200Z","contentHash":"64ae8b7186a7b9a4b904f3ae2cf1a1ae741e6f7a5010efa9c50c4bd85d2954ef"},{"kind":"task","issueId":"2691fde7-7a67-44fe-b672-9fb12da11140","sourceVersion":"2026-10-26T02:15:46.238Z","contentHash":"dc60d9a4dbe7a64386674e97a6c8f9e2658270312d77d76734f172795f773c59"}]',
+    false,
+    true,
+    '{}',
+    '{"140a327e-d3e9-4dc4-98df-f50990aaafb0","2691fde7-7a67-44fe-b672-9fb12da11140"}',
+    '{}',
+    '{}',
+    '{}',
+    '2026-10-26T02:15:48.175Z',
+    '508bcd52-0538-40f9-91c6-c73667fe8519',
+    '9208f443-3f60-498f-819b-cd46183cce5e',
+    1,
+    true,
+    'user'
+  ],
+  cause: PostgresError: Human Memory evidence seal does not retain its source history
+      at ErrorResponse (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30)
+      at handle (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6)
+      at Socket.data (file:///workspace/v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9)
+      at Socket.emit (node:events:509:28)
+      at addChunk (node:internal/streams/readable:563:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+      at Readable.push (node:internal/streams/readable:394:5)
+      at TCP.onStreamRead (node:internal/stream_base_commons:189:23) {
+    severity_local: 'ERROR',
+    severity: 'ERROR',
+    code: '23514',
+    where: 'PL/pgSQL function aw_native_payload_source_binding() line 42 at RAISE',
+    file: 'pl_exec.c',
+    line: '3937',
+    routine: 'exec_stmt_raise'
+  }
+}
+
+x-
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > supports shared binding, candidate review, detail and revocation
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/memory-routes.test.ts:286:70
+    284|         ],
+    285|       });
+    286|     expect(contradiction.status, JSON.stringify(contradiction.body)).t…
+       |                                                                      ^
+    287|     expect(contradiction.body).toMatchObject({
+    288|       resolution: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 skipped (3)
+   Start at  02:15:29
+   Duration  19.15s (transform 9.32s, setup 77ms, import 13.11s, tests 5.84s, environment 0ms)
+

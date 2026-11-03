@@ -32,7 +32,7 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:1,output_t
         PROBE_ERROR: options.error ?? "", PATH: `${root}${path.delimiter}${process.env.PATH ?? ""}`,
       } },
     });
-    return { result, capture: JSON.parse(await fs.readFile(capture, "utf8")) as { args: string[]; home: string } };
+    return { result, capture: await fs.readFile(capture, "utf8").then(JSON.parse).catch(() => null) };
   } finally {
     const recorded = await fs.readFile(capture, "utf8").then(JSON.parse).catch(() => null);
     if (recorded?.home) await fs.rm(recorded.home, { recursive: true, force: true });
@@ -47,31 +47,19 @@ describe("codex_local environment diagnostics", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
-  itPosix("preserves a successful hello when probe cleanup races a background writer", async () => {
-    const { result } = await runProbeFixture({ failCleanup: true });
-    expect(result.status).toBe("pass");
-    expect(result.checks).toContainEqual(expect.objectContaining({ code: "codex_hello_probe_passed" }));
-    expect(result.checks).not.toContainEqual(expect.objectContaining({ code: "codex_hello_probe_auth_required" }));
+  itPosix.each([
+    { failCleanup: true },
+    { error: "Unable to start turn: disk is full" },
+    { error: "Invalid API key" },
+    {},
+  ])("rejects paid inference before starting the CLI (%j)", async (options) => {
+    const { result, capture } = await runProbeFixture(options);
+    expect(result.status).toBe("fail");
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified", level: "error" }));
+    expect(result.checks.some((check) => check.code.startsWith("codex_hello_probe_"))).toBe(false);
+    expect(capture).toBeNull();
   });
 
-  itPosix("does not diagnose an unrelated plugin login warning as model authentication failure", async () => {
-    const { result } = await runProbeFixture({ error: "Unable to start turn: disk is full" });
-    expect(result.checks).toContainEqual(expect.objectContaining({ code: "codex_hello_probe_failed", detail: "Unable to start turn: disk is full" }));
-    expect(result.checks).not.toContainEqual(expect.objectContaining({ code: "codex_hello_probe_auth_required" }));
-  });
-
-  itPosix("still reports genuine provider authentication failures", async () => {
-    const { result } = await runProbeFixture({ error: "Invalid API key" });
-    expect(result.checks).toContainEqual(expect.objectContaining({ code: "codex_hello_probe_auth_required" }));
-  });
-
-  itPosix("keeps hello probes free of plugin synchronization and repository instructions", async () => {
-    const { capture } = await runProbeFixture();
-    expect(capture.args).toContain("features.plugins=false");
-    expect(capture.args).toContain("features.remote_plugin=false");
-    expect(capture.args).toContain("project_doc_max_bytes=0");
-    expect(capture.args).toContain("--ephemeral");
-  });
   it("creates a missing working directory when cwd is absolute", async () => {
     const cwd = path.join(
       os.tmpdir(),
@@ -92,7 +80,7 @@ describe("codex_local environment diagnostics", () => {
     });
 
     expect(result.checks.some((check) => check.code === "codex_cwd_valid")).toBe(true);
-    expect(result.checks.some((check) => check.level === "error")).toBe(false);
+    expect(result.checks.filter((check) => check.level === "error").map((check) => check.code)).toEqual(["paid_transport_unqualified"]);
     const stats = await fs.stat(cwd);
     expect(stats.isDirectory()).toBe(true);
     await fs.rm(path.dirname(cwd), { recursive: true, force: true });
@@ -161,7 +149,7 @@ describe("codex_local environment diagnostics", () => {
     }
   });
 
-  itWindows("runs the hello probe when Codex is available via a Windows .cmd wrapper", async () => {
+  itWindows("rejects paid inference after resolving a Windows .cmd wrapper", async () => {
     const root = path.join(
       os.tmpdir(),
       `paperclip-codex-local-probe-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -196,8 +184,8 @@ describe("codex_local environment diagnostics", () => {
         },
       });
 
-      expect(result.status).toBe("pass");
-      expect(result.checks.some((check) => check.code === "codex_hello_probe_passed")).toBe(true);
+      expect(result.status).toBe("fail");
+      expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified" }));
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

@@ -85,58 +85,62 @@ const sshTarget: AdapterExecutionTarget = {
   },
 };
 
-const initLine =
-  '{"type":"system","subtype":"init","cwd":"/home/daytona/paperclip-workspace","session_id":"abc","tools":["Bash","Read"]}';
-
-const loginRequiredStdout = [
-  initLine,
-  '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"Please run `claude login` to authenticate.","session_id":"abc"}',
-].join("\n");
-
 afterEach(() => {
   vi.clearAllMocks();
   resetClaudeCliCapabilitiesCacheForTests();
 });
 
-describe("claude sandbox auth-missing check", () => {
-  it("emits the canonical adapter_auth_missing check when a sandbox hello probe reports missing auth", async () => {
-    // The sandbox has no ready login, so the hello probe returns a
-    // login-required result. The Test must emit the neutral canonical check
-    // code. The user interface reads this code to decide login eligibility; it
-    // does not parse the message text or the top-level status.
-    probeResult.value = { exitCode: 1, stdout: loginRequiredStdout, stderr: "" };
+describe("claude remote paid hello admission", () => {
+  it.each([
+    ["sandbox", sandboxTarget, "Daytona"],
+    ["SSH", sshTarget, "Remote host"],
+  ] as const)("preserves static %s diagnostics and denies the paid hello before execution", async (_name, executionTarget, environmentName) => {
+    // A successful/high-enough version check is static setup evidence. The
+    // configured token remains visible as metadata, but must not authorize a
+    // paid hello probe on an unqualified runtime.
+    probeResult.value = { exitCode: 0, stdout: "2.1.300 (Claude Code)\n", stderr: "" };
 
     const result = await testEnvironment({
       companyId: "company-1",
       adapterType: "claude_local",
-      config: { engine: "cli", command: "claude" },
-      executionTarget: sandboxTarget,
-      environmentName: "Daytona",
+      config: {
+        engine: "cli",
+        command: "claude",
+        model: "claude-fable-5-1",
+        env: { CLAUDE_CODE_OAUTH_TOKEN: "oauth-test-token" },
+      },
+      executionTarget,
+      environmentName,
     });
 
-    // A missing-auth probe is a warning, not a failure, so the environment stays
-    // testable and the user interface can offer login.
-    expect(result.status).toBe("warn");
-    expect(result.checks.some((check) => check.code === ADAPTER_AUTH_MISSING_CHECK_CODE)).toBe(true);
-    // The descriptive probe check stays, so existing diagnostics keep working.
-    expect(result.checks.some((check) => check.code === "claude_hello_probe_auth_required")).toBe(true);
-  });
+    expect(result.status).toBe("fail");
+    for (const code of [
+      "claude_cwd_valid",
+      "claude_command_resolvable",
+      "claude_oauth_token_configured",
+      "paid_transport_unqualified",
+    ]) {
+      expect(result.checks.some((check) => check.code === code)).toBe(true);
+    }
+    for (const code of [
+      ADAPTER_AUTH_MISSING_CHECK_CODE,
+      "claude_hello_probe_auth_required",
+      "claude_hello_probe_passed",
+      "claude_hello_probe_error",
+    ]) {
+      expect(result.checks.some((check) => check.code === code)).toBe(false);
+    }
 
-  it("does not emit adapter_auth_missing when a non-sandbox remote probe reports missing auth", async () => {
-    // Only a sandbox target can start login. A non-sandbox remote target keeps
-    // the descriptive probe check but does not carry the neutral login code.
-    probeResult.value = { exitCode: 1, stdout: loginRequiredStdout, stderr: "" };
-
-    const result = await testEnvironment({
-      companyId: "company-1",
-      adapterType: "claude_local",
-      config: { engine: "cli", command: "claude" },
-      executionTarget: sshTarget,
-      environmentName: "Remote host",
-    });
-
-    expect(result.checks.some((check) => check.code === "claude_hello_probe_auth_required")).toBe(true);
-    expect(result.checks.some((check) => check.code === ADAPTER_AUTH_MISSING_CHECK_CODE)).toBe(false);
+    // The only remote process may be the free static --version diagnostic;
+    // there must be no `--print` model hello invocation.
+    expect(runAdapterExecutionTargetProcess).toHaveBeenCalledTimes(1);
+    const versionCall = runAdapterExecutionTargetProcess.mock.calls[0] as unknown as [
+      string,
+      AdapterExecutionTarget,
+      string,
+      string[],
+    ];
+    expect(versionCall[3]).toEqual(["--version"]);
   });
 });
 

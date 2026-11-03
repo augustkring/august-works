@@ -1,0 +1,17 @@
+[
+  {
+    "path": "packages/shared/src/model-broker.ts",
+    "expectedPrior": "b70407f288a41e4614e0d55093be7a2cb12e1ab8ebc172459f942d6eea29a012",
+    "candidateSha256": "6a8db48f77c6fa9d25662f13771e994488cc71e5b493381aeede97f6b29e0c2d"
+  },
+  {
+    "path": "server/src/services/orchestration/openai-responses-model-transport.ts",
+    "expectedPrior": "absent",
+    "candidateSha256": "8fa386118b9707e9e82a11a2bc644aab662b6d7384f1fc357592e6b3fed41724"
+  },
+  {
+    "path": "server/src/services/orchestration/openai-responses-model-transport.test.ts",
+    "expectedPrior": "absent",
+    "candidateSha256": "c7d3424143a83483c590c206cc57bc09d53aaabda07e68d2cf15535df3050ba0"
+  }
+]

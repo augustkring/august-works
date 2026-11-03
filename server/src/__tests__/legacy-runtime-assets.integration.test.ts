@@ -1,13 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { agents, companies, createDb, heartbeatRuns } from "@paperclipai/db";
+import { agents, companies, companyDeletionOperations, createDb, heartbeatRuns, memoryJobs } from "@paperclipai/db";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { materializeAsset } from "../services/native-runtime/runtime-context.js";
-import { nativeRuntimeAssetsRoot, reconcileLegacyNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
+import { assertCompanyManagedOpenCodeRuntimeDataErased, nativeRuntimeAssetsRoot, reconcileLegacyNativeRuntimeAssets } from "../services/native-runtime/runtime-asset-retention.js";
 import { removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -80,5 +80,76 @@ describe.skipIf(!support.supported)("Legacy runtime asset reconciliation on Post
     await fs.unlink(unsafe);
     expect(await reconcileLegacyNativeRuntimeAssets(db)).toMatchObject({ removed: 0 });
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId))).toHaveLength(1);
+  });
+
+  it("does not erase a shared historical bundle while another tenant Run still owns it", async () => {
+    const firstCompany = randomUUID(), secondCompany = randomUUID();
+    const firstAgent = randomUUID(), secondAgent = randomUUID();
+    const firstRun = randomUUID(), secondRun = randomUUID();
+    await db.insert(companies).values([
+      { id: firstCompany, name: "Historical profile owner one", issuePrefix: randomUUID() },
+      { id: secondCompany, name: "Historical profile owner two", issuePrefix: randomUUID() },
+    ]);
+    await db.insert(agents).values([
+      { id: firstAgent, companyId: firstCompany, name: "Legacy owner one", role: "engineer" },
+      { id: secondAgent, companyId: secondCompany, name: "Legacy owner two", role: "engineer" },
+    ]);
+    const shared = await materializeAsset([
+      { path: "SKILL.md", content: Buffer.from("Shared historical runtime bundle"), mode: 0o444 },
+    ]);
+    const historicalProfile = { nativeExecutionInput: { runtimeContext: { instructions: { bundle: shared }, skills: [] } } };
+    await db.insert(heartbeatRuns).values([
+      { id: firstRun, companyId: firstCompany, agentId: firstAgent, status: "succeeded", runtimeMode: "legacy",
+        runnerProfileJson: historicalProfile },
+      { id: secondRun, companyId: secondCompany, agentId: secondAgent, status: "succeeded", runtimeMode: "legacy",
+        runnerProfileJson: historicalProfile },
+    ]);
+
+    // The original instance worker may collect the content-addressed object only
+    // after every persisted historical Run reference is gone.
+    expect(await reconcileLegacyNativeRuntimeAssets(db)).toMatchObject({ deferredActiveRuns: false });
+    await expect(fs.readFile(path.join(shared.rootPath, "SKILL.md"), "utf8"))
+      .resolves.toBe("Shared historical runtime bundle");
+    await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, firstRun));
+    await reconcileLegacyNativeRuntimeAssets(db);
+    await reconcileLegacyNativeRuntimeAssets(db);
+    await expect(fs.readFile(path.join(shared.rootPath, "SKILL.md"), "utf8"))
+      .resolves.toBe("Shared historical runtime bundle");
+    await db.delete(heartbeatRuns).where(eq(heartbeatRuns.id, secondRun));
+    for (let attempt = 0; attempt < 4; attempt++) await reconcileLegacyNativeRuntimeAssets(db);
+    await expect(fs.stat(shared.rootPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(path.join(nativeRuntimeAssetsRoot(), "manifests", `${shared.digest}.json`)))
+      .rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects a pre-upgrade success receipt when cleared profiles leave legacy bytes behind", async () => {
+    const companyId = randomUUID(), agentId = randomUUID(), runId = randomUUID(), operationId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Stale legacy receipt fixture", issuePrefix: randomUUID(), status: "archived" });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Historical Native owner", role: "engineer" });
+    const retained = await materializeAsset([
+      { path: "SKILL.md", content: Buffer.from("Bytes not removed by an old worker"), mode: 0o444 },
+    ]);
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "interrupted", runtimeMode: "native",
+      driverKind: "opencode_server", runnerProfileJson: null });
+    await db.insert(companyDeletionOperations).values({ id: operationId, companyId, requestedByUserId: "fixture-human",
+      idempotencyKey: `stale-runtime-receipt-${operationId}`, status: "processing", stage: "purge",
+      evidence: { runtimesErasedAt: new Date().toISOString() } });
+    const legacyDigests = [retained.digest];
+    const suffix = createHash("sha256").update(legacyDigests.join(",")).digest("hex");
+    // This explicitly models an imported pre-fix historical receipt, not a
+    // success emitted by the current worker. The profile was already cleared,
+    // while the old bundle and its manifest were not physically removed.
+    await db.insert(memoryJobs).values([
+      { companyId, operationType: "retention", jobKey: `runtime-asset-erasure:v1:${runId}`,
+        status: "succeeded", attemptNumber: 1, finishedAt: new Date(),
+        sourceRefJson: { kind: "runtime_asset_erasure", runId, legacyDigests: [], companyPurgeOperationId: operationId } },
+      { companyId, operationType: "retention", jobKey: `runtime-asset-erasure:v1:${runId}:${suffix}`,
+        status: "succeeded", attemptNumber: 1, finishedAt: new Date(),
+        sourceRefJson: { kind: "runtime_asset_erasure", runId, legacyDigests, companyPurgeOperationId: operationId } },
+    ]);
+    await expect(assertCompanyManagedOpenCodeRuntimeDataErased(db, companyId, operationId))
+      .rejects.toThrow("Native OpenCode legacy runtime assets remain on disk after their erasure receipt");
+    await expect(fs.readFile(path.join(retained.rootPath, "SKILL.md"), "utf8"))
+      .resolves.toBe("Bytes not removed by an old worker");
   });
 });

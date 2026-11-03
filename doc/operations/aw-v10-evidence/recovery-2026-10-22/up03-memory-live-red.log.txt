@@ -1,0 +1,90 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-private-live-events.integration.test.ts (1 test | 1 failed) 15711ms
+     × drops actual private Memory creation activity while delivering a subsequent authorized socket barrier 1379ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-private-live-events.integration.test.ts > Native private Memory activity at live delivery > drops actual private Memory creation activity while delivering a subsequent authorized socket barrier
+AssertionError: expected { id: 1, …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "companyId": "61127530-bbb2-4cb2-8b9d-9083f1312a25",
+  "createdAt": "2026-10-22T23:25:55.525Z",
+  "id": 1,
+  "payload": {
+    "action": "memory.private_created",
+    "actorId": "e8b7f2b2-33e0-4a0c-b27c-0a3c3e34c32b",
+    "actorType": "agent",
+    "agentId": "e8b7f2b2-33e0-4a0c-b27c-0a3c3e34c32b",
+    "details": {
+      "memoryType": "lesson",
+      "ownerAgentId": "e8b7f2b2-33e0-4a0c-b27c-0a3c3e34c32b",
+    },
+    "entityId": "56535290-87fe-4763-a60f-5850bf743c8c",
+    "entityType": "memory_record",
+    "responsibleUserId": "b95ff7b4-1927-499a-be84-084efbd10d87",
+    "runId": "ffbf734a-d6cb-4373-90d4-110f60e97736",
+  },
+  "type": "activity.logged",
+}
+
+ ❯ src/__tests__/memory-private-live-events.integration.test.ts:82:75
+     80|       const agentActor = { type: "agent" as const, source: "agent_jwt"…
+     81|       expect(await analyticalLiveEventForReader(db, creation!, agentAc…
+     82|       expect.soft(await analyticalLiveEventForReader(db, creation!, bo…
+       |                                                                           ^
+     83|       publishLiveEvent({ companyId, type: "agent.status", payload: { m…
+     84|       await barrier;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-private-live-events.integration.test.ts > Native private Memory activity at live delivery > drops actual private Memory creation activity while delivering a subsequent authorized socket barrier
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/memory-private-live-events.integration.test.ts:86:88
+     84|       await barrier;
+     85|       expect(received.at(-1)?.payload.marker).toBe("authorized barrier…
+     86|       expect.soft(received.some(event => event.payload.entityId === so…
+       |                                                                                        ^
+     87|       expect.soft(JSON.stringify(received)).not.toContain(source.recor…
+     88|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-private-live-events.integration.test.ts > Native private Memory activity at live delivery > drops actual private Memory creation activity while delivering a subsequent authorized socket barrier
+AssertionError: expected '[{"id":1,"companyId":"61127530-bbb2-4…' not to contain '56535290-87fe-4763-a60f-5850bf743c8c'
+
+Expected: "56535290-87fe-4763-a60f-5850bf743c8c"
+Received: "[{"id":1,"companyId":"61127530-bbb2-4cb2-8b9d-9083f1312a25","type":"activity.logged","createdAt":"2026-10-22T23:25:55.525Z","payload":{"actorType":"agent","actorId":"e8b7f2b2-33e0-4a0c-b27c-0a3c3e34c32b","action":"memory.private_created","entityType":"memory_record","entityId":"56535290-87fe-4763-a60f-5850bf743c8c","agentId":"e8b7f2b2-33e0-4a0c-b27c-0a3c3e34c32b","runId":"ffbf734a-d6cb-4373-90d4-110f60e97736","responsibleUserId":"b95ff7b4-1927-499a-be84-084efbd10d87","details":{"ownerAgentId":"e8b7f2b2-33e0-4a0c-b27c-0a3c3e34c32b","memoryType":"lesson"}}},{"id":2,"companyId":"61127530-bbb2-4cb2-8b9d-9083f1312a25","type":"agent.status","createdAt":"2026-10-22T23:25:56.057Z","payload":{"marker":"authorized barrier"}}]"
+
+ ❯ src/__tests__/memory-private-live-events.integration.test.ts:87:49
+     85|       expect(received.at(-1)?.payload.marker).toBe("authorized barrier…
+     86|       expect.soft(received.some(event => event.payload.entityId === so…
+     87|       expect.soft(JSON.stringify(received)).not.toContain(source.recor…
+       |                                                 ^
+     88|     } finally {
+     89|       unsubscribe();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  23:25:21
+   Duration  34.84s (transform 12.49s, setup 210ms, import 17.97s, tests 15.71s, environment 0ms)
+

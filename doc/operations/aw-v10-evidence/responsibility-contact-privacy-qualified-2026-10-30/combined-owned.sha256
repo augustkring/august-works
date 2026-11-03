@@ -1,0 +1,7 @@
+63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a  server/src/routes/companies.ts
+eed3efe080337700f0c81cc30c5c17553c49b88764be80ab7f67d424985d3a05  server/src/__tests__/company-branding-route.test.ts
+fe6e05de7f9e176e9a23650d613b9896a37fc05faeea3d8d41b6cd486dddbdc6  ui/src/pages/CompanySettings.tsx
+229ba77be6dcd363c0b0e3cbc2564f1041851c55be5e35309c19c4ab7e28ab31  ui/src/api/companies.ts
+66f4e4b2f80ca9cd6f75d319aaf758ddc9c9d3ba8d186acb6d226cf00e8ce554  ui/src/api/client.ts
+0357a097b6d40c7b938f46eb3867d7d25797b71c22475b205feafb6900bacd4e  ui/src/pages/CompanySettingsRenameHint.test.tsx
+f299622b819f4b4b9adf621f5b89cb946de2016b62f4c1fd1984a50c8bc89589  ui/src/api/companies.test.ts

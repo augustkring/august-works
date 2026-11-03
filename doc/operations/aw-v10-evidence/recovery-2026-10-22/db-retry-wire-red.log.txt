@@ -1,0 +1,66 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/db| src/transient-write-retry.test.ts (8 tests | 7 failed) 2723ms
+     × does not replay a parameterized mutation (drizzle) 526ms
+     × does not replay insert into disconnect_effect default values (rows) 350ms
+     × does not replay insert into disconnect_effect default values (values) 307ms
+     × does not replay select disconnect_effect() (rows) 309ms
+     × does not replay select disconnect_effect() (values) 308ms
+     × does not replay with effect as (insert into disconnect_effect default values returning *) select * from effect (rows) 305ms
+     × does not replay with effect as (insert into disconnect_effect default values returning *) select * from effect (values) 304ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/db| src/transient-write-retry.test.ts > database connection loss after statement delivery > does not replay a parameterized mutation (drizzle)
+AssertionError: expected 3 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 3
+
+ ❯ src/transient-write-retry.test.ts:128:38
+    126|         message: expect.stringContaining("write CONNECTION_CLOSED"),
+    127|       });
+    128|       expect(peer.receivedEffects()).toBe(1);
+       |                                      ^
+    129|       expect(peer.extendedExecutions().filter((execution) => execution…
+    130|         .toEqual([{ statement: "insert into disconnect_effect(value) v…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  |@paperclipai/db| src/transient-write-retry.test.ts > database connection loss after statement delivery > does not replay insert into disconnect_effect default values (rows)
+ FAIL  |@paperclipai/db| src/transient-write-retry.test.ts > database connection loss after statement delivery > does not replay insert into disconnect_effect default values (values)
+ FAIL  |@paperclipai/db| src/transient-write-retry.test.ts > database connection loss after statement delivery > does not replay select disconnect_effect() (rows)
+ FAIL  |@paperclipai/db| src/transient-write-retry.test.ts > database connection loss after statement delivery > does not replay select disconnect_effect() (values)
+ FAIL  |@paperclipai/db| src/transient-write-retry.test.ts > database connection loss after statement delivery > does not replay with effect as (insert into disconnect_effect default values returning *) select * from effect (rows)
+ FAIL  |@paperclipai/db| src/transient-write-retry.test.ts > database connection loss after statement delivery > does not replay with effect as (insert into disconnect_effect default values returning *) select * from effect (values)
+AssertionError: expected 3 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 3
+
+ ❯ src/transient-write-retry.test.ts:165:40
+    163|           message: expect.stringContaining("write CONNECTION_CLOSED"),
+    164|         });
+    165|         expect(peer.receivedEffects()).toBe(1);
+       |                                        ^
+    166|
+    167|         // Failing the ambiguous statement must not poison the pool. A…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 1 passed (8)
+   Start at  18:53:36
+   Duration  67.31s (transform 35.79s, setup 0ms, import 63.38s, tests 2.72s, environment 0ms)
+

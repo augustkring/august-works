@@ -97,7 +97,7 @@ export function orchestrationService(db: Db) {
     companyId: string, raw: CreateOrchestrationPlanInput,
   ) {
     const input = createOrchestrationPlanSchema.parse(raw);
-      for (const contract of [input.completionContract, ...input.workers.flatMap(worker => worker.completionContract ? [worker.completionContract] : [])]) for (const output of contract.requiredOutputs) if (output.jsonSchema) assertWorkflowOutputSchema(output.jsonSchema);
+      for (const contract of [input.completionContract, ...input.workers.flatMap(worker => worker.completionContract ? [worker.completionContract] : [])]) for (const output of contract.requiredOutputs) if (output.kind === "task_document" && output.jsonSchema) assertWorkflowOutputSchema(output.jsonSchema);
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true);
     const taskIds = [...new Set([input.issueId, ...input.workers.map(worker => worker.issueId)])].sort();
     const tasks = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, taskIds))).orderBy(issues.id).for("update");
@@ -181,7 +181,7 @@ export function orchestrationService(db: Db) {
     }),
     create: async (actor: AuthorizationActor, companyId: string, raw: CreateOrchestrationPlanInput) => {
       const input = createOrchestrationPlanSchema.parse(raw);
-      for (const contract of [input.completionContract, ...input.workers.flatMap(worker => worker.completionContract ? [worker.completionContract] : [])]) for (const output of contract.requiredOutputs) if (output.jsonSchema) assertWorkflowOutputSchema(output.jsonSchema);
+      for (const contract of [input.completionContract, ...input.workers.flatMap(worker => worker.completionContract ? [worker.completionContract] : [])]) for (const output of contract.requiredOutputs) if (output.kind === "task_document" && output.jsonSchema) assertWorkflowOutputSchema(output.jsonSchema);
       await admit(actor, companyId, db, true);
       return withV7ActivityTransaction(db, (tx, publications) =>
         createWithinTransaction(tx, publications, actor, companyId, input));

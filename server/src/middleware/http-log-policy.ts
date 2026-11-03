@@ -58,7 +58,8 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
   if (!method || !url) return false;
   if (isPrivateTaskDraftUrl(url)) return true;
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
-  return /^\/api\/approvals(?:\/|$)/i.test(pathname)
+  return /^\/api\/auth(?:\/|$)/i.test(pathname)
+    || /^\/api\/approvals(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)
     || /^\/api\/agent-packages(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/(?:agent-packages|agent-package-options|agent-package-installations|agent-package-evaluations|agent-package-update-proposals)(?:\/|$)/i.test(pathname)
@@ -77,6 +78,8 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/experience\/(?:analytics|observations)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/support-access(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/support(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/(?:[^/]*\/)?(?:export|exports|import|imports)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/(?:[^/]*\/)*support-sessions(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/experience(?:\/|$)/i.test(pathname)
@@ -93,6 +96,7 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/notifications\/channel-preferences(?:\/|$)/i.test(normalizePath(url))) return "/api/companies/:companyId/notifications/channel-preferences/:operation";
   if (/\/notifications\/preference-proposals(?:\/|$)/i.test(normalizePath(url))) return "/api/companies/:companyId/notifications/preference-proposals/:operation";
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  if (/^\/api\/auth(?:\/|$)/i.test(pathname)) return "/api/auth/:operation";
   if (/^\/api\/approvals(?:\/|$)/i.test(pathname)) return "/api/approvals/:approvalId/:operation";
   if (/^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/projects/:operation";
   if (/^\/api\/projects(?:\/|$)/i.test(pathname)) return "/api/projects/:projectId/:operation";
@@ -110,6 +114,14 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/experience\/observations(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/observations/:operation";
   if (/\/experience\/analytics(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/analytics";
   if (/\/experience\/support-access(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/support-access";
+  if (/^\/api\/companies\/[^/]*\/support(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/support/:operation";
+  const portabilityRoute = pathname.match(/^\/api\/companies\/(?:(?<companyId>[^/]*)\/)?(?<kind>exports?|imports?)(?:\/|$)/i);
+  if (portabilityRoute?.groups) {
+    const kind = portabilityRoute.groups.kind!.toLowerCase();
+    return portabilityRoute.groups.companyId === undefined
+      ? `/api/companies/${kind}/:operation`
+      : `/api/companies/:companyId/${kind}/:operation`;
+  }
   if (/\/support-sessions(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/support-sessions/:operation";
   if (/\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-package-installations/:installationId/experience";
   if (/^\/api\/agent-packages(?:\/|$)/i.test(pathname)) return "/api/agent-packages/:operation";

@@ -28,6 +28,7 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
+  --color-dialog-backdrop: oklch(0 0 0 / 0.5);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
@@ -3173,6 +3174,12 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   .saas-page { @apply flex flex-col gap-6 p-6 mx-auto w-full max-w-3xl; }
   .saas-section { @apply flex flex-col gap-4; }
   .saas-row { @apply flex items-center justify-between gap-4; }
+  .saas-row > input[type="checkbox"] {
+    width: calc(var(--spacing) * 6);
+    height: calc(var(--spacing) * 6);
+    min-width: calc(var(--spacing) * 6);
+    min-height: calc(var(--spacing) * 6);
+  }
   .saas-footer { @apply flex items-center justify-between gap-4; }
   .saas-title { @apply text-xl font-semibold; }
   .saas-subtitle { @apply text-base font-semibold; }
@@ -3180,6 +3187,7 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   .saas-error { @apply text-sm text-destructive; }
   .saas-link { @apply text-sm text-primary underline underline-offset-4; }
   .saas-label { @apply flex flex-col gap-2 text-sm; }
+  .saas-error > [data-slot="button"][data-variant="outline"] { @apply text-foreground; }
   .saas-input { @apply w-full rounded-md border border-border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring; }
   .saas-machine { @apply font-mono text-sm; }
   .saas-steps { @apply flex flex-wrap gap-3 text-sm text-muted-foreground; }

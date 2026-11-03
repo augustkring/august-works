@@ -30,10 +30,13 @@ import {
 } from "@paperclipai/db";
 
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
 import type { StorageService } from "../../storage/types.js";
 import { issueService } from "../issues.js";
+import { preparePlatformSkillAdmission } from "../platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../tool-gateway.js";
 import { mergeHeartbeatRunResultJson } from "../heartbeat-run-summary.js";
 import {
   prepareReusedChatAttachment,
@@ -81,6 +84,7 @@ describe("native same-conversation chat attachment reuse", () => {
       issuePrefix: "NCR",
       issueCounter: 1,
     });
+    await seedCurrentHumanSourceActor(db, [companyId], userId);
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -104,6 +108,7 @@ describe("native same-conversation chat attachment reuse", () => {
       id: runId,
       companyId,
       agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -183,13 +188,6 @@ describe("native same-conversation chat attachment reuse", () => {
       principalId,
       paperclipUserId: userId,
       status: "linked",
-    });
-    await db.insert(companyMemberships).values({
-      companyId,
-      principalType: "user",
-      principalId: userId,
-      status: "active",
-      membershipRole: "member",
     });
 
     const sourceComment = await issueService(db).addComment(
@@ -290,6 +288,8 @@ describe("native same-conversation chat attachment reuse", () => {
         },
       })
       .where(eq(heartbeatRuns.id, runId));
+    await preparePlatformSkillAdmission(db, { companyId, agentId, runId,
+      responsibleUserId: userId, requireExisting: false }, blenteraPlatformContractHashes());
   });
 
   afterAll(async () => {
@@ -1079,7 +1079,10 @@ describe("native same-conversation chat attachment reuse", () => {
           title: "Earlier requested file",
         },
       }),
-    ).rejects.toThrow("paperclip_runner_chat_attachment_principal_denied");
+    ).rejects.toMatchObject({
+      status: 403,
+      message: expect.stringContaining("Responsible user"),
+    });
     await db
       .update(companyMemberships)
       .set({ status: "active" })

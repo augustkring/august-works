@@ -35,6 +35,18 @@ describe("persisted agent personas", () => {
     const [row] = await db.select().from(agents).where(eq(agents.id, original.id));
     expect(row.appearance).toEqual(appearance);
   });
+  it("keeps initial Native model setup and non-model repair available while requiring a real publication for a model switch", async () => {
+    const service = agentService(db), profileId = randomUUID();
+    const route = { provider: "aw_text_only", model: "model-a", workerModelProfileId: profileId, maxOutputTokens: 2048 };
+    const created = await service.create(companyId, { name: "Profile-backed", role: "engineer", adapterType: "paperclip_runner", adapterConfig: route });
+    const setup = await service.update(created.id, { adapterConfig: { ...route, cwd: "/tmp/work", instructionsFilePath: "AGENTS.md" } });
+    expect(setup?.adapterConfig).toMatchObject({ workerModelProfileId: profileId, cwd: "/tmp/work", instructionsFilePath: "AGENTS.md" });
+    await expect(service.update(created.id, { adapterConfig: { ...route, model: "model-b" } }))
+      .rejects.toMatchObject({ status: 409, details: { code: "model_migration_publication_required" } });
+    await expect(service.update(created.id, { adapterConfig: { ...route, model: "model-b" } }, {
+      authoredPublication: {} as never, recordRevision: { id: randomUUID(), source: "agent_authoring_publish" },
+    })).rejects.toMatchObject({ status: 409, details: { code: "model_migration_publication_required" } });
+  });
   it("backfills legacy IDs with exactly the same persisted identity as the runtime fallback", async () => {
     const ids = Array.from({ length: 20 }, () => randomUUID());
     await db.insert(agents).values(ids.map((id, i) => ({ id, companyId, name: `Legacy ${i}`, role: "engineer", appearance: null, icon: "bot" })));

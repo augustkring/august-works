@@ -7,6 +7,7 @@ import {
   agentWakeupRequests,
   agentRuntimeState,
   companySkills,
+  companyMemberships,
   companies,
   createDb,
   documentRevisions,
@@ -17,12 +18,14 @@ import {
   issueComments,
   issueDocuments,
   issues,
+  principalPermissionGrants,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService, resolveHeartbeatSchedulingSuppression } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 
@@ -38,6 +41,7 @@ if (!embeddedPostgresSupport.supported) {
 describeEmbeddedPostgres("heartbeat worktree suppression", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let restoreApiUrl: (() => void) | null = null;
 
   function isHeartbeatRunDependentFkError(error: unknown) {
     const message = error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error);
@@ -62,6 +66,7 @@ describeEmbeddedPostgres("heartbeat worktree suppression", () => {
   }
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase("heartbeat-worktree-suppression-");
     db = createDb(tempDb.connectionString);
   }, 20_000);
@@ -86,12 +91,15 @@ describeEmbeddedPostgres("heartbeat worktree suppression", () => {
     await db.delete(agentRuntimeState);
     await db.delete(companySkills);
     await db.delete(agents);
+    await db.delete(companyMemberships);
+    await db.delete(principalPermissionGrants);
     await db.delete(companies);
     await db.delete(instanceSettings);
   });
 
   afterAll(async () => {
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   }, 60_000);
 
   async function insertAgentAndIssue() {
@@ -107,6 +115,7 @@ describeEmbeddedPostgres("heartbeat worktree suppression", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: "responsible-user",
     });
+    await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
 
     await db.insert(agents).values({
       id: agentId,

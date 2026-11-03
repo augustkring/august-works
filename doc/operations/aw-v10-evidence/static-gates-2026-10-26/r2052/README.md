@@ -1,0 +1,3 @@
+# Static checks, 26 October 2026
+
+All eleven recorded commands returned zero: Docker dependency-stage contract, Node policy, no runtime git push, module boundaries, release package map, forbidden tokens, token gates, agent palette, character synchronization, Help metadata and generated Help drift. Raw commands, logs, numeric exits and check-script hashes are retained here. The check scripts ran against the live worktree at the recorded checkpoint; concurrent implementation continued. These checks do not establish final unchanged-head compilation, integration, browser, release or physical-host qualification.

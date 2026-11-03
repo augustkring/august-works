@@ -1,0 +1,78 @@
+{
+  "recordedAt": "2026-10-24T21:23:00.015789+00:00",
+  "implementationCommit": "ad03eb1b9",
+  "status": "in_progress; bounded software evidence, not full V10/PR qualification",
+  "requirements": [
+    "OWNER-01",
+    "V10-025",
+    "V10-026",
+    "V10-028",
+    "V10-030"
+  ],
+  "checks": {
+    "continuity-help-native": {
+      "exit": 1,
+      "log": "continuity-help-native.log"
+    },
+    "continuity-native-checked": {
+      "exit": 1,
+      "log": "continuity-native-checked.log"
+    },
+    "continuity-native-final": {
+      "exit": 1,
+      "log": "continuity-native-final.log"
+    },
+    "continuity-native-qualified": {
+      "exit": 1,
+      "log": "continuity-native-qualified.log"
+    },
+    "continuity-owned-final": {
+      "exit": 0,
+      "log": "continuity-owned-final.log"
+    },
+    "routine-owner-attention": {
+      "exit": 1,
+      "log": "routine-owner-attention.log"
+    },
+    "routine-owner-attention-owned": {
+      "exit": 0,
+      "log": "routine-owner-attention-owned.log"
+    },
+    "routine-owner-experience": {
+      "exit": 1,
+      "log": "routine-owner-experience.log"
+    },
+    "routine-owner-experience-archived": {
+      "exit": 1,
+      "log": "routine-owner-experience-archived.log"
+    },
+    "experience-archived-full": {
+      "exit": 0,
+      "log": "experience-archived-full.log"
+    },
+    "routine-departure-fence-focused": {
+      "exit": 0,
+      "log": "routine-departure-fence-focused.log"
+    },
+    "routine-departure-fence-full": {
+      "exit": 0,
+      "log": "routine-departure-fence-full.log"
+    },
+    "routine-departure-fence-lock-focused": {
+      "exit": 0,
+      "log": "routine-departure-fence-lock-focused.log"
+    },
+    "routine-departure-fence-lock-full": {
+      "exit": 0,
+      "log": "routine-departure-fence-lock-full.log"
+    }
+  },
+  "observations": [
+    "Access revocation does not require routine handoff. Missing/invalid replacement pauses active work and retains attribution; explicit valid current native User/member transfers manual active/paused routines with the original immutable revision writer and same physical transaction. Paused routines never reactivate. Private conversation source ownership is preserved; no inherited access granted.",
+    "Archive, ordinary suspension/pending transition, combined membership/grant withdrawal and instance company-access withdrawal share native pause behavior. Native schema/API/client report transferred, paused and owner-action counts. Original sole-owner and explicit invalid issue-assignment guards remain.",
+    "Read-only current-manager Action-needed projection identifies retained routines without active native Human responsibility. No routine names, bodies, principal IDs or private routine IDs are exposed. It uses the original experience reader and final source revalidation, not an assignment engine. Projection failure retains other attention items with partial coverage.",
+    "Native responsible User/account + active membership is checked in original physical dispatch transaction and before a new assignment wake. User then membership FOR SHARE NOWAIT avoids waiting on revocation; actual55P03 yields409 authentication_state_busy. Only actual resolved local_trusted server mode/proven original local_implicit request can supply original local-board exception. Already accepted native wake receipts may settle their known outcome; no new wake allowed by an old receipt.",
+    "Final original access/attention25PASS2suites. Original routine full77PASS including real membership lock contention, valid dispatch, revoked-before-creation zeroTask/zeroWake and withdrawn pending intent. Original V9 experience24PASS after one stale direct Project fixture was replaced by actual native HTTP User-authored creation. Earlier stages retained: source-erased synthetic private fixture and nonexistent raw conversation failed; final actual native conversation/run source verifies erasurefalse before pausing and exact owner/source retained.",
+    "Current changes do not establish provider stop/cancellation, full offboarding inventory/groups/backup/coverage/contact responsibilities, arbitrary routine eligibility, full credential-family lifetime or physical replica revocation. Full V10/release gates remain open. Full workspace and built-browser follow-up are recorded separately."
+  ]
+}

@@ -1,0 +1,1856 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders a page-level warning about instability and lack of guarantees
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > projects lifecycle and unqualified release evidence from the shared catalog
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > uses Danish lifecycle labels and accessible maturity wording
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults memory connectors off and persists an explicit toggle in both directions
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults chat connectors off and persists an explicit toggle in both directions
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Streamlined UI experimental toggle on and off
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > keeps Blentera Runner default-off and exposes an explicit opt-in
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Classic Task Interface experimental toggle on and off
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Decisions experimental toggle
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Goals Sidebar Link experimental toggle
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > hides the isolated-workspaces-by-default toggle while isolated workspaces are off
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the isolated-workspaces-by-default toggle on and off
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > reflects a stored isolated-workspaces-by-default value as checked
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the worktree run-execution toggle when in a worktree
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the cutoff-copy for the worktree run-execution toggle when off
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the armed timestamp when the flag matches the current instance
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the flag was armed in another instance
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the activation cutoff is missing
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Built-in Agents experimental toggle
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Beta skills experimental toggle
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Summaries experimental toggle
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > enables Summaries when enabling the Status Cards experimental toggle
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > disables Status Cards when disabling Summaries
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Server Info Debug View experimental toggle
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches Blentera Developer Mode
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders a managed key locked with the badge while unmanaged keys stay editable
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed isolated-workspaces-by-default setting locked
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed chat connectors setting locked
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Status Cards when managed Summaries is disabled
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Summaries on when managed Status Cards is enabled
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders no managed badge and keeps toggles editable without managedKeys (self-hosted)
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > groups developer and legacy settings into sections
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > renders setting cards without a background color
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > shows the maturity recorded for each settings capability
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > renders nothing for an operator-hidden toggle and keeps the rest
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > keeps only permitted controls in alphabetical order, including when hidden features are enabled
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > retains a section when one of its controls is visible
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > shows every toggle when nothing is hidden
+An error occurred in the <InstanceExperimentalSettings> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+ ❯ |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx (48 tests | 38 failed) 638ms
+     × renders a page-level warning about instability and lack of guarantees 61ms
+     × projects lifecycle and unqualified release evidence from the shared catalog 15ms
+     × uses Danish lifecycle labels and accessible maturity wording 13ms
+     × defaults memory connectors off and persists an explicit toggle in both directions 13ms
+     × defaults chat connectors off and persists an explicit toggle in both directions 12ms
+     × renders and patches the Streamlined UI experimental toggle on and off 12ms
+     × keeps Blentera Runner default-off and exposes an explicit opt-in 12ms
+     × renders and patches the Classic Task Interface experimental toggle on and off 12ms
+     × renders and patches the Decisions experimental toggle 19ms
+     × renders and patches the Goals Sidebar Link experimental toggle 11ms
+     × hides the isolated-workspaces-by-default toggle while isolated workspaces are off 11ms
+     × renders and patches the isolated-workspaces-by-default toggle on and off 10ms
+     × reflects a stored isolated-workspaces-by-default value as checked 12ms
+     × renders and patches the worktree run-execution toggle when in a worktree 13ms
+     × shows the cutoff-copy for the worktree run-execution toggle when off 16ms
+     × shows the armed timestamp when the flag matches the current instance 13ms
+     × fails closed with a re-enable hint when the flag was armed in another instance 13ms
+     × fails closed with a re-enable hint when the activation cutoff is missing 13ms
+     × renders and patches the Built-in Agents experimental toggle 12ms
+     × renders and patches the Beta skills experimental toggle 11ms
+     × renders and patches the Summaries experimental toggle 14ms
+     × enables Summaries when enabling the Status Cards experimental toggle 15ms
+     × disables Status Cards when disabling Summaries 17ms
+     × renders and patches the Server Info Debug View experimental toggle 10ms
+     × renders and patches Blentera Developer Mode 11ms
+     × renders a managed key locked with the badge while unmanaged keys stay editable 12ms
+     × keeps a managed isolated-workspaces-by-default setting locked 10ms
+     × keeps a managed chat connectors setting locked 10ms
+     × locks Status Cards when managed Summaries is disabled 10ms
+     × locks Summaries on when managed Status Cards is enabled 12ms
+     × renders no managed badge and keeps toggles editable without managedKeys (self-hosted) 11ms
+     × groups developer and legacy settings into sections 15ms
+     × renders setting cards without a background color 12ms
+     × shows the maturity recorded for each settings capability 12ms
+     × renders nothing for an operator-hidden toggle and keeps the rest 11ms
+     × keeps only permitted controls in alphabetical order, including when hidden features are enabled 13ms
+     × retains a section when one of its controls is visible 10ms
+     × shows every toggle when nothing is hidden 11ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 38 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders a page-level warning about instability and lack of guarantees
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:225:34
+    223|       alert.textContent?.includes("Experimental features may break at …
+    224|     );
+    225|     expect(warning?.textContent).toContain("Experimental features may …
+       |                                  ^
+    226|     expect(warning?.textContent).toContain("no compatibility guarantee…
+    227|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > projects lifecycle and unqualified release evidence from the shared catalog
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:233:93
+    231|
+    232|     const lifecycle = container.querySelector('[data-testid="capabilit…
+    233|     expect(container.querySelector('[aria-label="Capability maturity: …
+       |                                                                                             ^
+    234|     expect(lifecycle?.textContent).toContain("no compatibility guarant…
+    235|     expect(lifecycle?.textContent).toContain("Not recorded");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > uses Danish lifecycle labels and accessible maturity wording
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:245:98
+    243|     await renderPage();
+    244|
+    245|     expect(container.querySelector('[aria-label="Kapabilitetens modenh…
+       |                                                                                                  ^
+    246|     expect(container.querySelector('[data-testid="capability-lifecycle…
+    247|       .toBe("Kapabilitetens livscyklus og udgivelsesbeviser");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults memory connectors off and persists an explicit toggle in both directions
+AssertionError: expected undefined to be 'false' // Object.is equality
+
+- Expected:
+"false"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:261:77
+    259|     await renderPage();
+    260|     const selector = 'button[aria-label="Toggle memory connectors expe…
+    261|     expect(container.querySelector(selector)?.getAttribute("aria-check…
+       |                                                                             ^
+    262|     expect(container.textContent).toContain("Existing connections keep…
+    263|     for (const enabled of [true, false]) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults chat connectors off and persists an explicit toggle in both directions
+AssertionError: expected undefined to be 'false' // Object.is equality
+
+- Expected:
+"false"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:280:77
+    278|     await renderPage();
+    279|     const selector = 'button[aria-label="Toggle chat connectors experi…
+    280|     expect(container.querySelector(selector)?.getAttribute("aria-check…
+       |                                                                             ^
+    281|     expect(container.textContent).toContain("Existing chat connections…
+    282|     for (const enabled of [true, false]) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Streamlined UI experimental toggle on and off
+AssertionError: expected '' to contain 'Streamlined UI'
+
+- Expected
++ Received
+
+- Streamlined UI
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:322:35
+    320|     await renderPage();
+    321|
+    322|     expect(container.textContent).toContain("Streamlined UI");
+       |                                   ^
+    323|     expect(container.textContent).toContain(
+    324|       "Use the simplified main sidebar, shared Tasks and Inbox present…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > keeps Blentera Runner default-off and exposes an explicit opt-in
+AssertionError: expected '' to contain 'Blentera Runner'
+
+- Expected
++ Received
+
+- Blentera Runner
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:365:35
+    363|     await renderPage();
+    364|
+    365|     expect(container.textContent).toContain("Blentera Runner");
+       |                                   ^
+    366|     expect(container.textContent).toContain("Onboarding continues to u…
+    367|     const toggle = container.querySelector<HTMLButtonElement>(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Classic Task Interface experimental toggle on and off
+AssertionError: expected '' to contain 'Classic Task Interface'
+
+- Expected
++ Received
+
+- Classic Task Interface
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:386:35
+    384|     await renderPage();
+    385|
+    386|     expect(container.textContent).toContain("Classic Task Interface");
+       |                                   ^
+    387|     expect(container.textContent).toContain(
+    388|       "Restores the previous task detail page",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Decisions experimental toggle
+AssertionError: expected '' to contain 'Decisions'
+
+- Expected
++ Received
+
+- Decisions
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:434:35
+    432|     await renderPage();
+    433|
+    434|     expect(container.textContent).toContain("Decisions");
+       |                                   ^
+    435|     expect(container.textContent).toContain(
+    436|       "Show the Decisions item in the main sidebar",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Goals Sidebar Link experimental toggle
+AssertionError: expected '' to contain 'Goals Sidebar Link'
+
+- Expected
++ Received
+
+- Goals Sidebar Link
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:456:35
+    454|     await renderPage();
+    455|
+    456|     expect(container.textContent).toContain("Goals Sidebar Link");
+       |                                   ^
+    457|     expect(container.textContent).toContain(
+    458|       "Restore the Goals item in the main sidebar while the goals surf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > hides the isolated-workspaces-by-default toggle while isolated workspaces are off
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:478:78
+    476|     await renderPage();
+    477|
+    478|     expect(container.querySelector(ISOLATED_WORKSPACES_TOGGLE_SELECTOR…
+       |                                                                              ^
+    479|     expect(
+    480|       container.querySelector(ISOLATED_WORKSPACES_BY_DEFAULT_TOGGLE_SE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the isolated-workspaces-by-default toggle on and off
+AssertionError: expected '' to contain 'Use Isolated Workspaces By Default'
+
+- Expected
++ Received
+
+- Use Isolated Workspaces By Default
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:508:35
+    506|     await renderPage();
+    507|
+    508|     expect(container.textContent).toContain("Use Isolated Workspaces B…
+       |                                   ^
+    509|     expect(container.textContent).toContain("per-task worktree");
+    510|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > reflects a stored isolated-workspaces-by-default value as checked
+AssertionError: expected undefined to be 'true' // Object.is equality
+
+- Expected:
+"true"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:548:50
+    546|       ISOLATED_WORKSPACES_BY_DEFAULT_TOGGLE_SELECTOR,
+    547|     );
+    548|     expect(toggle?.getAttribute("aria-checked")).toBe("true");
+       |                                                  ^
+    549|   });
+    550|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the worktree run-execution toggle when in a worktree
+AssertionError: expected '' to contain 'Run tasks in this worktree'
+
+- Expected
++ Received
+
+- Run tasks in this worktree
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:564:35
+    562|     await renderPage();
+    563|
+    564|     expect(container.textContent).toContain("Run tasks in this worktre…
+       |                                   ^
+    565|     expect(container.textContent).toContain(
+    566|       "isolated git-worktree preview instance",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the cutoff-copy for the worktree run-execution toggle when off
+AssertionError: expected '' to contain 'Only tasks created after enabling wil…'
+
+- Expected
++ Received
+
+- Only tasks created after enabling will run automatically
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:587:35
+    585|     await renderPage();
+    586|
+    587|     expect(container.textContent).toContain(
+       |                                   ^
+    588|       "Only tasks created after enabling will run automatically",
+    589|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the armed timestamp when the flag matches the current instance
+AssertionError: expected '' to contain 'Running tasks created after'
+
+- Expected
++ Received
+
+- Running tasks created after
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:607:35
+    605|     await renderPage();
+    606|
+    607|     expect(container.textContent).toContain("Running tasks created aft…
+       |                                   ^
+    608|     expect(container.textContent).not.toContain("Execution is suppress…
+    609|     const toggle = container.querySelector<HTMLButtonElement>(WORKTREE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the flag was armed in another instance
+AssertionError: expected '' to contain 'Execution is suppressed'
+
+- Expected
++ Received
+
+- Execution is suppressed
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:624:35
+    622|     await renderPage();
+    623|
+    624|     expect(container.textContent).toContain("Execution is suppressed");
+       |                                   ^
+    625|     expect(container.textContent).toContain("armed in a different inst…
+    626|     expect(container.textContent).toContain("Toggle it off and back on…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the activation cutoff is missing
+AssertionError: expected '' to contain 'Execution is suppressed'
+
+- Expected
++ Received
+
+- Execution is suppressed
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:641:35
+    639|     await renderPage();
+    640|
+    641|     expect(container.textContent).toContain("Execution is suppressed");
+       |                                   ^
+    642|     expect(container.textContent).toContain("missing its activation cu…
+    643|     expect(container.textContent).not.toContain("Running tasks created…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Built-in Agents experimental toggle
+AssertionError: expected '' to contain 'Built-in Agents'
+
+- Expected
++ Received
+
+- Built-in Agents
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:649:35
+    647|     await renderPage();
+    648|
+    649|     expect(container.textContent).toContain("Built-in Agents");
+       |                                   ^
+    650|     expect(container.textContent).toContain("Show Blentera-managed bui…
+    651|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Beta skills experimental toggle
+AssertionError: expected '' to contain 'Beta skills'
+
+- Expected
++ Received
+
+- Beta skills
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:669:35
+    667|     await renderPage();
+    668|
+    669|     expect(container.textContent).toContain("Beta skills");
+       |                                   ^
+    670|     expect(container.textContent).toContain("pin beta releases of the …
+    671|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Summaries experimental toggle
+AssertionError: expected '' to contain 'Summaries'
+
+- Expected
++ Received
+
+- Summaries
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:689:35
+    687|     await renderPage();
+    688|
+    689|     expect(container.textContent).toContain("Summaries");
+       |                                   ^
+    690|     expect(container.textContent).toContain("Show Summarizer-generated…
+    691|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > enables Summaries when enabling the Status Cards experimental toggle
+AssertionError: expected '' to contain 'Status Cards'
+
+- Expected
++ Received
+
+- Status Cards
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:709:35
+    707|     await renderPage();
+    708|
+    709|     expect(container.textContent).toContain("Status Cards");
+       |                                   ^
+    710|     expect(container.textContent).toContain("experimental shared statu…
+    711|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > disables Status Cards when disabling Summaries
+AssertionError: expected "vi.fn()" to be called with arguments: [ { enableSummaries: false, …(1) } ]
+
+Number of calls: 0
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:744:56
+    742|     await flushReact();
+    743|
+    744|     expect(mockInstanceSettingsApi.updateExperimental).toHaveBeenCalle…
+       |                                                        ^
+    745|       enableSummaries: false,
+    746|       enableStatusCards: false,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Server Info Debug View experimental toggle
+AssertionError: expected '' to contain 'Server Info Debug View'
+
+- Expected
++ Received
+
+- Server Info Debug View
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:757:35
+    755|     await renderPage();
+    756|
+    757|     expect(container.textContent).toContain("Server Info Debug View");
+       |                                   ^
+    758|     expect(container.textContent).toContain(
+    759|       'Show a "Server" section in the account drawer with the current …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches Blentera Developer Mode
+AssertionError: expected '' to contain 'Blentera Developer Mode'
+
+- Expected
++ Received
+
+- Blentera Developer Mode
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:779:35
+    777|     await renderPage();
+    778|
+    779|     expect(container.textContent).toContain("Blentera Developer Mode");
+       |                                   ^
+    780|     expect(container.textContent).toContain("including Honeycomb trace…
+    781|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders a managed key locked with the badge while unmanaged keys stay editable
+AssertionError: expected '' to contain 'Managed by legacy Paperclip Cloud'
+
+- Expected
++ Received
+
+- Managed by legacy Paperclip Cloud
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:853:35
+    851|     });
+    852|
+    853|     expect(container.textContent).toContain(MANAGED_BADGE_TEXT);
+       |                                   ^
+    854|
+    855|     const builtInAgentsToggle = container.querySelector<HTMLButtonElem…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed isolated-workspaces-by-default setting locked
+AssertionError: expected undefined to be 'true' // Object.is equality
+
+- Expected:
+"true"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:888:50
+    886|       ISOLATED_WORKSPACES_BY_DEFAULT_TOGGLE_SELECTOR,
+    887|     );
+    888|     expect(toggle?.getAttribute("aria-checked")).toBe("true");
+       |                                                  ^
+    889|     expect(toggle?.disabled).toBe(true);
+    890|     expect(container.textContent).toContain(MANAGED_BADGE_TEXT);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed chat connectors setting locked
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:903:30
+    901|     });
+    902|     const toggle = container.querySelector<HTMLButtonElement>('button[…
+    903|     expect(toggle?.disabled).toBe(true);
+       |                              ^
+    904|     expect(toggle?.getAttribute("aria-checked")).toBe("false");
+    905|     expect(container.textContent).toContain(MANAGED_BADGE_TEXT);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Status Cards when managed Summaries is disabled
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:919:41
+    917|
+    918|     const statusCardsToggle = container.querySelector<HTMLButtonElemen…
+    919|     expect(statusCardsToggle?.disabled).toBe(true);
+       |                                         ^
+    920|
+    921|     await act(() => statusCardsToggle?.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Summaries on when managed Status Cards is enabled
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:937:39
+    935|
+    936|     const summariesToggle = container.querySelector<HTMLButtonElement>…
+    937|     expect(summariesToggle?.disabled).toBe(true);
+       |                                       ^
+    938|
+    939|     await act(() => summariesToggle?.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders no managed badge and keeps toggles editable without managedKeys (self-hosted)
+AssertionError: expected undefined to be false // Object.is equality
+
+- Expected:
+false
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:950:43
+    948|
+    949|     const builtInAgentsToggle = container.querySelector<HTMLButtonElem…
+    950|     expect(builtInAgentsToggle?.disabled).toBe(false);
+       |                                           ^
+    951|
+    952|     await act(() => builtInAgentsToggle?.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > groups developer and legacy settings into sections
+AssertionError: expected [] to deeply equal [ 'Experimental features', …(3) ]
+
+- Expected
++ Received
+
+- [
+-   "Experimental features",
+-   "V5 agent runtime and project control",
+-   "Blentera Developer Mode",
+-   "Legacy",
+- ]
++ []
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1006:22
+    1004|       (heading) => heading.textContent ?? "",
+    1005|     );
+    1006|     expect(headings).toEqual([
+       |                      ^
+    1007|       "Experimental features",
+    1008|       "V5 agent runtime and project control",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > renders setting cards without a background color
+AssertionError: expected 0 to be greater than 10
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1042:26
+    1040|
+    1041|     const cards = [...container.querySelectorAll('[data-slot="card"]')…
+    1042|     expect(cards.length).toBeGreaterThan(10);
+       |                          ^
+    1043|     expect(cards.every((card) => card.classList.contains("bg-transpare…
+    1044|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > shows the maturity recorded for each settings capability
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1052:103
+    1050|       const maturity = INSTANCE_FEATURE_CATALOG[key].lifecycle.maturit…
+    1051|       const localizedMaturity = maturity === "internal" ? "Internal" :…
+    1052|       expect(container.querySelector(`[aria-label="Capability maturity…
+       |                                                                                                       ^
+    1053|     }
+    1054|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > renders nothing for an operator-hidden toggle and keeps the rest
+AssertionError: expected '' to contain 'Beta skills'
+
+- Expected
++ Received
+
+- Beta skills
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1103:35
+    1101|
+    1102|     expect(container.textContent).not.toContain("Enable Environments");
+    1103|     expect(container.textContent).toContain("Beta skills");
+       |                                   ^
+    1104|     expect(container.textContent).not.toContain("Show the Apps navigat…
+    1105|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > keeps only permitted controls in alphabetical order, including when hidden features are enabled
+AssertionError: expected [] to deeply equal [ 'Enable External Objects', …(2) ]
+
+- Expected
++ Received
+
+- [
+-   "Enable External Objects",
+-   "Memory connectors",
+-   "Simplified English Interactions",
+- ]
++ []
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1123:89
+    1121|     );
+    1122|
+    1123|     expect([...container.querySelectorAll("h3")].map((heading) => head…
+       |                                                                                         ^
+    1124|       "Enable External Objects",
+    1125|       "Memory connectors",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > retains a section when one of its controls is visible
+AssertionError: expected undefined to be 'Blentera Developer Mode' // Object.is equality
+
+- Expected:
+"Blentera Developer Mode"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1138:99
+    1136|     const visible = new Set(["enablePaperclipDeveloperMode", "enableGo…
+    1137|     await renderPage(INSTANCE_FEATURE_KEYS.filter((key) => !visible.ha…
+    1138|     expect(container.querySelector('[aria-labelledby="developer-mode-h…
+       |                                                                                                   ^
+    1139|     expect(container.querySelector('[aria-labelledby="legacy-heading"]…
+    1140|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/38]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > shows every toggle when nothing is hidden
+AssertionError: expected '' to contain 'Enable Environments'
+
+- Expected
++ Received
+
+- Enable Environments
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1145:35
+    1143|     await renderPage();
+    1144|
+    1145|     expect(container.textContent).toContain("Enable Environments");
+       |                                   ^
+    1146|     expect(container.textContent).toContain("Beta skills");
+    1147|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/38]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 48 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders a page-level warning about instability and lack of guarantees". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "projects lifecycle and unqualified release evidence from the shared catalog". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "uses Danish lifecycle labels and accessible maturity wording". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render an Apps experimental setting". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "defaults memory connectors off and persists an explicit toggle in both directions". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not offer a retired MCP aggregators toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "defaults chat connectors off and persists an explicit toggle in both directions". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render the Conference Room Chat experimental setting for now". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render the Pipelines experimental setting for now". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render the toggle even when the stored flag is currently enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Streamlined UI experimental toggle on and off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render a Task Watchdogs toggle because watchdogs are always enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not expose the retired Runner Preview Ingress setting separately". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps Blentera Runner default-off and exposes an explicit opt-in". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Classic Task Interface experimental toggle on and off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Decisions experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Goals Sidebar Link experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "hides the isolated-workspaces-by-default toggle while isolated workspaces are off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps the dependent toggle hidden even when its stored flag is already on". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the isolated-workspaces-by-default toggle on and off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "reflects a stored isolated-workspaces-by-default value as checked". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "hides the worktree run-execution toggle when not running in a worktree". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the worktree run-execution toggle when in a worktree". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "shows the cutoff-copy for the worktree run-execution toggle when off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "shows the armed timestamp when the flag matches the current instance". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "fails closed with a re-enable hint when the flag was armed in another instance". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "fails closed with a re-enable hint when the activation cutoff is missing". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Built-in Agents experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Beta skills experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Summaries experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "enables Summaries when enabling the Status Cards experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "disables Status Cards when disabling Summaries". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Server Info Debug View experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches Blentera Developer Mode". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders a managed key locked with the badge while unmanaged keys stay editable". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps a managed isolated-workspaces-by-default setting locked". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps a managed chat connectors setting locked". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "locks Status Cards when managed Summaries is disabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "locks Summaries on when managed Status Cards is enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders no managed badge and keeps toggles editable without managedKeys (self-hosted)". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "groups developer and legacy settings into sections". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "alphabetizes cards by their displayed title within each section". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders setting cards without a background color". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "shows the maturity recorded for each settings capability". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders nothing for an operator-hidden toggle and keeps the rest". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps only permitted controls in alphabetical order, including when hidden features are enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "retains a section when one of its controls is visible". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+ReferenceError: INSTANCE_FEATURE_KEYS is not defined
+ ❯ InstanceExperimentalSettings ui/src/pages/InstanceExperimentalSettings.tsx:790:12
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "shows every toggle when nothing is hidden". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  38 failed | 33 passed (71)
+     Errors  48 errors
+   Start at  08:32:25
+   Duration  4.55s (transform 2.41s, setup 42ms, import 3.88s, tests 732ms, environment 673ms)
+

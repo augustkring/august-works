@@ -1,0 +1,1 @@
+23 tests executed: 13 passed and 10 onboarding failed. Unicode fixtures use an actual current Human session; the primary onboarding rejection was missing responsible Human on a Task inheriting an unqualified Project. Later audit assertions cascaded after the mock failure was not consumed.

@@ -1,0 +1,114 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (27 tests | 1 failed) 12362ms
+     × erases a captured Document revision through the original Learning privacy owner 114ms
+ ❯ |@paperclipai/server| src/__tests__/native-budget-queue-source-binding.integration.test.ts (3 tests | 3 failed) 9601ms
+     × retains the Project capture for a same-body budget no-op before a hard-stop edit 113ms
+     × invalidates a fresh Project capture when a budget policy resumes the project 17ms
+     × invalidates only changed queued-comment bodies within the original adapter transaction 143ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-budget-queue-source-binding.integration.test.ts > native payload snapshot invalidation in budget and queued-comment writers > retains the Project capture for a same-body budget no-op before a hard-stop edit
+Error: Failed query: update "projects" set "pause_reason" = $1, "paused_at" = $2, "updated_at" = $3 where "projects"."id" = $4
+params: budget,2026-10-23T22:49:27.743Z,2026-10-23T22:49:27.743Z,20fc69d7-e7ae-459f-a5e6-62468c8e45e0
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ pauseScopeForBudget src/services/budgets.ts:246:7
+    244|
+    245|     if (policy.scopeType === "project") {
+    246|       await db
+       |       ^
+    247|         .update(projects)
+    248|         .set({
+ ❯ pauseAndCancelScopeForBudget src/services/budgets.ts:269:5
+ ❯ Object.upsertPolicy src/services/budgets.ts:664:13
+ ❯ src/__tests__/native-budget-queue-source-binding.integration.test.ts:81:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "pause_reason" = $1, "paused_at" = $2, "updated_at" = $3 where "projects"."id" = $4', parameters: [ 'budget', '2026-10-23T22:49:27.743Z', '2026-10-23T22:49:27.743Z', '20fc69d7-e7ae-459f-a5e6-62468c8e45e0' ], args: [ 'budget', '2026-10-23T22:49:27.743Z', '2026-10-23T22:49:27.743Z', '20fc69d7-e7ae-459f-a5e6-62468c8e45e0' ], types: [ 25, 1184, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-budget-queue-source-binding.integration.test.ts > native payload snapshot invalidation in budget and queued-comment writers > invalidates a fresh Project capture when a budget policy resumes the project
+Error: Failed query: update "projects" set "pause_reason" = $1, "paused_at" = $2, "updated_at" = $3 where ("projects"."id" = $4 and "projects"."pause_reason" = $5)
+params: ,,2026-10-23T22:49:27.771Z,80fd8829-7ecc-404d-be1d-2166ceabf03d,budget
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ resumeScopeFromBudget src/services/budgets.ts:293:7
+    291|
+    292|     if (policy.scopeType === "project") {
+    293|       await db
+       |       ^
+    294|         .update(projects)
+    295|         .set({
+ ❯ Object.upsertPolicy src/services/budgets.ts:654:11
+ ❯ src/__tests__/native-budget-queue-source-binding.integration.test.ts:108:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "pause_reason" = $1, "paused_at" = $2, "updated_at" = $3 where ("projects"."id" = $4 and "projects"."pause_reason" = $5)', parameters: [ null, null, '2026-10-23T22:49:27.771Z', '80fd8829-7ecc-404d-be1d-2166ceabf03d', 'budget' ], args: [ null, null, '2026-10-23T22:49:27.771Z', '80fd8829-7ecc-404d-be1d-2166ceabf03d', 'budget' ], types: [ 25, 1184, 1184, 2950, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-budget-queue-source-binding.integration.test.ts > native payload snapshot invalidation in budget and queued-comment writers > invalidates only changed queued-comment bodies within the original adapter transaction
+Error: Failed query: update "issue_comments" set "body" = $1, "updated_at" = $2 where ("issue_comments"."id" = $3 and "issue_comments"."issue_id" = $4 and "issue_comments"."company_id" = $5) returning "id"
+params: after edit,2026-10-23T22:49:27.910Z,f0512618-2dc3-476a-8834-68df656271cd,1643e8f0-7f01-49f8-9731-1e0bdceeadd0,7fe4a7a9-ff80-44f0-9df9-3a31b9b3f3bb
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ Object.updateCommentBody src/modules/wake-queue/adapters/queued-comment-postgres.ts:49:23
+     47|   return {
+     48|     async updateCommentBody({ issueId, commentId, body, updatedAt }) {
+     49|       const updated = await tx
+       |                       ^
+     50|         .update(issueComments)
+     51|         .set({ body, updatedAt })
+ ❯ src/__tests__/native-budget-queue-source-binding.integration.test.ts:158:14
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-budget-queue-source-binding.integration.test.ts:157:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issue_comments" set "body" = $1, "updated_at" = $2 where ("issue_comments"."id" = $3 and "issue_comments"."issue_id" = $4 and "issue_comments"."company_id" = $5) returning "id"', parameters: [ 'after edit', '2026-10-23T22:49:27.910Z', 'f0512618-2dc3-476a-8834-68df656271cd', '1643e8f0-7f01-49f8-9731-1e0bdceeadd0', '7fe4a7a9-ff80-44f0-9df9-3a31b9b3f3bb' ], args: [ 'after edit', '2026-10-23T22:49:27.910Z', 'f0512618-2dc3-476a-8834-68df656271cd', '1643e8f0-7f01-49f8-9731-1e0bdceeadd0', '7fe4a7a9-ff80-44f0-9df9-3a31b9b3f3bb' ], types: [ 25, 1184, 2950, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > erases a captured Document revision through the original Learning privacy owner
+Error: Failed query: update "document_revisions" set "payload_source_snapshot" = $1, "title" = $2, "body" = $3, "change_summary" = $4 where ("document_revisions"."company_id" = $5 and "document_revisions"."id" in ($6))
+params: ,Erased learning evidence,,,79feabb3-f445-4ca5-bb84-1e55ae6bcef9,99fbbc53-5f1b-40fa-993c-f1712bbc7d07
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ invalidateLearningCycles src/services/learning/learning-privacy.ts:91:7
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:473:7
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:472:5
+
+Caused by: PostgresError: Playbook revisions are immutable
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_v5_playbook_revision_immutable() line 8 at RAISE', constraint_name: 'aw_v5_playbook_revision_immutable', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "document_revisions" set "payload_source_snapshot" = $1, "title" = $2, "body" = $3, "change_summary" = $4 where ("document_revisions"."company_id" = $5 and "document_revisions"."id" in ($6))', parameters: [ null, 'Erased learning evidence', '', null, '79feabb3-f445-4ca5-bb84-1e55ae6bcef9', '99fbbc53-5f1b-40fa-993c-f1712bbc7d07' ], args: [ null, 'Erased learning evidence', '', null, '79feabb3-f445-4ca5-bb84-1e55ae6bcef9', '99fbbc53-5f1b-40fa-993c-f1712bbc7d07' ], types: [ 3802, 25, 25, 25, 2950, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  4 failed | 35 passed (39)
+   Start at  22:47:37
+   Duration  110.30s (transform 27.96s, setup 753ms, import 60.37s, tests 46.28s, environment 1ms)
+

@@ -1,0 +1,16 @@
+{
+  "server/src/services/issues.ts": "381fd62d7e5989a0db3564ac7626741b927524c5f5a78b125d238737e87fa106",
+  "server/src/services/native-direct-input.ts": "6035962a62af44519278a6fa3a7964cb5089711fe59b2836964179fd59f17b6e",
+  "server/src/routes/issues.ts": "4d6c1ee7ab0ac332e14cd868cc0aab999e8888b5e12e22b482a73b1bc63c61e2",
+  "server/src/__tests__/manual-comment-payload-source.integration.test.ts": "e8833e977a6194f7092ea074fa97316fb70fd069b388db08b698a7073d3c7ebb",
+  "server/src/__tests__/manual-task-payload-source.integration.test.ts": "79ebec26286a1efc9271415bdc95763d35d3692c091329df7f66dc94e9348937",
+  "server/src/__tests__/manual-project-payload-source.integration.test.ts": "f385a813c832acbf8cd842e9cce29adf42c89e9a63b06998886fd6a879581362",
+  "server/src/__tests__/native-payload-public-response.integration.test.ts": "7fa39133adf243a255d56965f5ebc62617531bdef7ba3ff6bd450ceccb184e9f",
+  "server/src/services/analytical-live-events.ts": "fc2b6cb54b1d7251e5a142956bcb18f5b902e37c71c542d0c04b2af8973392d9",
+  "server/src/services/native-payload-public.ts": "4000f69e22034250c6d6a05acc6799b57efeeb39135080c1fc922825ac1b5902",
+  "server/src/modules/wake-queue/adapters/queued-comment-postgres.ts": "e6b1791c9e7689151fc046e08425dac58fd81600101857153d121673f4845ec8",
+  "packages/db/src/migrations/0509_nebulous_wong.sql": "4e9f04e21728f67595127d424eacf418108cb80c678eef214991321ada1d934f",
+  "tests/e2e/aw-v10-native-auth.spec.ts": "97a2619bd4767ff5dc8eb7e74b8de18936ec39bdbf1e57b08a09a7100de6d976",
+  "tests/e2e/aw-v10-native-auth.config.ts": "6cae7be75201ec1681482ac8fa19124ab58230f705dc1fb492dfbf7145a15be6",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

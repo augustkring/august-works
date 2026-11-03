@@ -1,0 +1,29 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 1 failed | 30 skipped) 15189ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 10915ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_settled_frame_missing_for_purge
+ ❯ Object.afterRunSettledBeforeTeardown src/__tests__/v7-model-reservations.integration.test.ts:696:55
+    694|       const result = await conversationReservationFixture(async facts …
+    695|         async facts => {
+    696|           if (!facts.run || !facts.reservation) throw new Error("conve…
+       |                                                       ^
+    697|           await assertConversationNativeStopBeforeErasure(facts);
+    698|           purgeHolder.value = await purgeConversationCompany(facts, "c…
+ ❯ runManagedNativeConversationFrame src/__tests__/helpers/managed-native-conversation-frame.ts:438:19
+ ❯ conversationReservationFixture src/__tests__/v7-model-reservations.integration.test.ts:346:22
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:694:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 30 skipped (31)
+   Start at  17:07:32
+   Duration  32.64s (transform 12.23s, setup 82ms, import 17.23s, tests 15.19s, environment 0ms)
+

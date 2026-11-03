@@ -1,0 +1,4 @@
+src/services/native-runtime/external-chat-wait.integration.test.ts(1897,40): error TS2304: Cannot find name 'sourceCaptures'.
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded

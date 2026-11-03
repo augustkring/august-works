@@ -1,0 +1,51 @@
+{
+  "name": "v10-149-rt01-openshell-r6-1-identity-resource-guards",
+  "status": "source-qualified",
+  "profileAdmission": "closed",
+  "upstream": {
+    "repository": "https://github.com/NVIDIA/OpenShell.git",
+    "version": "v0.1.2",
+    "commit": "6648bd0c290efbc41ba131ee9831ee45cd431f94"
+  },
+  "patch": {
+    "file": "openshell-rt01.patch",
+    "sha256": "c5571c1418ccc23866b399682b4d9f6f48242103970bffb470c8c45b968c810b",
+    "parentR4PatchSha256": "e28fc7fc8b860df810e7bf7337f59a53f2348e3595af6c883992d4ea09bc27d7",
+    "supersedesPatchSha256": "04e0e056d3187ea39c5171f1d6e254d6e2c73e786a3d380c0e6d0995f11bf12e",
+    "parentR5_1PatchSha256": "1b964e22688124645ad0b05653c533943724adc2a589dcdb87fe6219f617e227",
+    "resourceR12RustPatchSha256": "21b187786db26bedb858e24521b44a7e844864acab874cf9fdad317477c8642c",
+    "qualityProvisionR2PatchSha256": "cfae8322798266bdf895d4cb0a5115c1bdf329c133d9c7730cc52ff22885dcdf",
+    "parentR6PatchSha256": "9181ed297038877322ddb11991f819c4609d25205cf0905b8356447bb48383d5"
+  },
+  "sourcePins": {
+    "file": "source-pins.json",
+    "sha256": "d1eba31372c0fc3768949527b21dd6adc762b62f0a913bdb1ebe784cb9081239"
+  },
+  "license": {
+    "spdx": "Apache-2.0",
+    "upstreamFile": "LICENSE"
+  },
+  "qualification": {
+    "status": "source qualification passed; runtime/physical qualification remains open",
+    "R6_1Run": 41051549768,
+    "R6_1RunUrl": "https://github.com/augustkring/august-works/actions/runs/41051549768",
+    "R6_1HeadSha": "4f7894452d67dc76d7349c940217bdb0be39fb40",
+    "R6_1Outcome": "format and four-package cargo check passed; all 18 exact focused tests passed",
+    "R6_1FocusedTests": {
+      "configured": 18,
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    "portableReceiptArchiveSha256": "8be6460d60743a37ca8e6e3451e05b0fffe5f018a1b3581e8dd7b9936d50520a",
+    "previousR6FailedRun": 41049715574,
+    "previousR6FocusedTests": {
+      "configured": 18,
+      "executed": 0,
+      "skipped": 18
+    },
+    "physicalDockerQuotaProbe": "not run",
+    "physicalSeccompHostProbe": "not run",
+    "profileAdmission": "closed"
+  }
+}

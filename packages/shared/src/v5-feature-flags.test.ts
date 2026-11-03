@@ -12,6 +12,14 @@ describe("V5 rollout", () => {
       expect(INSTANCE_FEATURE_CATALOG[key].cloudDefault).toBe(false);
     }
   });
+  it("allows deterministic Skill resolution without optional Role Packs while requiring the Fabric", () => {
+    const flags = { ...v5FeatureFlagsSchema.parse(Object.fromEntries(V5_FEATURE_KEYS.map(key => [key, true]))),
+      enableFoundationV1: true, enableContextEngineV1: true, role_packs_v5: false };
+    expect(v5FeatureEnabled(flags, "role_packs_v5")).toBe(false);
+    expect(v5FeatureEnabled(flags, "skill_resolver_v5")).toBe(true);
+    expect(v5FeatureEnabled({ ...flags, agent_runtime_fabric_v5: false }, "skill_resolver_v5")).toBe(false);
+    expect(v5FeatureEnabled({ ...flags, agent_provider_bindings_v5: false }, "skill_resolver_v5")).toBe(false);
+  });
   it("cannot enable delegation or autonomous promotion through an incomplete flag set", () => {
     expect(v5FeatureEnabled({ cross_company_execution_v5: true }, "cross_company_execution_v5")).toBe(false);
     expect(v5FeatureEnabled({ skill_autonomous_promotion_v5: true }, "skill_autonomous_promotion_v5")).toBe(false);

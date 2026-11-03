@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, integer, jsonb, timestamp, foreignKey, unique, uniqueIndex, check, index } from "drizzle-orm/pg-core";
-import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget, ModelReservationQuote } from "@paperclipai/shared";
+import type { ExecutionPrincipal, SupervisionPolicy, OrchestrationBudget, ModelReservationQuote, ModelTariffCeiling, ModelProviderWireReceipt } from "@paperclipai/shared";
 import { documentRevisions } from "./document_revisions.js";
 import { workflowRevisions } from "./workflows.js";
 import { toolInvocations } from "./tool_access.js";
@@ -10,6 +10,7 @@ import { agents } from "./agents.js";
 import { completionContracts } from "./completion_contracts.js";
 import { agentExecutionManifests } from "./execution_manifests.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
+import { agentPackageVersions } from "./agent_packages.js";
 import { workflowRuns, workflows } from "./workflows.js";
 const times = () => ({ createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow() });
 export const orchestrationPlans = pgTable("orchestration_plans", {
@@ -52,19 +53,64 @@ export const orchestrationToolCharges = pgTable("orchestration_tool_charges", {
 }, t => ({ planFk: foreignKey({ columns: [t.companyId, t.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }) }));
 
 export const orchestrationModelReservations = pgTable("orchestration_model_reservations", {
-  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), planId: uuid("plan_id").notNull(), workerId: uuid("worker_id"), workerAttemptId: uuid("worker_attempt_id"),
-  purpose: text("purpose").$type<"worker_model" | "read_only_verification" | "read_only_trajectory" | "provider_conformance" | "agent_safe_test">().notNull(),
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), planId: uuid("plan_id"), workerId: uuid("worker_id"), workerAttemptId: uuid("worker_attempt_id"),
+  conversationAgentId: uuid("conversation_agent_id"), conversationRunId: uuid("conversation_run_id"), conversationIssueId: uuid("conversation_issue_id"),
+  conversationSessionGeneration: integer("conversation_session_generation"), executionManifestId: uuid("execution_manifest_id"), executionManifestHash: text("execution_manifest_hash"),
+  conversationTariffSnapshot: jsonb("conversation_tariff_snapshot").$type<ModelTariffCeiling | null>(),
+  purpose: text("purpose").$type<"worker_model" | "conversation_model" | "read_only_verification" | "read_only_trajectory" | "provider_conformance" | "agent_safe_test" | "decision_shadow">().notNull(),
   principalUserId: text("principal_user_id").notNull(), idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
   quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
   status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
-  providerResponseHash: text("provider_response_hash"), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  providerResponseHash: text("provider_response_hash"), providerWireReceipt: jsonb("provider_wire_receipt").$type<ModelProviderWireReceipt | null>(), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   tenantUq: unique("orchestration_model_reservation_tenant_uq").on(t.companyId, t.id), keyUq: unique("orchestration_model_reservation_key_uq").on(t.companyId, t.planId, t.idempotencyKey),
+  conversationKeyUq: uniqueIndex("orchestration_model_reservation_conversation_key_uq").on(t.companyId, t.conversationRunId, t.idempotencyKey).where(sql`${t.conversationRunId} is not null`),
   planFk: foreignKey({ columns: [t.companyId, t.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }).onDelete("cascade"), workerFk: foreignKey({ columns: [t.companyId, t.planId, t.workerId], foreignColumns: [orchestrationWorkers.companyId, orchestrationWorkers.planId, orchestrationWorkers.id] }), attemptFk: foreignKey({ columns: [t.companyId, t.planId, t.workerAttemptId], foreignColumns: [orchestrationWorkerAttempts.companyId, orchestrationWorkerAttempts.planId, orchestrationWorkerAttempts.id] }),
+  conversationRunFk: foreignKey({ name: "orchestration_model_reservations_conversation_run_fk", columns: [t.companyId, t.conversationAgentId, t.conversationRunId], foreignColumns: [heartbeatRuns.companyId, heartbeatRuns.agentId, heartbeatRuns.id] }).onDelete("restrict"),
+  conversationIssueFk: foreignKey({ name: "orchestration_model_reservations_conversation_issue_fk", columns: [t.companyId, t.conversationIssueId], foreignColumns: [issues.companyId, issues.id] }).onDelete("restrict"),
+  conversationManifestFk: foreignKey({ name: "orchestration_model_reservations_conversation_manifest_fk", columns: [t.companyId, t.executionManifestId], foreignColumns: [agentExecutionManifests.companyId, agentExecutionManifests.id] }).onDelete("restrict"),
+  scopeCheck: check("orchestration_model_reservation_scope_ck", sql`(${t.purpose}='conversation_model' and ${t.planId} is null and ${t.workerId} is null and ${t.workerAttemptId} is null and ${t.conversationAgentId} is not null and ${t.conversationRunId} is not null and ${t.conversationIssueId} is not null and ${t.conversationSessionGeneration} is not null and ${t.conversationSessionGeneration}>=0 and ${t.executionManifestId} is not null and ${t.executionManifestHash} is not null and ${t.executionManifestHash} ~ '^[a-f0-9]{64}$' and ${t.conversationTariffSnapshot} is not null and jsonb_typeof(${t.conversationTariffSnapshot})='object') or (${t.purpose}<>'conversation_model' and ${t.planId} is not null and ${t.conversationAgentId} is null and ${t.conversationRunId} is null and ${t.conversationIssueId} is null and ${t.conversationSessionGeneration} is null and ${t.executionManifestId} is null and ${t.executionManifestHash} is null and ${t.conversationTariffSnapshot} is null)`),
   statusCheck: check("orchestration_model_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),
-  purposeCheck: check("orchestration_model_reservation_purpose_ck", sql`${t.purpose} in ('worker_model','read_only_verification','read_only_trajectory','provider_conformance','agent_safe_test')`),
+  purposeCheck: check("orchestration_model_reservation_purpose_ck", sql`${t.purpose} in ('worker_model','conversation_model','read_only_verification','read_only_trajectory','provider_conformance','agent_safe_test','decision_shadow')`),
   costCheck: check("orchestration_model_reservation_cost_ck", sql`${t.maximumMinor} between 0 and 1000000 and (${t.quote}->>'maximumMinor')::int=${t.maximumMinor} and ${t.expiresAt}>${t.createdAt}`),
   hashCheck: check("orchestration_model_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),
   pendingIdx: index("orchestration_model_reservation_pending_idx").on(t.status, t.expiresAt),
+}));
+
+/** A separate, taskless ledger owner for explicitly operator-funded first-party
+ * support calls. It does not weaken or share the plan-backed reservation FK. */
+export const orchestrationCompanyPurposeBudgets = pgTable("orchestration_company_purpose_budgets", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "restrict" }),
+  purpose: text("purpose").$type<"first_party_support" | "decision_skill_suggestion">().notNull(), funder: text("funder").notNull(), profileId: text("profile_id").notNull(), profileHash: text("profile_hash").notNull(), providerAccountId: text("provider_account_id").notNull(), credentialBindingHash: text("credential_binding_hash").notNull(), periodKey: text("period_key").notNull(),
+  periodStartsAt: timestamp("period_starts_at", { withTimezone: true }).notNull(), periodEndsAt: timestamp("period_ends_at", { withTimezone: true }).notNull(),
+  provider: text("provider").notNull(), model: text("model").notNull(), sourceSha: text("source_sha").notNull(), qualificationHash: text("qualification_hash").notNull(), tariffHash: text("tariff_hash").notNull(),
+  maxCostMinor: integer("max_cost_minor").notNull(), reservedMinor: integer("reserved_minor").notNull().default(0), maxCalls: integer("max_calls").notNull(), reservedCalls: integer("reserved_calls").notNull().default(0), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  tenantUq: unique("orchestration_company_purpose_budget_tenant_uq").on(t.companyId, t.id),
+  periodUq: unique("orchestration_company_purpose_budget_period_uq").on(t.companyId, t.purpose, t.profileId, t.periodKey),
+  contractCheck: check("orchestration_company_purpose_budget_contract_ck", sql`${t.purpose} in ('first_party_support','decision_skill_suggestion') and ((${t.purpose}='first_party_support' and ${t.funder}='blentera_platform') or (${t.purpose}='decision_skill_suggestion' and ${t.funder}='company_connection')) and ${t.profileId} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.profileHash} ~ '^[a-f0-9]{64}$' and ${t.providerAccountId} ~ '^[a-zA-Z0-9._:-]{1,160}$' and ${t.credentialBindingHash} ~ '^[a-f0-9]{64}$' and ${t.periodKey} ~ '^[a-zA-Z0-9._:-]{1,120}$' and ${t.periodStartsAt}<${t.periodEndsAt} and ${t.periodEndsAt}<=${t.periodStartsAt}+interval '366 days' and ${t.provider} in ('openai','anthropic','openrouter') and length(${t.model}) between 1 and 200 and ${t.sourceSha} ~ '^[a-f0-9]{40}$' and ${t.qualificationHash} ~ '^[a-f0-9]{64}$' and ${t.tariffHash} ~ '^[a-f0-9]{64}$'`),
+  amountCheck: check("orchestration_company_purpose_budget_amount_ck", sql`${t.maxCostMinor} between 1 and 1000000 and ${t.reservedMinor} between 0 and ${t.maxCostMinor} and ${t.maxCalls} between 1 and 10000 and ${t.reservedCalls} between 0 and ${t.maxCalls}`),
+  periodIdx: index("orchestration_company_purpose_budget_period_idx").on(t.periodEndsAt),
+}));
+export const orchestrationCompanyPurposeReservations = pgTable("orchestration_company_purpose_reservations", {
+  id: uuid("id").primaryKey().defaultRandom(), companyId: uuid("company_id").notNull(), budgetId: uuid("budget_id").notNull(), purpose: text("purpose").$type<"first_party_support" | "decision_skill_suggestion">().notNull().default("first_party_support"), principalUserId: text("principal_user_id").notNull(),
+  /** Exact globally published first-party support package release pinned by
+   * the trusted server. Null is retained only for pre-feature legacy rows. */
+  packageVersionId: uuid("package_version_id"),
+  idempotencyKey: text("idempotency_key").notNull(), requestHash: text("request_hash").notNull(), inputHash: text("input_hash").notNull(), authorityHash: text("authority_hash").notNull(),
+  quote: jsonb("quote").$type<ModelReservationQuote>().notNull(), maximumMinor: integer("maximum_minor").notNull(),
+  status: text("status").$type<"reserved" | "dispatched" | "completed" | "failed" | "unknown" | "cancelled">().notNull().default("reserved"),
+  providerResponseHash: text("provider_response_hash"), providerWireReceipt: jsonb("provider_wire_receipt").$type<ModelProviderWireReceipt | null>(), usage: jsonb("usage").$type<{ inputTokens: number; outputTokens: number } | null>(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), dispatchedAt: timestamp("dispatched_at", { withTimezone: true }), completedAt: timestamp("completed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  tenantUq: unique("orchestration_company_purpose_reservation_tenant_uq").on(t.companyId, t.id),
+  purposeCheck: check("orchestration_company_purpose_reservation_purpose_ck", sql`${t.purpose} in ('first_party_support','decision_skill_suggestion')`),
+  keyUq: unique("orchestration_company_purpose_reservation_key_uq").on(t.companyId, t.idempotencyKey),
+  budgetFk: foreignKey({ columns: [t.companyId, t.budgetId], foreignColumns: [orchestrationCompanyPurposeBudgets.companyId, orchestrationCompanyPurposeBudgets.id] }).onDelete("restrict"),
+  packageVersionFk: foreignKey({ columns: [t.packageVersionId], foreignColumns: [agentPackageVersions.id] }).onDelete("restrict"),
+  statusCheck: check("orchestration_company_purpose_reservation_status_ck", sql`${t.status} in ('reserved','dispatched','completed','failed','unknown','cancelled')`),
+  costCheck: check("orchestration_company_purpose_reservation_cost_ck", sql`${t.maximumMinor} between 0 and 1000000 and (${t.quote}->>'maximumMinor')::int=${t.maximumMinor} and ${t.expiresAt}>${t.createdAt}`),
+  hashCheck: check("orchestration_company_purpose_reservation_hash_ck", sql`${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.inputHash} ~ '^[a-f0-9]{64}$' and ${t.authorityHash} ~ '^[a-f0-9]{64}$' and (${t.providerResponseHash} is null or ${t.providerResponseHash} ~ '^[a-f0-9]{64}$')`),
+  pendingIdx: index("orchestration_company_purpose_reservation_pending_idx").on(t.status, t.expiresAt),
 }));

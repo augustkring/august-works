@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/db| src/native-run-input-source-receipt.test.ts (7 tests | 1 failed) 12310ms
+     × permits only marker-backed whole-profile erasure and forbids resurrection 41ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/db| src/native-run-input-source-receipt.test.ts > Original run input receipt database binding > permits only marker-backed whole-profile erasure and forbids resurrection
+AssertionError: promise resolved "[]" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+[]
+
+ ❯ src/native-run-input-source-receipt.test.ts:145:133
+    143|       await expect(db`update heartbeat_runs set runner_profile_json=${…
+    144|       await db`insert into memory_deletion_markers(company_id,kind,key…
+    145|       await expect(db`update heartbeat_runs set runner_profile_json=${…
+       |                                                                                                                                     ^
+    146|       await db`update heartbeat_runs set runner_profile_json=${clear==…
+    147|       await expect(write(row,receipt)).rejects.toMatchObject(denied);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  07:06:16
+   Duration  23.21s (transform 5.94s, setup 0ms, import 10.12s, tests 12.31s, environment 0ms)
+

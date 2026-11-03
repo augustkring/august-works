@@ -1,0 +1,3 @@
+# Actual conversation financial frame R30
+
+This fresh focused run is not financial acceptance. Snapshot and syntax preflights passed, but the one selected Vitest case failed before provider dispatch: 1 failed, 30 skipped, exit 1. The run was `adapter_failed` during `preparing`; the manifest and initial source receipt existed, but there was no reservation or provider request. Therefore R30 provides no settlement, purge, or outbox evidence. It follows R28, where the same known-cost case reached the real provider and passed through canonical purge, with the then-current test failing only because the runtime-asset outbox row was queued instead of succeeded. The broker-host adjustment is being isolated before a fresh rerun.

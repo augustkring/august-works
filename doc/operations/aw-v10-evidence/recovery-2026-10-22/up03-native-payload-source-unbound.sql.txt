@@ -1,0 +1,13 @@
+ALTER TABLE "context_manifest_items" ADD COLUMN "payload_source_snapshot" jsonb;--> statement-breakpoint
+ALTER TABLE "document_revisions" ADD COLUMN "payload_source_protocol_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "document_revisions" ADD COLUMN "payload_source_snapshot" jsonb;--> statement-breakpoint
+ALTER TABLE "issue_attachments" ADD COLUMN "payload_source_protocol_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "issue_attachments" ADD COLUMN "payload_source_snapshot" jsonb;--> statement-breakpoint
+ALTER TABLE "issue_comments" ADD COLUMN "payload_source_protocol_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "issue_comments" ADD COLUMN "payload_source_snapshot" jsonb;--> statement-breakpoint
+ALTER TABLE "issues" ADD COLUMN "payload_source_protocol_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "issues" ADD COLUMN "payload_source_snapshot" jsonb;--> statement-breakpoint
+ALTER TABLE "memory_records" ADD COLUMN "payload_source_protocol_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "memory_records" ADD COLUMN "payload_source_snapshot" jsonb;--> statement-breakpoint
+ALTER TABLE "projects" ADD COLUMN "payload_source_protocol_version" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "projects" ADD COLUMN "payload_source_snapshot" jsonb;

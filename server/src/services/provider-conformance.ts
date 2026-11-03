@@ -1,3 +1,4 @@
+import { withLegacyPaidTransportAdmission, NativePaidTransportAdmissionError } from "./native-runtime/paid-transport-admission.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { agents, agentIdentities, agentPresenceRuntimeBindings, heartbeatRuns, issues, type Db } from "@paperclipai/db";
@@ -34,6 +35,16 @@ export function providerConformanceService(db: Db) {
         .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
       if (draftCandidate?.adapterType === "paperclip_runner" && draftCandidate.adapterConfig.provider === "aw_text_only")
         return installedNativeDraftConformance(db).test(actor, companyId, agentId, input);
+      // This endpoint runs paid model probes. Non-paid discovery/configuration
+      // and independently operated provider lifecycle APIs remain separate.
+      try {
+        withLegacyPaidTransportAdmission({ adapterType: draftCandidate?.adapterType ?? "unknown",
+          companyId, agentId, operation: "provider_conformance" }, () => undefined);
+      } catch (error) {
+        if (error instanceof NativePaidTransportAdmissionError)
+          throw conflict(error.message, { code: error.code, ...error.resultJson });
+        throw error;
+      }
       async function target(cid: string, aid: string) {
         await assertV5Authorization(db, actor, cid, "agents:configure", { type: "agent", companyId: cid, agentId: aid });
         await assertV5Authorization(db, actor, cid, "agent:wake", { type: "agent", companyId: cid, agentId: aid });

@@ -1,17 +1,21 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import {
   orchestrationWorkers,
   issueDocuments,
+  issues,
   documents,
   agents,
   orchestrationPlans,
   type Db,
 } from "@paperclipai/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { workerModelResultSchema, agentDraftRequestsTaskReview, parseAgentDraftOutput,
+  type NativePayloadSourceInput,
   agentDraftReviewDocument, AGENT_REVIEWED_TASK_OUTPUT_INSTRUCTIONS } from "@paperclipai/shared";
 import type {
+  NativeExecutionInput,
   NativeRunIdentity,
   NativeSessionCapabilities,
 } from "@paperclipai/paperclip-runner";
@@ -24,8 +28,11 @@ import type {
   PrpTerminalState,
 } from "../../vendor/paperclip-runner/index.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
+import { nativeSha256 } from "./canonical.js";
 import { forbidden, conflict } from "../../errors.js";
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
+import type { NativeAwModelOutputCapture, NativeBootstrapSourceClosure } from "./native-execution-input.js";
+import type { WorkerModelDispatchWireReceipt } from "../orchestration/worker-model-gateway.js";
 import { retainedOrchestrationContract } from "../orchestration/orchestration-contracts.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { readAuthoredAgentDefinition, assertAuthoredAgentSnapshotCurrent,
@@ -35,6 +42,8 @@ type Gateway = ReturnType<typeof workerModelGateway>;
 type Input = Parameters<Gateway["issue"]>[0] & {
   outputKey: string;
   maxOutputTokens: number;
+  sourceClosure?: NativeBootstrapSourceClosure;
+  expectedTask: NativeExecutionInput["task"];
   /** Verified, bounded server projection; never accepted by the model HTTP API. */
   runtimeContextText?: {
     aggregateDigest: string;
@@ -227,20 +236,71 @@ export function createAwTextDraftBackend(
         callId: `${callId}:context`,
         arguments: {},
       });
-      const activeTask = z
+      const activeTaskRow = z
         .object({
           activeTask: z
             .object({
               id: z.string(),
+              identifier: z.string().nullable(),
               title: z.string(),
               description: z.string().nullable(),
+              workMode: z.string(),
             })
             .passthrough(),
         })
         .passthrough()
         .parse(taskContext).activeTask;
+      const activeTask = {
+        id: activeTaskRow.id,
+        identifier: activeTaskRow.identifier,
+        title: activeTaskRow.title,
+        description: activeTaskRow.description,
+        workMode: activeTaskRow.workMode,
+      };
       if (activeTask.id !== identity.issueId)
         throw forbidden("Text draft canonical Task changed");
+      if (input.sourceClosure) {
+        const taskSource = input.sourceClosure.sourceSet.inputs.find((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+          source.kind === "task" && source.issueId === activeTask.id);
+        const [currentTask] = await db.select({
+          id: issues.id,
+          companyId: issues.companyId,
+          identifier: issues.identifier,
+          title: issues.title,
+          description: issues.description,
+          workMode: issues.workMode,
+          ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+        }).from(issues).where(and(
+          eq(issues.companyId, identity.companyId),
+          eq(issues.id, identity.issueId),
+        )).for("share");
+        const currentTaskProjection = currentTask && {
+          identifier: currentTask.identifier,
+          title: currentTask.title,
+          description: currentTask.description,
+          workMode: currentTask.workMode,
+        };
+        const renderedTaskProjection = {
+          identifier: input.expectedTask.identifier,
+          title: input.expectedTask.title,
+          description: input.expectedTask.description,
+          workMode: input.expectedTask.workMode,
+        };
+        const legacyRenderedTaskHash = currentTask && nativeSha256({
+          id: currentTask.id,
+          ...currentTaskProjection,
+        });
+        if (!currentTask || !taskSource ||
+          (taskSource.contentHash !== currentTask.ownerBodyHash && taskSource.contentHash !== legacyRenderedTaskHash) ||
+          !isDeepStrictEqual(currentTaskProjection, renderedTaskProjection) ||
+          !isDeepStrictEqual(currentTaskProjection, {
+            identifier: activeTask.identifier,
+            title: activeTask.title,
+            description: activeTask.description,
+            workMode: activeTask.workMode,
+          }) || input.sourceClosure.taskEnvelopeDigest !== nativeSha256(input.expectedTask))
+          throw forbidden("Text draft Task does not match the captured source body");
+      }
       open.signal?.throwIfAborted();
       return draftSession(
         db,
@@ -278,9 +338,11 @@ function draftSession(
 ): NativeSession {
   const controller = new AbortController(),
     source = `aw-draft:${identity.runId}`;
+  const awOutputCapture: { value: NativeAwModelOutputCapture | null } = { value: null };
   const tools = new PaperclipRunnerToolAuthority(db, {
     ...identity,
     authoritySignal: controller.signal,
+    awOutputCapture,
   });
   const history: PrpEvent[] = [],
     waiters = new Set<() => void>();
@@ -409,11 +471,13 @@ function draftSession(
       work = (async () => {
         try {
           controller.signal.throwIfAborted();
+          const wireReceipt: { value: WorkerModelDispatchWireReceipt | null } = { value: null };
+          const modelCallId = `aw-draft:${identity.runId}`;
           const response = workerModelResultSchema.parse(
             await gateway.call(
               claims,
               {
-                callId: `aw-draft:${identity.runId}`,
+                callId: modelCallId,
                 system: taskReview ? `${system.replace("Return only the draft text.", "")} ${AGENT_REVIEWED_TASK_OUTPUT_INSTRUCTIONS}` : system,
                 prompt: JSON.stringify({
                   assignedRuntimeContext: input.runtimeContextText ?? null,
@@ -426,8 +490,28 @@ function draftSession(
                 maxOutputTokens: input.maxOutputTokens,
               },
               controller.signal,
+              input.sourceClosure ? { onWireDispatch: (receipt) => { wireReceipt.value = receipt; } } : undefined,
             ),
           );
+          const exactWireReceipt = wireReceipt.value;
+          if (input.sourceClosure) {
+            if (!exactWireReceipt || exactWireReceipt.callId !== modelCallId ||
+              exactWireReceipt.reservationId !== response.reservationId)
+              throw forbidden("Text draft provider dispatch receipt is unavailable");
+            awOutputCapture.value = {
+              runId: identity.runId,
+              sourceSet: structuredClone(input.sourceClosure.sourceSet),
+              dispatch: {
+                kind: "worker_model_dispatch",
+                runId: identity.runId,
+                reservationId: exactWireReceipt.reservationId,
+                callId: exactWireReceipt.callId,
+                requestHash: exactWireReceipt.requestHash,
+                wireBodyHash: exactWireReceipt.bodySha256,
+                responseHash: nativeSha256({ text: response.text, usage: response.usage }),
+              },
+            };
+          }
           controller.signal.throwIfAborted();
           const output = parseAgentDraftOutput(response.text, taskReview);
           await assertAuthoredAgentSnapshotCurrent(db, authoredAgent);

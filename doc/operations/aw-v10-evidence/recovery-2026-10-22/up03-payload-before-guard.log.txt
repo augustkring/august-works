@@ -1,0 +1,104 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts (4 tests | 4 failed) 12489ms
+     × allows the current owner but withholds both task and run from another company administrator 323ms
+     × does not transfer private history through the same agent serving another human 94ms
+     × rechecks membership after an earlier successful read 70ms
+     × withholds foreign, missing and unauthenticated source scopes 44ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > allows the current owner but withholds both task and run from another company administrator
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:49:95
+     47|     for (const scope of [{ issueId }, { runId }]) {
+     48|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+     49|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+       |                                                                                               ^
+     50|     }
+     51|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > does not transfer private history through the same agent serving another human
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:55:108
+     53|     for (const scope of [{ issueId }, { runId }]) {
+     54|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+     55|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+       |                                                                                                            ^
+     56|     }
+     57|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > rechecks membership after an earlier successful read
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:64:95
+     62|     ));
+     63|     for (const scope of [{ issueId }, { runId }]) {
+     64|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+       |                                                                                               ^
+     65|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+     66|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > withholds foreign, missing and unauthenticated source scopes
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:70:102
+     68|   it("withholds foreign, missing and unauthenticated source scopes", a…
+     69|     for (const scope of [{ issueId }, { runId }]) {
+     70|       await expect(assertAnalyticalContextPayloadAccess(db, foreignCom…
+       |                                                                                                      ^
+     71|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+     72|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  20:19:00
+   Duration  28.29s (transform 9.38s, setup 417ms, import 14.90s, tests 12.49s, environment 0ms)
+

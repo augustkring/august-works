@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, timestamp, index } from "drizzle-orm/pg-core";
 import { authUsers } from "./auth.js";
 import { companies } from "./companies.js";
@@ -14,6 +15,7 @@ export const cliAuthChallenges = pgTable(
     requestedCompanyId: uuid("requested_company_id").references(() => companies.id, { onDelete: "set null" }),
     pendingKeyHash: text("pending_key_hash").notNull(),
     pendingKeyName: text("pending_key_name").notNull(),
+    pendingKeyExpiresAt: timestamp("pending_key_expires_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP + INTERVAL '30 days'`),
     approvedByUserId: text("approved_by_user_id").references(() => authUsers.id, { onDelete: "set null" }),
     boardApiKeyId: uuid("board_api_key_id").references(() => boardApiKeys.id, { onDelete: "set null" }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),

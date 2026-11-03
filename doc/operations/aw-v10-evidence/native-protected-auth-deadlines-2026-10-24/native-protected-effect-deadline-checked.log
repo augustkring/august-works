@@ -1,0 +1,18 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[09:03:10] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[09:03:43] [31mERROR[39m: [36mNative authentication request failed[39m [90m{"component":"native-authentication"}[39m
+[09:04:07] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[09:04:07] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[09:04:08] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[09:04:12] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+
+ Test Files  3 passed (3)
+      Tests  48 passed (48)
+   Start at  09:02:29
+   Duration  118.63s (transform 19.14s, setup 497ms, import 45.07s, tests 72.11s, environment 1ms)
+

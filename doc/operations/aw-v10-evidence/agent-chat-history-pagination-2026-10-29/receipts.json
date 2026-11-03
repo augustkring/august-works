@@ -1,0 +1,33 @@
+{
+  "schema": "aw.scoped-software-acceptance.v1",
+  "capturedAt": "2026-10-29T10:29:01.200769+00:00",
+  "command": "bash /workspace/v10-preparation/run-agent-chat-history-current-r2-20261029.sh",
+  "exitCode": 0,
+  "testsPassed": 1,
+  "testsSkipped": 0,
+  "processClosed": true,
+  "sourceHead": "9877c7a604958ae87d8aa3f2385ca5c098e1804d",
+  "testAndFixturePins": {
+    "tests/e2e/agent-chat-projects.spec.ts": "be2feedae466d49eaa0cfe1961cba5bcad3501ca02baac84fec2118e7914f7dd",
+    "tests/e2e/agent-chat.shared.ts": "b8026b09451bf2546101a6e40d1136462b380d626fb534bd408fa2381942cb4e",
+    "tests/e2e/fixtures/native-chat-codex.mjs": "7e41142eff63ff206247c8cc5ee2cf3fdf81444d308e1d9ef39349320dc92a4f"
+  },
+  "sourceDrift": {},
+  "fullReconstructableSourceReceipt": "/workspace/v10-preparation/agent-chat-history-current-r2-20261029/source-pins.json",
+  "stdoutSha256": "a40e3345122a49ea5ea00e337b653f95b8c6f0fda128cb856080c188dcd49d63",
+  "providerEventsSha256": "30bef2f2963c40f614dfc03e191c724e7f3a484189e20fe56cccd51a13747262",
+  "timingSummary": "timing-summary.json",
+  "earnedBehavior": [
+    "Exactly65 original report_progress calls with65 successful settlements and0 tool errors through controlled native provider/real RunnerD transport",
+    "Actual final provider item and turn completion emitted; original idle owner observes no live runs and waiting/in_review",
+    "Reload and older-page scroll retain both History message00 and latest64, as asserted by the exact browser test"
+  ],
+  "testBudget": "Only65-write history case uses120-second idle wait and180-second test timeout, based on measured serialized owner latency. All other idle calls retain60seconds; production timeouts/security/workbudgets unchanged.",
+  "limitations": [
+    "Controlled deterministic provider; no paid provider call, external provider or physical host qualification.",
+    "No performance SLO qualification is claimed. Timestamps are optional bounded trace metadata, never prompt/tool bodies.",
+    "Source pinned at snapshotstart; later main-tree edits are excluded. Earlier unchanged-budget failure remains in preparation history-r1 logs/timing evidence."
+  ],
+  "rawLogDisposition": "Exact raw browser log retained privately at /workspace/v10-preparation/agent-chat-history-current-r2-20261029/browser.log; not committed because it includes disposable bootstrap links. SHA-256 retained above.",
+  "archivedSourcePinsSha256": "b34ce3c923c7ae4fb1c83966e88b8e69e7c9e15bd375f087378184f3af89b557"
+}

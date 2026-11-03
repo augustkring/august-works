@@ -1,0 +1,101 @@
+{
+  "record": "independent-current-fixture-regressions-v1",
+  "runs": [
+    {
+      "id": "workspace",
+      "attempt": "workspace-busy-fixture-repair-r1-20261029",
+      "sourceHead": "378b6b2a6d9d922bb35102261d809069fe4ae0ae",
+      "testFile": "server/src/__tests__/heartbeat-workspace-busy.test.ts",
+      "testFileSha256": "70e389c5451835a78144e9a48be42fa759a00a45b20758c47e83731f2740bd51",
+      "passed": 16,
+      "filteredOrSkipped": 2,
+      "rawPatchSha256": "3fbd72690f311a4ca7f4c37028cfc7b95ea80eed28be8d3196ceb7f93383fc5d",
+      "rawLogSha256": "0ab54ac2fa8e35de293b6bc4ec9aa7ec84d5bba96a83a216a4ed3fef82486e6c",
+      "sanitizedLogSha256": "0ab54ac2fa8e35de293b6bc4ec9aa7ec84d5bba96a83a216a4ed3fef82486e6c",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      },
+      "testExit": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed | 2 skipped (18)",
+        "Duration  60.55s (transform 9.83s, setup 69ms, import 14.22s, tests 46.15s, environment 0ms)"
+      ]
+    },
+    {
+      "id": "recovery",
+      "attempt": "lifecycle-issue-recovery-historical-regressions-20261029-r1",
+      "sourceHead": "378b6b2a6d9d922bb35102261d809069fe4ae0ae",
+      "testFile": "server/src/__tests__/issue-recovery-actions.test.ts",
+      "testFileSha256": "69509506740dcacfd64ad6a98eece787fea4d8507bb167e07b313aa47aa56eb8",
+      "passed": 4,
+      "filteredOrSkipped": 59,
+      "rawPatchSha256": "b0836f2456b5c091a31b7dc5d8b4035e1a3d65bf0f69b90937175e2ef6de1c28",
+      "rawLogSha256": "ac62d7b5ae577d8d0b122ac0efb1208a1cfc546beb596d27ea6f5b502746206d",
+      "sanitizedLogSha256": "ac62d7b5ae577d8d0b122ac0efb1208a1cfc546beb596d27ea6f5b502746206d",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      },
+      "testExit": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  4 passed | 59 skipped (63)",
+        "Duration  21.86s (transform 10.40s, setup 75ms, import 14.98s, tests 6.68s, environment 0ms)"
+      ]
+    },
+    {
+      "id": "create-skill",
+      "attempt": "inventory-resume2-create-skill-ci-20261029-r2",
+      "sourceHead": "378b6b2a6d9d922bb35102261d809069fe4ae0ae",
+      "testFile": "server/src/services/native-runtime/create-skill.integration.test.ts",
+      "testFileSha256": "a0b8488ed6e91fca6d136a8fbbb92c122bb7b87d32a9f618e09c3e5148f8b005",
+      "passed": 6,
+      "filteredOrSkipped": 0,
+      "rawPatchSha256": "0d69181096dcedae70009c3565e4d6f95ebb224d4637d273d623537c858d5a6d",
+      "rawLogSha256": "f4294cbb1032b95db64bc31875a84fa59271eb25d486b8251aa3e0ac85fd04f8",
+      "sanitizedLogSha256": "f4294cbb1032b95db64bc31875a84fa59271eb25d486b8251aa3e0ac85fd04f8",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      },
+      "testExit": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  31.24s (transform 14.44s, setup 114ms, import 20.29s, tests 10.69s, environment 0ms)"
+      ]
+    },
+    {
+      "id": "monitor",
+      "attempt": "inventory-resume2-issue-monitor-ci-20261029-r2",
+      "sourceHead": "378b6b2a6d9d922bb35102261d809069fe4ae0ae",
+      "testFile": "server/src/__tests__/issue-monitor-scheduler.test.ts",
+      "testFileSha256": "9851ef1adaec78cf0f1e03507a06f1e034613befdbf44bd21ac4b1d3709dcbb0",
+      "passed": 11,
+      "filteredOrSkipped": 0,
+      "rawPatchSha256": "b29b03480816b4e2581d0de593f97fc391139000dde071b3f604f40a1927fd3e",
+      "rawLogSha256": "d19565c04b79f8b5af7a1a957d6821882da8249229c133a99f2dc2f54242213f",
+      "sanitizedLogSha256": "d19565c04b79f8b5af7a1a957d6821882da8249229c133a99f2dc2f54242213f",
+      "redactions": {
+        "jwt": 0,
+        "bearer": 0,
+        "invite": 0,
+        "credential": 0
+      },
+      "testExit": 0,
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  53.91s (transform 10.45s, setup 78ms, import 15.27s, tests 38.42s, environment 0ms)"
+      ]
+    }
+  ]
+}

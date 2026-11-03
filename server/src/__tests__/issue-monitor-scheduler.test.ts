@@ -1,13 +1,19 @@
 import { randomUUID } from "node:crypto";
+import { fork, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { PROVIDER_QUOTA_MONITOR_SERVICE_NAME } from "@paperclipai/shared";
 import {
   activityLog,
   agentRuntimeState,
   agentWakeupRequests,
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   companySkills,
   createDb,
   documentRevisions,
@@ -30,6 +36,8 @@ import { normalizeIssueExecutionPolicy, parseIssueExecutionState } from "../serv
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const scheduledWorkerPath = fileURLToPath(new URL("./fixtures/scheduled-work-recovery-worker.ts", import.meta.url));
+const tsxLoaderPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../cli/node_modules/tsx/dist/loader.mjs");
 
 if (!embeddedPostgresSupport.supported) {
   console.warn(
@@ -41,6 +49,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
   const seededAgentIds = new Set<string>();
+  const seededResponsibleUserIds = new Set<string>();
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-issue-monitor-");
@@ -99,6 +108,46 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     throw new Error("Timed out waiting for issue monitor heartbeat side effects to settle");
   }
 
+  function startMonitorWorker(companyId: string, issueId: string) {
+    return fork(scheduledWorkerPath, [], {
+      cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."),
+      execArgv: ["--import", tsxLoaderPath],
+      env: {
+        PATH: process.env.PATH ?? "",
+        NODE_ENV: process.env.NODE_ENV ?? "test",
+        PAPERCLIP_TEST_DATABASE_URL: tempDb!.connectionString,
+        PAPERCLIP_TEST_COMPANY_ID: companyId,
+        PAPERCLIP_TEST_MONITOR_ISSUE_ID: issueId,
+        PAPERCLIP_TEST_SCHEDULED_KIND: "monitor",
+      },
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+    });
+  }
+
+  async function waitForMonitorWorkerMessage(child: ChildProcess, type: string, timeoutMs = 15_000) {
+    return new Promise<Record<string, unknown>>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`Timed out waiting for scheduled monitor worker ${type}`)), timeoutMs);
+      const onMessage = (message: unknown) => {
+        if (!message || typeof message !== "object") return;
+        const value = message as Record<string, unknown>;
+        if (value.type === "worker_error") {
+          clearTimeout(timer);
+          reject(new Error(`Scheduled monitor worker error: ${String(value.message)}`));
+        } else if (value.type === type) {
+          clearTimeout(timer);
+          resolve(value);
+        }
+      };
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        clearTimeout(timer);
+        reject(new Error(`Scheduled monitor worker exited before ${type} (${code ?? signal})`));
+      };
+      child.on("message", onMessage);
+      child.once("exit", onExit);
+      child.once("error", error => { clearTimeout(timer); reject(error); });
+    });
+  }
+
   async function cleanupRows() {
     await waitForHeartbeatSideEffectsSettled();
     await db.delete(heartbeatRunEvents);
@@ -116,7 +165,12 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     await db.delete(agentRuntimeState);
     await db.delete(agents);
     await db.delete(companySkills);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    for (const userId of seededResponsibleUserIds) {
+      await db.delete(authUsers).where(eq(authUsers.id, userId));
+    }
+    seededResponsibleUserIds.clear();
   }
 
   afterEach(async () => {
@@ -152,10 +206,12 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     issueStatus?: "in_progress" | "in_review";
     monitorAttemptCount?: number;
     monitor?: Record<string, unknown>;
+    bindBodySnapshot?: boolean;
   }) {
     const companyId = randomUUID();
     const agentId = randomUUID();
     const issueId = randomUUID();
+    const responsibleUserId = randomUUID();
     const nextCheckAt = new Date("2026-04-11T12:30:00.000Z");
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 
@@ -172,8 +228,14 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       name: "Paperclip",
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
-      defaultResponsibleUserId: "responsible-user",
+      defaultResponsibleUserId: responsibleUserId,
     });
+
+    await db.insert(authUsers).values({ id: responsibleUserId, name: "Monitor owner",
+      email: `${responsibleUserId}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    seededResponsibleUserIds.add(responsibleUserId);
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: responsibleUserId,
+      status: "active", membershipRole: "owner" });
 
     await db.insert(agents).values({
       id: agentId,
@@ -195,6 +257,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       },
       permissions: {},
     });
+    await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agentId,
+      status: "active", membershipRole: "member" });
     seededAgentIds.add(agentId);
 
     await db.insert(issues).values({
@@ -204,6 +268,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       status: input?.issueStatus ?? "in_progress",
       priority: "medium",
       assigneeAgentId: agentId,
+      responsibleUserId,
+      createdByUserId: responsibleUserId,
       issueNumber: 1,
       identifier: `${issuePrefix}-1`,
       executionPolicy: {
@@ -242,13 +308,27 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       monitorAttemptCount,
       monitorNotes: "Check deploy",
       monitorScheduledBy: "assignee",
+      ...(input?.bindBodySnapshot ? { payloadSourceProtocolVersion: 1 } : {}),
     });
+
+    if (input?.bindBodySnapshot) {
+      // Structural snapshot for exercising the DB body-mutation guard only;
+      // this synthetic scheduler fixture does not claim an authenticated source capture.
+      await db.execute(sql`update issues target set payload_source_snapshot=(
+        select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue','companyId',target.company_id,
+            'id',target.id,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(target))),
+            'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+              'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+        ) body
+      ) where target.company_id=${companyId}::uuid and target.id=${issueId}::uuid`);
+    }
 
     return { companyId, agentId, issueId, nextCheckAt };
   }
 
   it("triggers due issue monitors once and clears the one-shot schedule", async () => {
-    const { issueId, agentId } = await seedFixture();
+    const { issueId, agentId } = await seedFixture({ bindBodySnapshot: true });
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
@@ -266,6 +346,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       lastTriggeredAt: tickAt.toISOString(),
       attemptCount: 1,
     });
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    expect(issue.payloadSourceSnapshotInvalidated).toBe(true);
 
     const wakeup = await db
       .select()
@@ -281,6 +363,76 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       .then((rows) => rows.map((row) => row.action));
     expect(activity).toContain("issue.monitor_triggered");
   });
+
+  it("claims a due monitor once across independent server database clients", async () => {
+    const { issueId, agentId } = await seedFixture({ bindBodySnapshot: true });
+    const independentDb = createDb(tempDb!.connectionString);
+    try {
+      const tickAt = new Date("2026-04-11T12:31:00.000Z");
+      const results = await Promise.all([
+        heartbeatService(db).tickIssueMonitors(tickAt),
+        heartbeatService(independentDb).tickIssueMonitors(tickAt),
+      ]);
+
+      expect(results.map(result => result.triggered).sort()).toEqual([0, 1]);
+      const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+      expect(issue?.monitorNextCheckAt).toBeNull();
+      expect(issue?.monitorAttemptCount).toBe(1);
+      expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, agentId))).toHaveLength(1);
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+    } finally {
+      await independentDb.$client.end({ timeout: 0 }).catch(() => undefined);
+    }
+  });
+
+  it("recovers a direct-writer monitor deadline after OS restart and dispatches one effect", async () => {
+    const { companyId, issueId, agentId } = await seedFixture({ bindBodySnapshot: true });
+    const savedDeadline = new Date(Date.now() + 60_000);
+    await db.update(issues).set({ monitorNextCheckAt: savedDeadline }).where(eq(issues.id, issueId));
+    const first = startMonitorWorker(companyId, issueId);
+    const children = [first];
+    try {
+      const ready = await waitForMonitorWorkerMessage(first, "ready");
+      expect(ready.nextWakeAt).toBe(savedDeadline.getTime());
+
+      // This writer has no in-process database-work notification. An explicit
+      // reconciliation wake must discover the durable deadline change.
+      const dueDeadline = new Date(Date.now() + 1_500);
+      await db.execute(sql`update issues set monitor_next_check_at = ${dueDeadline.toISOString()}::timestamptz
+        where company_id = ${companyId}::uuid and id = ${issueId}::uuid`);
+      const reconciled = waitForMonitorWorkerMessage(first, "reconciled");
+      first.send({ type: "wake" });
+      expect((await reconciled).nextRunAt).toBe(dueDeadline.toISOString());
+
+      const firstExit = once(first, "exit");
+      first.kill("SIGKILL");
+      await firstExit;
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, dueDeadline.getTime() - Date.now()) + 100));
+
+      // Fresh OS processes restore from the due persisted timestamp and race the
+      // original monitor claim; only the winning issue owner emits effects.
+      const second = startMonitorWorker(companyId, issueId);
+      const third = startMonitorWorker(companyId, issueId);
+      children.push(second, third);
+      await Promise.all([waitForMonitorWorkerMessage(second, "ready"), waitForMonitorWorkerMessage(third, "ready")]);
+      await vi.waitFor(async () => {
+        expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, agentId))).toHaveLength(1);
+        expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+      }, { timeout: 15_000 });
+      const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+      expect(issue?.monitorNextCheckAt).toBeNull();
+      expect(issue?.monitorAttemptCount).toBe(1);
+    } finally {
+      await Promise.all(children.slice(1).map(async child => {
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        const exit = once(child, "exit");
+        child.send({ type: "stop" });
+        await Promise.race([exit, new Promise(resolve => setTimeout(resolve, 3_000))]);
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      }));
+      if (first.exitCode === null && first.signalCode === null) first.kill("SIGKILL");
+    }
+  }, 90_000);
 
   it.each(["unknown", "exhausted"] as const)("does not replay a quota monitor with %s execution evidence", async (kind) => {
     const sourceRunId = randomUUID();
@@ -424,7 +576,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
   });
 
   it("clears due monitors that cannot be dispatched and records a skip", async () => {
-    const { issueId } = await seedFixture({ agentStatus: "paused" });
+    const { issueId } = await seedFixture({ agentStatus: "paused", bindBodySnapshot: true });
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
@@ -438,6 +590,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       status: "cleared",
       clearReason: "dispatch_skipped",
     });
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    expect(issue.payloadSourceSnapshotInvalidated).toBe(true);
 
     const activity = await db
       .select()
@@ -449,6 +603,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
 
   it("clears exhausted monitors and queues bounded owner recovery instead of another due check", async () => {
     const { issueId, agentId } = await seedFixture({
+      bindBodySnapshot: true,
       monitorAttemptCount: 1,
       monitor: {
         maxAttempts: 1,
@@ -469,6 +624,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       status: "cleared",
       clearReason: "max_attempts_exhausted",
     });
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    expect(issue.payloadSourceSnapshotInvalidated).toBe(true);
 
     const wakeup = await db
       .select()

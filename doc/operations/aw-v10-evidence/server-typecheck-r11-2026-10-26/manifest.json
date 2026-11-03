@@ -1,0 +1,22 @@
+[
+  {
+    "file": "current-server-tsc-r11-20261026-source-pins.json",
+    "rawSha256": "a1ce02454824bc3d78eb978e69df6125f0a4481cfb1de7fe5cb636527df393dd",
+    "rawBytes": 36240
+  },
+  {
+    "file": "current-server-tsc-r11-20261026-snapshot.log.gz",
+    "rawSha256": "acf6692d29b53d0a94dbbf07d999b8676f7d514f3db0fe40afbc16d3442c679b",
+    "rawBytes": 37
+  },
+  {
+    "file": "current-server-tsc-r11-20261026.log.gz",
+    "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rawBytes": 0
+  },
+  {
+    "file": "current-server-tsc-r11-20261026.exit",
+    "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+    "rawBytes": 2
+  }
+]

@@ -13,6 +13,8 @@ import {
   runtimeHosts,
   runtimeOperations,
   supportSessions,
+  orchestrationCompanyPurposeReservations,
+  memoryJobs,
   type Db,
 } from "@paperclipai/db";
 import { companyDeletionRequestSchema } from "@paperclipai/shared";
@@ -22,6 +24,9 @@ import type { companyObjectErasure } from "./object-erasure.js";
 import { companyService } from "../companies.js";
 import type { billingService } from "../billing/billing.js";
 import type { runtimeControlService } from "../runtime/control.js";
+import { assertCompanyManagedOpenCodeRuntimeDataErased, enqueueCompanyManagedOpenCodeRuntimeErasure,
+  retireCompanyNativeLegacyRuntimeProfiles } from "../native-runtime/runtime-asset-retention.js";
+import { memoryJobService } from "../memory/memory-jobs.js";
 export function saasOffboardingService(
   db: Db,
   billing: ReturnType<typeof billingService>,
@@ -175,15 +180,11 @@ export function saasOffboardingService(
       .limit(1);
     if (!operation) return false;
     try {
-      if (operation.stage === "revoke") {
+      if (operation.stage === "revoke" || operation.stage === "revoke_finalizing") {
         await companyService(db).archive(operation.companyId, {
           actorType: "user",
           actorId: operation.requestedByUserId,
-        });
-        await db
-          .update(companyDeletionOperations)
-          .set({ status: "processing", stage: "runtimes", errorCode: null })
-          .where(eq(companyDeletionOperations.id, operation.id));
+        }, { offboardingOperationId: operation.id, now });
         return true;
       }
       if (operation.stage === "runtimes") {
@@ -351,12 +352,77 @@ export function saasOffboardingService(
           const [current] = await tx.select({ stage: companyDeletionOperations.stage, status: companyDeletionOperations.status })
             .from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id)).for("update");
           if (!current || current.stage !== "purge" || current.status === "completed") return false;
+          // Fence/cancel never-dispatched support reservations before touching
+          // external company objects. A dispatch with an unknown or pending
+          // provider outcome must settle at the original broker first.
+          await tx.update(orchestrationCompanyPurposeReservations)
+            .set({ status: "cancelled", completedAt: now })
+            .where(and(
+              eq(orchestrationCompanyPurposeReservations.companyId, operation.companyId),
+              eq(orchestrationCompanyPurposeReservations.status, "reserved"),
+            ));
+          const [supportOutcome] = await tx.select({ id: orchestrationCompanyPurposeReservations.id })
+            .from(orchestrationCompanyPurposeReservations).where(and(
+              eq(orchestrationCompanyPurposeReservations.companyId, operation.companyId),
+              inArray(orchestrationCompanyPurposeReservations.status, ["dispatched", "unknown"]),
+            )).limit(1);
+          if (supportOutcome) return false;
           const held = await tx.execute(sql`select 1 from customer_feedback_retention where company_id=${operation.companyId}::uuid
             and legal_hold and (hold_release_at is null or hold_release_at>clock_timestamp()) limit 1`);
           if (held.length) throw conflict("Feedback retention hold requires its original operator before company erasure");
           return true;
         });
         if (!admitted) return false;
+        // Retained OpenCode transcripts belong to the original run and Stop
+        // receipt. Persist their existing outbox work before company purge can
+        // remove those owner rows; a failed/active run holds this phase open.
+        const managedRunIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, operation.companyId, operation.id);
+        if (managedRunIds.length) {
+          await memoryJobService(db, {
+            eraseRemoteNativeRuntimeAsset: (locator, input) => runtime.eraseRemoteNativeRuntimeAsset(locator, input),
+          }).tick({ limit: 32, companyId: operation.companyId });
+          const keys = managedRunIds.map(runId => `runtime-asset-erasure:v1:${runId}`);
+          const attempts = await db.select({ jobKey: memoryJobs.jobKey, attemptNumber: memoryJobs.attemptNumber,
+            status: memoryJobs.status, sourceRefJson: memoryJobs.sourceRefJson })
+            .from(memoryJobs).where(and(
+            eq(memoryJobs.companyId, operation.companyId), inArray(memoryJobs.jobKey, keys),
+          )).orderBy(memoryJobs.jobKey, desc(memoryJobs.attemptNumber));
+          const latest = new Map<string, typeof attempts[number]>();
+          for (const job of attempts) if (!latest.has(job.jobKey)) latest.set(job.jobKey, job);
+          const hasCurrentReceipt = (runId: string) => {
+            const job = latest.get(`runtime-asset-erasure:v1:${runId}`);
+            const source = job?.sourceRefJson as Record<string, unknown> | undefined;
+            return job?.status === "succeeded" && source?.kind === "runtime_asset_erasure" &&
+              source.runId === runId && source.companyPurgeOperationId === operation.id;
+          };
+          if (managedRunIds.some(runId => !hasCurrentReceipt(runId))) {
+            const waitingOnStop = managedRunIds.some(runId => latest.get(`runtime-asset-erasure:v1:${runId}`)?.status === "failed");
+            await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + (waitingOnStop ? 60000 : 10000)),
+              errorCode: "managed_provider_erasure_pending" }).where(eq(companyDeletionOperations.id, operation.id));
+            return true;
+          }
+        }
+        const retiredLegacyRunIds = await retireCompanyNativeLegacyRuntimeProfiles(db, operation.companyId, operation.id);
+        if (retiredLegacyRunIds.length) {
+          // The first pass proves provider-home Stop and queues old global
+          // bundle digests. Only after that proof does the canonical company
+          // owner retire frozen profile references while retaining Run and
+          // Stop rows. A second real worker pass can then erase unreferenced
+          // bytes before the final company transaction deletes those owners.
+          await enqueueCompanyManagedOpenCodeRuntimeErasure(db, operation.companyId, operation.id);
+          await memoryJobService(db, {
+            eraseRemoteNativeRuntimeAsset: (locator, input) => runtime.eraseRemoteNativeRuntimeAsset(locator, input),
+          }).tick({ limit: 50, companyId: operation.companyId });
+        }
+        try {
+          await assertCompanyManagedOpenCodeRuntimeDataErased(db, operation.companyId, operation.id);
+        } catch (error) {
+          if (!(error && typeof error === "object" && "status" in error && error.status === 409)) throw error;
+          await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + 10000),
+            errorCode: retiredLegacyRunIds.length ? "legacy_runtime_asset_erasure_pending" : "managed_provider_erasure_pending" })
+            .where(eq(companyDeletionOperations.id, operation.id));
+          return true;
+        }
         const objectEvidence = await objects.erase(
           operation.companyId,
           now,
@@ -365,6 +431,7 @@ export function saasOffboardingService(
         const databaseEvidence = await purgeCompanyContent(
           db,
           operation.companyId,
+          { operationId: operation.id },
         );
         await removeFeedbackImages?.(operation.companyId);
         const [pendingImage] = await db.select({ id: feedbackImageDeletions.id }).from(feedbackImageDeletions).where(and(
@@ -382,6 +449,12 @@ export function saasOffboardingService(
               ...operation.evidence,
               objects: objectEvidence,
               database: databaseEvidence,
+              ...(databaseEvidence.platformModelFunding
+                ? { platformModelFunding: databaseEvidence.platformModelFunding }
+                : {}),
+              ...(databaseEvidence.nativeConversationModelFunding
+                ? { nativeConversationModelFunding: databaseEvidence.nativeConversationModelFunding }
+                : {}),
               completedAt: now.toISOString(),
             },
           })
@@ -396,7 +469,12 @@ export function saasOffboardingService(
           notBefore: new Date(now.getTime() + 60000),
           errorCode: "offboarding_reconciliation_pending",
         })
-        .where(eq(companyDeletionOperations.id, operation.id));
+        .where(and(
+          eq(companyDeletionOperations.id, operation.id),
+          eq(companyDeletionOperations.stage, operation.stage),
+          eq(companyDeletionOperations.notBefore, operation.notBefore),
+          inArray(companyDeletionOperations.status, ["requested", "processing", "waiting_retention"]),
+        ));
       return true;
     }
   }

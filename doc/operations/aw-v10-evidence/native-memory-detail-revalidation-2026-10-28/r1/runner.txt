@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/services/memory/memory-service.test.ts
+test_pattern=Memory Core service

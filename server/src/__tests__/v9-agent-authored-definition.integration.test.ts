@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { companySkillService } from "../services/company-skills.js";
+import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
+import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
+import { writePaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { agents, agentConfigRevisions, heartbeatRuns, createDb } from "@paperclipai/db";
@@ -51,6 +55,29 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(runtime.mcp.bindingId).toBeNull();
     expect(runtime.skills).toEqual([]);
   });
+  it("keeps the immutable platform reference bundle alongside an authored definition without granting customer tools", async () => {
+    const published = await install();
+    const agent = (await agentService(db).update(published.id, { status: "idle", pauseReason: null }))!;
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id,
+      responsibleUserId: f.userId, status: "running", runtimeMode: "native" }).returning();
+    const platform = await preparePlatformSkillAdmission(db, { companyId: f.home, agentId: agent.id,
+      runId: run!.id, responsibleUserId: f.userId, requireExisting: false }, blenteraPlatformContractHashes());
+    const actor = { type: "agent" as const, source: "none" as const, companyId: f.home, agentId: agent.id,
+      runId: run!.id, onBehalfOfUserId: f.userId };
+    const entries = await companySkillService(db).listRuntimeSkillEntries(f.home, { actor, readScope: "task",
+      selectedSkillKeys: new Set([platform.pin.key]), versionSelections: new Map([[platform.pin.key, platform.pin.versionId]]) });
+    const runtime = await buildNativeRuntimeContext({ db, agent, runId: run!.id,
+      runtimeConfig: writePaperclipSkillSyncPreference({ provider: "aw_text_only", model: "fixture-model" },
+        [{ key: platform.pin.key, versionId: platform.pin.versionId }]), runtimeSkillEntries: entries });
+    expect(runtime.skills).toHaveLength(1);
+    expect(runtime.skills[0]).toMatchObject({ key: "blentera-platform", versionId: platform.pin.versionId });
+    const files = await readNativeRuntimeAssetText(runtime.skills[0]!.bundle, 128000, { companyId: f.home, runId: run!.id });
+    expect(files).toHaveLength(14);
+    expect(files.find(file => file.path === "references/work.md")?.text).toContain("Task");
+    expect(await readNativeRuntimeAssetText(runtime.instructions.bundle, 64000, { companyId: f.home, runId: run!.id }))
+      .toEqual([{ path: "AGENTS.md", text: authoredAgentInstructionText(definition.content) }]);
+    expect(runtime.mcp.bindingId).toBeNull();
+  });
   it("retains the identified old definition when another revision is installed", async () => {
     const oldAgent = await install();
     const next = compileAuthoredAgentDefinition({ ...definition.content, instructions: { ...definition.content.instructions, purpose: "A revised purpose" } }, randomUUID(), "b".repeat(64));
@@ -68,8 +95,12 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it("blocks generic configuration and instruction writes before filesystem effects", async () => {
     const agent = await install(), svc = agentInstructionsService(db);
-    for (const patch of [{ runtimeConfig: {} }, { name: "Changed live" }, { permissions: { canCreateAgents: true } }, { adapterConfig: { promptTemplate: "Changed live" } }])
+    for (const patch of [{ runtimeConfig: {} }, { name: "Changed live" }, { permissions: { canCreateAgents: true } }])
       await expect(agentService(db).update(agent.id, patch)).rejects.toMatchObject({ status: 409, details: { code: "authored_agent_version_readonly" } });
+    // Replacing the adapter config also removes the pinned provider/model, so
+    // the routing-publication guard rejects it before the authored-version guard.
+    await expect(agentService(db).update(agent.id, { adapterConfig: { promptTemplate: "Changed live" } }))
+      .rejects.toMatchObject({ status: 409, details: { code: "model_migration_publication_required" } });
     await expect(svc.writeFile(agent, "AGENTS.md", "Changed live")).rejects.toMatchObject({ status: 409 });
     await expect(svc.writeFile(agent, "promptTemplate.legacy.md", "Changed live")).rejects.toMatchObject({ status: 409 });
     await expect(svc.updateBundle(agent, { mode: "managed" })).rejects.toMatchObject({ status: 409 });

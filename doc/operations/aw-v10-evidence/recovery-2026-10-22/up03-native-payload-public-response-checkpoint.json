@@ -1,0 +1,97 @@
+{
+  "status": "Bounded native public response projection checkpoint; complete input/source graph and V10 remain OPEN",
+  "actual": {
+    "session": 81396,
+    "observed_exit": 0,
+    "durable_exit": 0,
+    "passed": 16,
+    "test_files": 3,
+    "seconds": 94.88,
+    "source_pins_unchanged": 9,
+    "pg_http_cleanup": "closed",
+    "scope": "Four actual PG/HTTP serialization cases cover11 reads, three existing Memory route lifecycle cases, nine shared queue response/permission unit cases. Actual row proof survives response projection; arbitrary nested Memory metadata stays intact."
+  },
+  "regressions": [
+    {
+      "session": 64688,
+      "exit": 1,
+      "failed": 3,
+      "seconds": 114.85,
+      "classification": "Fixture error only: variadic PostgreSQL jsonb_build_object needs explicit kind::text; no HTTP privacy verdict."
+    },
+    {
+      "session": 91592,
+      "exit": 1,
+      "failed_cases": 3,
+      "failed_field_assertions": 14,
+      "seconds": 62.73,
+      "classification": "Genuine actual PG/HTTP proof fields leak on Task/Project/Memory list/detail and Memory export; all positive body/DB retention checks pass. Five source pins unchanged."
+    },
+    {
+      "session": 8470,
+      "exit": 0,
+      "passed": 3,
+      "seconds": 62.42,
+      "classification": "Pre-review seven-read scope only; later Comment/queue/nested gaps still open, no wider write qualification."
+    },
+    {
+      "session": 30795,
+      "exit": 1,
+      "failed_cases": 1,
+      "passed": 3,
+      "failed_field_assertions": 4,
+      "seconds": 93.01,
+      "classification": "Actual Comment list/detail proof fields leak; six source pins unchanged."
+    },
+    {
+      "session": 10173,
+      "exit": 1,
+      "failed_cases": 1,
+      "passed": 8,
+      "failed_field_assertions": 2,
+      "seconds": 1.0,
+      "classification": "Shared queue DTO transports internal Comment fields; structural unit proof only, no DB/permission assertion; two source pins unchanged."
+    },
+    {
+      "session": 99119,
+      "exit": 1,
+      "failed_cases": 2,
+      "passed": 1,
+      "seconds": 88.34,
+      "classification": "Existing Memory fixtures omitted real auth account and private producer Human/run. Added those actual DB facts without changing production guards or expected API statuses. Final lifecycle cases all pass."
+    },
+    {
+      "session": 37316,
+      "exit": 0,
+      "passed": 16,
+      "seconds": 81.17,
+      "classification": "Pre-nested follow-up checkpoint; later nested references separately reproduced."
+    },
+    {
+      "session": 2126,
+      "exit": 1,
+      "failed_cases": 2,
+      "skipped": 2,
+      "failed_field_assertions": 4,
+      "seconds": 74.7,
+      "classification": "Actual mentioned-Project and heartbeat wake-Comment proofs leak in nested public responses; three source pins unchanged."
+    }
+  ],
+  "compiler": {
+    "before_nested_session": 40411,
+    "observed_exit": 0,
+    "current_session": 53219,
+    "status": "PASS direct current server compiler; all nine final source pins remain unchanged",
+    "durable_exit": 0,
+    "command": "GOMEMLIMIT=6GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter @paperclipai/server exec tsc --noEmit --singleThreaded"
+  },
+  "implementation": "A small pure projection at known native row response owners removes only the two internal proof properties. No global recursive filter, metadata/entity guessing, permission cache, source grant or change to canonical authority. Internal DB rows and source proof remain available to their owners.",
+  "limits": [
+    "Injected board actor at API fixture boundary; no credential, physical host or provider qualification.",
+    "PG proof rows are structural source-free fixtures; their hash/protocol supplies no producer completeness or authority.",
+    "This covers known HTTP rows/nested references and the shared Comment queue DTO; complete native tool, portability/export and every other delivery surface still need review.",
+    "No production native writer stamps these snapshots. Complete immutable delivered-input receipts and frozen output captures remain pending.",
+    "Copied private Memory, both original temporal regressions, same-transaction canonical source SQL before limits and UP03 remain OPEN.",
+    "Full current workspace typecheck/test:run/build and all V10/release/PR gates remain OPEN."
+  ]
+}

@@ -262,3 +262,23 @@ it("names the unavailable AI account instead of suggesting secret bindings", () 
   expect(notice.body).toContain("Reconnect the account");
   expect(notice.body).not.toContain("secret/env");
 });
+
+
+describe("unqualified paid runtime recovery notices", () => {
+  it("uses the central runtime reason and the exact Agent settings action, without private diagnostics", () => {
+    const agentId = "12345678-1234-1234-1234-123456789abc";
+    const notice = buildConfigurationIncompleteRecoveryNoticeSeed({ reason: "paid_transport_unqualified", agentId,
+      actionUrl: "https://private.invalid/credentials", provider: "PRIVATE_PROVIDER_SENTINEL", error: "PRIVATE_ERROR_SENTINEL" });
+    expect(notice.body).toBe("This runtime is not available for managed model calls. Choose an available runtime in Runtime settings. " +
+      `[Runtime settings](/agents/${agentId}/runtime).`);
+    expect(notice.nextAction).toBe("Choose an available runtime in Runtime settings, then continue the task.");
+    expect(notice.body).not.toContain("secret/env");
+    expect(JSON.stringify(notice)).not.toContain("PRIVATE_");
+    expect(JSON.stringify(notice)).not.toContain("private.invalid");
+  });
+  it.each([null, "invalid)/[link](https://private.invalid)"])("does not invent a Runtime link for an unknown Agent (%s)", agentId => {
+    const notice = buildConfigurationIncompleteRecoveryNoticeSeed({ reason: "paid_transport_unqualified", agentId });
+    expect(notice.body).not.toContain("](");
+    expect(notice.body).toContain("This runtime is not available for managed model calls.");
+  });
+});

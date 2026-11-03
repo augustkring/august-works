@@ -199,7 +199,9 @@ export const createRoutineTriggerSchema = z.discriminatedUnion("kind", [
   baseTriggerSchema.extend({
     kind: z.literal("schedule"),
     cronExpression: z.string().trim().min(1),
-    timezone: z.string().trim().min(1).default("UTC"),
+    // Leave omission visible to the original routine owner; it resolves the
+    // company's current default, while an explicit per-schedule timezone wins.
+    timezone: z.string().trim().min(1).optional(),
   }),
   baseTriggerSchema.extend({
     kind: z.literal("webhook"),

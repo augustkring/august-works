@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { expect, test, type APIResponse } from "@playwright/test";
 
@@ -38,14 +38,19 @@ test("reviews an artifact through keyboard controls and exports and erases Memor
       key: "v4-test", name: "V4 browser test", providerKey: "local", enabled: true, config: {},
     } }));
     const observedAt = new Date().toISOString();
+    const sourceContent = "Deterministic browser fixture content";
+    const sourceTask = await json(await request.post(`${base}/issues`, { data: {
+      title: "V4 browser Memory evidence", description: sourceContent,
+    } }));
     const candidate = await json(await request.post(`${base}/memory/candidates`, { data: {
       bindingId: binding.id, memoryType: "fact", scope: { type: "company", id: null }, ownerAgentId: null,
-      subject: null, title: "V4 browser privacy record", content: "Deterministic browser fixture content", summary: null,
+      subject: null, title: "V4 browser privacy record", content: sourceContent, summary: null,
       sensitivity: "internal", importance: 50, confidenceScore: 0.5, validFrom: null, validUntil: null, observedAt,
       retentionPolicy: "standard", expiresAt: null, createdByOperationId: randomUUID(), metadata: {}, evidence: [{
-        sourceClass: "task", sourceProvider: "e2e_fixture", sourceType: "fixture", sourceRef: `fixture://${randomUUID()}`,
-        sourceVersion: null, sourceUpdatedAt: null, observedAt, excerptHash: "a".repeat(64),
-        citation: { label: "Deterministic browser fixture" }, trustLevel: "medium", relation: "supports",
+        sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${sourceTask.id}`,
+        sourceVersion: sourceTask.updatedAt, sourceUpdatedAt: sourceTask.updatedAt, observedAt,
+        excerptHash: createHash("sha256").update(sourceContent).digest("hex"),
+        citation: { label: `${sourceTask.identifier}: ${sourceTask.title}` }, trustLevel: "medium", relation: "supports",
       }],
     } }));
     const recordId = candidate.record.id;
@@ -92,7 +97,7 @@ test("reviews an artifact through keyboard controls and exports and erases Memor
   }
 });
 
-test("reviews run evidence and qualifies, shadows and retires a generated optimizer candidate", async ({ page, request }) => {
+test("reviews run evidence and qualifies, shadows and retires a generated optimizer candidate", async ({ page, request, playwright }) => {
   test.setTimeout(120_000);
   const flags = await json(await request.get("/api/instance/settings/experimental"));
   const enabled = { enableWorkflowsV1: true, enableWorkflowBuilderV1: true, enableAutomationArtifactsV1: true,
@@ -123,7 +128,12 @@ test("reviews run evidence and qualifies, shadows and retires a generated optimi
     await qualify.focus(); await page.keyboard.press("Enter");
     await page.getByRole("button", { name: "Generate from reviewed runs", exact: true }).click();
     await expect(page.getByLabel("Candidate contract JSON")).toHaveValue(/preserve-0/);
+    const compilation = page.waitForResponse(response =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.startsWith(`${base}/workflows/${workflow.id}/optimizer-suggestions/`) &&
+      new URL(response.url()).pathname.endsWith("/compile"));
     await page.getByRole("button", { name: "Compile and run replay", exact: true }).click();
+    expect(await json(await compilation)).toMatchObject({ gatesPassed: true });
     await expect(page.getByRole("status").filter({ hasText: "Qualification passed." })).toBeVisible();
     const shadowResponse = page.waitForResponse(response =>
       response.request().method() === "POST" &&
@@ -142,8 +152,16 @@ test("reviews run evidence and qualifies, shadows and retires a generated optimi
     await expect(page.getByText(/shadow: 3 passed, 0 failed/)).toBeVisible();
     const evaluations = await json(await request.get(`${base}/workflows/${workflow.id}/optimizer-evaluations`));
     expect(evaluations).toMatchObject([{ status: "shadow", replayEvaluation: { status: "passed" }, shadowEvaluation: { status: "passed" } }]);
-    // Anonymous local-board access does not impersonate an identified approver.
-    expect((await request.post(`${base}/workflows/${workflow.id}/optimizer-evaluations/${evaluations[0].id}/request-approval`, { data: {} })).status()).toBe(403);
+    // The main fixture has a real Human session. Use a separate empty cookie
+    // jar to verify an anonymous caller cannot request approval.
+    const anonymous = await playwright.request.newContext({
+      baseURL: new URL(page.url()).origin, storageState: { cookies: [], origins: [] },
+    });
+    try {
+      expect((await anonymous.post(`${base}/workflows/${workflow.id}/optimizer-evaluations/${evaluations[0].id}/request-approval`, { data: {} })).status()).toBe(401);
+    } finally {
+      await anonymous.dispose();
+    }
     await page.screenshot({ path: "test-results/aw-v4-optimizer-shadow.png", fullPage: true });
     await page.getByRole("button", { name: "Retire and use original transform", exact: true }).click();
     await expect.poll(async () => json(await request.get(`${base}/workflows/${workflow.id}/optimizer-evaluations`))).toMatchObject([{ status: "retired" }]);

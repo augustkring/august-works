@@ -1,0 +1,5 @@
+# Native CI fixture corrections
+
+Twenty-one selected cases passed in the serialized qualified dependency workspace: two launch-fingerprint cases, three business-event erasure cases, twelve Work Signals cases, and four orchestration source-erasure cases. Launch fixtures use the mandatory hashed session directory and standard shell utilities. Erasure fixtures invalidate old payload snapshots and verify suppression of all original Task activities, including the Human capture audit. Work Signals and Memory fixtures use current verified Human ownership and canonical native sources rather than invented evidence references. Production security guards are unchanged by these fixture changes.
+
+Each subdirectory preserves the exact tested source: start from `sourceHead` in its manifest, apply the decompressed patch, and extract the new-source archive. Logs and dependency/source hashes identify the tested snapshot. Other source in these snapshots was still under integration; these receipts qualify only the selected cases.

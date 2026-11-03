@@ -1,3 +1,6 @@
+import { readSandboxBrokerAuthorityEnforcement } from "./runtime/control.js";
+import { ToolModelEffectAdmissionError } from "./native-runtime/paid-transport-admission.js";
+import { currentResourcePolicy } from "./resource-governance.js";
 import { assertPackageExecution } from "./agent-packages/execution-gate.js";
 import { assertExecutionGovernance } from "./ai-governance/execution-gate.js";
 import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
@@ -7,9 +10,35 @@ import { resolveWorkflowConnectorSession, type WorkflowGatewayContext } from "./
 import { validateWorkflowOutput, WorkflowOutputSchemaError } from "./workflows/workflow-output-schema.js";
 import { COGNEE_STDIO_TEMPLATE, cogneeCloudUrl, callCogneeCloud } from "./cognee-connection.js";
 import { HttpError } from "../errors.js";
+import {
+  authorizationService,
+  canActorReadProjectPrivacy,
+  issueReadSqlCondition,
+  projectReadSqlCondition,
+  type AuthorizationActor,
+} from "./authorization.js";
+import { projectService } from "./projects.js";
+import { agentService } from "./agents.js";
+import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
+import { decisionSearchService } from "./decisions.js";
+import { processFindingService } from "./process-findings.js";
+import { withNativeAnalyticalReader } from "./analytical-reader.js";
+import { managedServiceHealthFromEnvironment } from "./experience/service-health.js";
+import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
+import {
+  AGENT_NATIVE_OPERATION_MANIFEST,
+  agentNativeOperationForLegacyToolName,
+  agentNativeOperationForToolName,
+  agentNativeOperationManifestHash,
+  blenteraToolCatalogContractHash,
+} from "./agent-native-operation-manifest.js";
+import { CAPABILITY_SEMANTIC_TOOL_CATALOG, paperclipSemanticAction } from "../vendor/paperclip-runner/index.js";
+import { PaperclipRunnerToolAuthority } from "./native-runtime/paperclip-runner-tool-authority.js";
 import { claimSlackRateLimitRetry } from "./connectors/slack-retry.js";
+import { assertPlatformSkillAdmission } from "./platform-skill-admission.js";
 import { resolveSlackTaskAuthority } from "./connectors/slack-authority.js";
-import { SLACK_TOOLS } from "@paperclipai/shared";
+import { SLACK_TOOLS, SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
 import { slackToolsForSession } from "./connectors/slack-catalog.js";
 import { executeSlackTool } from "./connectors/slack.js";
 import { githubGuestBotConnectionForSession, githubBotToolsForSession } from "./chat-github-tools.js";
@@ -20,8 +49,9 @@ import { emitConnectionInvoked } from "./connector-telemetry.js";
 import { resolveManagedGitHubIdentitySelection } from "./git-credentials.js";
 import { extractRemoteMcpPending } from "./remote-mcp-pending.js";
 import { logger } from "../middleware/logger.js";
+import { createSandboxQualificationCredentialJwt, verifySandboxBrokerJwt, verifySandboxQualificationCredentialJwt, type SandboxBrokerCapabilityClaim, type SandboxQualificationCredentialClaim } from "../agent-auth-jwt.js";
 import { spawn } from "node:child_process";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   and,
   asc,
@@ -38,6 +68,8 @@ import {
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  agentPresenceRuntimeBindings,
+  agentExecutionManifests,
   approvals,
   companies,
   companyMemberships,
@@ -51,6 +83,7 @@ import {
   issueDocuments,
   issueThreadInteractions,
   issues,
+  memoryRecords,
   projects,
   toolActionRequests,
   toolActionDeliveries,
@@ -69,7 +102,14 @@ import {
   toolProfileEntries,
   toolProfiles,
   toolStdioCommandTemplates,
+  runtimeHostCommands,
+  runtimePolicySnapshots,
 } from "@paperclipai/db";
+import { authSessions, runtimeCells, runtimeHosts, runtimeSandboxBindings } from "@paperclipai/db";
+import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
+import { assertV7Authorization } from "./v7-authorization.js";
+
+let nativeRememberFailureDiagnostics = 0;
 import type { ToolRunContext } from "@paperclipai/plugin-sdk";
 import type {
   CreateToolMcpGateway,
@@ -91,8 +131,11 @@ import type {
   ToolMcpGatewayTokenCreated,
   ToolMcpGatewayWithTokens,
   UpdateToolMcpGateway,
+  SandboxPolicy,
+  SandboxCapabilitySnapshot,
 } from "@paperclipai/shared";
 import {
+  memoryAgentRememberInputSchema,
   memoryAgentCorrectInputJsonSchema,
   memoryAgentRecallInputJsonSchema,
   memoryAgentRememberInputJsonSchema,
@@ -118,9 +161,11 @@ import type {
 } from "./plugin-tool-dispatcher.js";
 import { logActivity, type LogActivityInput } from "./activity-log.js";
 import { secretService } from "./secrets.js";
-import { railwayCommandBudgetMs, createRailwayClient, isRailwayConnection, isRailwayEndpoint, isRailwayToolBlocked, normalizeRailwayToolName, RAILWAY_API_URL, RAILWAY_TOOL_PREFIX, RailwayError } from "./railway.js";
+import { railwayCommandBudgetMs, createRailwayClient, isRailwayConnection, isRailwayEndpoint, isRailwayToolBlocked, normalizeRailwayToolName, RAILWAY_TOOLS, RAILWAY_API_URL, RAILWAY_TOOL_PREFIX, RailwayError } from "./railway.js";
 import { RAILWAY_SSH_SECRET_PATH, runRailwaySshCommand } from "./railway-ssh.js";
 import {
+  MCP_PROTOCOL_VERSION,
+  SUPPORTED_MCP_PROTOCOL_VERSIONS,
   initializeMcpHttpSession,
   getMcpHttpSession,
   forgetMcpHttpSessions,
@@ -133,6 +178,7 @@ import {
   projectedConnectionHeaders,
   projectedConnectionToolArguments,
   projectedConnectionToolInputSchema,
+  toolAccessService,
 } from "./tool-access.js";
 import { assertGoogleChatToolArgumentsSupported, googleChatToolDescription } from "./google-chat-tool-policy.js";
 import { parseRemoteHttpEndpoint } from "./remote-http-endpoint-guard.js";
@@ -183,6 +229,7 @@ import {
 import { extendApprovedExecutionWaitDeadline } from "./approved-execution-wait.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
+import { sealNativeMemoryToolResultSnapshot, type MemoryMutationActor } from "./memory/memory-service.js";
 import { workflowAuthoringToolsService } from "./workflows/workflow-authoring-tools.js";
 import { foundationAuthoringToolsService } from "./foundation-authoring-tools.js";
 import { foundationAuthoringProposeInputJsonSchema } from "@paperclipai/shared";
@@ -190,6 +237,8 @@ import { notificationPreferenceProposalService } from "./notification-preference
 import { notificationPreferenceProposalInputJsonSchema } from "@paperclipai/shared";
 import { routineAuthoringToolsService } from "./routine-authoring-tools.js";
 import { agentSetupAuthoringToolsService } from "./agent-setup-authoring-tools.js";
+import { customerSupportCaseService } from "./experience/support-cases.js";
+import { readSupportCaseDataPolicy } from "./experience/support-case-configuration.js";
 import { agentSetupAuthoringInputJsonSchema, agentSetupCatalogInputJsonSchema } from "@paperclipai/shared";
 import { routineAuthoringCreateInputJsonSchema, v9FeatureEnabled } from "@paperclipai/shared";
 
@@ -278,6 +327,25 @@ const DEFAULT_MCP_GATEWAY_PROTOCOL_LIMITS: McpGatewayProtocolLimitOptions = {
 const TOOL_APPROVAL_DESCRIPTION_SUFFIX =
   "Requires human approval: calling it posts an approval card on your task and you will be woken with the result once decided.";
 
+function runnerSemanticToolSchema(operationId: string): Record<string, unknown> {
+  const tool = CAPABILITY_SEMANTIC_TOOL_CATALOG.find((candidate) => candidate.operationId === operationId);
+  const action = paperclipSemanticAction(operationId);
+  const schema = tool?.inputSchema ?? action?.inputSchema;
+  if (!schema) throw new Error("agent_native_runner_tool_binding_missing");
+  return schema as Record<string, unknown>;
+}
+const RUNNER_TASK_OPERATION_BY_SELF_TOOL: Readonly<Record<string, string>> = Object.freeze({
+  "paperclip-self:create_task": "create_task",
+  "paperclip-self:update_task": "update_task",
+  "paperclip-self:propose_completion": "propose_completion",
+  "paperclip-self:report_progress": "report_progress",
+  "paperclip-self:reassign_task": "reassign_task",
+  "paperclip-self:set_dependencies": "set_dependencies",
+  "paperclip-self:create_project": "create_project",
+  "paperclip-self:write_document": "write_document",
+  "paperclip-self:request_human_input": "request_human_input",
+});
+
 export type ToolGatewayProviderType =
   | "mcp_http_fixture"
   | "mcp_stdio_fixture"
@@ -323,6 +391,11 @@ export interface ToolGatewayDescriptor extends AgentToolDescriptor {
   providerMetadata?: ConnectedMcpGatewayMetadata | Record<string, unknown>;
 }
 
+export interface BlenteraPlatformContractHashes {
+  operationManifestHash: string;
+  toolCatalogContractHash: string;
+}
+
 export interface ToolGatewaySession {
   id: string;
   token: string;
@@ -349,6 +422,40 @@ export interface ToolGatewaySession {
   expiresAt: Date;
   workflowRunId?: string;
   workflowNodeId?: string;
+  sandboxBrokerCapability?: SandboxBrokerCapabilityClaim;
+}
+
+export interface BlenteraGovernedRunBindingAttestation {
+  protocolVersion: 1;
+  companyId: string;
+  agentId: string;
+  paperclipRunId: string;
+  responsibleUserId: string;
+  runtimeAdapter: string;
+  runtimeCapabilitySnapshotHash: string | null;
+  platformSkill: { key: string; version: string; digest: string; sourceSha: string };
+  operationManifestHash: string;
+  toolCatalogContractHash: string;
+  gatewayId: string;
+  gatewayPublicId: string;
+  gatewayProfileId: string | null;
+  assignmentDigest: string | null;
+  tokenExpiresAt: string;
+}
+
+export type SandboxBrokerAuthority = (input: {
+  capabilityToken: string;
+  gatewayPublicId: string;
+}) => Promise<SandboxBrokerCapabilityClaim>;
+
+export interface SandboxCredentialBrokerBinding {
+  connectionId: string;
+  grantVersionHash: string;
+  gatewayPublicId: string;
+  endpointPath: string;
+  allowedTools: string[];
+  binary: string | null;
+  destination: { hostname: string; port: number; method: "POST"; path: string };
 }
 
 export type ToolGatewayRuntimeSlot = ToolRuntimeSlotView;
@@ -356,7 +463,94 @@ export type ToolGatewayRuntimeSlot = ToolRuntimeSlotView;
 /** Server-owned delegation; never read from request bodies or gateway tokens. */
 export interface ScopedToolGatewayContext {
   session: ToolGatewaySession;
+  /** Current-run disclosure aperture for tool.list; it never authorizes invocation. */
+  discoveryCatalogEntryIds?: readonly string[];
   assertCurrent: (tool?: ToolGatewayDescriptor) => Promise<void>;
+  /** Verify a selected catalog pin after current policy has been evaluated. */
+  assertManifestCurrent?: (tool: ToolGatewayDescriptor) => Promise<void>;
+}
+
+// The output witness is process-local capability state, never a field on an
+// HTTP request or serializable scoped context.
+const nativeMemoryOutputCaptures = new WeakMap<ScopedToolGatewayContext, NativeModelOutputCapture>();
+export function bindManagedNativeMemoryOutputCapture(context: ScopedToolGatewayContext, capture: NativeModelOutputCapture) {
+  nativeMemoryOutputCaptures.set(context, capture);
+  return context;
+}
+function nativeMemoryOutputCapture(context: ScopedToolGatewayContext | undefined) {
+  return context ? nativeMemoryOutputCaptures.get(context) : undefined;
+}
+
+/** Revalidate the canonical result and its Native Memory owner before a scoped idempotent replay. */
+export async function assertScopedNativeMemoryReplayReceiptCurrent(db: Db, input: {
+  companyId: string; runId: string; agentId: string; issueId: string; callId: string;
+  invocationId: string; argumentsHash: string; result: unknown;
+}): Promise<{ recordId: string; snapshotDigest: string }> {
+  if (input.result === null || input.result === undefined) throw new ToolGatewayHttpError(403,
+    "Managed Memory replay receipt is unavailable", "native_memory_capture_invalid");
+  const resultRecord = asRecord(input.result);
+  const resultData = asRecord(resultRecord?.data);
+  const resultMemory = asRecord(resultData?.record);
+  const recordId = typeof resultMemory?.id === "string" ? resultMemory.id : null;
+  const resultSummary = validateToolContent({ value: input.result, direction: "result",
+    sensitiveMode: "redact", promptInjectionMode: "block" }).summary;
+  if (!recordId || !resultSummary.sha256) throw new ToolGatewayHttpError(403,
+    "Managed Memory replay receipt is unavailable", "native_memory_capture_invalid");
+  const [transactionStart] = await db.execute<{ transactionId: string }>(sql`select txid_current()::text as "transactionId"`);
+  if (!transactionStart?.transactionId) throw new ToolGatewayHttpError(403,
+    "Managed Memory replay transaction is unavailable", "native_memory_capture_invalid");
+  const [invocation] = await db.select({ status: toolInvocations.status, argumentsHash: toolInvocations.argumentsHash,
+    resultHash: toolInvocations.resultHash, workflowResultJson: toolInvocations.workflowResultJson })
+    .from(toolInvocations).where(and(eq(toolInvocations.id, input.invocationId),
+      eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
+      eq(toolInvocations.agentId, input.agentId), eq(toolInvocations.issueId, input.issueId),
+      eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
+      eq(toolInvocations.toolName, "paperclip-self:remember"))).for("share");
+  if (!invocation || invocation.status !== "succeeded" || invocation.argumentsHash !== input.argumentsHash ||
+    invocation.resultHash !== resultSummary.sha256 || invocation.workflowResultJson === null ||
+    nativeSha256(invocation.workflowResultJson) !== nativeSha256(input.result))
+    throw new ToolGatewayHttpError(403, "Managed Memory replay receipt is no longer current",
+      "native_memory_capture_invalid");
+  const { memoryPayloadVisible } = await import("./memory/memory-privacy.js");
+  const [output] = await db.select({ deletedAt: memoryRecords.deletedAt, revokedAt: memoryRecords.revokedAt,
+    expiresAt: memoryRecords.expiresAt,
+    retentionState: memoryRecords.retentionState, reviewState: memoryRecords.reviewState,
+    createdByActorType: memoryRecords.createdByActorType, createdByActorId: memoryRecords.createdByActorId,
+    sourceRunIds: memoryRecords.sourceRunIds,
+    sourceProvenanceQualified: memoryRecords.sourceProvenanceQualified,
+    payloadSourceProtocolVersion: memoryRecords.payloadSourceProtocolVersion,
+    payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot,
+    payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated,
+    metadata: memoryRecords.metadata }).from(memoryRecords).where(and(
+      eq(memoryRecords.companyId, input.companyId), eq(memoryRecords.id, recordId), memoryPayloadVisible(),
+      isNull(memoryRecords.revokedAt), or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, sql`clock_timestamp()`)),
+      eq(memoryRecords.retentionState, "active"), inArray(memoryRecords.reviewState, ["pending", "accepted"]),
+      eq(memoryRecords.payloadSourceSnapshotInvalidated, false), eq(memoryRecords.payloadSourceProtocolVersion, 1))).for("share");
+  const metadata = output?.metadata && typeof output.metadata === "object" && !Array.isArray(output.metadata)
+    ? output.metadata as Record<string, unknown> : null;
+  const { nativePayloadSourceSnapshotSchema } = await import("@paperclipai/shared");
+  const snapshot = nativePayloadSourceSnapshotSchema.safeParse(output?.payloadSourceSnapshot);
+  if (!output || output.deletedAt || output.revokedAt || output.expiresAt && output.expiresAt.getTime() <= Date.now() ||
+    output.retentionState !== "active" ||
+    !["pending", "accepted"].includes(output.reviewState) || output.createdByActorType !== "agent" ||
+    output.createdByActorId !== input.agentId || !output.sourceProvenanceQualified ||
+    output.payloadSourceProtocolVersion !== 1 || output.payloadSourceSnapshotInvalidated ||
+    metadata?.nativeManagedMemoryInvocationId !== input.invocationId ||
+    metadata.nativeManagedMemoryCallId !== input.callId || metadata.nativeManagedMemoryArgumentsHash !== input.argumentsHash ||
+    !output.sourceRunIds.includes(input.runId) ||
+    !snapshot.success || !snapshot.data.inputs.some(source => source.kind === "task" && source.issueId === input.issueId) ||
+    snapshot.data.owner.kind !== "memory_record" ||
+    snapshot.data.owner.companyId !== input.companyId || snapshot.data.owner.id !== recordId)
+    throw new ToolGatewayHttpError(403, "Managed Memory output is no longer current", "native_memory_capture_invalid");
+  const [owner] = await db.execute<{ valid: boolean }>(sql`select
+    public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${snapshot.data.owner.contentHash}
+      and encode(sha256(convert_to((m.payload_source_snapshot-'digest')::text,'UTF8')),'hex')=${snapshot.data.digest} as valid
+    from ${memoryRecords} m where m.company_id=${input.companyId}::uuid and m.id=${recordId}::uuid`);
+  const [transactionEnd] = await db.execute<{ transactionId: string }>(sql`select txid_current()::text as "transactionId"`);
+  if (!owner?.valid || transactionEnd?.transactionId !== transactionStart.transactionId)
+    throw new ToolGatewayHttpError(403, "Managed Memory output changed during replay validation",
+      "native_memory_capture_invalid");
+  return { recordId, snapshotDigest: snapshot.data.digest };
 }
 
 export class ToolGatewayHttpError extends Error {
@@ -981,6 +1175,69 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "read",
   },
   {
+    name: "paperclip-self:create_task",
+    displayName: "Create Task",
+    description: "Create governed follow-up work using the current Task owner and current run authority.",
+    parametersSchema: runnerSemanticToolSchema("create_task"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:update_task",
+    displayName: "Update Task fields",
+    description: "Update title, description, or priority on the Task attached to the current run using its exact current revision.",
+    parametersSchema: runnerSemanticToolSchema("update_task"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:propose_completion",
+    displayName: "Request completion review",
+    description: "Ask the accountable Human to review Task completion readiness; Task status remains under the Native finalizer and evidence policy.",
+    parametersSchema: runnerSemanticToolSchema("propose_completion"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:report_progress",
+    displayName: "Add internal Task comment",
+    description: "Add an internal progress comment to the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("report_progress"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:reassign_task",
+    displayName: "Reassign Task",
+    description: "Reassign an eligible Task after the current owner and version checks.",
+    parametersSchema: runnerSemanticToolSchema("reassign_task"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:set_dependencies",
+    displayName: "Set Task blockers",
+    description: "Replace the blocker set for the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("set_dependencies"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:create_project",
+    displayName: "Create Project",
+    description: "Create a governed Project using the current Native Project owner.",
+    parametersSchema: runnerSemanticToolSchema("create_project"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:write_document",
+    displayName: "Write Task document",
+    description: "Create or update a revisioned document on the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("write_document"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:request_human_input",
+    displayName: "Request Task input",
+    description: "Create a structured question or decision interaction on the Task attached to the current run.",
+    parametersSchema: runnerSemanticToolSchema("request_human_input"),
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
     name: "paperclip-self:recall",
     displayName: "Recall Memory",
     description:
@@ -1152,6 +1409,110 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "read",
   },
   {
+    name: "paperclip-self:list_projects",
+    displayName: "List readable Projects",
+    description: "List current non-archived Projects readable by this Co-worker and its represented Human.",
+    parametersSchema: {
+      type: "object",
+      properties: { limit: { type: "integer", minimum: 1, maximum: 50 } },
+      additionalProperties: false,
+    },
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "read",
+  },
+  {
+    name: "paperclip-self:get_project_context",
+    displayName: "Read a Project summary",
+    description: "Read one current Project summary after current Project and retained Task-source access checks.",
+    parametersSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", format: "uuid" } },
+      required: ["projectId"],
+      additionalProperties: false,
+    },
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "read",
+  },
+  {
+    name: "paperclip-self:get_my_agent_context",
+    displayName: "Read my Co-worker status",
+    description: "Read a bounded identity and operating-status summary for the current verified Co-worker. No credentials, configuration, permissions, or other Co-workers are returned.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:get_my_current_work",
+    displayName: "Read my current Task",
+    description: "Read the Task bound to this current run after current Task and source authorization checks.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:search_decisions",
+    displayName: "Search readable Decisions",
+    description: "Search Decisions only when the current Co-worker and represented Human can read the origin and every referenced Task. Search does not decide or execute a Decision.",
+    parametersSchema: {
+      type: "object", properties: { query: { type: "string", minLength: 1, maxLength: 500 }, limit: { type: "integer", minimum: 1, maximum: 20 } },
+      required: ["query"], additionalProperties: false,
+    },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:search_process_findings",
+    displayName: "Search authorized Insights",
+    description: "Search current process findings only through the retained native analytical reader boundary. Findings are evidence for Human interpretation, not calibrated probability or an operational decision.",
+    parametersSchema: {
+      type: "object", properties: { query: { type: "string", maxLength: 500 }, limit: { type: "integer", minimum: 1, maximum: 20 } },
+      additionalProperties: false,
+    },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:create_support_request",
+    displayName: "Create a Support request",
+    description: "Create a local Support case for the current represented Human using a bounded description and optional schema-whitelisted safe context. External delivery is separate and is not implied.",
+    parametersSchema: {
+      type: "object",
+      properties: {
+        idempotencyKey: { type: "string", format: "uuid" },
+        expectedPolicyRevision: { type: "string", pattern: "^[a-f0-9]{64}$" },
+        description: { type: "string", minLength: 1, maxLength: 10000 },
+        category: { type: "string", enum: ["not_working", "access", "apps_connections", "account_billing", "using_blentera", "other"] },
+        subject: { type: "string", minLength: 1, maxLength: 200 },
+        impact: { type: ["string", "null"], enum: ["blocked", "limited", "question", null] },
+        safeContext: { type: "object", properties: {
+          surface: { type: "string", enum: ["home", "needs_you", "work", "agents", "apps", "company", "account", "onboarding", "workflow", "support", "other"] },
+          operationId: { type: "string", format: "uuid" }, occurredAt: { type: "string", format: "date-time" },
+          errorCode: { type: "string", enum: ["NETWORK_UNAVAILABLE", "REQUEST_TIMEOUT", "ACCESS_CHANGED", "DEPENDENCY_UNAVAILABLE"] },
+        }, additionalProperties: false },
+      }, required: ["idempotencyKey", "expectedPolicyRevision", "description"], additionalProperties: false,
+    },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:get_support_intake_status",
+    displayName: "Check Support intake",
+    description: "Check whether configured Support case intake is currently available and read its approved disclosure terms. This does not report external service incidents.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:get_service_status",
+    displayName: "Read current service status",
+    description: "Read the bounded public Blentera Statuspage projection. This is separate from Support case intake availability and returns no customer case or credentials.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:list_authorized_apps",
+    displayName: "Check authorized Apps",
+    description: "List only active Apps and connections whose tools are currently discoverable under this session's profile and policy. Reports bounded health state, never credentials or connection configuration.",
+    parametersSchema: { type: "object", properties: {}, additionalProperties: false },
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
     name: "mcp-stdio-fixture:increment_counter",
     displayName: "Stdio runtime counter",
     description:
@@ -1180,6 +1541,13 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "read",
   },
 ];
+
+/** Canonical first-party Memory tool descriptor for managed Native catalogs. */
+export function managedNativeRememberToolDescriptor(): ToolGatewayDescriptor {
+  const tool = BUILTIN_TOOLS.find(candidate => candidate.name === "paperclip-self:remember");
+  if (!tool) throw new Error("managed_native_memory_tool_unavailable");
+  return { ...tool, parametersSchema: structuredClone(tool.parametersSchema) };
+}
 
 const VIRTUAL_SEARCH_TOOLS: ToolGatewayDescriptor = {
   name: "search_tools",
@@ -1220,6 +1588,57 @@ const VIRTUAL_RUN_TOOL: ToolGatewayDescriptor = {
 
 const VIRTUAL_TOOLS = [VIRTUAL_SEARCH_TOOLS, VIRTUAL_RUN_TOOL];
 
+function blenteraSelfToolContractCatalog() {
+  const catalog = AGENT_NATIVE_OPERATION_MANIFEST.filter((operation) => operation.toolId !== null && operation.legacyAliases.length > 0).map((operation) => {
+    const legacyName = operation.legacyAliases[0];
+    const tool = BUILTIN_TOOLS.find((candidate) => candidate.name === legacyName && candidate.providerType === "paperclip_self");
+    if (!tool) throw new Error("agent_native_operation_tool_binding_missing");
+    return {
+      toolId: operation.toolId,
+      operationId: operation.operationId,
+      legacyAliases: operation.legacyAliases,
+      displayName: operation.customerJob.replace(/\.$/, ""),
+      description: operation.customerJob,
+      inputSchema: tool.parametersSchema,
+      risk: tool.risk,
+    };
+  });
+  const manifestAliases = catalog.flatMap((operation) => operation.legacyAliases).sort();
+  const builtinSelfNames = BUILTIN_TOOLS
+    .filter((tool) => tool.providerType === "paperclip_self")
+    .map((tool) => tool.name)
+    .sort();
+  if (JSON.stringify(manifestAliases) !== JSON.stringify(builtinSelfNames)) {
+    throw new Error("agent_native_operation_catalog_incomplete");
+  }
+  return catalog;
+}
+
+function assertBlenteraSelfToolCatalogComplete(): void {
+  // A first-party tool added to Tool Gateway must acquire canonical coverage
+  // metadata before it can be discovered or executed through the model path.
+  blenteraSelfToolContractCatalog();
+}
+
+/** Stable contracts used by the reserved Blentera Platform Skill release. */
+export function blenteraPlatformContractHashes(): BlenteraPlatformContractHashes {
+  return {
+    operationManifestHash: agentNativeOperationManifestHash(),
+    toolCatalogContractHash: blenteraToolCatalogContractHash(blenteraSelfToolContractCatalog()),
+  };
+}
+
+function blenteraFirstPartyToolForDiscovery(tool: ToolGatewayDescriptor): ToolGatewayDescriptor {
+  const operation = agentNativeOperationForLegacyToolName(tool.name);
+  if (!operation?.toolId) return tool;
+  return {
+    ...tool,
+    name: operation.toolId,
+    displayName: operation.customerJob.replace(/\.$/, ""),
+    description: operation.customerJob,
+  };
+}
+
 const MEMORY_SELF_TOOL_NAMES = new Set([
   "paperclip-self:recall",
   "paperclip-self:remember",
@@ -1249,6 +1668,11 @@ function isWorkflowAuthoringSelfToolName(name: string): boolean {
 export function createToolGatewayService(
   db: Db,
   options: {
+    operatorUserIds?: readonly string[];
+    /** Server-owned application origin for the fixed inert qualification endpoint. */
+    qualificationBrokerOrigin?: string;
+    supportCaseDataPolicy?: ReturnType<typeof readSupportCaseDataPolicy>;
+    serviceHealthReader?: ReturnType<typeof managedServiceHealthFromEnvironment>;
     pluginToolDispatcher?: PluginToolDispatcher;
     deploymentMode?: DeploymentMode;
     deploymentExposure?: DeploymentExposure;
@@ -1290,6 +1714,60 @@ export function createToolGatewayService(
     now?: () => number;
   } = {},
 ) {
+  const supportCaseDataPolicy = options.supportCaseDataPolicy ?? readSupportCaseDataPolicy(process.env);
+  const serviceHealthReader = options.serviceHealthReader ?? managedServiceHealthFromEnvironment(process.env);
+  // Tool Gateway sessions persist only their token hash and execution IDs.
+  // Retain the original verified Agent actor in process memory so Memory
+  // writers can recheck its current credential, key revocation, run, and
+  // responsible-user authority. A process restart intentionally loses this
+  // carrier and makes Memory tools unavailable for those sessions.
+  const memorySessionActors = new Map<string, { actor: AuthorizationActor; sessionExpiresAt: number }>();
+  function rememberSessionActor(session: ToolGatewaySession, actor: AuthorizationActor | undefined) {
+    const now = Date.now();
+    for (const [id, value] of memorySessionActors) {
+      if (value.sessionExpiresAt <= now) memorySessionActors.delete(id);
+    }
+    while (memorySessionActors.size >= 10_000) {
+      const oldest = memorySessionActors.keys().next().value;
+      if (!oldest) break;
+      memorySessionActors.delete(oldest);
+    }
+    if (
+      actor?.type !== "agent" || (actor.source !== "agent_jwt" && actor.source !== "agent_key") ||
+      actor.companyId !== session.companyId || actor.agentId !== session.agentId ||
+      (actor.runId ?? null) !== (session.runId ?? null) ||
+      (actor.onBehalfOfUserId ?? null) !== (session.responsibleUserId ?? null) ||
+      (actor.authenticatedCredentialExpiresAt != null &&
+        (!Number.isFinite(actor.authenticatedCredentialExpiresAt) || actor.authenticatedCredentialExpiresAt <= now))
+    ) return;
+    const detached: AuthorizationActor = {
+      ...actor,
+      companyIds: actor.companyIds ? [...actor.companyIds] : undefined,
+      memberships: actor.memberships?.map((membership) => ({ ...membership })),
+      onBehalfOfMemberships: actor.onBehalfOfMemberships?.map((membership) => ({ ...membership })),
+      keyScope: actor.keyScope ? structuredClone(actor.keyScope) : actor.keyScope,
+      // One-request native effect proofs are consumed by middleware and must
+      // never become reusable session authority.
+      nativeToolEffect: undefined,
+    };
+    memorySessionActors.set(session.id, { actor: detached, sessionExpiresAt: session.expiresAt.getTime() });
+  }
+  function currentSessionMemoryActor(session: ToolGatewaySession): AuthorizationActor | undefined {
+    const value = memorySessionActors.get(session.id);
+    if (!value || value.sessionExpiresAt <= Date.now()) {
+      memorySessionActors.delete(session.id);
+      return undefined;
+    }
+    const actor = value.actor;
+    if (actor.companyId !== session.companyId || actor.agentId !== session.agentId ||
+      (actor.runId ?? null) !== (session.runId ?? null) ||
+      (actor.onBehalfOfUserId ?? null) !== (session.responsibleUserId ?? null) ||
+      (actor.authenticatedCredentialExpiresAt != null && actor.authenticatedCredentialExpiresAt <= Date.now())) {
+      memorySessionActors.delete(session.id);
+      return undefined;
+    }
+    return actor;
+  }
   // Authorization links can contain one-time codes. Keep them briefly in memory;
   // persist only the redacted request and execution identifiers for recovery.
   const upstreamHandoffs = new Map<string, { pending: ToolUpstreamPending; expires: number }>();
@@ -1350,6 +1828,8 @@ export function createToolGatewayService(
     string,
     Promise<typeof connectionGrants.$inferSelect>
   >();
+  let sandboxBrokerAuthority: SandboxBrokerAuthority | null = null;
+  let sandboxBrokerAuthorityOrigin: string | null = null;
   const vercelConnect =
     options.vercelConnectClient === undefined
       ? createVercelConnectClient()
@@ -1423,11 +1903,16 @@ export function createToolGatewayService(
   }
 
   function pluginTools(): ToolGatewayDescriptor[] {
-    return (pluginToolDispatcher?.listToolsForAgent() ?? []).map((tool) => ({
+    return (pluginToolDispatcher?.listToolsForAgent() ?? [])
+      // First-party operation IDs and their historical selectors are reserved.
+      // A plugin with the same name must not create an ambiguous catalog entry
+      // or shadow the operation's policy selector.
+      .filter((tool) => !agentNativeOperationForToolName(tool.name))
+      .map((tool) => ({
       ...tool,
       providerType: "paperclip_plugin" as const,
       risk: inferToolRisk(tool.name),
-    }));
+      }));
   }
 
   function allTools(): ToolGatewayDescriptor[] {
@@ -1442,6 +1927,7 @@ export function createToolGatewayService(
       notificationAuthoring: v9FeatureEnabled(experimental,"ambient_commands_v9") && v9FeatureEnabled(experimental,"notification_policy_v9"),
       routineAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9"),
       agentSetupAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9") && v9FeatureEnabled(experimental, "hire_agent_v9"),
+      supportRequests: supportCaseDataPolicy !== null,
       foundationAuthoring: experimental.enableFoundationV1 === true && v9FeatureEnabled(experimental, "ambient_commands_v9"),
       workflowAuthoring:
         experimental.enableWorkflowsV1 === true &&
@@ -1450,10 +1936,47 @@ export function createToolGatewayService(
     };
   }
 
-  async function staticToolsForSession(
+  async function assertExternalMcpModelEffects(session: ToolGatewaySession): Promise<void> {
+    // A company-purpose/manual call is still a platform-initiated invocation.
+    await assertToolInternalInferenceAdmitted(session);
+  }
+
+  function serverOwnedNonModelRemoteTool(connection: typeof toolConnections.$inferSelect, toolName: string): boolean {
+    // This exact branch executes our strict schemas/fixed GraphQL documents at
+    // RAILWAY_API_URL, not arbitrary MCP implementation or caller URL/body.
+    return isRailwayConnection(connection) && connection.config.railwayApiStatus === "available" &&
+      RAILWAY_TOOLS.some(tool => tool.name === toolName) &&
+      toolName !== `${RAILWAY_TOOL_PREFIX}run-command` && !isRailwayToolBlocked(toolName);
+  }
+
+  async function assertConnectedToolModelEffects(session: ToolGatewaySession, tool: ToolGatewayDescriptor): Promise<void> {
+    if (tool.providerType === "mcp_remote_http") {
+      const { entry, connection } = await resolveConnectedRemoteTool(session, tool);
+      if (!serverOwnedNonModelRemoteTool(connection, entry.toolName)) await assertExternalMcpModelEffects(session);
+    } else if (tool.providerType === "mcp_local_stdio") {
+      const { entry, connection } = await resolveConnectedLocalStdioTool(session, tool);
+      const template = await resolveLocalStdioRuntimeTemplate(connection);
+      if (!(template.templateId === "paperclip.cognee-cloud" && entry.toolName === "forget"))
+        await assertExternalMcpModelEffects(session);
+    }
+  }
+
+  async function assertToolInternalInferenceAdmitted(session: ToolGatewaySession): Promise<void> {
+    // Opaque plugin workers and model-backed memory operations have no forced
+    // nested reservation/whole-invocation liability contract in this profile.
+    const error = new ToolModelEffectAdmissionError("tool_internal_inference", {
+      companyId: session.companyId, agentId: session.agentId,
+    });
+    throw new ToolGatewayHttpError(409, error.message, "tool_model_effect_unqualified", {
+      code: "configuration_incomplete", ...error.resultJson,
+    });
+  }
+
+  async function eligibleStaticToolsForSession(
     session: ToolGatewaySession,
   ): Promise<ToolGatewayDescriptor[]> {
-    const tools = allTools();
+    assertBlenteraSelfToolCatalogComplete();
+    const tools = allTools().filter(tool => tool.providerType !== "paperclip_plugin");
     if (!session.agentId) {
       return tools.filter((tool) => tool.providerType !== "paperclip_self");
     }
@@ -1463,6 +1986,7 @@ export function createToolGatewayService(
       if (tool.name === "paperclip-self:create_routine_draft") return flags.routineAuthoring;
       if (tool.name === "paperclip-self:create_agent_setup_draft") return flags.agentSetupAuthoring;
       if (tool.name === "paperclip-self:list_agent_setup_capabilities") return flags.agentSetupAuthoring;
+      if (tool.name === "paperclip-self:create_support_request") return flags.supportRequests;
       if (tool.name === "paperclip-self:propose_foundation_change") return flags.foundationAuthoring;
       if (isMemorySelfToolName(tool.name)) {
         if (tool.name === "paperclip-self:share_memory") {
@@ -1475,6 +1999,12 @@ export function createToolGatewayService(
       }
       return true;
     });
+  }
+
+  async function staticToolsForSession(
+    session: ToolGatewaySession,
+  ): Promise<ToolGatewayDescriptor[]> {
+    return (await eligibleStaticToolsForSession(session)).map(blenteraFirstPartyToolForDiscovery);
   }
 
   async function connectedMcpToolsForCompany(
@@ -2160,7 +2690,10 @@ export function createToolGatewayService(
       lastUsedAt: now,
       updatedAt: now,
     });
-    return captureSessionIdentity(session);
+    const memoryActor = memorySessionActors.get(session.id)?.actor;
+    return captureSessionIdentity(memoryActor?.type === "agent"
+      ? { ...session, responsibleUserId: memoryActor.onBehalfOfUserId ?? null }
+      : session);
   }
 
   async function captureSessionIdentity(
@@ -2855,12 +3388,16 @@ export function createToolGatewayService(
     idempotencyKey?: string | null;
     consumeRateLimit?: boolean;
   }): ToolAccessDecisionInput {
+    const operation = agentNativeOperationForToolName(input.tool.name);
+    const policyTool = operation
+      ? { ...input.tool, name: operation.legacyAliases[0] }
+      : input.tool;
     return policyInputForAgentTool({
       companyId: input.session.companyId,
       agentId: input.session.agentId,
       actorType: input.session.actorType,
       actorId: input.session.actorId ?? input.session.gatewayTokenId ?? null,
-      tool: input.tool,
+      tool: policyTool,
       parameters: input.parameters,
       idempotencyKey: input.idempotencyKey,
       consumeRateLimit: input.consumeRateLimit,
@@ -2930,7 +3467,10 @@ export function createToolGatewayService(
   }
 
   function findStaticTool(toolName: string): ToolGatewayDescriptor {
-    const tool = allTools().find((candidate) => candidate.name === toolName);
+    const operation = agentNativeOperationForToolName(toolName);
+    const tool = (operation ? BUILTIN_TOOLS.find((candidate) =>
+      candidate.providerType === "paperclip_self" && operation.legacyAliases.includes(candidate.name)) : undefined) ??
+      allTools().find((candidate) => candidate.name === toolName);
     if (!tool) {
       throw new ToolGatewayHttpError(
         404,
@@ -2947,17 +3487,29 @@ export function createToolGatewayService(
     toolName: string,
   ): Promise<ToolGatewayDescriptor> {
     const connectedTools = await connectedMcpToolsForCompany(session.companyId);
+    // Classify the stored requested descriptor before identity selection can
+    // refresh OAuth or open a vault credential. This catalogue projection is
+    // secret-free, shared by direct, approved and virtual invocation entries.
+    const requestedConnected = agentNativeOperationForToolName(toolName) ? null
+      : connectedTools.find(candidate => candidate.name === toolName);
+    if (requestedConnected) await assertConnectedToolModelEffects(session, requestedConnected);
     const hasOnDemandTargets = connectedTools.some(isOnDemandRemoteTool);
     const virtualTools = hasOnDemandTargets ? VIRTUAL_TOOLS : [];
     const githubBotTools = await githubBotToolsForSession(db, session);
-    const tool = [...await staticToolsForSession(session), ...connectedTools, ...virtualTools, ...githubBotTools, ...await slackToolsForSession(db, session)]
+    const candidates = [...await eligibleStaticToolsForSession(session), ...connectedTools, ...virtualTools, ...githubBotTools, ...await slackToolsForSession(db, session)]
       .filter(
         (candidate) =>
           session.agentId ||
           (candidate.providerType !== "paperclip_self" &&
             candidate.providerType !== "paperclip_plugin"),
-      )
-      .find((candidate) => candidate.name === toolName);
+      );
+    const operation = agentNativeOperationForToolName(toolName);
+    const operationTool = operation ? candidates.find((candidate) =>
+      candidate.providerType === "paperclip_self" && operation.legacyAliases.includes(candidate.name)) : undefined;
+    // Canonical operation IDs and historical aliases are reserved names. A
+    // disabled first-party tool must stay unavailable instead of falling
+    // through to a same-named plugin/connector candidate.
+    const tool = operation ? operationTool : candidates.find((candidate) => candidate.name === toolName);
     if (!tool) {
       throw new ToolGatewayHttpError(
         404,
@@ -2965,6 +3517,9 @@ export function createToolGatewayService(
         "tool_not_found",
         { tool: toolName },
       );
+    }
+    if (tool.providerType === "paperclip_self" && !agentNativeOperationForLegacyToolName(tool.name)) {
+      throw new ToolGatewayHttpError(503, "First-party operation metadata is unavailable", "operation_manifest_incomplete");
     }
     const guestBotConnection = await githubGuestBotConnectionForSession(db, session);
     if (guestBotConnection && tool.connectionId && (tool.connectionId !== guestBotConnection || tool.providerType !== "paperclip_github_chat"))
@@ -3230,8 +3785,34 @@ export function createToolGatewayService(
     tool: ToolGatewayDescriptor,
     parameters: unknown,
     invocationId?: string,
+    scopedContext?: ScopedToolGatewayContext,
   ) {
     const params = asRecord(parameters) ?? {};
+
+    const runnerTaskOperation = RUNNER_TASK_OPERATION_BY_SELF_TOOL[tool.name];
+    if (runnerTaskOperation) {
+      if (!session.agentId || !session.runId || !session.issueId || !invocationId) {
+        throw new ToolGatewayHttpError(403,
+          "Task mutations require a current Native Agent run and durable Tool Gateway call identity",
+          "native_task_run_required");
+      }
+      const actor = currentSessionMemoryActor(session);
+      if (!actor || actor.type !== "agent" || !actor.onBehalfOfUserId) {
+        throw new ToolGatewayHttpError(403,
+          "Task mutations require the original verified Agent credential and current represented Human",
+          "native_task_authority_unavailable");
+      }
+      const result = await new PaperclipRunnerToolAuthority(db, {
+        companyId: session.companyId,
+        agentId: session.agentId,
+        issueId: session.issueId,
+        runId: session.runId,
+        sourceChannel: "tool_gateway_mcp",
+        transportCallId: invocationId,
+        requireCurrentResponsibleUser: true,
+      }).execute({ tool: runnerTaskOperation, callId: invocationId, arguments: params });
+      return { content: JSON.stringify(result), data: result };
+    }
 
     if (tool.providerType === "paperclip_slack_chat") {
       if (!session.agentId || !session.runId || !session.issueId) throw new ToolGatewayHttpError(403, "Slack task binding required", "slack_task_required");
@@ -3310,24 +3891,29 @@ export function createToolGatewayService(
           "agent_context_required",
         );
       }
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Task discovery requires the original verified Agent credential and represented Human", "task_reader_authority_unavailable");
       const limit = Math.max(1, Math.min(50, Number(params.limit ?? 10) || 10));
-      const rows = await db
-        .select({
-          id: issues.id,
-          identifier: issues.identifier,
-          title: issues.title,
-          status: issues.status,
-          priority: issues.priority,
-        })
-        .from(issues)
-        .where(
-          and(
+      const rows = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const readCondition = await issueReadSqlCondition(queryDb, actor);
+        return queryDb
+          .select({
+            id: issues.id,
+            identifier: issues.identifier,
+            title: issues.title,
+            status: issues.status,
+            priority: issues.priority,
+          })
+          .from(issues)
+          .where(and(
             eq(issues.companyId, session.companyId),
-            eq(issues.assigneeAgentId, session.agentId),
-          ),
-        )
-        .orderBy(desc(issues.updatedAt))
-        .limit(limit);
+            eq(issues.assigneeAgentId, session.agentId!),
+            readCondition,
+          ))
+          .orderBy(desc(issues.updatedAt))
+          .limit(limit);
+      }, true, true);
 
       return {
         content: JSON.stringify(rows),
@@ -3343,6 +3929,9 @@ export function createToolGatewayService(
           "agent_context_required",
         );
       }
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Task context requires the original verified Agent credential and represented Human", "task_reader_authority_unavailable");
       const issueId =
         typeof params.issueId === "string" ? params.issueId : session.issueId;
       if (!issueId) {
@@ -3352,21 +3941,37 @@ export function createToolGatewayService(
           "missing_issue_id",
         );
       }
-      const [issue] = await db
-        .select({
-          id: issues.id,
-          identifier: issues.identifier,
-          title: issues.title,
-          description: issues.description,
-          status: issues.status,
-          priority: issues.priority,
-        })
-        .from(issues)
-        .where(
-          and(eq(issues.companyId, session.companyId), eq(issues.id, issueId)),
-        )
-        .limit(1);
-      if (!issue) {
+      const result = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const readCondition = await issueReadSqlCondition(queryDb, actor);
+        const [issue] = await queryDb
+          .select({
+            id: issues.id,
+            identifier: issues.identifier,
+            title: issues.title,
+            description: issues.description,
+            status: issues.status,
+            priority: issues.priority,
+          })
+          .from(issues)
+          .where(and(eq(issues.companyId, session.companyId), eq(issues.id, issueId), readCondition))
+          .limit(1)
+          .for("share");
+        if (!issue) return null;
+
+        const [planDocument] = await queryDb
+          .select({
+            documentId: documents.id,
+            title: documents.title,
+            latestRevisionId: documents.latestRevisionId,
+            latestRevisionNumber: documents.latestRevisionNumber,
+          })
+          .from(issueDocuments)
+          .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
+          .where(and(eq(issueDocuments.issueId, issue.id), eq(issueDocuments.key, "plan")))
+          .limit(1);
+        return { issue, planDocument: planDocument ?? null };
+      }, true, true);
+      if (!result) {
         throw new ToolGatewayHttpError(
           404,
           "Issue not found",
@@ -3374,27 +3979,218 @@ export function createToolGatewayService(
         );
       }
 
-      const [planDocument] = await db
-        .select({
-          documentId: documents.id,
-          title: documents.title,
-          latestRevisionId: documents.latestRevisionId,
-          latestRevisionNumber: documents.latestRevisionNumber,
-        })
-        .from(issueDocuments)
-        .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
-        .where(
-          and(
-            eq(issueDocuments.issueId, issue.id),
-            eq(issueDocuments.key, "plan"),
-          ),
-        )
-        .limit(1);
-
       return {
-        content: JSON.stringify({ issue, planDocument: planDocument ?? null }),
-        data: { issue, planDocument: planDocument ?? null },
+        content: JSON.stringify(result),
+        data: result,
       };
+    }
+
+    if (tool.name === "paperclip-self:get_my_agent_context") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Co-worker status requires an Agent-scoped current run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Co-worker status requires the original verified Agent credential and represented Human", "agent_reader_authority_unavailable");
+      const data = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const currentAgent = await agentService(queryDb).getById(session.agentId!);
+        const agent = currentAgent?.companyId === session.companyId ? {
+          id: currentAgent.id, name: currentAgent.name, title: currentAgent.title, role: currentAgent.role,
+          status: currentAgent.status, reportsTo: currentAgent.reportsTo,
+          lastHeartbeatAt: currentAgent.lastHeartbeatAt, updatedAt: currentAgent.updatedAt,
+        } : null;
+        const [run] = await queryDb.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+          startedAt: heartbeatRuns.startedAt, finishedAt: heartbeatRuns.finishedAt }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, session.companyId), eq(heartbeatRuns.id, session.runId!),
+          eq(heartbeatRuns.agentId, session.agentId!), eq(heartbeatRuns.responsibleUserId, actor.onBehalfOfUserId!),
+          eq(heartbeatRuns.status, "running"),
+        )).limit(1).for("share");
+        return agent && run ? { agent, run } : null;
+      }, true, true);
+      if (!data) throw new ToolGatewayHttpError(404, "Current Co-worker run not found", "agent_run_not_found");
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:get_my_current_work") {
+      if (!session.agentId || !session.runId || !session.issueId) throw new ToolGatewayHttpError(403,
+        "Current work requires an issue-scoped Agent run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Current work requires the original verified Agent credential and represented Human", "task_reader_authority_unavailable");
+      const data = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const readCondition = await issueReadSqlCondition(queryDb, actor);
+        const [issue] = await queryDb.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
+          status: issues.status, priority: issues.priority, updatedAt: issues.updatedAt })
+          .from(issues).where(and(eq(issues.companyId, session.companyId), eq(issues.id, session.issueId!), readCondition))
+          .limit(1).for("share");
+        const [run] = await queryDb.select({ id: heartbeatRuns.id, status: heartbeatRuns.status,
+          startedAt: heartbeatRuns.startedAt }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, session.companyId), eq(heartbeatRuns.id, session.runId!),
+          eq(heartbeatRuns.agentId, session.agentId!), or(
+            eq(heartbeatRuns.issueId, session.issueId!), eq(heartbeatRuns.nativeIssueId, session.issueId!),
+            sql`${heartbeatRuns.contextSnapshot}->>'issueId'=${session.issueId}`,
+          ),
+          eq(heartbeatRuns.responsibleUserId, actor.onBehalfOfUserId!), eq(heartbeatRuns.status, "running"),
+        )).limit(1).for("share");
+        return issue && run ? { issue, run } : null;
+      }, true, true);
+      if (!data) throw new ToolGatewayHttpError(404, "Current Task not found", "issue_not_found");
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:search_decisions") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Decision search requires an Agent-scoped current run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Decision search requires the original verified Agent credential and represented Human", "decision_reader_authority_unavailable");
+      const query = typeof params.query === "string" ? params.query.trim() : "";
+      if (!query || query.length > 500) throw new ToolGatewayHttpError(400, "A search query of 1 to 500 characters is required", "invalid_parameters");
+      const limit = typeof params.limit === "number" ? Math.max(1, Math.min(20, Math.floor(params.limit))) : 20;
+      const result = await decisionSearchService(db).search(session.companyId, actor, query, limit);
+      const data = { items: result.items, limitReached: result.items.length >= limit };
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:search_process_findings") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Insight search requires an Agent-scoped current run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Insight search requires the original verified Agent credential and represented Human", "insight_reader_authority_unavailable");
+      const query = typeof params.query === "string" ? params.query.trim() : "";
+      if (query.length > 500) throw new ToolGatewayHttpError(400, "Search query is too long", "invalid_parameters");
+      const limit = typeof params.limit === "number" ? Math.max(1, Math.min(20, Math.floor(params.limit))) : 20;
+      const result = await withNativeAnalyticalReader(db, session.companyId, actor,
+        () => processFindingService(db).search(session.companyId, actor, query, limit), "task");
+      const data = { items: result.items, limitReached: result.items.length >= limit };
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:create_support_request") {
+      if (!session.agentId || !session.runId || !supportCaseDataPolicy) throw new ToolGatewayHttpError(403,
+        "Support requests require a configured intake policy and an Agent-scoped run", "support_request_unavailable");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Support requests require the original verified Agent credential and represented Human", "support_request_authority_unavailable");
+      const data = await customerSupportCaseService(db, { dataPolicy: supportCaseDataPolicy })
+        .createFromNative(actor, session.companyId, params);
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:get_support_intake_status") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Support intake status requires an Agent-scoped run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Support intake status requires the original verified Agent credential and represented Human", "support_reader_authority_unavailable");
+      const data = await customerSupportCaseService(db, { dataPolicy: supportCaseDataPolicy })
+        .intakePolicyFromNative(actor, session.companyId);
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:get_service_status") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,
+        "Service status requires an Agent-scoped run", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Service status requires the original verified Agent credential and represented Human", "service_status_authority_unavailable");
+      await assertPlatformSkillAdmission(db, actor, blenteraPlatformContractHashes());
+      const data = await serviceHealthReader.read();
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:list_authorized_apps") {
+      if (!session.agentId) throw new ToolGatewayHttpError(403, "App discovery requires an Agent-scoped gateway session", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "App discovery requires the original verified Agent credential and represented Human", "app_reader_authority_unavailable");
+      const connectionTools = (await listToolsForContext(session)).filter((candidate) =>
+        candidate.providerType !== "paperclip_self" && typeof candidate.connectionId === "string" &&
+        typeof candidate.applicationId === "string");
+      const connectionIds = [...new Set(connectionTools.map(candidate => candidate.connectionId!))];
+      const apps = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        if (connectionIds.length === 0) return [];
+        const decisions = await Promise.all(connectionTools.map(async candidate => ({ candidate,
+          decision: await toolAccessPolicyService(queryDb).decide(policyInputForTool({ session, tool: candidate })) })));
+        const allowedNames = new Map<string, Set<string>>();
+        for (const { candidate, decision } of decisions) {
+          if (!decision.allowed && decision.decision !== "require_approval") continue;
+          const names = allowedNames.get(candidate.connectionId!) ?? new Set<string>();
+          names.add(candidate.name);
+          allowedNames.set(candidate.connectionId!, names);
+        }
+        const rows = await queryDb.select({ connectionId: toolConnections.id, connectionName: toolConnections.name,
+          applicationName: toolApplications.name, applicationType: toolApplications.type,
+          status: toolConnections.status, enabled: toolConnections.enabled, credentialPolicy: toolConnections.credentialPolicy,
+          healthStatus: toolConnections.healthStatus, lastHealthAt: toolConnections.lastHealthAt,
+        }).from(toolConnections).innerJoin(toolApplications, eq(toolApplications.id, toolConnections.applicationId)).where(and(
+          eq(toolConnections.companyId, session.companyId), inArray(toolConnections.id, connectionIds),
+          eq(toolApplications.companyId, session.companyId), eq(toolApplications.status, "active"),
+          eq(toolConnections.status, "active"), eq(toolConnections.enabled, true),
+        )).orderBy(asc(toolApplications.name), asc(toolConnections.name)).for("share");
+        return rows.flatMap(row => {
+          const toolNames = [...(allowedNames.get(row.connectionId) ?? [])].sort();
+          if (toolNames.length === 0) return [];
+          return [{ application: row.applicationName, type: row.applicationType,
+            connection: row.connectionName, status: row.status, enabled: row.enabled,
+            health: row.credentialPolicy === "per_user" ? "unknown" : row.healthStatus,
+            lastHealthAt: row.credentialPolicy === "per_user" ? null : row.lastHealthAt?.toISOString() ?? null,
+            availableOperations: toolNames }];
+        });
+      }, true, true);
+      const data = { applications: apps };
+      return { content: JSON.stringify(data), data };
+    }
+
+    if (tool.name === "paperclip-self:list_projects" || tool.name === "paperclip-self:get_project_context") {
+      if (!session.agentId) throw new ToolGatewayHttpError(403,
+        "Project tools require an agent-scoped gateway session", "agent_context_required");
+      const actor = currentSessionMemoryActor(session);
+      if (!actor) throw new ToolGatewayHttpError(403,
+        "Project reads require the original verified Agent credential and represented Human", "project_reader_authority_unavailable");
+      const requestedProjectId = tool.name === "paperclip-self:get_project_context"
+        ? typeof params.projectId === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(params.projectId) ? params.projectId.toLowerCase() : null
+        : null;
+      if (tool.name === "paperclip-self:get_project_context" && !requestedProjectId) {
+        throw new ToolGatewayHttpError(400, "projectId must be a UUID", "invalid_parameters");
+      }
+      const limit = Math.max(1, Math.min(50, Number(params.limit ?? 20) || 20));
+      const summaries = await withCurrentTaskSourceRead(db, session.companyId, actor, async (queryDb) => {
+        const projectCondition = await projectReadSqlCondition(queryDb, actor);
+        const candidateQuery = queryDb.select({ id: projects.id }).from(projects).where(and(
+          eq(projects.companyId, session.companyId),
+          ...(requestedProjectId ? [] : [isNull(projects.archivedAt)]),
+          projectCondition,
+          ...(requestedProjectId ? [eq(projects.id, requestedProjectId)] : []),
+        )).orderBy(desc(projects.updatedAt), asc(projects.name)).limit(requestedProjectId ? 1 : limit).for("share");
+        const ids = await candidateQuery;
+        if (ids.length === 0) return [];
+        const hydrated = await projectService(queryDb).listByIds(session.companyId, ids.map(row => row.id));
+        const visible: Array<Pick<(typeof hydrated)[number],
+          "id" | "name" | "description" | "status" | "visibility" | "targetDate" | "leadAgentId" | "archivedAt" | "updatedAt">> = [];
+        for (const project of hydrated) {
+          if (!(await canActorReadProjectPrivacy(queryDb, actor, project))) continue;
+          const decision = await authorizationService(queryDb).decide({ actor, action: "project:read",
+            resource: { type: "project", companyId: session.companyId, projectId: project.id } });
+          if (!decision.allowed) continue;
+          visible.push({
+            id: project.id,
+            name: project.name,
+            description: project.description,
+            status: project.status,
+            visibility: project.visibility,
+            targetDate: project.targetDate,
+            leadAgentId: project.leadAgentId,
+            archivedAt: project.archivedAt,
+            updatedAt: project.updatedAt,
+          });
+        }
+        return visible;
+      }, true, true);
+      if (requestedProjectId && summaries.length === 0) throw new ToolGatewayHttpError(404,
+        "Project not found", "project_not_found");
+      const data = tool.name === "paperclip-self:get_project_context" ? summaries[0] : { projects: summaries };
+      return { content: JSON.stringify(data), data };
     }
 
     if (tool.name === "paperclip-self:propose_foundation_change") {
@@ -3536,6 +4332,15 @@ export function createToolGatewayService(
         );
       }
 
+      const authorizationActor = currentSessionMemoryActor(session);
+      if (!authorizationActor) {
+        throw new ToolGatewayHttpError(
+          403,
+          "Memory tools require the original verified Agent credential",
+          "memory_agent_authority_unavailable",
+        );
+      }
+
       const memory = memoryAgentToolsService(db);
       const context = {
         companyId: session.companyId,
@@ -3544,6 +4349,11 @@ export function createToolGatewayService(
         issueId: session.issueId,
         projectId: session.projectId,
         responsibleUserId: session.responsibleUserId ?? null,
+        authorizationActor,
+        ...(nativeMemoryOutputCapture(scopedContext) ? {
+          nativeModelOutputCapture: nativeMemoryOutputCapture(scopedContext)!,
+          nativeToolInvocationId: invocationId,
+        } : {}),
         allowShared: flags.sharedMemory,
         allowPrivate: flags.privateMemory,
       };
@@ -3559,6 +4369,28 @@ export function createToolGatewayService(
                 : await memory.share(context, parameters);
         return { content: JSON.stringify(data), data };
       } catch (error) {
+        if (tool.name === "paperclip-self:remember" &&
+            process.env.PAPERCLIP_NATIVE_SOURCE_MEMO_DIAGNOSTICS === "1" &&
+            nativeRememberFailureDiagnostics < 8) {
+          nativeRememberFailureDiagnostics += 1;
+          const candidate = error && typeof error === "object" ? error as Record<string, unknown> : {};
+          const details = candidate.details && typeof candidate.details === "object"
+            ? candidate.details as Record<string, unknown> : {};
+          const code = details.code ?? candidate.code;
+          const frames = (typeof candidate.stack === "string" ? candidate.stack : "").split("\n").flatMap((line) => {
+            const match = /server\/src\/services\/([A-Za-z0-9_./-]+\.ts):(\d+):\d+/.exec(line);
+            return match ? [`${match[1]}:${match[2]}`] : [];
+          }).slice(0, 5);
+          const errorName = typeof candidate.name === "string" ? candidate.name : "Error";
+          const safeCode = typeof code === "string" && /^(?:[a-z][a-z0-9_]{0,63}|[A-Z0-9_]{1,32})$/.test(code)
+            ? code : null;
+          console.error("native_managed_remember_failure", JSON.stringify({
+            name: ["Error", "HttpError", "TypeError", "RangeError", "ConflictError"].includes(errorName) ? errorName : "other",
+            status: typeof candidate.status === "number" ? candidate.status : null,
+            code: safeCode,
+            frames,
+          }));
+        }
         if (error instanceof HttpError) {
           const details =
             error.details && typeof error.details === "object"
@@ -3622,6 +4454,46 @@ export function createToolGatewayService(
       `Tool "${tool.name}" not found`,
       "tool_not_found",
     );
+  }
+
+  async function revalidateFirstPartyBuiltinReplay(
+    session: ToolGatewaySession,
+    tool: ToolGatewayDescriptor,
+    parameters: unknown,
+    invocationId: string,
+  ): Promise<unknown> {
+    if (tool.providerType !== "paperclip_self") return undefined;
+    const operation = agentNativeOperationForLegacyToolName(tool.name);
+    if (!operation || !operation.mcpExposed) {
+      throw new ToolGatewayHttpError(409,
+        "This first-party operation is not classified for replay; refresh through its canonical workflow",
+        "first_party_replay_revalidation_unavailable", { tool: tool.name });
+    }
+    const replayOwnerKind = RUNNER_TASK_OPERATION_BY_SELF_TOOL[tool.name]
+      ? "semantic_receipt"
+      : tool.risk === "read"
+        ? "read_projection"
+        : tool.name === "paperclip-self:create_workflow" &&
+            operation.operationId === "blentera.workflow.draft.create" &&
+            operation.canonicalService === "workflowAuthoringToolsService.create"
+          ? "idempotent_owner"
+        : operation.operationId === "blentera.support.case.request" &&
+            operation.canonicalService === "customerSupportCaseService.createFromNative"
+          ? "idempotent_owner"
+          : null;
+    if (!replayOwnerKind) {
+      throw new ToolGatewayHttpError(409,
+        "This first-party operation has no qualified replay owner; refresh through its canonical workflow",
+        "first_party_replay_revalidation_unavailable", { operationId: operation.operationId });
+    }
+    const actor = currentSessionMemoryActor(session);
+    if (!actor || actor.type !== "agent" || !actor.runId || !actor.onBehalfOfUserId) {
+      throw new ToolGatewayHttpError(403, "Current Agent and represented Human authority is unavailable", "native_task_authority_unavailable");
+    }
+    await assertPlatformSkillAdmission(db, actor, blenteraPlatformContractHashes());
+    const refreshed = await executeBuiltinTool(session, tool, parameters, invocationId);
+    return validateToolContent({ value: refreshed, direction: "result", sensitiveMode: "redact",
+      promptInjectionMode: "block" }).value;
   }
 
   function remoteEndpoint(config: Record<string, unknown>): string {
@@ -5165,6 +6037,45 @@ export function createToolGatewayService(
     return findOrganizationGrant();
   }
 
+  async function qualificationCanarySourceBindingHash(input: {
+    session: ToolGatewaySession;
+    connection: typeof toolConnections.$inferSelect;
+    grant: typeof connectionGrants.$inferSelect;
+    gateway: typeof toolMcpGateways.$inferSelect;
+    tool: ToolGatewayDescriptor;
+    fixtureConfig: Record<string, unknown>;
+  }) {
+    const endpoint = new URL(await resolvedRemoteEndpoint(input.session, input.connection, input.grant));
+    const profileEntries = await db.select().from(toolProfileEntries).where(and(
+      eq(toolProfileEntries.companyId, input.gateway.companyId), eq(toolProfileEntries.profileId, input.gateway.profileId),
+    ));
+    return nativeSha256({
+      connection: {
+        id: input.connection.id, applicationId: input.connection.applicationId, transport: input.connection.transport,
+        status: input.connection.status, enabled: input.connection.enabled, authKind: input.connection.authKind,
+        credentialSource: input.connection.credentialSource, credentialPolicy: input.connection.credentialPolicy,
+        credentialRefs: input.connection.credentialRefs, credentialSecretRefs: input.connection.credentialSecretRefs,
+        config: input.connection.config, transportConfig: input.connection.transportConfig,
+      },
+      grant: {
+        id: input.grant.id, kind: input.grant.kind, subjectUserId: input.grant.subjectUserId,
+        status: input.grant.status, revokedAt: input.grant.revokedAt,
+        credentialSecretRefs: input.grant.credentialSecretRefs, externalCredential: input.grant.externalCredential,
+      },
+      endpoint: { protocol: endpoint.protocol, hostname: endpoint.hostname, port: endpoint.port, pathname: endpoint.pathname },
+      gateway: { id: input.gateway.id, publicId: input.gateway.gatewayPublicId, status: input.gateway.status,
+        profileId: input.gateway.profileId, profileEntries: profileEntries.map(entry => ({
+          selectorType: entry.selectorType, effect: entry.effect, connectionId: entry.connectionId,
+          applicationId: entry.applicationId, catalogEntryId: entry.catalogEntryId, toolName: entry.toolName,
+          riskLevel: entry.riskLevel, conditions: entry.conditions,
+        })).sort((a, b) => stableHash(a).localeCompare(stableHash(b))) },
+      tool: { name: input.tool.name, upstreamToolName: input.tool.upstreamToolName,
+        catalogEntryId: input.tool.catalogEntryId, parametersSchema: input.tool.parametersSchema,
+        description: input.tool.description, risk: input.tool.risk },
+      fixtureConfig: input.fixtureConfig,
+    });
+  }
+
   async function resolveConnectedRemoteTool(
     session: ToolGatewaySession,
     tool: ToolGatewayDescriptor,
@@ -5634,11 +6545,18 @@ export function createToolGatewayService(
       return promise;
     };
     try {
-      await request("initialize", {
-        protocolVersion: "2024-11-05",
+      const initialized = await request("initialize", {
+        protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "paperclip-tool-gateway", version: "0.3.1" },
+        clientInfo: { name: "blentera-tool-gateway", version: "0.3.1" },
       });
+      const negotiatedProtocol = asRecord(initialized)?.protocolVersion;
+      if (typeof negotiatedProtocol !== "string" || !SUPPORTED_MCP_PROTOCOL_VERSIONS.has(negotiatedProtocol)) {
+        throw stdioProtocolError("Local stdio MCP selected an unsupported protocol version", {
+          connectionId: input.connection.id,
+          catalogEntryId: input.entry?.id ?? null,
+        });
+      }
       child.stdin.write(
         `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`,
       );
@@ -5692,6 +6610,9 @@ export function createToolGatewayService(
     params: Record<string, unknown>;
     callerHeaders?: Record<string, string | string[] | undefined>;
   }): Promise<unknown> {
+    if (!["tools/list", "resources/list", "prompts/list"].includes(input.method)) {
+      await assertExternalMcpModelEffects(input.session);
+    }
     const grant = await resolveConnectionGrant(input.session, input.connection);
     const endpoint = await resolvedRemoteEndpoint(
       input.session,
@@ -5806,6 +6727,9 @@ export function createToolGatewayService(
         "mcp_transport_unsupported",
       );
     }
+    if (!["tools/list", "resources/list", "prompts/list"].includes(input.method)) {
+      await assertExternalMcpModelEffects(input.session);
+    }
     const template = await resolveLocalStdioRuntimeTemplate(input.connection);
     const grant = await resolveConnectionGrant(input.session, input.connection);
     const env = await localStdioEnvironment(
@@ -5823,7 +6747,9 @@ export function createToolGatewayService(
         companyId: input.session.companyId,
         applicationId: input.connection.applicationId,
         connectionId: input.connection.id,
-        connectionKey: `mcp:${input.session.companyId}:${input.connection.id}`,
+        // Each gateway session is run-bound. Keep local stdio slot state
+        // isolated by that session instead of reusing a company connection slot.
+        connectionKey: `mcp:${input.session.companyId}:${input.connection.id}:${input.session.id}`,
         runId: input.session.runId,
         issueId: input.session.issueId,
         agentId: input.session.agentId,
@@ -5987,6 +6913,7 @@ export function createToolGatewayService(
     tool: ToolGatewayDescriptor,
     options: { requireResolvedCredentials?: boolean } = {},
   ): Promise<Record<string, unknown> | null> {
+    await assertConnectedToolModelEffects(session, tool);
     if (tool.providerType === "paperclip_slack_chat") {
       if (!session.agentId || !session.runId || !session.issueId) throw new ToolGatewayHttpError(403, "Slack task binding required", "slack_task_required");
       const authority = await resolveSlackTaskAuthority(db, { companyId: session.companyId, agentId: session.agentId, runId: session.runId, issueId: session.issueId, endpointId: String(asRecord(tool.providerMetadata)?.endpointId ?? ""), identityContextId: session.identityContextId, approvedInvocationId: session.approvedSlackInvocationId });
@@ -6361,6 +7288,7 @@ export function createToolGatewayService(
       session,
       tool,
     );
+    if (!serverOwnedNonModelRemoteTool(connection, entry.toolName)) await assertExternalMcpModelEffects(session);
     // Recheck immediately before dispatch, including previously approved calls
     // and connections whose stored grant/catalog predates scope reduction.
     assertGoogleChatToolArgumentsSupported(connection, entry.toolName, parameters);
@@ -6383,8 +7311,14 @@ export function createToolGatewayService(
       if (!scopedContext) return;
       try {
         await scopedContext.assertCurrent(tool);
+        await scopedContext.assertManifestCurrent?.(tool);
       } catch (error) {
         if (error instanceof ToolGatewayHttpError) throw error;
+        if (error instanceof HttpError) {
+          const details = error.details && typeof error.details === "object" ? error.details as Record<string, unknown> : {};
+          throw new ToolGatewayHttpError(error.status, error.message,
+            typeof details.code === "string" ? details.code : "scoped_tool_authority_changed", details);
+        }
         throw new ToolGatewayHttpError(403, "Scoped execution authority changed", "scoped_tool_authority_changed");
       }
       const live = await resolveConnectedRemoteTool(session, tool);
@@ -6859,8 +7793,14 @@ export function createToolGatewayService(
       session,
       tool,
     );
-    const grant = await resolveConnectionGrant(session, connection);
     const template = await resolveLocalStdioRuntimeTemplate(connection);
+    if (!(template.templateId === "paperclip.cognee-cloud" && entry.toolName === "forget")) {
+      await assertExternalMcpModelEffects(session);
+    }
+    if (template.templateId === "paperclip.cognee-cloud" && ["remember", "recall"].includes(entry.toolName)) {
+      await assertToolInternalInferenceAdmitted(session);
+    }
+    const grant = await resolveConnectionGrant(session, connection);
     const env = await localStdioEnvironment(
       session,
       connection,
@@ -6878,7 +7818,7 @@ export function createToolGatewayService(
         companyId: session.companyId,
         applicationId: tool.applicationId ?? null,
         connectionId: connection.id,
-        connectionKey: `mcp:${session.companyId}:${connection.id}`,
+          connectionKey: `mcp:${session.companyId}:${connection.id}:${session.id}`,
         runId: session.runId,
         issueId: session.issueId,
         agentId: session.agentId,
@@ -7261,6 +8201,21 @@ export function createToolGatewayService(
     method: McpGatewayProtocolMethod,
     clientMetadata: ReturnType<typeof safeClientMetadata>,
   ) {
+    // The original authenticated gateway request owns the existing durable
+    // counter. A configured company policy is additional to token/gateway
+    // limits; entitlement or a paid tier never bypasses either gate.
+    const resourceRate = (await currentResourcePolicy(db))?.rates.find(rule => rule.companyId === session.companyId);
+    if (resourceRate) {
+      const config = { max: resourceRate.hardLimit + resourceRate.burst, windowMs: resourceRate.windowMs };
+      const state = await consumeProtocolRateLimit({ companyId: session.companyId,
+        counterKey: "resource:gateway_request:company:v1", config });
+      if (state.limited) {
+        await writeProtocolRateLimitAudit({ session, method, limiterKeyClass: "gateway", count: state.count,
+          limit: config, retryAfterMs: state.retryAfterMs, clientMetadata });
+        throw new ToolGatewayHttpError(429, "Configured gateway request budget is occupied", "resource_gateway_request_limited",
+          { resource: "gateway_request", retryAfterMs: state.retryAfterMs });
+      }
+    }
     const action = protocolLimiterKeyClass(method);
     const tokenLimit =
       method === "initialize"
@@ -7438,6 +8393,102 @@ export function createToolGatewayService(
     );
   }
 
+  async function sandboxBrokerSessionFromBearer(input: {
+    gatewayId?: string | null;
+    gatewayPublicId?: string | null;
+    bearerToken: string;
+    protocolMethod: McpGatewayProtocolMethod;
+    callerHeaders?: Record<string, string | string[] | undefined>;
+  }): Promise<ToolGatewaySession | null> {
+    const claims = verifySandboxBrokerJwt(input.bearerToken);
+    if (!claims) return null;
+    if (!sandboxBrokerAuthority || !input.gatewayPublicId) {
+      throw new ToolGatewayHttpError(503, "Managed credential broker is unavailable", "sandbox_broker_unavailable");
+    }
+    const capability = await sandboxBrokerAuthority({ capabilityToken: input.bearerToken, gatewayPublicId: input.gatewayPublicId });
+    if (stableHash(capability) !== stableHash(claims.sandbox_broker)) {
+      throw new ToolGatewayHttpError(401, "Sandbox broker capability changed", "sandbox_broker_capability_invalid");
+    }
+    const selected = capability.bindings.find(binding => binding.gatewayPublicId === input.gatewayPublicId);
+    if (!selected || selected.endpointPath !== `/mcp/gateways/${input.gatewayPublicId}` ||
+      (input.gatewayId && !/^[0-9a-f-]{36}$/i.test(input.gatewayId))) {
+      throw new ToolGatewayHttpError(403, "Sandbox broker capability does not include this Gateway", "sandbox_broker_gateway_denied");
+    }
+    const now = new Date();
+    const [parent] = await db.select().from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.idempotencyKey, capability.parentRequestId),
+      eq(runtimeHostCommands.companyId, claims.company_id),
+      eq(runtimeHostCommands.runtimeCellId, capability.cellId),
+      eq(runtimeHostCommands.cellGeneration, BigInt(capability.generation)),
+      eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "CLAIMED"),
+      gt(runtimeHostCommands.deadlineAt, now),
+    )).limit(1);
+    const parentPayload = parent?.payload as Record<string, unknown> | undefined;
+    if (!parent || parentPayload?.bindingId !== capability.bindingId || parentPayload.hostId !== capability.hostId ||
+      parentPayload.hostEpoch !== capability.hostEpoch || parentPayload.runId !== capability.runId ||
+      parentPayload.attemptId !== capability.attemptId || parentPayload.attempt !== capability.attempt ||
+      parentPayload.manifestId !== capability.manifestId || parentPayload.manifestHash !== capability.manifestHash ||
+      parentPayload.policySnapshotId !== capability.policySnapshotId || parentPayload.policyHash !== capability.policyHash) {
+      throw new ToolGatewayHttpError(403, "Parent sandbox execution is no longer current", "sandbox_broker_parent_fenced");
+    }
+    const [run] = await db.select({ agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId,
+      issueId: heartbeatRuns.nativeIssueId, status: heartbeatRuns.status }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, capability.runId),
+    )).limit(1);
+    if (!run || run.status !== "running" || run.agentId !== claims.sub ||
+      !claims.responsible_user_id || run.responsibleUserId !== claims.responsible_user_id || !run.issueId) {
+      throw new ToolGatewayHttpError(403, "Current responsible run is unavailable", "sandbox_broker_run_changed");
+    }
+    const [policy] = await db.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, claims.company_id), eq(runtimePolicySnapshots.id, capability.policySnapshotId),
+      eq(runtimePolicySnapshots.bindingId, capability.bindingId), eq(runtimePolicySnapshots.runtimeCellId, capability.cellId),
+      eq(runtimePolicySnapshots.agentId, claims.sub), eq(runtimePolicySnapshots.executionManifestId, capability.manifestId),
+      eq(runtimePolicySnapshots.policyHash, capability.policyHash), eq(runtimePolicySnapshots.status, "qualified"),
+      gt(runtimePolicySnapshots.expiresAt, now),
+    )).limit(1);
+    const compiledPolicy = policy?.compilation.compiledPolicy;
+    if (!policy || !compiledPolicy || compiledPolicy.credentials.mode !== "brokered") {
+      throw new ToolGatewayHttpError(403, "Compiled credential broker policy is no longer current", "sandbox_broker_policy_changed");
+    }
+    const [presence] = await db.select().from(agentPresenceRuntimeBindings).where(and(
+      eq(agentPresenceRuntimeBindings.companyId, claims.company_id), eq(agentPresenceRuntimeBindings.agentId, claims.sub),
+      eq(agentPresenceRuntimeBindings.status, "active"),
+    )).limit(1);
+    if (!presence) throw new ToolGatewayHttpError(403, "Current local presence is unavailable", "sandbox_broker_presence_changed");
+    const resolved = await createToolGatewayService(db).resolveSandboxCredentialBrokerBindings({
+      companyId: claims.company_id, agentId: claims.sub, runId: capability.runId,
+      responsibleUserId: claims.responsible_user_id, presenceId: presence.id,
+      bindings: compiledPolicy.credentials.bindings,
+    });
+    if (resolved.bindings.length !== capability.bindings.length ||
+      stableHash(resolved.bindings) !== stableHash(capability.bindings) ||
+      compiledPolicy.credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash)) {
+      throw new ToolGatewayHttpError(403, "Current connector grant or secret revision changed", "sandbox_broker_grant_changed");
+    }
+    const [gateway] = await db.select().from(toolMcpGateways).where(and(
+      eq(toolMcpGateways.companyId, claims.company_id), eq(toolMcpGateways.gatewayPublicId, input.gatewayPublicId),
+      eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      ...(input.gatewayId ? [eq(toolMcpGateways.id, input.gatewayId)] : []),
+    )).limit(1);
+    if (!gateway) throw new ToolGatewayHttpError(404, "MCP gateway not found", "gateway_not_found");
+    const [issue] = await db.select({ projectId: issues.projectId }).from(issues).where(and(
+      eq(issues.companyId, claims.company_id), eq(issues.id, run.issueId), eq(issues.assigneeAgentId, claims.sub),
+    )).limit(1);
+    if (!issue) throw new ToolGatewayHttpError(403, "Current Task owner is unavailable", "sandbox_broker_task_changed");
+    const session = await captureSessionIdentity({
+      id: `sandbox-broker:${capability.brokerSessionId}`, token: "", companyId: claims.company_id,
+      agentId: claims.sub, runId: capability.runId, issueId: run.issueId, projectId: issue.projectId,
+      gatewayId: gateway.id, gatewayPublicId: gateway.gatewayPublicId, gatewayName: gateway.name,
+      gatewayProfileId: gateway.profileId, gatewayTokenAllowedActions: ["tools/list", "tools/call"],
+      actorType: "agent", actorId: claims.sub, responsibleUserId: claims.responsible_user_id,
+      sandboxBrokerCapability: capability, createdAt: now, expiresAt: new Date(capability.expiresAt),
+    });
+    if (session.responsibleUserId !== claims.responsible_user_id) {
+      throw new ToolGatewayHttpError(403, "Current execution identity changed", "sandbox_broker_identity_changed");
+    }
+    return session;
+  }
+
   async function namedGatewaySessionFromBearer(input: {
     gatewayId?: string | null;
     gatewayPublicId?: string | null;
@@ -7447,6 +8498,8 @@ export function createToolGatewayService(
   }): Promise<ToolGatewaySession> {
     const clientMetadata = safeClientMetadata(input.callerHeaders);
     const bearerToken = input.bearerToken.trim();
+    const sandboxBroker = await sandboxBrokerSessionFromBearer({ ...input, bearerToken });
+    if (sandboxBroker) return sandboxBroker;
     const tokenId = namedGatewayTokenId(bearerToken.trim());
     const tokenHash = hashGatewayToken(bearerToken.trim());
     const conditions = [eq(toolMcpGatewayTokens.tokenHash, tokenHash)];
@@ -8948,12 +10001,700 @@ export function createToolGatewayService(
     };
   }
 
-  return {
+  async function resolveSandboxCredentialBrokerBindingsWithDecision(
+    input: {
+      companyId: string;
+      agentId: string;
+      runId: string;
+      responsibleUserId: string;
+      presenceId: string;
+      bindings: SandboxPolicy["credentials"]["bindings"];
+    },
+    decideForTool: (input: ToolAccessDecisionInput) => Promise<ToolAccessDecision>,
+  ): Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: SandboxCredentialBrokerBinding[] }> {
+    const authorizedConnectionGrantHashes: Record<string, string> = {};
+    const resolved: SandboxCredentialBrokerBinding[] = [];
+    const [run] = await db.select({
+      companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId,
+      responsibleUserId: heartbeatRuns.responsibleUserId, status: heartbeatRuns.status,
+      issueId: heartbeatRuns.nativeIssueId,
+    }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
+    if (!run || run.status !== "running" || run.agentId !== input.agentId || run.responsibleUserId !== input.responsibleUserId || !run.issueId) {
+      throw new ToolGatewayHttpError(409, "Current responsible run is required for credential brokering", "sandbox_broker_run_changed");
+    }
+    const [issue] = await db.select({ projectId: issues.projectId }).from(issues).where(and(
+      eq(issues.companyId, input.companyId), eq(issues.id, run.issueId), eq(issues.assigneeAgentId, input.agentId),
+    )).limit(1);
+    if (!issue) throw new ToolGatewayHttpError(409, "Current Task owner is required for credential brokering", "sandbox_broker_task_changed");
+    const sessionBase: ToolGatewaySession = {
+      id: `sandbox-broker:${input.runId}`, token: "", companyId: input.companyId,
+      agentId: input.agentId, runId: input.runId, issueId: run.issueId, projectId: issue.projectId,
+      actorType: "agent", actorId: input.agentId, responsibleUserId: input.responsibleUserId,
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    };
+    const currentSession = await captureSessionIdentity(sessionBase);
+    if (currentSession.responsibleUserId !== input.responsibleUserId) {
+      throw new ToolGatewayHttpError(403, "The current execution identity does not match the responsible Human", "sandbox_broker_identity_changed");
+    }
+    for (const binding of input.bindings) {
+      const [connection] = await db.select().from(toolConnections).where(and(
+        eq(toolConnections.companyId, input.companyId), eq(toolConnections.id, binding.connectionId),
+        eq(toolConnections.enabled, true), eq(toolConnections.status, "active"), eq(toolConnections.transport, "mcp_remote"),
+      )).limit(1);
+      if (!connection) throw new ToolGatewayHttpError(409, "Credential broker connection is unavailable", "sandbox_broker_connection_unavailable");
+      const grant = await resolveConnectionGrant(currentSession, connection);
+      const endpoint = new URL(await resolvedRemoteEndpoint(currentSession, connection, grant));
+      const port = endpoint.port ? Number(endpoint.port) : endpoint.protocol === "https:" ? 443 : 80;
+      const path = endpoint.pathname || "/";
+      if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
+        endpoint.hostname !== binding.hostname || port !== binding.port || !binding.methods.includes("POST") ||
+        !binding.pathPrefixes.some(prefix => prefix === "/" || path === prefix || path.startsWith(`${prefix.replace(/\/$/, "")}/`))) {
+        throw new ToolGatewayHttpError(409, "Credential broker destination does not match the compiled connection endpoint", "sandbox_broker_destination_changed");
+      }
+      const secretVersions = await connectedCredentialVersionSnapshots(connection, grant, { requireResolved: true });
+      const gateways = await db.select().from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.companyId, input.companyId), eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      ));
+      const eligible: Array<{
+        gateway: typeof toolMcpGateways.$inferSelect;
+        profile: typeof toolProfiles.$inferSelect;
+        profileEntries: Array<typeof toolProfileEntries.$inferSelect>;
+        tools: ToolGatewayDescriptor[];
+      }> = [];
+      for (const gateway of gateways) {
+        if ((gateway.agentId && gateway.agentId !== input.agentId) || (gateway.projectId && gateway.projectId !== issue.projectId) ||
+          (gateway.issueId && gateway.issueId !== run.issueId) ||
+          (gateway.contextScopeType === "agent" && gateway.contextScopeId && gateway.contextScopeId !== input.agentId) ||
+          (gateway.contextScopeType === "project" && gateway.contextScopeId && gateway.contextScopeId !== issue.projectId) ||
+          (gateway.contextScopeType === "issue" && gateway.contextScopeId && gateway.contextScopeId !== run.issueId)) continue;
+        const [profile] = await db.select().from(toolProfiles).where(and(
+          eq(toolProfiles.companyId, input.companyId), eq(toolProfiles.id, gateway.profileId), eq(toolProfiles.status, "active"),
+        )).limit(1);
+        if (!profile) continue;
+        const profileEntries = await db.select().from(toolProfileEntries).where(and(
+          eq(toolProfileEntries.companyId, input.companyId), eq(toolProfileEntries.profileId, gateway.profileId),
+        ));
+        if (profileEntries.some(entry => entry.conditions && Object.keys(entry.conditions).length > 0)) continue;
+        const matches = (entry: typeof toolProfileEntries.$inferSelect, tool: ToolGatewayDescriptor) => {
+          if (entry.selectorType === "connection") return entry.connectionId === connection.id;
+          if (entry.selectorType === "application") return entry.applicationId === connection.applicationId;
+          if (entry.selectorType === "catalog_entry") return entry.catalogEntryId === tool.catalogEntryId;
+          if (entry.selectorType === "tool_name") return entry.toolName === tool.name || entry.toolName === tool.upstreamToolName;
+          return entry.riskLevel === tool.risk;
+        };
+        const gatewaySession: ToolGatewaySession = {
+          ...currentSession, id: `sandbox-broker:${input.runId}:${gateway.id}`,
+          gatewayId: gateway.id, gatewayPublicId: gateway.gatewayPublicId,
+          gatewayName: gateway.name, gatewayProfileId: gateway.profileId,
+        };
+        // Compile-time route provenance does not confer dispatch authority. Use
+        // the server-owned catalog and Gateway profile directly, then apply
+        // policy checks through the caller-selected server-only decision path.
+        const guestBotConnection = await githubGuestBotConnectionForSession(db, gatewaySession);
+        const visibleTools = (await connectedMcpToolsForCompany(input.companyId)).filter(tool => {
+          if (guestBotConnection && (tool.connectionId !== guestBotConnection || tool.providerType !== "paperclip_github_chat")) return false;
+          if (tool.connectionId !== connection.id || tool.providerType !== "mcp_remote_http") return false;
+          if (profile.defaultAction === "allow") return !profileEntries.some(entry => entry.effect === "exclude" && matches(entry, tool));
+          return profileEntries.some(entry => entry.effect === "include" && matches(entry, tool)) &&
+            !profileEntries.some(entry => entry.effect === "exclude" && matches(entry, tool));
+        });
+        const permittedTools: ToolGatewayDescriptor[] = [];
+        for (const tool of visibleTools) {
+          const decision = await decideForTool(policyInputForTool({ session: gatewaySession, tool }));
+          if (decision.allowed) permittedTools.push(tool);
+        }
+        if (permittedTools.length) eligible.push({ gateway, profile, profileEntries, tools: permittedTools });
+      }
+      eligible.sort((a, b) => a.gateway.gatewayPublicId.localeCompare(b.gateway.gatewayPublicId));
+      const selected = eligible[0];
+      if (!selected) throw new ToolGatewayHttpError(409, "No current assigned gateway tools match the credential binding", "sandbox_broker_tools_unavailable");
+      const allowedTools = selected.tools.map(tool => tool.name).sort();
+      const fingerprint = {
+        source: {
+          companyId: input.companyId, agentId: input.agentId, runId: input.runId,
+          issueId: run.issueId, projectId: issue.projectId, responsibleUserId: input.responsibleUserId,
+          presenceId: input.presenceId,
+        },
+        connection: {
+          id: connection.id, applicationId: connection.applicationId, transport: connection.transport,
+          enabled: connection.enabled, status: connection.status, authKind: connection.authKind,
+          credentialSource: connection.credentialSource, credentialPolicy: connection.credentialPolicy,
+          credentialRefs: connection.credentialRefs, credentialSecretRefs: connection.credentialSecretRefs,
+          externalCredential: connection.externalCredential,
+        },
+        grant: {
+          id: grant.id, kind: grant.kind, subjectUserId: grant.subjectUserId,
+          subjectAgentId: grant.subjectAgentId, status: grant.status, revokedAt: grant.revokedAt,
+          credentialSecretRefs: grant.credentialSecretRefs, externalCredential: grant.externalCredential,
+          providerTenant: grant.providerTenant,
+        },
+        endpoint: { protocol: endpoint.protocol, hostname: endpoint.hostname, port, path },
+        secretVersions,
+        gateway: {
+          id: selected.gateway.id, publicId: selected.gateway.gatewayPublicId,
+          agentId: selected.gateway.agentId, projectId: selected.gateway.projectId,
+          issueId: selected.gateway.issueId, contextScopeType: selected.gateway.contextScopeType,
+          contextScopeId: selected.gateway.contextScopeId,
+          profile: { id: selected.profile.id, status: selected.profile.status, defaultAction: selected.profile.defaultAction },
+          entries: selected.profileEntries.map(entry => ({
+            selectorType: entry.selectorType, effect: entry.effect, connectionId: entry.connectionId,
+            applicationId: entry.applicationId, catalogEntryId: entry.catalogEntryId,
+            toolName: entry.toolName, riskLevel: entry.riskLevel,
+          })),
+          tools: selected.tools.map(tool => ({
+            name: tool.name, upstreamToolName: tool.upstreamToolName,
+            catalogEntryId: tool.catalogEntryId, schemaHash: stableHash(tool.parametersSchema),
+            descriptionHash: stableHash(tool.description), risk: tool.risk,
+          })),
+        },
+      };
+      const grantVersionHash = stableHash(fingerprint);
+      authorizedConnectionGrantHashes[binding.connectionId] = grantVersionHash;
+      resolved.push({
+        connectionId: binding.connectionId, grantVersionHash,
+        gatewayPublicId: selected.gateway.gatewayPublicId,
+        endpointPath: `/mcp/gateways/${selected.gateway.gatewayPublicId}`,
+        allowedTools,
+        binary: binding.binary,
+        destination: { hostname: endpoint.hostname, port, method: "POST", path },
+      });
+    }
+    return { authorizedConnectionGrantHashes, bindings: resolved };
+  }
+
+  const qualificationEchoPath = "/mcp/qualification/credential-echo";
+  const qualificationEchoMarker = "paperclip-qualification-credential-ok-v1";
+  const qualificationEchoEndpoint = (() => {
+    try {
+      const origin = new URL(options.qualificationBrokerOrigin ?? "");
+      if (origin.protocol !== "https:" || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== "/") return null;
+      return `${origin.origin}${qualificationEchoPath}`;
+    } catch { return null; }
+  })();
+
+  const service = {
+    setSandboxBrokerAuthority(authority: SandboxBrokerAuthority, endpointOrigin?: string) {
+      sandboxBrokerAuthority = authority;
+      sandboxBrokerAuthorityOrigin = null;
+      const owned=readSandboxBrokerAuthorityEnforcement(authority);
+      if(owned) try {
+        const url=new URL(endpointOrigin ?? owned.origin);
+        if(url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash && url.pathname === "/" && url.origin === owned.origin)
+          sandboxBrokerAuthorityOrigin=owned.origin;
+      } catch { /* Unknown/mismatched origin earns no capability claim. */ }
+    },
+    describeSandboxBrokerEnforcement(endpointOrigin: string) {
+      if(!sandboxBrokerAuthority || sandboxBrokerAuthorityOrigin !== endpointOrigin ||
+          service.resolveSandboxCredentialBrokerPolicyBindings !== canonicalSandboxBrokerResolver) return null;
+      return { protocol: "sandbox_exec_v1" as const, origin:sandboxBrokerAuthorityOrigin,
+        dimensions: ["company","presence","expiry","revocation"] as const };
+    },
+    isSandboxBrokerToken(token: string) {
+      return verifySandboxBrokerJwt(token) !== null;
+    },
+    isSandboxQualificationCredentialToken(token: string) {
+      return verifySandboxQualificationCredentialJwt(token) !== null;
+    },
+    async isSandboxQualificationCanaryCall(input: { gatewayPublicId: string; tool: string }) {
+      const [gateway] = await db.select({ id: toolMcpGateways.id }).from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.gatewayPublicId, input.gatewayPublicId), eq(toolMcpGateways.status, "active"),
+        isNull(toolMcpGateways.archivedAt),
+      )).limit(1);
+      if (!gateway) return false;
+      const connections = await db.select({ config: toolConnections.config }).from(toolMcpGateways)
+        .innerJoin(toolProfileEntries, and(eq(toolProfileEntries.companyId, toolMcpGateways.companyId), eq(toolProfileEntries.profileId, toolMcpGateways.profileId)))
+        .innerJoin(toolConnections, eq(toolConnections.id, toolProfileEntries.connectionId))
+        .where(and(eq(toolMcpGateways.id, gateway.id), eq(toolConnections.status, "active"), eq(toolConnections.enabled, true)));
+      return connections.some(row => {
+        const fixture = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+        return fixture?.kind === "platform_owned_qualification_echo" &&
+          fixture.purpose === "sandbox_qualification" && fixture.setupOnly === true &&
+          (fixture.toolName === input.tool || fixture.wrongToolName === input.tool);
+      });
+    },
+    async issueSandboxQualificationCredentialProbe(input: {
+      actor: AuthorizationActor;
+      scope: { companyId: string; bindingId: string; cellId: string; cellGeneration: string; sandboxRef: string };
+      bindingVersion: number;
+      operationKey: string;
+      target: NonNullable<SandboxCapabilitySnapshot["qualificationTarget"]>;
+      caseId: SandboxQualificationCredentialClaim["caseId"];
+      commandId: string;
+    }): Promise<{ commandId: string; capabilityToken: string; nonce: string } | null> {
+      const fixture = input.target.qualificationCredentialFixture;
+      if (!qualificationEchoEndpoint || fixture?.profileId !== "paperclip-qualification" ||
+          fixture.origin !== new URL(qualificationEchoEndpoint).origin) return null;
+      const caseIds = new Set<SandboxQualificationCredentialClaim["caseId"]>([
+        "credential_allow", "credential_raw_read_deny", "credential_wrong_destination_deny",
+        "credential_wrong_binary_deny", "credential_revoke_deny",
+      ]);
+      if (!fixture || !caseIds.has(input.caseId) || fixture.argumentTemplateHash !== nativeSha256({
+        caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>",
+      })) return null;
+      const operatorId = input.actor.type === "board" && input.actor.source === "session" ? input.actor.userId : null;
+      const sessionId = input.actor.type === "board" && input.actor.source === "session" ? input.actor.sessionId : null;
+      if (!operatorId || !sessionId || !options.operatorUserIds?.includes(operatorId)) return null;
+      await assertConfiguredOperatorAuthentication(db, input.actor, options.operatorUserIds ?? []);
+      await assertV7Authorization(db, input.actor, input.scope.companyId, "runtime:manage");
+      const [binding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, input.scope.companyId), eq(runtimeSandboxBindings.id, input.scope.bindingId),
+        eq(runtimeSandboxBindings.runtimeCellId, input.scope.cellId), eq(runtimeSandboxBindings.cellGeneration, input.scope.cellGeneration),
+      )).limit(1);
+      const [cell] = await db.select().from(runtimeCells).where(and(
+        eq(runtimeCells.companyId, input.scope.companyId), eq(runtimeCells.id, input.scope.cellId),
+        eq(runtimeCells.generation, BigInt(input.scope.cellGeneration)), eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt),
+      )).limit(1);
+      const [host] = cell?.runtimeHostId ? await db.select().from(runtimeHosts).where(and(
+        eq(runtimeHosts.id, cell.runtimeHostId), eq(runtimeHosts.credentialVersion, input.target.hostEpoch),
+        eq(runtimeHosts.status, "READY"), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
+      )).limit(1) : [];
+      if (!binding || !cell || !host || binding.version !== input.bindingVersion ||
+        !["requested", "ready", "failed"].includes(binding.status) || binding.backend !== "openshell" ||
+        (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== input.scope.sandboxRef ||
+        input.target.companyId !== input.scope.companyId || input.target.bindingId !== input.scope.bindingId ||
+        input.target.cellId !== input.scope.cellId || input.target.cellGeneration !== input.scope.cellGeneration ||
+        input.target.sandboxRef !== input.scope.sandboxRef || input.target.bindingVersion !== input.bindingVersion ||
+        input.target.phase !== "Ready" || input.target.hostEpoch !== host.credentialVersion ||
+        !binding.boundaryPolicy.credentials || binding.boundaryPolicy.credentials.mode !== "brokered")
+        return null;
+      const [operatorSession] = await db.select().from(authSessions).where(and(
+        eq(authSessions.id, sessionId), eq(authSessions.userId, operatorId), gt(authSessions.expiresAt, new Date()),
+      )).limit(1);
+      if (!operatorSession) return null;
+      const [gateway] = await db.select().from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.companyId, input.scope.companyId), eq(toolMcpGateways.gatewayPublicId, fixture.gatewayPublicId),
+        eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      )).limit(1);
+      const companyConnections = await db.select().from(toolConnections).where(and(
+        eq(toolConnections.companyId, input.scope.companyId), eq(toolConnections.status, "active"),
+        eq(toolConnections.enabled, true), eq(toolConnections.transport, "mcp_remote"),
+      ));
+      const fixtureConnections = companyConnections.filter(row => {
+        const candidate = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+        return row.createdByUserId === operatorId && candidate?.kind === "platform_owned_qualification_echo" && candidate.purpose === "sandbox_qualification" &&
+          candidate.setupOnly === true && candidate.fixtureId === fixture.fixtureId;
+      });
+      const connection = fixtureConnections.length === 1 ? fixtureConnections[0] : undefined;
+      if (!gateway || !connection || binding.boundaryPolicy.credentials.bindings.some(candidate => candidate.connectionId === connection.id)) return null;
+      const canary = connection.config?.sandboxQualificationCanary;
+      if (!canary || typeof canary !== "object" || Array.isArray(canary)) return null;
+      const canaryConfig = canary as Record<string, unknown>;
+      const canaryKeys = ["argumentTemplateHash", "endpointOrigin", "endpointPath", "fixtureHash", "fixtureId", "gatewayPublicId", "grantId", "kind", "marker", "noSideEffects", "purpose", "readOnly", "setupOnly", "toolName", "version", "wrongToolName"].sort();
+      if (Object.keys(canaryConfig).sort().join(",") !== canaryKeys.join(",") ||
+        canaryConfig.kind !== "platform_owned_qualification_echo" || canaryConfig.version !== 1 ||
+        canaryConfig.purpose !== "sandbox_qualification" || canaryConfig.setupOnly !== true ||
+        canaryConfig.fixtureId !== fixture.fixtureId || canaryConfig.fixtureHash !== fixture.fixtureHash ||
+        canaryConfig.gatewayPublicId !== fixture.gatewayPublicId || canaryConfig.toolName !== fixture.toolName ||
+        canaryConfig.wrongToolName !== fixture.wrongToolName || canaryConfig.argumentTemplateHash !== fixture.argumentTemplateHash ||
+        canaryConfig.marker !== fixture.marker || canaryConfig.readOnly !== true || canaryConfig.noSideEffects !== true ||
+        typeof canaryConfig.endpointOrigin !== "string" || canaryConfig.marker !== qualificationEchoMarker) return null;
+      const session: ToolGatewaySession = {
+        id: `qualification:${input.commandId}`, token: "qualification-host-probe", companyId: input.scope.companyId,
+        agentId: null, runId: null, issueId: null, projectId: null, gatewayId: gateway.id,
+        gatewayPublicId: gateway.gatewayPublicId, gatewayName: gateway.name, gatewayProfileId: gateway.profileId,
+        gatewayTokenAllowedActions: ["tools/call"], actorType: "user", actorId: operatorId, responsibleUserId: operatorId,
+        createdAt: operatorSession.createdAt, expiresAt: operatorSession.expiresAt,
+      };
+      let grant: typeof connectionGrants.$inferSelect;
+      try { grant = await resolveConnectionGrant(session, connection); } catch { return null; }
+      if (grant.id !== canaryConfig.grantId || grant.status !== "active") return null;
+      const endpoint = new URL(await resolvedRemoteEndpoint(session, connection, grant));
+      if (endpoint.href !== qualificationEchoEndpoint || endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
+        endpoint.username || endpoint.password || endpoint.search || endpoint.hash) return null;
+      const snapshots = await connectedCredentialVersionSnapshots(connection, grant, { requireResolved: true });
+      const secretVersionHash = nativeSha256(snapshots);
+      const tool = (await connectedMcpToolsForConnection(session.companyId, connection.id)).find(candidate => candidate.name === fixture.toolName) ?? null;
+      if (!tool || tool.connectionId !== connection.id || tool.providerType !== "mcp_remote_http" || tool.risk !== "read") return null;
+      const sourceBindingHash = await qualificationCanarySourceBindingHash({ session, connection, grant, gateway, tool, fixtureConfig: canaryConfig });
+      const nonce = randomBytes(16).toString("hex"), expiresAt = new Date(Date.now() + 20_000).toISOString();
+      const argumentsValue = { fixtureId: fixture.fixtureId, caseId: input.caseId, nonce };
+      const positiveBody = { jsonrpc: "2.0", id: input.commandId, method: "tools/call", params: { name: fixture.toolName, arguments: argumentsValue } };
+      const claim: SandboxQualificationCredentialClaim = {
+        version: 1, purpose: "qualification_credential_probe", aud: "paperclip-sandbox-qualification",
+        jti: randomUUID(), commandId: input.commandId, caseId: input.caseId, fixtureId: fixture.fixtureId,
+        fixtureHash: fixture.fixtureHash, hostEpoch: input.target.hostEpoch, scope: {
+          companyId: input.scope.companyId, bindingId: input.scope.bindingId, cellId: input.scope.cellId,
+          generation: input.scope.cellGeneration, sandboxRef: input.scope.sandboxRef,
+        }, bindingVersion: input.bindingVersion, sandboxId: input.target.sandboxId, containerId: input.target.containerId,
+        provisioningHash: input.target.provisioningHash, targetQualificationHash: input.target.targetHash,
+        connectionId: connection.id, grantId: grant.id,
+        secretVersionHash, sourceBindingHash, operatorUserId: operatorId, operatorSessionId: sessionId, profileId: fixture.profileId,
+        profileHash: fixture.profileHash, binaries: [...fixture.binaries], gatewayPublicId: fixture.gatewayPublicId,
+        toolName: fixture.toolName, argumentTemplateHash: fixture.argumentTemplateHash, argumentsHash: nativeSha256(argumentsValue),
+        requestBodyHash: nativeSha256(positiveBody), nonce, origin: fixture.origin, method: "POST",
+        path: `/mcp/gateways/${fixture.gatewayPublicId}`, expiresAt, maxUses: 1,
+      };
+      const capabilityToken = createSandboxQualificationCredentialJwt({ companyId: input.scope.companyId,
+        bindingId: input.scope.bindingId, operatorUserId: operatorId, claim });
+      if (!capabilityToken) return null;
+      if (input.caseId === "credential_revoke_deny") {
+        await toolAccessService(db).revokeConnectionGrant(connection.id, grant.id, { actorType: "user", actorId: operatorId });
+      }
+      return { commandId: input.commandId, capabilityToken, nonce };
+    },
+    async executeSandboxQualificationCredentialTool(input: {
+      capabilityToken: string; gatewayPublicId: string; commandId: string; tool: string; parameters: unknown;
+    }, observedAuthorization?: string): Promise<{ invocationId: string; result: { content: string; structuredContent: { marker: string } } }> {
+      const verified = verifySandboxQualificationCredentialJwt(input.capabilityToken);
+      const claim = verified?.qualification_credential;
+      if (!claim) throw new ToolGatewayHttpError(401, "Qualification credential capability is required", "sandbox_qualification_credential_required");
+      if (!qualificationEchoEndpoint || claim.profileId !== "paperclip-qualification" || claim.origin !== new URL(qualificationEchoEndpoint).origin)
+        throw new ToolGatewayHttpError(409, "Platform qualification endpoint is unavailable", "sandbox_qualification_fixture_changed");
+      if (input.commandId !== claim.commandId || (observedAuthorization === undefined ? input.gatewayPublicId !== claim.gatewayPublicId : input.gatewayPublicId !== "") ||
+        !input.parameters || typeof input.parameters !== "object" || Array.isArray(input.parameters))
+        throw new ToolGatewayHttpError(403, "Qualification request scope changed", "sandbox_qualification_tool_mismatch");
+      const args = input.parameters as Record<string, unknown>;
+      const expectedArgs = { fixtureId: claim.fixtureId, caseId: claim.caseId, nonce: claim.nonce };
+      const body = { jsonrpc: "2.0", id: claim.commandId, method: "tools/call", params: { name: claim.toolName, arguments: expectedArgs } };
+      if (Object.keys(args).length !== 3 || args.fixtureId !== claim.fixtureId || args.caseId !== claim.caseId || args.nonce !== claim.nonce ||
+        nativeSha256(args) !== claim.argumentsHash || nativeSha256({ caseId: "<caseId>", fixtureId: "<fixtureId>", nonce: "<nonce>" }) !== claim.argumentTemplateHash)
+        throw new ToolGatewayHttpError(403, "Qualification request body changed", "sandbox_qualification_tool_mismatch");
+      const actor: AuthorizationActor = { type: "board", source: "session", userId: claim.operatorUserId, sessionId: claim.operatorSessionId };
+      const now = new Date();
+      const [cell] = await db.select().from(runtimeCells).where(and(
+        eq(runtimeCells.companyId, claim.scope.companyId), eq(runtimeCells.id, claim.scope.cellId),
+        eq(runtimeCells.generation, BigInt(claim.scope.generation)), eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt),
+      )).limit(1);
+      const [binding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, claim.scope.companyId), eq(runtimeSandboxBindings.id, claim.scope.bindingId),
+        eq(runtimeSandboxBindings.runtimeCellId, claim.scope.cellId), eq(runtimeSandboxBindings.cellGeneration, claim.scope.generation),
+        eq(runtimeSandboxBindings.version, claim.bindingVersion),
+      )).limit(1);
+      const [host] = cell?.runtimeHostId ? await db.select().from(runtimeHosts).where(and(
+        eq(runtimeHosts.id, cell.runtimeHostId), eq(runtimeHosts.credentialVersion, claim.hostEpoch), eq(runtimeHosts.status, "READY"),
+        isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
+      )).limit(1) : [];
+      const [gateway] = await db.select().from(toolMcpGateways).where(and(
+        eq(toolMcpGateways.companyId, claim.scope.companyId), eq(toolMcpGateways.gatewayPublicId, claim.gatewayPublicId),
+        eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      )).limit(1);
+      const [hostCommand] = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.id, claim.commandId), eq(runtimeHostCommands.runtimeHostId, host?.id ?? "00000000-0000-4000-8000-000000000000"),
+        eq(runtimeHostCommands.companyId, claim.scope.companyId), eq(runtimeHostCommands.runtimeCellId, claim.scope.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(claim.scope.generation)), eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND),
+        eq(runtimeHostCommands.status, "CLAIMED"), gt(runtimeHostCommands.deadlineAt, now),
+      )).limit(1);
+      if (!cell || !binding || !host || !gateway || !hostCommand || !["requested", "ready", "failed"].includes(binding.status) ||
+        (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== claim.scope.sandboxRef || Date.parse(claim.expiresAt) <= now.getTime())
+        throw new ToolGatewayHttpError(409, "Qualification target is no longer current", "sandbox_qualification_target_changed");
+      await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds ?? []);
+      await assertV7Authorization(db, actor, claim.scope.companyId, "runtime:manage");
+      const [hostUse] = await db.transaction(async tx => {
+        if (observedAuthorization !== undefined) {
+          const [existing] = await tx.select().from(runtimeHostCommands).where(and(
+            eq(runtimeHostCommands.runtimeHostId, host.id), eq(runtimeHostCommands.companyId, claim.scope.companyId),
+            eq(runtimeHostCommands.runtimeCellId, claim.scope.cellId), eq(runtimeHostCommands.cellGeneration, BigInt(claim.scope.generation)),
+            eq(runtimeHostCommands.commandType, "sandbox_qualification_credential_probe"),
+            eq(runtimeHostCommands.idempotencyKey, `sandbox-qualification-credential:${claim.jti}`),
+            eq(runtimeHostCommands.status, "CLAIMED"), gt(runtimeHostCommands.deadlineAt, now),
+          )).limit(1);
+          if (!existing || existing.payload.operationBodyHash !== claim.requestBodyHash || existing.safeResult !== null)
+            throw new ToolGatewayHttpError(409, "Qualification observation is not current", "sandbox_qualification_capability_replayed");
+          return [existing];
+        }
+        await assertConfiguredOperatorAuthentication(tx as unknown as Db, actor, options.operatorUserIds ?? []);
+        const [inserted] = await tx.insert(runtimeHostCommands).values({
+          runtimeHostId: host.id, companyId: claim.scope.companyId, runtimeCellId: claim.scope.cellId,
+          cellGeneration: BigInt(claim.scope.generation), commandType: "sandbox_qualification_credential_probe",
+          idempotencyKey: `sandbox-qualification-credential:${claim.jti}`,
+          payload: { jtiHash: nativeSha256(claim.jti), commandId: claim.commandId, caseId: claim.caseId,
+            gatewayPublicId: claim.gatewayPublicId, connectionId: claim.connectionId, operationBodyHash: claim.requestBodyHash },
+          status: "CLAIMED", attempt: 1, deadlineAt: new Date(Math.min(Date.parse(claim.expiresAt), hostCommand.deadlineAt.getTime())),
+        }).onConflictDoNothing().returning();
+        if (!inserted) throw new ToolGatewayHttpError(409, "Qualification capability was already consumed", "sandbox_qualification_capability_replayed");
+        return [inserted];
+      });
+      const session: ToolGatewaySession = {
+        id: `qualification:${claim.jti}`, token: input.capabilityToken, companyId: claim.scope.companyId,
+        agentId: null, runId: null, issueId: null, projectId: gateway.projectId ?? null, gatewayId: gateway.id,
+        gatewayPublicId: claim.gatewayPublicId, gatewayName: gateway.name, gatewayProfileId: gateway.profileId,
+        gatewayTokenAllowedActions: ["tools/call"], actorType: "user", actorId: claim.operatorUserId,
+        responsibleUserId: claim.operatorUserId, createdAt: now, expiresAt: new Date(Date.parse(claim.expiresAt)),
+      };
+      const assertCurrent = async (tool?: ToolGatewayDescriptor) => {
+        await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds ?? []);
+        await assertV7Authorization(db, actor, claim.scope.companyId, "runtime:manage");
+        const [currentBinding] = await db.select().from(runtimeSandboxBindings).where(and(
+          eq(runtimeSandboxBindings.companyId, claim.scope.companyId), eq(runtimeSandboxBindings.id, claim.scope.bindingId),
+          eq(runtimeSandboxBindings.version, claim.bindingVersion), eq(runtimeSandboxBindings.status, binding.status),
+        )).limit(1);
+        const [currentCell] = await db.select({ status: runtimeCells.status }).from(runtimeCells).where(and(
+          eq(runtimeCells.companyId, claim.scope.companyId), eq(runtimeCells.id, claim.scope.cellId),
+          eq(runtimeCells.generation, BigInt(claim.scope.generation)), eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt),
+        )).limit(1);
+        const [currentHost] = await db.select({ credentialVersion: runtimeHosts.credentialVersion }).from(runtimeHosts).where(and(
+          eq(runtimeHosts.id, host.id), eq(runtimeHosts.credentialVersion, claim.hostEpoch), eq(runtimeHosts.status, "READY"),
+          isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
+        )).limit(1);
+        const [currentChallenge] = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+          eq(runtimeHostCommands.id, claim.commandId), eq(runtimeHostCommands.runtimeHostId, host.id),
+          eq(runtimeHostCommands.companyId, claim.scope.companyId), eq(runtimeHostCommands.runtimeCellId, claim.scope.cellId),
+          eq(runtimeHostCommands.cellGeneration, BigInt(claim.scope.generation)),
+          eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "CLAIMED"),
+          gt(runtimeHostCommands.deadlineAt, new Date()),
+        )).limit(1);
+        if (!currentBinding || !currentCell || !currentHost || !currentChallenge || Date.parse(claim.expiresAt) <= Date.now())
+          throw new ToolGatewayHttpError(409, "Qualification target changed during probe", "sandbox_qualification_target_changed");
+        const [currentConnection] = await db.select().from(toolConnections).where(and(
+          eq(toolConnections.companyId, claim.scope.companyId), eq(toolConnections.id, claim.connectionId),
+          eq(toolConnections.status, "active"), eq(toolConnections.enabled, true),
+        )).limit(1);
+        const activeFixtureConnections = await db.select({ id: toolConnections.id, config: toolConnections.config, createdByUserId: toolConnections.createdByUserId }).from(toolConnections).where(and(
+          eq(toolConnections.companyId, claim.scope.companyId), eq(toolConnections.status, "active"),
+          eq(toolConnections.enabled, true), eq(toolConnections.transport, "mcp_remote"),
+        ));
+        const sameFixture = activeFixtureConnections.filter(row => {
+          const candidate = row.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+          return row.createdByUserId === claim.operatorUserId && candidate?.kind === "platform_owned_qualification_echo" && candidate.purpose === "sandbox_qualification" &&
+            candidate.setupOnly === true && candidate.fixtureId === claim.fixtureId;
+        });
+        const [currentGateway] = await db.select().from(toolMcpGateways).where(and(
+          eq(toolMcpGateways.companyId, claim.scope.companyId), eq(toolMcpGateways.gatewayPublicId, claim.gatewayPublicId),
+          eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+        )).limit(1);
+        if (!currentConnection || currentConnection.createdByUserId !== claim.operatorUserId || !currentGateway)
+          throw new ToolGatewayHttpError(409, "Qualification gateway grant was revoked", "sandbox_qualification_grant_revoked");
+        if (sameFixture.length !== 1 || sameFixture[0]?.id !== claim.connectionId)
+          throw new ToolGatewayHttpError(409, "Qualification fixture identity changed", "sandbox_qualification_fixture_changed");
+        const canaryConfig = currentConnection.config?.sandboxQualificationCanary as Record<string, unknown> | undefined;
+        if (!canaryConfig || canaryConfig.kind !== "platform_owned_qualification_echo" || canaryConfig.purpose !== "sandbox_qualification" ||
+          canaryConfig.setupOnly !== true || canaryConfig.fixtureId !== claim.fixtureId ||
+          canaryConfig.fixtureHash !== claim.fixtureHash || canaryConfig.toolName !== claim.toolName || canaryConfig.gatewayPublicId !== claim.gatewayPublicId ||
+          canaryConfig.marker !== qualificationEchoMarker)
+          throw new ToolGatewayHttpError(409, "Qualification canary fixture changed", "sandbox_qualification_fixture_changed");
+        if (currentBinding.boundaryPolicy.credentials.bindings.some(candidate => candidate.connectionId === claim.connectionId))
+          throw new ToolGatewayHttpError(409, "Qualification fixture grant cannot overlap runtime credentials", "sandbox_qualification_fixture_changed");
+        const currentGrant = await resolveConnectionGrant(session, currentConnection).catch(() => null);
+        if (!currentGrant || currentGrant.id !== claim.grantId || currentGrant.status !== "active")
+          throw new ToolGatewayHttpError(403, "Qualification credential grant was revoked", "sandbox_qualification_grant_revoked");
+        if (currentGateway.id !== session.gatewayId || currentGateway.profileId !== session.gatewayProfileId || currentGrant.id !== canaryConfig.grantId)
+          throw new ToolGatewayHttpError(409, "Qualification gateway authority changed", "sandbox_qualification_fixture_changed");
+        const endpoint = new URL(await resolvedRemoteEndpoint(session, currentConnection, currentGrant));
+        if (endpoint.href !== qualificationEchoEndpoint || endpoint.protocol !== "https:" || endpoint.origin !== canaryConfig.endpointOrigin || endpoint.pathname !== canaryConfig.endpointPath ||
+          endpoint.username || endpoint.password || endpoint.search || endpoint.hash)
+          throw new ToolGatewayHttpError(409, "Qualification canary destination changed", "sandbox_qualification_fixture_changed");
+        const versions = await connectedCredentialVersionSnapshots(currentConnection, currentGrant, { requireResolved: true }).catch(() => null);
+        if (!versions || nativeSha256(versions) !== claim.secretVersionHash)
+          throw new ToolGatewayHttpError(409, "Qualification credential version changed", "sandbox_qualification_grant_revoked");
+        const currentTool = (await connectedMcpToolsForConnection(session.companyId, currentConnection.id)).find(candidate => candidate.name === claim.toolName) ?? null;
+        if (!currentTool || currentTool.connectionId !== claim.connectionId || currentTool.providerType !== "mcp_remote_http" || currentTool.risk !== "read" ||
+          await qualificationCanarySourceBindingHash({ session, connection: currentConnection, grant: currentGrant,
+            gateway: currentGateway, tool: currentTool, fixtureConfig: canaryConfig }) !== claim.sourceBindingHash)
+          throw new ToolGatewayHttpError(409, "Qualification canary source binding changed", "sandbox_qualification_fixture_changed");
+        if (tool && (tool.name !== claim.toolName || tool.connectionId !== claim.connectionId || tool.providerType !== "mcp_remote_http" || tool.risk !== "read"))
+          throw new ToolGatewayHttpError(403, "Qualification tool is outside the one-use fixture", "sandbox_qualification_tool_mismatch");
+        return canaryConfig.marker;
+      };
+      try {
+        if (input.tool !== claim.toolName) throw new ToolGatewayHttpError(403, "Qualification tool is outside the one-use fixture", "sandbox_qualification_tool_mismatch");
+        if (nativeSha256(body) !== claim.requestBodyHash) throw new ToolGatewayHttpError(403, "Qualification request body changed", "sandbox_qualification_tool_mismatch");
+        await assertCurrent();
+        if (!qualificationEchoEndpoint) throw new ToolGatewayHttpError(409, "Platform qualification endpoint is unavailable", "sandbox_qualification_fixture_changed");
+        const [connection] = await db.select().from(toolConnections).where(and(
+          eq(toolConnections.id, claim.connectionId), eq(toolConnections.companyId, claim.scope.companyId),
+        )).limit(1);
+        if (!connection) throw new ToolGatewayHttpError(409, "Qualification connection changed", "sandbox_qualification_grant_revoked");
+        const grant = await resolveConnectionGrant(session, connection);
+        const headers = await resolveCredentialHeaders(session, connection, grant);
+        await assertCurrent(); // credential refresh is asynchronous and cannot extend authority
+        const authorization = headers.Authorization ?? headers.authorization;
+        if (Object.keys(headers).length !== 1 || typeof authorization !== "string" || !authorization.startsWith("Bearer "))
+          throw new ToolGatewayHttpError(409, "Qualification requires its dedicated bearer credential", "sandbox_qualification_fixture_changed");
+        const observation = { version: 1, commandId: claim.commandId, requestBodyHash: claim.requestBodyHash,
+          sourceBindingHash: claim.sourceBindingHash, secretVersionHash: claim.secretVersionHash, marker: qualificationEchoMarker };
+        const safeResult = { invocationId: hostUse.id, result: { content: qualificationEchoMarker, structuredContent: { marker: qualificationEchoMarker } } };
+        if (observedAuthorization !== undefined) {
+          const observed = Buffer.from(observedAuthorization), expected = Buffer.from(authorization);
+          if (observed.length !== expected.length || !timingSafeEqual(observed, expected))
+            throw new ToolGatewayHttpError(403, "Qualification credential was not observed", "sandbox_qualification_credential_required");
+          await assertCurrent();
+          const [recorded] = await db.update(runtimeHostCommands).set({ safeResult: observation }).where(and(
+            eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED"),
+            isNull(runtimeHostCommands.safeResult), gt(runtimeHostCommands.deadlineAt, new Date()),
+          )).returning({ id: runtimeHostCommands.id });
+          if (!recorded) throw new ToolGatewayHttpError(409, "Qualification capability was already observed", "sandbox_qualification_capability_replayed");
+          return safeResult;
+        }
+        const init: RequestInit = { method: "POST", redirect: "manual", signal: AbortSignal.timeout(10_000),
+          headers: { "content-type": "application/json", Authorization: authorization,
+            "x-paperclip-qualification-capability": input.capabilityToken }, body: JSON.stringify(body) };
+        await assertCurrent();
+        const response = options.remoteHttpRequest ? await options.remoteHttpRequest(qualificationEchoEndpoint, init)
+          : await guardedRemoteHttpFetch(qualificationEchoEndpoint, init, { ...remoteHttpFetchOptions(), responseTimeoutMs: 10_000 });
+        await assertCurrent();
+        if (!response.ok || response.redirected)
+          throw new ToolGatewayHttpError(502, "Qualification echo did not succeed", "sandbox_qualification_probe_failed");
+        const echoed = asRecord(await response.json());
+        await assertCurrent();
+        if (nativeSha256(echoed) !== nativeSha256(safeResult))
+          throw new ToolGatewayHttpError(502, "Qualification echo result changed", "sandbox_qualification_result_invalid");
+        const [completed] = await db.update(runtimeHostCommands).set({ status: "SUCCEEDED", completedAt: new Date(),
+          safeResult: { ...observation, invocationId: hostUse.id, resultHash: nativeSha256(safeResult.result) },
+        }).where(and(eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED"),
+          eq(runtimeHostCommands.safeResult, observation), gt(runtimeHostCommands.deadlineAt, new Date()),
+        )).returning({ id: runtimeHostCommands.id });
+        if (!completed) throw new ToolGatewayHttpError(409, "Qualification observation changed", "sandbox_qualification_capability_replayed");
+        return safeResult;
+      } catch (error) {
+        const code = error instanceof ToolGatewayHttpError ? error.reasonCode : "sandbox_qualification_probe_failed";
+        if (observedAuthorization === undefined) await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: code })
+          .where(and(eq(runtimeHostCommands.id, hostUse.id), eq(runtimeHostCommands.status, "CLAIMED")));
+        throw error;
+      }
+    },
+    async executeSandboxBrokerTool(input: {
+      capabilityToken: string;
+      gatewayPublicId: string;
+      operationId: string;
+      tool: string;
+      parameters?: unknown;
+      timeoutMs?: number;
+      signal?: AbortSignal;
+    }) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.operationId)) {
+        throw new ToolGatewayHttpError(400, "Broker operation id must be a UUID", "sandbox_broker_operation_id_invalid");
+      }
+      const session = await sandboxBrokerSessionFromBearer({
+        gatewayPublicId: input.gatewayPublicId, bearerToken: input.capabilityToken, protocolMethod: "tools/call",
+      });
+      if (!session?.sandboxBrokerCapability) throw new ToolGatewayHttpError(401, "Sandbox broker capability is required", "sandbox_broker_capability_invalid");
+      const capability = session.sandboxBrokerCapability;
+      const binding = capability.bindings.find(candidate => candidate.gatewayPublicId === input.gatewayPublicId);
+      if (!binding || !binding.allowedTools.includes(input.tool)) {
+        throw new ToolGatewayHttpError(403, "Operation is outside the current broker capability", "sandbox_broker_operation_denied");
+      }
+      const [parent] = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.idempotencyKey, capability.parentRequestId),
+        eq(runtimeHostCommands.companyId, session.companyId),
+        eq(runtimeHostCommands.runtimeCellId, capability.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(capability.generation)),
+        eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "CLAIMED"),
+      )).limit(1);
+      if (!parent) throw new ToolGatewayHttpError(403, "Parent sandbox execution is fenced", "sandbox_broker_parent_fenced");
+      const parameterValue = input.parameters ?? {};
+      const operationHash = stableHash({ tool: input.tool, parameters: parameterValue });
+      const operationKey = `sandbox-broker:${capability.brokerSessionId}:${input.operationId}`;
+      const claimState = await db.transaction(async tx => {
+        const [liveParent] = await tx.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+          eq(runtimeHostCommands.idempotencyKey, capability.parentRequestId),
+          eq(runtimeHostCommands.companyId, session.companyId),
+          eq(runtimeHostCommands.runtimeCellId, capability.cellId),
+          eq(runtimeHostCommands.cellGeneration, BigInt(capability.generation)),
+          eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "CLAIMED"),
+          gt(runtimeHostCommands.deadlineAt, new Date()),
+        )).for("update").limit(1);
+        if (!liveParent) throw new ToolGatewayHttpError(403, "Parent sandbox execution is fenced", "sandbox_broker_parent_fenced");
+        const [prior] = await tx.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, operationKey)).for("update").limit(1);
+        if (prior) {
+          const payload = prior.payload as Record<string, unknown>;
+          if (payload.operationHash !== operationHash || payload.parentRequestId !== capability.parentRequestId || payload.connectionId !== binding.connectionId || payload.tool !== input.tool) {
+            throw new ToolGatewayHttpError(409, "Broker operation id was reused for different arguments", "sandbox_broker_operation_conflict");
+          }
+          if (prior.status !== "SUCCEEDED") throw new ToolGatewayHttpError(409, "Original broker operation has an unknown or incomplete outcome", "sandbox_broker_operation_unsettled");
+          return { replay: prior };
+        }
+        const now = new Date();
+        const [created] = await tx.insert(runtimeHostCommands).values({
+          runtimeHostId: capability.hostId, companyId: session.companyId, runtimeCellId: capability.cellId,
+          cellGeneration: BigInt(capability.generation), commandType: "sandbox_broker", idempotencyKey: operationKey,
+          payload: {
+            parentRequestId: capability.parentRequestId, brokerSessionId: capability.brokerSessionId,
+            bindingId: capability.bindingId, runId: capability.runId, attemptId: capability.attemptId, attempt: capability.attempt,
+            manifestId: capability.manifestId, manifestHash: capability.manifestHash,
+            policySnapshotId: capability.policySnapshotId, policyHash: capability.policyHash,
+            connectionId: binding.connectionId, gatewayPublicId: input.gatewayPublicId,
+            tool: input.tool, operationId: input.operationId, operationHash,
+          },
+          status: "PENDING", attempt: 0, deadlineAt: new Date(Math.min(parent.deadlineAt.getTime(), Date.parse(capability.expiresAt))),
+        }).onConflictDoNothing().returning();
+        if (!created) {
+          const [raced] = await tx.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, operationKey)).for("update").limit(1);
+          if (!raced) throw new ToolGatewayHttpError(409, "Broker operation claim could not be persisted", "sandbox_broker_claim_unavailable");
+          const payload = raced.payload as Record<string, unknown>;
+          if (payload.operationHash !== operationHash || raced.status !== "SUCCEEDED") throw new ToolGatewayHttpError(409, "Original broker operation has an unknown or conflicting outcome", "sandbox_broker_operation_unsettled");
+          return { replay: raced };
+        }
+        const [claimed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
+          eq(runtimeHostCommands.id, created.id), eq(runtimeHostCommands.status, "PENDING"), eq(runtimeHostCommands.attempt, 0),
+        )).returning();
+        if (!claimed) throw new ToolGatewayHttpError(409, "Broker operation claim was already consumed", "sandbox_broker_claim_unavailable");
+        return { replay: null, claim: claimed };
+      });
+      if (claimState.replay) {
+        const safe = claimState.replay.safeResult as Record<string, unknown> | null;
+        const invocationId = typeof safe?.invocationId === "string" ? safe.invocationId : null;
+        const [invocation] = invocationId ? await db.select().from(toolInvocations).where(and(
+          eq(toolInvocations.companyId, session.companyId), eq(toolInvocations.id, invocationId),
+          eq(toolInvocations.idempotencyKey, operationKey), eq(toolInvocations.status, "succeeded"),
+        )).limit(1) : [];
+        if (!invocation) throw new ToolGatewayHttpError(409, "Completed broker result is unavailable; external outcome cannot be repeated", "sandbox_broker_result_unavailable");
+        return { invocationId, status: "replayed" as const, tool: input.tool, result: invocation.workflowResultJson };
+      }
+      const claim = "claim" in claimState ? claimState.claim : null;
+      if (!claim) throw new ToolGatewayHttpError(409, "Broker operation claim is unavailable", "sandbox_broker_claim_unavailable");
+      const assertCurrent = async (tool?: ToolGatewayDescriptor) => {
+        const current = await sandboxBrokerSessionFromBearer({
+          gatewayPublicId: input.gatewayPublicId, bearerToken: input.capabilityToken, protocolMethod: "tools/call",
+        });
+        if (!current?.sandboxBrokerCapability || stableHash(current.sandboxBrokerCapability) !== stableHash(capability) ||
+          current.gatewayId !== session.gatewayId || current.runId !== session.runId || current.responsibleUserId !== session.responsibleUserId ||
+          (tool && (tool.connectionId !== binding.connectionId || tool.name !== input.tool || !binding.allowedTools.includes(tool.name)))) {
+          throw new ToolGatewayHttpError(403, "Broker execution authority changed", "sandbox_broker_authority_changed");
+        }
+      };
+      try {
+        await assertCurrent();
+        const result = await service.executeTool({
+          sessionToken: input.capabilityToken, tool: input.tool, parameters: parameterValue,
+          idempotencyKey: operationKey, timeoutMs: input.timeoutMs, signal: input.signal,
+        }, undefined, { session, assertCurrent });
+        await assertCurrent();
+        const [completed] = await db.update(runtimeHostCommands).set({
+          status: "SUCCEEDED", completedAt: new Date(),
+          safeResult: { invocationId: result.invocationId, resultHash: stableHash(result.result ?? null) },
+        }).where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"))).returning({ id: runtimeHostCommands.id });
+        if (!completed) throw new ToolGatewayHttpError(409, "Broker result was fenced before delivery", "sandbox_broker_result_fenced");
+        return result;
+      } catch (error) {
+        const reasonCode = error instanceof ToolGatewayHttpError ? error.reasonCode : "sandbox_broker_outcome_unknown";
+        await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: reasonCode })
+          .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED")));
+        throw error;
+      }
+    },
+    /** Resolve current, server-owned credential and gateway metadata for sandbox
+     * policy compilation. Secret values are never returned; only the selected
+     * grant revision and resolved secret version numbers enter the digest. */
+    async resolveSandboxCredentialBrokerBindings(input: {
+      companyId: string;
+      agentId: string;
+      runId: string;
+      responsibleUserId: string;
+      presenceId: string;
+      bindings: SandboxPolicy["credentials"]["bindings"];
+    }): Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: SandboxCredentialBrokerBinding[] }> {
+      return resolveSandboxCredentialBrokerBindingsWithDecision(input, policyService.decide);
+    },
+    /** Current grant/secret and assigned Gateway metadata for server-side
+     * sandbox policy compilation. This route projection is not a dispatch
+     * authorization; `resolveSandboxCredentialBrokerBindings` remains the
+     * full current-operation check used when minting or consuming capability. */
+    async resolveSandboxCredentialBrokerPolicyBindings(input: {
+      companyId: string;
+      agentId: string;
+      runId: string;
+      responsibleUserId: string;
+      presenceId: string;
+      bindings: SandboxPolicy["credentials"]["bindings"];
+    }): Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: SandboxCredentialBrokerBinding[] }> {
+      return resolveSandboxCredentialBrokerBindingsWithDecision(input, policyService.decideForPolicyCompilation);
+    },
     async recordRuntimeMcpDeliveryDiagnostic(input: {
       companyId: string;
       agentId: string;
       runId: string;
       permittedNotInstalledConnections: Array<{ id: string; name: string }>;
+      firstPartyToolsDelivered?: boolean;
     }) {
       if (input.permittedNotInstalledConnections.length === 0) return;
       const [run] = await db
@@ -8980,7 +10721,9 @@ export function createToolGatewayService(
         details: {
           decision: "diagnostic",
           reasonCode: "permitted_connections_not_installed",
-          deliveredServerCount: 0,
+          deliveredServerCount: input.firstPartyToolsDelivered === false ? 0 : 1,
+          deliveredAssignmentCount: 0,
+          deliveredFirstPartyTools: input.firstPartyToolsDelivered !== false,
           permittedNotInstalledCount:
             input.permittedNotInstalledConnections.length,
           permittedNotInstalledConnections:
@@ -9342,6 +11085,115 @@ export function createToolGatewayService(
       });
     },
 
+    /**
+     * Authenticated metadata for the repository-owned OpenClaw bridge plugin.
+     * The claims are reconstructed from the bearer token and the existing
+     * server-owned Run admission; caller-supplied identities are never used.
+     */
+    async describeNamedGatewayRunBinding(input: {
+      gatewayId?: string | null;
+      gatewayPublicId?: string | null;
+      bearerToken: string;
+      callerHeaders?: Record<string, string | string[] | undefined>;
+    }): Promise<BlenteraGovernedRunBindingAttestation | null> {
+      const session = await namedGatewaySessionFromBearer({
+        gatewayId: input.gatewayId ?? null,
+        gatewayPublicId: input.gatewayPublicId ?? null,
+        bearerToken: input.bearerToken,
+        protocolMethod: "initialize",
+        callerHeaders: input.callerHeaders,
+      });
+      if (!session.runId || !session.agentId || !session.responsibleUserId || !session.gatewayId || !session.gatewayPublicId) {
+        return null;
+      }
+      const contracts = blenteraPlatformContractHashes();
+      const actor: AuthorizationActor = {
+        type: "agent",
+        source: "none",
+        companyId: session.companyId,
+        agentId: session.agentId,
+        runId: session.runId,
+        onBehalfOfUserId: session.responsibleUserId,
+      };
+      await assertPlatformSkillAdmission(db, actor, contracts);
+      const [run] = await db.select({
+        runnerProfileJson: heartbeatRuns.runnerProfileJson,
+        runtimeAdapter: agents.adapterType,
+      }).from(heartbeatRuns).innerJoin(agents, and(
+        eq(agents.id, heartbeatRuns.agentId),
+        eq(agents.companyId, heartbeatRuns.companyId),
+      )).where(and(
+        eq(heartbeatRuns.companyId, session.companyId),
+        eq(heartbeatRuns.id, session.runId),
+        eq(heartbeatRuns.agentId, session.agentId),
+        eq(heartbeatRuns.status, "running"),
+      )).limit(1);
+      const [gateway] = await db.select({ metadata: toolMcpGateways.metadata })
+        .from(toolMcpGateways)
+        .where(and(
+          eq(toolMcpGateways.companyId, session.companyId),
+          eq(toolMcpGateways.id, session.gatewayId),
+          eq(toolMcpGateways.status, "active"),
+        )).limit(1);
+      const [manifestRow] = await db.select({ manifest: agentExecutionManifests.manifest })
+        .from(agentExecutionManifests)
+        .where(and(
+          eq(agentExecutionManifests.companyId, session.companyId),
+          eq(agentExecutionManifests.agentId, session.agentId),
+          eq(agentExecutionManifests.runId, session.runId),
+        )).limit(1);
+      const runnerProfile = asRecord(run?.runnerProfileJson);
+      const admission = asRecord(runnerProfile?.platformSkillAdmission);
+      const skill = asRecord(admission?.platformSkill);
+      const manifest = asRecord(manifestRow?.manifest);
+      const nativeContract = asRecord(manifest?.agentNativeContract);
+      const primaryProvider = Array.isArray(manifest?.providers)
+        ? asRecord(manifest.providers[0])
+        : null;
+      const metadata = asRecord(gateway?.metadata);
+      const assignmentDigest = metadata?.nativeRuntimeAssignmentDigest;
+      if (!run || typeof run.runtimeAdapter !== "string" || !admission || !skill || typeof skill.key !== "string" ||
+          typeof skill.version !== "string" || typeof skill.digest !== "string" ||
+          typeof skill.sourceSha !== "string" ||
+          !nativeContract ||
+          admission.operationManifestHash !== contracts.operationManifestHash ||
+          admission.toolCatalogContractHash !== contracts.toolCatalogContractHash ||
+          admission.runtimeAdapter !== run.runtimeAdapter ||
+          typeof assignmentDigest !== "string" || !/^[a-f0-9]{64}$/.test(assignmentDigest)) {
+        throw new ToolGatewayHttpError(409, "The current operating procedure admission is unavailable", "platform_skill_readmission_required");
+      }
+      if (manifestRow && (!nativeContract || nativeContract.operationManifestHash !== contracts.operationManifestHash ||
+          nativeContract.toolCatalogContractHash !== contracts.toolCatalogContractHash ||
+          nativeContract.protocolProfile !== "2026-07-28" || nativeContract.runtimeAdapter !== run.runtimeAdapter ||
+          typeof nativeContract.runtimeCapabilitySnapshotHash !== "string" ||
+          nativeContract.runtimeCapabilitySnapshotHash !== primaryProvider?.snapshotHash)) {
+        throw new ToolGatewayHttpError(409, "The current provider capability snapshot is unavailable", "provider_capability_revalidation_required");
+      }
+      return {
+        protocolVersion: 1,
+        companyId: session.companyId,
+        agentId: session.agentId,
+        paperclipRunId: session.runId,
+        responsibleUserId: session.responsibleUserId,
+        runtimeAdapter: run.runtimeAdapter,
+        runtimeCapabilitySnapshotHash: typeof nativeContract?.runtimeCapabilitySnapshotHash === "string"
+          ? nativeContract.runtimeCapabilitySnapshotHash : null,
+        platformSkill: {
+          key: skill.key,
+          version: skill.version,
+          digest: skill.digest,
+          sourceSha: skill.sourceSha,
+        },
+        operationManifestHash: contracts.operationManifestHash,
+        toolCatalogContractHash: contracts.toolCatalogContractHash,
+        gatewayId: session.gatewayId,
+        gatewayPublicId: session.gatewayPublicId,
+        gatewayProfileId: session.gatewayProfileId ?? null,
+        assignmentDigest: typeof assignmentDigest === "string" ? assignmentDigest : null,
+        tokenExpiresAt: session.expiresAt.toISOString(),
+      };
+    },
+
     async listToolsForNamedGateway(input: {
       gatewayId?: string | null;
       gatewayPublicId?: string | null;
@@ -9356,7 +11208,11 @@ export function createToolGatewayService(
         callerHeaders: input.callerHeaders,
       });
       await assertGatewayTokenAction(session, "tools/list");
-      const tools = await listToolsForContext(session);
+      const tools = (await listToolsForContext(session)).filter(tool => {
+        if (!session.sandboxBrokerCapability) return true;
+        const binding = session.sandboxBrokerCapability.bindings.find(candidate => candidate.gatewayPublicId === session.gatewayPublicId);
+        return !!binding && tool.connectionId === binding.connectionId && binding.allowedTools.includes(tool.name);
+      });
       await writeAudit({
         session,
         companyId: session.companyId,
@@ -9395,6 +11251,8 @@ export function createToolGatewayService(
       ttlMs?: number;
       actorType?: LogActivityInput["actorType"];
       actorId?: string;
+      /** Original middleware-verified actor; never populated from request JSON. */
+      authorizationActor?: AuthorizationActor;
     }): Promise<ToolGatewaySession> {
       await assertAgentInCompany(input.companyId, input.agentId);
       const { issueId, projectId } = await resolveRunContext(input);
@@ -9411,6 +11269,9 @@ export function createToolGatewayService(
         projectId,
         createdAt: now,
         expiresAt: new Date(now.getTime() + sessionTtlMs(input.ttlMs)),
+        responsibleUserId: input.authorizationActor?.type === "agent"
+          ? input.authorizationActor.onBehalfOfUserId ?? null
+          : null,
       };
 
       await db.insert(toolGatewaySessions).values({
@@ -9441,6 +11302,7 @@ export function createToolGatewayService(
           expiresAt: session.expiresAt.toISOString(),
         },
       });
+      rememberSessionActor(session, input.authorizationActor);
 
       return session;
     },
@@ -9609,6 +11471,7 @@ export function createToolGatewayService(
         );
       }
 
+      await assertConnectedToolModelEffects(session, tool);
       const requestedParameters = await governedToolArguments(
         session,
         tool,
@@ -10285,12 +12148,14 @@ export function createToolGatewayService(
 
     async listScopedTools(context: ScopedToolGatewayContext) {
       await context.assertCurrent();
+      const discoveryCatalogEntryIds = context.discoveryCatalogEntryIds ? new Set(context.discoveryCatalogEntryIds) : null;
       const tools = (await listToolsForContext(context.session)).filter(tool =>
-        tool.connectionId && ["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType));
+        tool.connectionId && ["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType) &&
+        (!discoveryCatalogEntryIds || typeof tool.catalogEntryId === "string" && discoveryCatalogEntryIds.has(tool.catalogEntryId)));
       const visible: ToolGatewayDescriptor[] = [];
       // ponytail: bound per-tool authority checks to 100; paginate larger inventories.
       for (const tool of tools.slice(0, 100)) {
-        try { await context.assertCurrent(tool); visible.push(tool); }
+        try { await context.assertCurrent(tool); await context.assertManifestCurrent?.(tool); visible.push(tool); }
         catch (error) {
           if (!(error instanceof Error && "status" in error && error.status === 403)) throw error;
         }
@@ -10315,6 +12180,9 @@ export function createToolGatewayService(
         callerHeaders: input.callerHeaders,
       });
       await assertGatewayTokenAction(session, "tools/call");
+      if (allTools().some(tool => tool.name === input.tool && tool.providerType === "paperclip_plugin")) {
+        await assertToolInternalInferenceAdmitted(session);
+      }
       let invocationId = String(randomUUID());
       const startedAt = Date.now();
 
@@ -10390,6 +12258,77 @@ export function createToolGatewayService(
         input = { ...input, tool: bound.name };
       }
       let tool = await findToolForSession(session, input.tool);
+      await assertConnectedToolModelEffects(session, tool);
+      const scopedMemoryCapture = nativeMemoryOutputCapture(scopedContext);
+      if (scopedMemoryCapture) {
+        const capture = scopedMemoryCapture;
+        const use = capture.managedOpenCodeToolUse;
+        if (tool.name !== "paperclip-self:remember" || tool.providerType !== "paperclip_self" ||
+          tool.pluginId !== "paperclip-self" || !use || use.toolName !== tool.name ||
+          capture.runId !== session.runId || capture.dispatch.runId !== session.runId ||
+          !session.agentId || !session.issueId ||
+          !capture.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === session.issueId) ||
+          use.argumentsHash !== nativeSha256(input.parameters ?? {})) {
+          throw new ToolGatewayHttpError(403, "Native Memory output capture does not match this scoped call", "native_memory_capture_invalid");
+        }
+        const [capturedRun] = await db.select({ agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.nativeIssueId,
+          responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, session.companyId), eq(heartbeatRuns.id, capture.runId),
+        ));
+        if (!capturedRun || capturedRun.agentId !== session.agentId || capturedRun.issueId !== session.issueId ||
+          capturedRun.responsibleUserId !== (session.responsibleUserId ?? null))
+          throw new ToolGatewayHttpError(403, "Native Memory output session binding changed", "native_memory_capture_invalid");
+        // The canonical Native Memory write transaction revalidates this exact
+        // capture after reading the persisted detail and before commit; sealing
+        // repeats the complete check once the Gateway invocation succeeds.
+        input = { ...input, idempotencyKey: `aw-native-tool:${capture.runId}:${use.callId}` };
+      }
+      const revalidateScopedMemoryReplay = async (replay: { invocationId: string; argumentsHash: string; result: unknown }) => {
+        if (!scopedMemoryCapture) return;
+        const replayIssueId = session.issueId;
+        const replayAgentId = session.agentId;
+        const replayRunId = session.runId;
+        if (!replayIssueId) throw new ToolGatewayHttpError(403,
+          "Managed Memory replay has no current Task binding", "native_memory_capture_invalid");
+        if (!replay.argumentsHash || !replayAgentId || !replayRunId) throw new ToolGatewayHttpError(403,
+          "Managed Memory replay receipt is unavailable", "native_memory_capture_invalid");
+        const { assertNativeModelOutputCaptureCurrent } = await import("./native-direct-input.js");
+        const { lockAnalyticalCompany } = await import("./analytical-privacy.js");
+        const { lockMemoryPrivacy } = await import("./memory/memory-privacy.js");
+        await db.transaction(async rawTx => {
+          const tx = rawTx as unknown as Db;
+          await lockAnalyticalCompany(tx, session.companyId);
+          await lockMemoryPrivacy(tx, session.companyId);
+          const outputReceipt = await assertScopedNativeMemoryReplayReceiptCurrent(tx, { companyId: session.companyId,
+            runId: replayRunId, agentId: replayAgentId, issueId: replayIssueId,
+            callId: scopedMemoryCapture.managedOpenCodeToolUse!.callId,
+            invocationId: replay.invocationId, argumentsHash: replay.argumentsHash,
+            result: replay.result });
+          // Recheck consumed inputs after output receipt reads, then apply the output's current reader policy.
+          await assertNativeModelOutputCaptureCurrent(tx, session.companyId, replayIssueId, scopedMemoryCapture,
+            "paperclip-self:remember");
+          const { canActorReadMemorySources, memoryPayloadVisible } = await import("./memory/memory-privacy.js");
+          const currentReader = currentSessionMemoryActor(session);
+          if (!currentReader || !await canActorReadMemorySources(tx, session.companyId, currentReader, outputReceipt.recordId))
+            throw new ToolGatewayHttpError(403, "Managed Memory output destination is no longer readable",
+              "native_memory_capture_invalid");
+          const [stillCurrent] = await tx.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot })
+            .from(memoryRecords).where(and(eq(memoryRecords.companyId, session.companyId),
+              eq(memoryRecords.id, outputReceipt.recordId), memoryPayloadVisible(), isNull(memoryRecords.revokedAt),
+              or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, sql`clock_timestamp()`)),
+              eq(memoryRecords.retentionState, "active"), inArray(memoryRecords.reviewState, ["pending", "accepted"]),
+              eq(memoryRecords.payloadSourceSnapshotInvalidated, false), eq(memoryRecords.payloadSourceProtocolVersion, 1)))
+            .for("share");
+          const { nativePayloadSourceSnapshotSchema } = await import("@paperclipai/shared");
+          const finalSnapshot = nativePayloadSourceSnapshotSchema.safeParse(stillCurrent?.payloadSourceSnapshot);
+          if (!finalSnapshot.success || finalSnapshot.data.digest !== outputReceipt.snapshotDigest)
+            throw new ToolGatewayHttpError(403, "Managed Memory output changed during replay validation",
+              "native_memory_capture_invalid");
+        });
+      };
+      if (scopedContext && tool.name === "paperclip-self:remember" && !scopedMemoryCapture) {
+        throw new ToolGatewayHttpError(403, "Managed Native Memory writes require a current provider tool-use capture", "native_memory_capture_required");
+      }
       if (scopedContext && tool.providerType === "paperclip_virtual" && tool.name !== "run_tool") {
         throw new ToolGatewayHttpError(403, "Scoped runs discover connected tools through tool.list", "scoped_tool_not_connected");
       }
@@ -10524,7 +12463,9 @@ export function createToolGatewayService(
       }
 
       if (scopedContext) {
-        if (!tool.connectionId || !["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType)) {
+        const nativeMemoryCall = Boolean(scopedMemoryCapture && tool.name === "paperclip-self:remember" &&
+          tool.providerType === "paperclip_self");
+        if (!nativeMemoryCall && (!tool.connectionId || !["mcp_remote_http", "mcp_local_stdio"].includes(tool.providerType))) {
           throw new ToolGatewayHttpError(403, "Scoped calls require a local connected tool", "scoped_tool_not_connected");
         }
         await scopedContext.assertCurrent(tool);
@@ -10559,6 +12500,35 @@ export function createToolGatewayService(
           argumentsHash: argumentValidation.summary.sha256 ?? "",
         });
         if (replay?.matched) {
+          if (tool.providerType === "paperclip_self") {
+            // Preserve the original Gateway invocation and its receipt, but
+            // re-enter the original semantic owner before returning any
+            // first-party replay. The manifest classifies its effect and the
+            // matching builtin remains its original executable owner. The
+            // owner rechecks current source, Human, ACL, and Skill authority;
+            // current Tool Gateway policy is also required. An operation
+            // without a known safe owner class fails closed instead of using
+            // the generic cached result.
+            const currentPolicy = await policyService.decide(policyInputForTool({
+              session,
+              tool,
+              parameters: requestedParameters,
+              consumeRateLimit: true,
+            }));
+            if (!currentPolicy.allowed) {
+              throw new ToolGatewayHttpError(403, "Current Tool Gateway policy no longer permits this operation", "tool_policy_denied");
+            }
+            const refreshed = await revalidateFirstPartyBuiltinReplay(session, tool, requestedParameters, replay.invocationId);
+            return {
+              invocationId: replay.invocationId,
+              status: "replayed" as const,
+              tool: virtualToolName ?? tool.name,
+              targetTool: virtualToolName ? tool.name : undefined,
+              result: refreshed,
+            };
+          }
+          await revalidateScopedMemoryReplay({ invocationId: replay.invocationId,
+            argumentsHash: argumentValidation.summary.sha256 ?? "", result: replay.result });
           return {
             invocationId: replay.invocationId,
             status: "replayed" as const,
@@ -10942,10 +12912,12 @@ export function createToolGatewayService(
         if (accessDecision.allowed && tool.providerType === "paperclip_slack_chat" && SLACK_TOOLS.some(t => t.name === tool.upstreamToolName && t.risk === "approval")) {
           accessDecision = { ...accessDecision, allowed: false, decision: "require_approval", reasonCode: "requires_approval_policy", explanation: "Slack destructive actions, channel creation and invitations require approval." };
         }
-        const recorded = await policyService.recordInvocation(
-          decisionInput,
-          accessDecision,
-        );
+        if (scopedContext && (accessDecision.allowed || accessDecision.decision === "require_approval"))
+          await scopedContext.assertManifestCurrent?.(tool);
+        const rememberDraft = scopedMemoryCapture && tool.name === "paperclip-self:remember"
+          ? memoryAgentRememberInputSchema.safeParse(effectiveParameters).success : false;
+        const recorded = await policyService.recordInvocation(decisionInput, accessDecision,
+          rememberDraft ? { nativeMemoryDraft: true } : undefined);
         await policyService.writeAudit(decisionInput, accessDecision);
         invocationId = recorded.invocation.id;
         const retryingSlackRateLimit = recorded.replayed && accessDecision.allowed && tool.providerType === "paperclip_slack_chat" && session.agentId && session.runId && session.issueId
@@ -10968,6 +12940,10 @@ export function createToolGatewayService(
           if ((session.workflowRunId || scopedContext) && recorded.invocation.status !== "succeeded") throw new ToolGatewayHttpError(409,
             "The original tool operation is pending or failed; its effects cannot be repeated",
             "tool_idempotency_unsettled", { invocationId, status: recorded.invocation.status });
+          const replayResult = tool.providerType === "paperclip_self"
+            ? await revalidateFirstPartyBuiltinReplay(session, tool, effectiveParameters, invocationId)
+            : session.workflowRunId || scopedContext
+              ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation);
           await writeAudit({
             session,
             companyId: session.companyId,
@@ -10984,11 +12960,13 @@ export function createToolGatewayService(
               replayed: true,
             },
           });
+          if (tool.providerType !== "paperclip_self") await revalidateScopedMemoryReplay({ invocationId,
+            argumentsHash: argumentValidation.summary.sha256 ?? "", result: replayResult });
           return {
             invocationId,
             status: "replayed" as const,
             tool: tool.name,
-            result: session.workflowRunId || scopedContext ? recorded.invocation.workflowResultJson : storedInvocationResult(recorded.invocation),
+            result: replayResult,
           };
         }
         if (accessDecision.decision === "require_approval") {
@@ -11084,6 +13062,7 @@ export function createToolGatewayService(
             "agent_context_required",
           );
         }
+        if (tool.providerType === "paperclip_plugin") await assertToolInternalInferenceAdmitted(session);
         const connectedMcpExecution =
           tool.providerType === "mcp_remote_http"
             ? await executeRemoteHttpTool(
@@ -11124,7 +13103,7 @@ export function createToolGatewayService(
                 executionTimeoutMs,
               )
             : await runWithTimeout(
-                executeBuiltinTool(session, tool, effectiveParameters, invocationId),
+                executeBuiltinTool(session, tool, effectiveParameters, invocationId, scopedContext),
                 executionTimeoutMs,
               );
 
@@ -11160,6 +13139,25 @@ export function createToolGatewayService(
             updatedAt: completedAt,
           })
           .where(eq(toolInvocations.id, invocationId));
+        const nativeMemoryCapture = nativeMemoryOutputCapture(scopedContext);
+        if (tool.name === "paperclip-self:remember" && nativeMemoryCapture) {
+          const resultRecord = asRecord(resultValidation.value);
+          const data = asRecord(resultRecord?.data);
+          const memory = asRecord(data?.record);
+          if ((data?.status === "accepted" || data?.status === "pending") && typeof memory?.id === "string" &&
+            resultValidation.summary.sha256) {
+            const authorizationActor = currentSessionMemoryActor(session);
+            if (!authorizationActor) throw new ToolGatewayHttpError(403,
+              "Memory output lost its verified Agent session", "memory_agent_authority_unavailable");
+            const actor: MemoryMutationActor = {
+              principal: { type: "agent", agentId: session.agentId!, responsibleUserId: session.responsibleUserId ?? null },
+              runId: session.runId, authorizationActor,
+              nativeModelOutputCapture: nativeMemoryCapture, nativeToolInvocationId: invocationId,
+            };
+            await sealNativeMemoryToolResultSnapshot(db, { companyId: session.companyId,
+              recordId: memory.id, actor, resultHash: resultValidation.summary.sha256 });
+          }
+        }
         if (input.approvedActionRequestId) {
           const [executedRequest] = await db
             .update(toolActionRequests)
@@ -11424,6 +13422,7 @@ export function createToolGatewayService(
       };
 
       const tool = findStaticTool(input.tool);
+      if (tool.providerType === "paperclip_plugin") await assertToolInternalInferenceAdmitted(sessionLike);
 
       if (tool.providerType !== "paperclip_plugin") {
         throw new ToolGatewayHttpError(
@@ -11708,6 +13707,7 @@ export function createToolGatewayService(
           ),
         )
         .returning();
+      memorySessionActors.delete(input.sessionId);
       const sessionView = gatewaySessionFromRow(session!);
       await writeAudit({
         session: sessionView,
@@ -11734,6 +13734,7 @@ export function createToolGatewayService(
         .delete(toolGatewaySessions)
         .where(lte(toolGatewaySessions.expiresAt, now))
         .returning({ id: toolGatewaySessions.id });
+      for (const row of rows) memorySessionActors.delete(row.id);
       return { deletedCount: rows.length };
     },
 
@@ -11791,6 +13792,8 @@ export function createToolGatewayService(
       }
     },
   };
+  const canonicalSandboxBrokerResolver=service.resolveSandboxCredentialBrokerPolicyBindings;
+  return service;
 }
 
 export type ToolGatewayService = ReturnType<typeof createToolGatewayService>;

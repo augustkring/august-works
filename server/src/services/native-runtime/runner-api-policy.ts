@@ -1,3 +1,4 @@
+import { TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE } from "./paid-transport-admission.js";
 /** Ordinary API results and replay receipts are not a secret-value channel. */
 export function runnerApiRestriction(
   method: string,
@@ -30,6 +31,10 @@ export function runnerApiRestriction(
 
 /** Runner-owned transitions cannot be reached by the generic HTTP escape hatch. */
 export function runnerApiMutationRestriction(path: string): string | null {
+  if (path === "/api/plugins/tools/execute") {
+    return `${TOOL_MODEL_EFFECT_UNAVAILABLE_MESSAGE} configuration_incomplete; owner: Managed model gateway owner; reason: tool_model_effect_unqualified`;
+  }
+
   const issueRoute = /^\/api\/issues\/\{[^}]+\}/.test(path);
   const routineAnnotation =
     /^\/api\/routines\/\{[^}]+\}\/description\/annotations(?:\/\{[^}]+\}(?:\/comments)?)?$/.test(

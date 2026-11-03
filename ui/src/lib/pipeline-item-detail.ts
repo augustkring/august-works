@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import type { Issue } from "@paperclipai/shared";
 import type {
   PipelineCase,
@@ -291,7 +292,7 @@ function readDecision(payload: Record<string, unknown>) {
 function actorName(event: PipelineCaseEvent) {
   if (event.actorAgent?.name) return event.actorAgent.name;
   if (event.actorType === "user") return "Board";
-  if (event.actorType === "system") return "Paperclip";
+  if (event.actorType === "system") return PRODUCT_IDENTITY.productName;
   return null;
 }
 

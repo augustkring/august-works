@@ -1,10 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
+  agents,
   companyUserSidebarPreferences,
   userSidebarPreferences,
 } from "@paperclipai/db";
-import type { SidebarOrderPreference } from "@paperclipai/shared";
+import type { PreferredCoworkerPreference, SidebarOrderPreference } from "@paperclipai/shared";
+import { notFound } from "../errors.js";
 
 function normalizeOrderedIds(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -92,6 +94,45 @@ export function sidebarPreferenceService(db: Db) {
         })
         .returning();
       return toPreference(row?.projectOrder ?? normalized, row?.updatedAt ?? now);
+    },
+
+    async getPreferredCoworker(companyId: string, userId: string): Promise<PreferredCoworkerPreference> {
+      const row = await db.query.companyUserSidebarPreferences.findFirst({
+        where: and(
+          eq(companyUserSidebarPreferences.companyId, companyId),
+          eq(companyUserSidebarPreferences.userId, userId),
+        ),
+      });
+      const agentId = row?.preferredAgentId ?? null;
+      if (!agentId) return { agentId: null, updatedAt: row?.updatedAt ?? null };
+      const [currentAgent] = await db.select({ id: agents.id }).from(agents).where(and(
+        eq(agents.companyId, companyId),
+        eq(agents.id, agentId),
+        ne(agents.status, "terminated"),
+      )).limit(1);
+      return { agentId: currentAgent?.id ?? null, updatedAt: row?.updatedAt ?? null };
+    },
+
+    async setPreferredCoworker(companyId: string, userId: string, agentId: string | null): Promise<PreferredCoworkerPreference> {
+      if (agentId) {
+        const [currentAgent] = await db.select({ id: agents.id }).from(agents).where(and(
+          eq(agents.companyId, companyId),
+          eq(agents.id, agentId),
+          ne(agents.status, "terminated"),
+        )).limit(1);
+        if (!currentAgent) throw notFound("Co-worker is unavailable in this company");
+      }
+      const now = new Date();
+      const [row] = await db.insert(companyUserSidebarPreferences).values({
+        companyId,
+        userId,
+        preferredAgentId: agentId,
+        updatedAt: now,
+      }).onConflictDoUpdate({
+        target: [companyUserSidebarPreferences.companyId, companyUserSidebarPreferences.userId],
+        set: { preferredAgentId: agentId, updatedAt: now },
+      }).returning({ preferredAgentId: companyUserSidebarPreferences.preferredAgentId, updatedAt: companyUserSidebarPreferences.updatedAt });
+      return { agentId: row?.preferredAgentId ?? null, updatedAt: row?.updatedAt ?? now };
     },
   };
 }

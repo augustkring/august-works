@@ -10,6 +10,7 @@ import { and, eq } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  authUsers,
   approvals,
   companies,
   companyMemberships,
@@ -40,6 +41,7 @@ import {
 
 const support = await getEmbeddedPostgresTestSupport();
 const describePg = support.supported ? describe.sequential : describe.skip;
+const boardReader = (userId: string) => ({ type: "board" as const, source: "session" as const, userId });
 
 describePg("Workflow executor V1", () => {
   let db!: ReturnType<typeof createDb>;
@@ -63,6 +65,7 @@ describePg("Workflow executor V1", () => {
     await db.delete(workflows);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -73,7 +76,9 @@ describePg("Workflow executor V1", () => {
 
   async function seedPublishedManualWorkflow() {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "Executor Co",
@@ -129,8 +134,10 @@ describePg("Workflow executor V1", () => {
     expectedOutputSchema?: Record<string, unknown> | null;
   }) {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
     const agentId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "Agent Task Co",
@@ -237,8 +244,10 @@ describePg("Workflow executor V1", () => {
     timeoutSeconds?: number;
   } = {}) {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
     const agentId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "External Agent Co",
@@ -453,7 +462,9 @@ describePg("Workflow executor V1", () => {
 
   async function seedPublishedGraph(graph: WorkflowGraphV1) {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow test Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companies).values({
       id: companyId,
       name: "Branch Executor Co",
@@ -792,7 +803,8 @@ describePg("Workflow executor V1", () => {
 
   async function seedSubworkflowParent(child: Awaited<ReturnType<typeof seedPublishedManualWorkflow>>) {
     const svc = workflowService(db);
-    const actor = { principal: { type: "user" as const, userId: child.userId } };
+    const actor = { principal: { type: "user" as const, userId: child.userId },
+      authorizationActor: { type: "board" as const, source: "session" as const, userId: child.userId } };
     const parent = await svc.create(child.companyId, { name: "Pinned parent" }, actor);
     const draft = await svc.updateDraft(child.companyId, parent.id, { expectedRevisionId: parent.draftRevisionId!, graph: {
       version: 1, nodes: [
@@ -833,7 +845,11 @@ describePg("Workflow executor V1", () => {
     const restarted = workflowExecutorService(db);
     await restarted.recoverExpiredRuns(20, new Date(Date.now() + 2_000));
     await restarted.recoverExpiredRuns();
-    expect((await restarted.getRun(child.companyId, waiting.run.id))?.run.status).toBe("succeeded");
+    // Background recovery may finish the child, but it cannot read/copy the
+    // child's result under the initiator's authority. The current verified
+    // Human session resumes the same idempotent parent request.
+    expect((await restarted.getRun(child.companyId, waiting.run.id))?.run.status).toBe("waiting");
+    expect((await executor.startManualRun(child.companyId, parent.id, { input: { value: 1 } }, actor, "child-wait")).run.status).toBe("succeeded");
     const cancelled = await executor.startManualRun(child.companyId, parent.id, { input: { value: 2 } }, actor, "child-cancel");
     const cancelledChildId = cancelled.steps.find((item) => item.nodeId === "child")!.childWorkflowRunId!;
     expect((await executor.cancelRun(child.companyId, cancelled.run.id, { reason: "Stop parent and child" }, actor)).run.status).toBe("cancelled");
@@ -1227,6 +1243,8 @@ describePg("Workflow executor V1", () => {
       status: "running",
       source: "manual",
       triggerPayload: { enabled: true },
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "dead-worker",
       leaseExpiresAt: new Date(now.getTime() - 60_000),
@@ -1315,7 +1333,7 @@ describePg("Workflow executor V1", () => {
       variables: [],
       settings: {},
     });
-    const now = new Date("2026-09-28T15:10:00.000Z");
+    const now = new Date();
     const old = new Date(now.getTime() - 120_000);
     const [run] = await db.insert(workflowRuns).values({
       companyId: seeded.companyId,
@@ -1324,6 +1342,8 @@ describePg("Workflow executor V1", () => {
       status: "running",
       source: "manual",
       triggerPayload: {},
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "dead-worker",
       leaseExpiresAt: new Date(now.getTime() - 60_000),
@@ -1393,6 +1413,8 @@ describePg("Workflow executor V1", () => {
       status: "queued",
       source: "manual",
       triggerPayload: { source: "recovery" },
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       createdAt: old,
       updatedAt: old,
@@ -1435,9 +1457,13 @@ describePg("Workflow executor V1", () => {
     }).returning();
     await db.delete(companyMemberships).where(eq(companyMemberships.companyId, seeded.companyId));
     await workflowExecutorService(db).recoverExpiredRuns(10, now);
-    const detail = await workflowExecutorService(db).getRun(seeded.companyId, run!.id);
-    expect(detail?.run).toMatchObject({ status: "failed", failureCode: "workflow_execution_principal_revoked" });
-    expect(detail?.steps).toHaveLength(0);
+    expect((await workflowExecutorService(db).getRun(seeded.companyId, run!.id))?.run)
+      .toMatchObject({ status: "failed", failureCode: "workflow_execution_principal_revoked" });
+    await expect(workflowExecutorService(db).getRun(seeded.companyId, run!.id, boardReader(seeded.userId)))
+      .rejects.toMatchObject({ status: 403 });
+    const [detail] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, run!.id));
+    expect(detail).toMatchObject({ status: "failed", failureCode: "workflow_execution_principal_revoked" });
+    expect(await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId, run!.id))).toHaveLength(0);
   });
 
   it("does not steal a run while its execution lease is still valid", async () => {
@@ -1451,6 +1477,8 @@ describePg("Workflow executor V1", () => {
       status: "running",
       source: "manual",
       triggerPayload: {},
+      responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "healthy-worker",
       leaseExpiresAt: new Date(now.getTime() + 20_000),
@@ -1515,7 +1543,8 @@ describePg("Workflow executor V1", () => {
     };
     const seeded = await seedPublishedGraph(graph);
     const actor = { principal: { type: "user" as const, userId: seeded.userId } };
-    const startedAt = new Date("2026-09-28T15:40:00.000Z");
+    const startedAt = new Date();
+    const runStartedAt = new Date(startedAt.getTime() - 30 * 24 * 60 * 60 * 1_000);
     const [run] = await db.insert(workflowRuns).values({
       companyId: seeded.companyId,
       workflowId: seeded.workflow.id,
@@ -1527,8 +1556,8 @@ describePg("Workflow executor V1", () => {
       executionOwnerId: "inline:test-retry",
       leaseExpiresAt: new Date(startedAt.getTime() + 30_000),
       ownerHeartbeatAt: startedAt,
-      startedAt,
-      createdAt: startedAt,
+      startedAt: runStartedAt,
+      createdAt: runStartedAt,
       updatedAt: startedAt,
     }).returning();
 
@@ -1540,11 +1569,11 @@ describePg("Workflow executor V1", () => {
       status: "succeeded",
       inputJson: {},
       outputJson: {},
-      startedAt,
-      finishedAt: new Date(startedAt.getTime() + 5),
+      startedAt: runStartedAt,
+      finishedAt: new Date(runStartedAt.getTime() + 5),
       durationMs: 5,
-      createdAt: startedAt,
-      updatedAt: startedAt,
+      createdAt: runStartedAt,
+      updatedAt: runStartedAt,
     });
     const [runningStep] = await db.insert(workflowStepRuns).values({
       companyId: seeded.companyId,
@@ -1553,9 +1582,11 @@ describePg("Workflow executor V1", () => {
       attempt: 1,
       status: "running",
       inputJson: { expression: "true" },
-      startedAt: new Date(startedAt.getTime() + 10),
-      createdAt: new Date(startedAt.getTime() + 10),
-      updatedAt: new Date(startedAt.getTime() + 10),
+      // The worker lease is current and renewable even though this node has
+      // been active for more than PostgreSQL int32 milliseconds.
+      startedAt: new Date(runStartedAt.getTime() + 10),
+      createdAt: new Date(runStartedAt.getTime() + 10),
+      updatedAt: new Date(runStartedAt.getTime() + 10),
     }).returning();
 
     const scheduled = await scheduleWorkflowStepRetry(
@@ -1589,6 +1620,11 @@ describePg("Workflow executor V1", () => {
     const scheduledAttempt = waiting!.steps.find(
       (step) => step.nodeId === "condition" && step.attempt === 1,
     )!;
+    expect(scheduledAttempt.durationMs).toBeGreaterThan(2_147_483_647);
+    expect(scheduledAttempt.durationMs).toBe(
+      new Date(scheduledAttempt.finishedAt!).getTime() -
+        new Date(scheduledAttempt.startedAt!).getTime(),
+    );
     const scheduledAt = scheduledAttempt.finishedAt!;
     const beforeDue = new Date(new Date(scheduledAt).getTime() + 500);
     const before = await workflowExecutorService(db).recoverExpiredRuns(10, beforeDue);
@@ -2203,7 +2239,7 @@ describePg("Workflow executor V1", () => {
       variables: [],
       settings: {},
     });
-    const now = new Date("2026-09-28T20:30:00.000Z");
+    const now = new Date();
     const old = new Date(now.getTime() - 120_000);
     const [run] = await db.insert(workflowRuns).values({
       companyId: seeded.companyId,
@@ -2213,6 +2249,7 @@ describePg("Workflow executor V1", () => {
       source: "manual",
       triggerPayload: {},
       responsibleUserId: seeded.userId,
+      executionPrincipal: { type: "user", userId: seeded.userId },
       correlationId: randomUUID(),
       executionOwnerId: "dead-worker",
       leaseExpiresAt: new Date(now.getTime() - 60_000),

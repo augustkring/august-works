@@ -12,6 +12,16 @@ export const workerModelBindingSchema = z
   .strict();
 export type WorkerModelBinding = z.infer<typeof workerModelBindingSchema>;
 
+/** Current Human chat runs have no orchestration plan or worker attempt. The
+ * controller issues this separate binding from the persisted Native run. */
+export const conversationModelBindingSchema = z.object({
+  issueId: z.string().uuid(),
+  conversationSessionGeneration: z.number().int().nonnegative(),
+  executionManifestId: z.string().uuid(),
+  executionManifestHash: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict();
+export type ConversationModelBinding = z.infer<typeof conversationModelBindingSchema>;
+
 /** First supported worker transport: one bounded text inference. Model,
  * connection, destination, tariffs, Native task and authority are server-owned.
  * Client/server tools, sessions, attachments, thinking and retries are absent. */

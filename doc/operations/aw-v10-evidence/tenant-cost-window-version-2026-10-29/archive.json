@@ -1,0 +1,242 @@
+{
+  "archiveSha256": "d2a7567cc6e87811dee85b30a2d7019e0d0291f9a27a5ab304b02eb0f5ec2218",
+  "sourceChecks": [
+    {
+      "capture": "tenant-cost-window-version-r1-20261029",
+      "path": "packages/shared/src/saas-costs.ts",
+      "sha256": "d819ecc7935a696c4aede9a47fe97ae177366a2d595b57d7efdbfb4a9cf1711a"
+    },
+    {
+      "capture": "tenant-cost-window-version-r1-20261029",
+      "path": "server/src/services/billing/costs.ts",
+      "sha256": "ab818eae99002094e0f533f164d38ff756cc132990ccf7d2cd4bf4fcc0aa514f"
+    },
+    {
+      "capture": "tenant-cost-window-version-r1-20261029",
+      "path": "server/src/__tests__/v6-costs.integration.test.ts",
+      "sha256": "90e07242e46f9806a44950fc7d53d2a08adf210c7e7a0bde807ebbd9121ac4f7"
+    },
+    {
+      "capture": "tenant-cost-ui-version-r1-20261029",
+      "path": "packages/shared/src/saas-costs.ts",
+      "sha256": "d819ecc7935a696c4aede9a47fe97ae177366a2d595b57d7efdbfb4a9cf1711a"
+    },
+    {
+      "capture": "tenant-cost-ui-version-r1-20261029",
+      "path": "ui/src/pages/SaasOperations.test.tsx",
+      "sha256": "f1e071e0b9926551143b230f143ac81bc2fb7ea2b1cc9182298442ff246182d4"
+    }
+  ],
+  "members": [
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-test.log",
+      "rawBytes": 1248,
+      "rawSha256": "4eb37bd7eadeb175e3e12e0bed654fe8e57bb48645441e94ea28ea647695b9fa"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-test.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-runner.txt",
+      "rawBytes": 88,
+      "rawSha256": "9ccc80b8a332027004c7e4b530f4df624dc2daf24b3d79667a208888dee3205a"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-source-pins.json",
+      "rawBytes": 180431,
+      "rawSha256": "aef3b8e7de010c39c60e2fa7c924754e75d01ffe40c350654acdfb77f3f05ea7"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-syntax.log",
+      "rawBytes": 61,
+      "rawSha256": "a3f3c5a5c177e11f172c05bd4f168c661449c9410b60e0a3dde6ab6ba860315c"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-syntax.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-snapshot.log",
+      "rawBytes": 38,
+      "rawSha256": "84f044fb9ccbe5e3f3e2a167d5ae9c12c80e80e01dbe581124dc12224393d179"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-snapshot.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/tenant-cost-window-version-r1-20261029-binary.sha256",
+      "rawBytes": 65,
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/source-head.patch",
+      "rawBytes": 491226,
+      "rawSha256": "8e7197de0610c621915c7686aab1771c542dacd571e3c0ea5ebe0fc4bfe50d0d"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "rawBytes": 3167,
+      "rawSha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/packages/db/src/migrations/meta/0563_snapshot.json",
+      "rawBytes": 2785918,
+      "rawSha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "rawBytes": 3030,
+      "rawSha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "rawBytes": 2094,
+      "rawSha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/packages/shared/src/agent-model-migration-monitoring.ts",
+      "rawBytes": 2289,
+      "rawSha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/packages/shared/src/resource-governance.ts",
+      "rawBytes": 2455,
+      "rawSha256": "cf3be1dac5d870ce5a84340ca2998c2446f6093697506456161f6c65ab6c2749"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/server/src/services/agents/authoring-model-migration-monitor.ts",
+      "rawBytes": 19902,
+      "rawSha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/server/src/services/resource-governance.ts",
+      "rawBytes": 2460,
+      "rawSha256": "12b1e8411459fea6a47e6615f6b7db1adbe2d6feb6c7205179d240cb2d32d347"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "rawBytes": 11897,
+      "rawSha256": "92bc4b104b26a017955c41864734f1c89eff4cef0b23d2756b1ecb48a9138f19"
+    },
+    {
+      "file": "tenant-cost-window-version-r1-20261029/untracked-source/ui/src/components/AgentModelMigrationMonitor.tsx",
+      "rawBytes": 8089,
+      "rawSha256": "1744bbfd25942411c42bf2eba07af387d763a20f7b24e67dadc48acf966c2f32"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-test.log",
+      "rawBytes": 4985,
+      "rawSha256": "332ac07054740636f9a5e8d871c87b62b9e53f75f9280aaca4d601b0a56563c0"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-test.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-runner.txt",
+      "rawBytes": 79,
+      "rawSha256": "e8b09624c3fb12ca0f32d9cbb53d385a853dd1d8b887f18577502dd01cb99799"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-source-pins.json",
+      "rawBytes": 180387,
+      "rawSha256": "9799d5394270afa40b37e1215687d4cb9eeed6fcf02af1b44e993cdcc3a8d7c6"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-syntax.log",
+      "rawBytes": 61,
+      "rawSha256": "a3f3c5a5c177e11f172c05bd4f168c661449c9410b60e0a3dde6ab6ba860315c"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-syntax.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-snapshot.log",
+      "rawBytes": 38,
+      "rawSha256": "84f044fb9ccbe5e3f3e2a167d5ae9c12c80e80e01dbe581124dc12224393d179"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-snapshot.exit",
+      "rawBytes": 2,
+      "rawSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/tenant-cost-ui-version-r1-20261029-binary.sha256",
+      "rawBytes": 65,
+      "rawSha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/source-head.patch",
+      "rawBytes": 491226,
+      "rawSha256": "8e7197de0610c621915c7686aab1771c542dacd571e3c0ea5ebe0fc4bfe50d0d"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/packages/db/src/migrations/0563_wise_yellow_claw.sql",
+      "rawBytes": 3167,
+      "rawSha256": "3a657358183cd499efba154831c969c49dda4d1f7df69a5d0236eb2358a4e57d"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/packages/db/src/migrations/meta/0563_snapshot.json",
+      "rawBytes": 2785918,
+      "rawSha256": "2cda86e5db45b3f55304bcbfbb9afd3bd6cdb405b138de8ef0d3039c86567e71"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/packages/db/src/schema/agent_model_migration_monitor_receipts.ts",
+      "rawBytes": 3030,
+      "rawSha256": "25b781862fb45a42ef09de0802c0665234c83d8d7373e98652661a0670110d85"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/packages/shared/src/agent-model-migration-monitoring.test.ts",
+      "rawBytes": 2094,
+      "rawSha256": "d840e1f3dc02097ae59d5acd5ecf1af41cbccb1b92a9827cf0dde253e81b850e"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/packages/shared/src/agent-model-migration-monitoring.ts",
+      "rawBytes": 2289,
+      "rawSha256": "625c3d11b0eb727393bd99943fb4d099d88eced84b8d23949b231badfb8bea83"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/packages/shared/src/resource-governance.ts",
+      "rawBytes": 2455,
+      "rawSha256": "cf3be1dac5d870ce5a84340ca2998c2446f6093697506456161f6c65ab6c2749"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/server/src/services/agents/authoring-model-migration-monitor.ts",
+      "rawBytes": 19902,
+      "rawSha256": "cb10a1a6f90654478939c60cbfaf09a74989da19e4bb39e52f0d57f88d4541b4"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/server/src/services/resource-governance.ts",
+      "rawBytes": 2460,
+      "rawSha256": "12b1e8411459fea6a47e6615f6b7db1adbe2d6feb6c7205179d240cb2d32d347"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/ui/src/components/AgentModelMigrationMonitor.test.tsx",
+      "rawBytes": 11897,
+      "rawSha256": "92bc4b104b26a017955c41864734f1c89eff4cef0b23d2756b1ecb48a9138f19"
+    },
+    {
+      "file": "tenant-cost-ui-version-r1-20261029/untracked-source/ui/src/components/AgentModelMigrationMonitor.tsx",
+      "rawBytes": 8089,
+      "rawSha256": "1744bbfd25942411c42bf2eba07af387d763a20f7b24e67dadc48acf966c2f32"
+    }
+  ]
+}

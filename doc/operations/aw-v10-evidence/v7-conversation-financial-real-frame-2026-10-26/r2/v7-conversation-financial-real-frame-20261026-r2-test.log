@@ -1,0 +1,119 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts (31 tests | 6 failed | 25 skipped) 552803ms
+     × binds live reservations to the actual Human session and current conversation generation 90213ms
+     × settles the actual qualified conversation usage once and preserves the exact debit in canonical purge 90625ms
+     × allows the last exact-budget dispatch and rejects the next reservation 93608ms
+     × dispatches the 64th actual funded call and refuses the 65th 94803ms
+     × rolls back settlement if an actual reservation receipt is preempted, then settles once 89407ms
+     × retains an actual unknown conversation hold and blocks canonical company purge 89905ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > binds live reservations to the actual Human session and current conversation generation
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:515:25
+    513|         exercised = true;
+    514|       });
+    515|       expect(exercised).toBe(true);
+       |                         ^
+    516|       expect(result.providerCallCount).toBeGreaterThan(0);
+    517|       expect(result.workerPlan).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > settles the actual qualified conversation usage once and preserves the exact debit in canonical purge
+Error: conversation_frame_facts_missing
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:527:25
+    525|       const result = await conversationReservationFixture(async facts …
+    526|       const facts = factsHolder.value;
+    527|       if (!facts) throw new Error("conversation_frame_facts_missing");
+       |                         ^
+    528|       expect(result.success).toBe(true);
+    529|       expect(result.workerPlan).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > allows the last exact-budget dispatch and rejects the next reservation
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:570:22
+    568|         denied = true;
+    569|       }, 1);
+    570|       expect(denied).toBe(true);
+       |                      ^
+    571|       expect(result.success).toBe(true);
+    572|       expect(result.reservation).toMatchObject({ status: "completed", …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > dispatches the 64th actual funded call and refuses the 65th
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:593:30
+    591|         boundaryPassed = true;
+    592|       });
+    593|       expect(boundaryPassed).toBe(true);
+       |                              ^
+    594|       expect(result.providerCallCount).toBeGreaterThan(0);
+    595|     }, conversationFrameTestTimeoutMs);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > rolls back settlement if an actual reservation receipt is preempted, then settles once
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:614:34
+    612|         conflictRolledBack = true;
+    613|       });
+    614|       expect(conflictRolledBack).toBe(true);
+       |                                  ^
+    615|       expect(result.success).toBe(true);
+    616|       const [receipt] = await db.select().from(costEvents).where(eq(co…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > retains an actual unknown conversation hold and blocks canonical company purge
+Error: conversation_dispatched_facts_missing
+ ❯ src/__tests__/v7-model-reservations.integration.test.ts:627:25
+    625|       });
+    626|       const facts = dispatchedFacts.value;
+    627|       if (!facts) throw new Error("conversation_dispatched_facts_missi…
+       |                         ^
+    628|       expect(result.success).toBe(false);
+    629|       expect(result.providerCallCount).toBeGreaterThan(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 25 skipped (31)
+   Start at  13:56:04
+   Duration  581.28s (transform 21.24s, setup 91ms, import 28.22s, tests 552.80s, environment 0ms)
+

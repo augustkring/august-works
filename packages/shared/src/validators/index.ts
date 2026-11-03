@@ -75,11 +75,15 @@ export {
 
 export {
   createCompanySchema,
+  companyLocaleSchema,
+  companyTimeZoneSchema,
   interactionResolverGovernanceSchema,
   updateCompanySchema,
+  updateCompanyResponsibilityContactsSchema,
   updateCompanyBrandingSchema,
   type CreateCompany,
   type UpdateCompany,
+  type UpdateCompanyResponsibilityContacts,
   type UpdateCompanyBranding,
 } from "./company.js";
 export {
@@ -129,7 +133,10 @@ export {
 export {
   sidebarOrderPreferenceSchema,
   upsertSidebarOrderPreferenceSchema,
+  preferredCoworkerPreferenceSchema,
+  setPreferredCoworkerPreferenceSchema,
   type UpsertSidebarOrderPreference,
+  type SetPreferredCoworkerPreference,
 } from "./sidebar-preferences.js";
 export {
   resourceMembershipStateSchema,
@@ -315,6 +322,8 @@ export {
   portabilitySidebarOrderSchema,
   portabilityAgentManifestEntrySchema,
   portabilitySkillManifestEntrySchema,
+  portabilityProjectManifestEntrySchema,
+  portabilityIssueManifestEntrySchema,
   portabilityManifestSchema,
   portabilitySourceSchema,
   portabilityTargetSchema,
@@ -391,12 +400,14 @@ export {
 export {
   createProjectSchema,
   updateProjectSchema,
+  addProjectAccessMemberSchema,
   createProjectWorkspaceSchema,
   updateProjectWorkspaceSchema,
   projectExecutionWorkspacePolicySchema,
   projectWorkspaceRuntimeConfigSchema,
   type CreateProject,
   type UpdateProject,
+  type AddProjectAccessMember,
   type CreateProjectWorkspace,
   type UpdateProjectWorkspace,
   type ProjectExecutionWorkspacePolicy,
@@ -768,11 +779,24 @@ export {
   type CurrentUserPreferences,
   type UpdateCurrentUserPreferences,
   authSessionSchema,
+  nativeAuthenticationSecuritySchema,
+  nativeAuthenticationMethodsSchema,
+  nativePasskeySchema,
+  nativePasskeyListSchema,
+  nativePasskeyRegistrationSchema,
+  nativePasskeyAuthenticationSchema,
+  type NativePasskey,
+  nativeAuthenticationConfirmationSchema,
+  type NativeAuthenticationSecurity,
+  nativeRecoveryCodesSchema,
+  nativeTotpEnrollmentSchema,
   updateCurrentUserProfileSchema,
   updateCompanyMemberSchema,
   updateCompanyMemberWithPermissionsSchema,
+  securitySuspendCompanyMemberSchema,
   archiveCompanyMemberSchema,
   updateMemberPermissionsSchema,
+  createHumanWorkflowCoverageSchema,
   searchAdminUsersQuerySchema,
   updateUserCompanyAccessSchema,
   type CreateCompanyInvite,
@@ -790,8 +814,10 @@ export {
   type UpdateCurrentUserProfile,
   type UpdateCompanyMember,
   type UpdateCompanyMemberWithPermissions,
+  type SecuritySuspendCompanyMember,
   type ArchiveCompanyMember,
   type UpdateMemberPermissions,
+  type CreateHumanWorkflowCoverage,
   type SearchAdminUsersQuery,
   type UpdateUserCompanyAccess,
 } from "./access.js";
@@ -991,3 +1017,5 @@ export * from "./chat-channels.js";
 export * from "./chat-github.js";
 
 export * from "./email.js";
+
+export * from "./native-payload-source-snapshot.js";

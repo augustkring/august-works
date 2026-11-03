@@ -1,0 +1,95 @@
+{
+  "scope": "UP03 native same-company Foundation authorization prerequisite; no SQL privacy graph, schema, or migration changes",
+  "productionOwner": "server/src/services/authorization.ts",
+  "productionSha256": "ee7a4e4055e0bed062c8bbc35f60cd27a4175b77437c8b2c4d52e3d709b2c442",
+  "currentTest": "server/src/__tests__/foundation-read-source-authority.integration.test.ts",
+  "currentTestSha256": "c02fc79cc0e95457804c37bf158b879bbc8ab1fc376d0ab40f74f34492563570",
+  "runtime": "Node24.21, actual embedded PostgreSQL with original full migrator, maxConnections3, Vitest maxWorkers1, NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=1GiB GOMAXPROCS=2",
+  "captures": [
+    {
+      "session": 49838,
+      "exitCode": 1,
+      "result": "4 failed; first three contain genuine whitelist/positive-lock regression assertions; fourth is fixture result-array error, timeout and unhandled rejection. Not four semantic regressions.",
+      "durationSeconds": 58.69,
+      "log": "up03-foundation-source-red.log.txt",
+      "pinsVerifiedAfterExit": true,
+      "fixture": "up03-foundation-source-initial-fixture.test.ts.txt"
+    },
+    {
+      "session": 88371,
+      "exitCode": 1,
+      "result": "3 genuine regression tests failed, 1 actual held-Task-lock grant-withdrawal test passed; no unhandled error",
+      "durationSeconds": 26.15,
+      "log": "up03-foundation-source-red-corrected.log.txt",
+      "pinsVerifiedAfterExit": true,
+      "fixture": "up03-foundation-source-red-qualified-fixture.test.ts.txt"
+    },
+    {
+      "session": 70576,
+      "exitCode": 0,
+      "result": "8 passed before independent review found scope-overwrite and scoped-grant proof gaps; bounded historical result only",
+      "durationSeconds": 58.99,
+      "log": "up03-foundation-source-green.log.txt",
+      "pinsVerifiedAfterExit": true,
+      "fixture": "up03-foundation-source-eight-green-fixture.test.ts.txt"
+    },
+    {
+      "session": 59351,
+      "exitCode": 1,
+      "result": "2 genuine scope regressions failed, 8 deselected: original skill_test request broadened after actual Source-row wait and persisted key update; scoped direct canonical grant incorrectly certified company-wide",
+      "durationSeconds": 22.91,
+      "log": "up03-foundation-source-scope-red.log.txt",
+      "pinsVerifiedAfterExit": true,
+      "fixture": "up03-foundation-source-scope-red-fixture.test.ts.txt"
+    },
+    {
+      "session": 70934,
+      "exitCode": 0,
+      "result": "16 passed, 82 deselected, two files: 10 new Foundation cases and 6 original Source cases",
+      "durationSeconds": 57.64,
+      "log": "up03-foundation-source-final.log.txt",
+      "pinsVerifiedAfterExit": true,
+      "physicalPostgresCleanupClosed": true,
+      "command": "GOMEMLIMIT=1GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/foundation-read-source-authority.integration.test.ts server/src/__tests__/authorization-service.test.ts --maxWorkers=1 -t Source"
+    }
+  ],
+  "implementation": [
+    "New Foundation source whitelist accepts only same-company company resource, absent/empty requested scope, and an actual PgTransaction callback; ordinary canonical scoped decisions and issue/project source behavior remain unchanged.",
+    "Private Foundation-only loader mode reuses canonical permission, current membership, grant, responsible-Human and instance-role policy. Actual account/Agent/run/key and positive permission facts use FOR SHARE NOWAIT, retained through outer transaction commit. No cache or wire authority flag.",
+    "Actual persisted key scope must be valid and equal to a nonnull original parsed request scope; a broadened key cannot broaden the old request. Actual Board key revocation/expiry is checked; callback completion rejects expired credentials.",
+    "Malformed raw nonnull Agent keyScope is denied before canonical dispatch, using the original shared schema. Legacy absent/null key scope retains native semantics.",
+    "NOWAIT authority contention becomes generic HTTP409 native_source_authority_busy with no principal identifiers. Actual missing/revoked principals are denied.",
+    "Native local deployment and actual instance roles are preserved; copied admin flags do not grant Foundation source authority. Existing paused-Agent/terminal-run canonical Foundation read semantics are preserved."
+  ],
+  "finalAssertions": [
+    "Canonical board/Agent current grants permit same-company Foundation source reads; foreign company, Foundation edit, non-company resource, nonempty scope, autocommit and escaped callback do not.",
+    "Human and Agent grants, actual Human existence, actual revoked/expired credentials, strict key scopes, unsupported trust and stale admin/membership DTOs are tested.",
+    "Separate actual NOWAIT probes prove user, Agent, run, key, Human membership, Agent membership, Human grant and Agent grant locks remain held after callback until outer commit; native role and Board key pin probes are separate.",
+    "Observed pg_blocking_pids proves Source-row waits before actual grant withdrawal and key-scope broadening; postwait decisions deny.",
+    "Actual profile local-implicit and native role positives, cloud tenant role exclusion, SaaS denial, classified User/Agent/membership lock contention and callback-time credential expiration are tested.",
+    "Six existing native Source regressions remain selected and pass."
+  ],
+  "limits": [
+    "No whole V10/UP03 private graph completion claim. Task/Project/Memory/Foundation captured-payload role distinctions and downstream SQL closure remain separate work.",
+    "Permission facts are valid only within the same physical native transaction/callback. Returned decisions are not durable capabilities; consumers must execute their SQL inside that transaction.",
+    "This prerequisite does not pin Foundation payload/revision rows, reauthenticate token hashes, or certify transport/provider acceptance.",
+    "New integration test lives under src/__tests__, excluded by normal server tsconfig. Current production compiler result is not claimed here.",
+    "Initial errored fixture and pre-review eight-case green are preserved rather than relabeled as final qualification."
+  ],
+  "artifactsSha256": {
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-red.log.txt": "2d4748c0094b8abc0c769b0a85b37fc8a362088c2c1d78689d966026afb81bdd",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-red-before.sha256.txt": "d18e5ddac32e003db562e7df165a7a8ca19c2990cd129016797c97cfb806dba8",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-red-corrected.log.txt": "3c73c0b6f1a204a57c077756a709fe2edb94644f2b629374ed9c9074b1936fb3",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-red-corrected-before.sha256.txt": "80f2eef1b77e981ddc8f88ac74f7aaca09e46e22c0cdd754f7b557f1cedf0d4c",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-green.log.txt": "492a89e0f5fb81eee29114c2cbcf2498bf9359ea0fa445b91b35ca6bcf805d12",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-green-before.sha256.txt": "f6db31306ebc1b58f26f786373526cfcd47c5cd538aab651f52bcac509ae7d31",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-scope-red.log.txt": "2710d36863426cf1a841b07d49aecfd42e96754608720c2978d656fe215d23b9",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-scope-red-before.sha256.txt": "12e194fdd0a6810b5ef798bb55910d591be57632badbc6b330a535891dfae65b",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-final.log.txt": "40f54f6e596a2b4c2b1f59bfe9da80e3d0d7c6d4af133c0f73f61ab3e8f13383",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-final-before.sha256.txt": "688a579323640c395e89f162fe69947ece50a427bd4c206040fdc84dba8d2232",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-initial-fixture.test.ts.txt": "c158cf3da829655ddd0e02b7743a4f76e1ecbf9cc72aabb3e8e2abcee23be887",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-red-qualified-fixture.test.ts.txt": "420591dd9d994cff5bd1a46d16c0f5a89f701c7cb49ff6fa5517709b6dcf275d",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-eight-green-fixture.test.ts.txt": "ae35c5d6cad83353e784321d6b8a3e1e88564f34979957df47b4702df4915b5b",
+    "doc/operations/aw-v10-evidence/recovery-2026-10-22/up03-foundation-source-scope-red-fixture.test.ts.txt": "036c8ffa57a71c132e6f5982f3bd7e916aa523c54f76d4aa8c1e2a09198ad96d"
+  }
+}

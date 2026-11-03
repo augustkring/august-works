@@ -82,7 +82,7 @@ describe("errorHandler", () => {
     expect(telemetryMocks.trackErrorHandlerCrash).not.toHaveBeenCalled();
   });
 
-  it("exposes raw 500 messages for trusted Cloud tenant imports", () => {
+  it("exposes the trusted import response while sanitizing secret-sensitive crash metadata", () => {
     const req = {
       ...makeReq(),
       method: "POST",
@@ -104,7 +104,10 @@ describe("errorHandler", () => {
       error: "Internal server error",
       message: "portable file references missing upload id",
     });
-    expect(res.err).toBe(err);
+    expect(res.err).not.toBe(err);
+    expect(res.err).toBeInstanceOf(Error);
+    expect(res.err.message).toBe("Secret-sensitive request failed");
+    expect(JSON.stringify(res.__errorContext)).not.toContain(err.message);
   });
 
   it("attaches HttpError instances for 500 responses", () => {

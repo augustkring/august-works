@@ -1,0 +1,7 @@
+{
+  "revision": "R1123",
+  "status": "frozen private source; Oxc only; actual PG/coherent Host qualification pending",
+  "sourceCount": 5,
+  "sharedContractExcluded": true,
+  "actualPostgres": "NOT RUN"
+}

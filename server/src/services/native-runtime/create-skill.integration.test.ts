@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
-import { activityLog, companySkills, companyMemberships, heartbeatRuns, issues } from "@paperclipai/db";
+import { activityLog, companySkills, heartbeatRuns, issues } from "@paperclipai/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startRunnerApiTestServer } from "../../__tests__/helpers/runner-api-server.js";
 import { companySkillPolicyService } from "../company-skill-policy.js";
@@ -33,8 +33,22 @@ describe("runner create_skill through the real skill API", () => {
 
   async function fixture(options: Parameters<typeof server.fixture>[0] = {}) {
     const result = await server.fixture(options);
-    await server.db.insert(companyMemberships).values({ companyId: result.companyId, principalType: "agent", principalId: result.agentId, status: "active", membershipRole: "member" });
     return result;
+  }
+
+  async function companySkillBaseline(companyId: string) {
+    return server.db.select().from(companySkills).where(eq(companySkills.companyId, companyId));
+  }
+
+  type CompanySkillRows = Awaited<ReturnType<typeof companySkillBaseline>>;
+
+  function newSkillsSince(rows: CompanySkillRows, baseline: CompanySkillRows) {
+    const priorIds = new Set(baseline.map((skill) => skill.id));
+    return rows.filter((skill) => !priorIds.has(skill.id));
+  }
+
+  function expectSameSkillIds(rows: CompanySkillRows, baseline: CompanySkillRows) {
+    expect(rows.map((skill) => skill.id).sort()).toEqual(baseline.map((skill) => skill.id).sort());
   }
 
   const args = {
@@ -44,34 +58,39 @@ describe("runner create_skill through the real skill API", () => {
 
   it("creates one skill and one task-feed event across response retries", async () => {
     const testFixture = await fixture();
+    const baseline = await companySkillBaseline(testFixture.companyId);
     expect(testFixture.authority.definitions().some(tool => tool.name === "create_skill")).toBe(true);
     const call = (callId: string) => testFixture.authority.execute({ tool: "create_skill", callId, arguments: args });
     const first = await call("first");
     expect(await call("lost-response-retry")).toEqual(first);
-    const skills = await server.db.select().from(companySkills).where(eq(companySkills.companyId, testFixture.companyId));
-    expect(skills).toHaveLength(1);
-    expect(skills[0]).toMatchObject({ name: args.name, markdown: args.markdown });
+    const skills = await companySkillBaseline(testFixture.companyId);
+    const createdSkills = newSkillsSince(skills, baseline);
+    expect(skills).toHaveLength(baseline.length + 1);
+    expect(createdSkills).toHaveLength(1);
+    expect(createdSkills[0]).toMatchObject({ name: args.name, markdown: args.markdown });
     const service = companySkillService(server.db);
-    expect((await service.readFile(testFixture.companyId, skills[0]!.id, "SKILL.md"))?.content).toBe(args.markdown);
-    expect(await service.listVersions(testFixture.companyId, skills[0]!.id)).toHaveLength(1);
+    expect((await service.readFile(testFixture.companyId, createdSkills[0]!.id, "SKILL.md"))?.content).toBe(args.markdown);
+    expect(await service.listVersions(testFixture.companyId, createdSkills[0]!.id)).toHaveLength(1);
     const events = (await activityService(server.db).forIssue(testFixture.issueId)).filter(e => e.action === "company.skill_created");
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ entityId: skills[0]!.id, details: { sourceIssueId: testFixture.issueId, versionId: skills[0]!.currentVersionId } });
+    expect(events[0]).toMatchObject({ entityId: createdSkills[0]!.id, details: { sourceIssueId: testFixture.issueId, versionId: createdSkills[0]!.currentVersionId } });
     await expect(testFixture.authority.execute({ tool: "create_skill", callId: "conflict", arguments: { ...args, markdown: args.markdown + "Different instructions." } })).rejects.toThrow(/different inputs/);
-    expect((await service.readFile(testFixture.companyId, skills[0]!.id, "SKILL.md"))?.content).toBe(args.markdown);
+    expect((await service.readFile(testFixture.companyId, createdSkills[0]!.id, "SKILL.md"))?.content).toBe(args.markdown);
   });
 
   it("enforces explicit company policy before a write", async () => {
     const testFixture = await fixture();
+    const baseline = await companySkillBaseline(testFixture.companyId);
     await companySkillPolicyService(server.db).replace({ companyId: testFixture.companyId, expectedRevision: 0,
       policy: { schemaVersion: 1, defaultEffect: "deny", rules: [] },
       activity: { actorType: "user", actorId: "test-board" } });
     await expect(testFixture.authority.execute({ tool: "create_skill", callId: "policy-denied", arguments: args })).rejects.toThrow(/company policy/);
-    expect(await server.db.select().from(companySkills).where(eq(companySkills.companyId, testFixture.companyId))).toHaveLength(0);
+    expectSameSkillIds(await companySkillBaseline(testFixture.companyId), baseline);
   });
 
   it("recovers a concurrent or replacement-run retry without creating another skill", async () => {
     const testFixture = await fixture();
+    const baseline = await companySkillBaseline(testFixture.companyId);
     const [first, duplicate] = await Promise.all(["first", "concurrent"].map(callId =>
       testFixture.authority.execute({ tool: "create_skill", callId, arguments: args })));
     expect(duplicate).toEqual(first);
@@ -87,25 +106,31 @@ describe("runner create_skill through the real skill API", () => {
     const replacement = new PaperclipRunnerToolAuthority(server.db, { ...testFixture, runId: replacementRunId });
     expect(await replacement.execute({ tool: "create_skill", callId: "recovered", arguments: args })).toEqual(first);
     await expect(testFixture.authority.execute({ tool: "create_skill", callId: "stale", arguments: args })).rejects.toThrow();
-    expect(await server.db.select().from(companySkills).where(eq(companySkills.companyId, testFixture.companyId))).toHaveLength(1);
+    const createdSkills = newSkillsSince(await companySkillBaseline(testFixture.companyId), baseline);
+    expect(createdSkills).toHaveLength(1);
+    expect(createdSkills[0]).toMatchObject({ name: args.name, markdown: args.markdown });
     expect((await activityService(server.db).forIssue(testFixture.issueId)).filter(e => e.action === "company.skill_created")).toHaveLength(1);
   });
 
   it("rechecks company policy when a completed call is retried", async () => {
     const testFixture = await fixture();
+    const baseline = await companySkillBaseline(testFixture.companyId);
     await testFixture.authority.execute({ tool: "create_skill", callId: "allowed", arguments: args });
     await companySkillPolicyService(server.db).replace({ companyId: testFixture.companyId, expectedRevision: 0,
       policy: { schemaVersion: 1, defaultEffect: "deny", rules: [] },
       activity: { actorType: "user", actorId: "test-board" } });
     await expect(testFixture.authority.execute({ tool: "create_skill", callId: "revoked-retry", arguments: args })).rejects.toThrow(/company policy/);
-    expect(await server.db.select().from(companySkills).where(eq(companySkills.companyId, testFixture.companyId))).toHaveLength(1);
+    const createdSkills = newSkillsSince(await companySkillBaseline(testFixture.companyId), baseline);
+    expect(createdSkills).toHaveLength(1);
+    expect(createdSkills[0]).toMatchObject({ name: args.name, markdown: args.markdown });
   });
 
   it("does not create skills in planning mode", async () => {
     const testFixture = await fixture({ mode: "planning" });
+    const baseline = await companySkillBaseline(testFixture.companyId);
     expect(new PaperclipRunnerToolAuthority(server.db, { ...testFixture, workMode: "planning" }).definitions().some(tool => tool.name === "create_skill")).toBe(false);
     await expect(testFixture.authority.execute({ tool: "create_skill", callId: "plan", arguments: args })).rejects.toThrow();
-    expect(await server.db.select().from(companySkills).where(eq(companySkills.companyId, testFixture.companyId))).toHaveLength(0);
+    expectSameSkillIds(await companySkillBaseline(testFixture.companyId), baseline);
   });
 
   it("isolates company names and creation history", async () => {

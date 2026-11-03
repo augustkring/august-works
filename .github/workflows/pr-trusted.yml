@@ -333,6 +333,58 @@ jobs:
           pnpm install --frozen-lockfile --ignore-scripts
           git diff --exit-code -- pnpm-lock.yaml
 
+      - name: Validate customer product identity and compatibility exceptions
+        run: pnpm check:customer-brand && pnpm test:customer-brand
+
+  help_docs:
+    name: Help docs metadata and links
+    needs: [gate]
+    runs-on: ${{ needs.gate.outputs.runner }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Test Help docs validator
+        run: pnpm run test:help-docs
+
+      - name: Validate Help Center articles
+        run: pnpm run check:help-docs
+
+      - name: Check linked Help changes and write release evidence
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVIDENCE_FILE: ${{ runner.temp }}/help-change-review-evidence.json
+        run: node ./scripts/check-help-change-review.mjs --base "$BASE_SHA" --head "$HEAD_SHA" --evidence-out "$EVIDENCE_FILE"
+
+      - name: Retain Help change review evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: help-change-review-evidence
+          path: ${{ runner.temp }}/help-change-review-evidence.json
+          if-no-files-found: ignore
+
   typecheck_release_registry:
     name: Typecheck + Release Registry
     needs: [gate]
@@ -434,12 +486,54 @@ jobs:
       - name: Typecheck workspaces whose build scripts skip TypeScript
         run: pnpm run typecheck:build-gaps
 
+      - name: Typecheck all workspaces
+        run: pnpm -r typecheck
+
       - name: Verify release registry test coverage
         run: pnpm run test:release-registry
 
+      # The complete SDK pack is produced once from the existing locked
+      # workspace, not reinstalled independently in every server shard.
+      - name: Build managed Native provider pack
+        run: |
+          provider_pack="$RUNNER_TEMP/paperclip-native-provider-pack"
+          artifact_dir="$RUNNER_TEMP/paperclip-native-provider-pack-artifact"
+          mkdir -p "$artifact_dir"
+          pnpm --filter @paperclipai/paperclip-runner run build:provider-pack "$provider_pack"
+          git diff --exit-code -- pnpm-lock.yaml
+          test -x "$provider_pack/dist/bin/paperclip-runnerd"
+          git rev-parse HEAD > "$artifact_dir/source-commit.txt"
+          tar -czf "$artifact_dir/provider-pack.tar.gz" -C "$provider_pack" .
+          (cd "$artifact_dir" && sha256sum provider-pack.tar.gz source-commit.txt > provider-pack.sha256)
+
+      - name: Fetch pinned managed Native OpenShell prover
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          artifact_dir="$RUNNER_TEMP/paperclip-native-provider-pack-artifact"
+          archive="$artifact_dir/openshell-prover-x86_64-unknown-linux-musl.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 2 --max-time 120 \
+            https://github.com/NVIDIA/OpenShell/releases/download/v0.1.2/openshell-prover-x86_64-unknown-linux-musl.tar.gz \
+            --output "$archive"
+          echo "e1c9db66ae459850cab43765d7ad569effe2ac0a338c902a1b895d0cc361fbb0  $archive" | sha256sum --check
+          test "$(tar -tzf "$archive")" = openshell-prover
+          binary_sha=$(tar -xOzf "$archive" openshell-prover | sha256sum | cut -d ' ' -f 1)
+          test "$binary_sha" = 3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1
+
+      - name: Retain managed Native provider pack
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: managed-native-provider-pack-${{ github.run_id }}
+          path: ${{ runner.temp }}/paperclip-native-provider-pack-artifact/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
   general_tests:
     name: General tests (${{ matrix.group_label }})
-    needs: [gate]
+    needs: [gate, typecheck_release_registry]
     if: ${{ needs.gate.outputs.full_ci == 'true' }}
     runs-on: ${{ needs.gate.outputs.runner }}
     timeout-minutes: 20
@@ -506,6 +600,71 @@ jobs:
             group_label: server (12/12)
             shard_index: 11
             shard_count: 12
+          # Each managed SDK file and the kernel primitive gets a fresh job.
+          - group: general-server-managed-native
+            group_label: managed Native (1/16)
+            shard_index: 0
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (2/16)
+            shard_index: 1
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (3/16)
+            shard_index: 2
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (4/16)
+            shard_index: 3
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (5/16)
+            shard_index: 4
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (6/16)
+            shard_index: 5
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (7/16)
+            shard_index: 6
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (8/16)
+            shard_index: 7
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (9/16)
+            shard_index: 8
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (10/16)
+            shard_index: 9
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (11/16)
+            shard_index: 10
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (12/16)
+            shard_index: 11
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (13/16)
+            shard_index: 12
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (14/16)
+            shard_index: 13
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (15/16)
+            shard_index: 14
+            shard_count: 16
+          - group: general-server-managed-native
+            group_label: managed Native (16/16)
+            shard_index: 15
+            shard_count: 16
           - group: general-chat
             group_label: chat (1/3)
             shard_index: 0
@@ -547,6 +706,112 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
 
+      - name: Install root-owned Node for remote erasure mechanics tests
+        if: matrix.group == 'general-server-without-chat' || matrix.group == 'general-server-managed-native'
+        env:
+          ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: &managed_native_image_node |
+          trusted_node_dir=/usr/local/libexec/paperclip-erasure-test-node
+          observer_dir=/usr/local/libexec/paperclip-fixture-observers
+          # Check every existing target/ancestor BEFORE any privileged install.
+          # Missing descendants may be installed; existing different bytes are never replaced.
+          observer_check_chain() {
+            local current="$1" observer_mode
+            while [[ ! -e "$current" && ! -L "$current" ]]; do current=${current%/*}; done
+            while :; do
+              test "$(/usr/bin/readlink -f -- "$current")" = "$current"
+              test "$(/usr/bin/stat -Lc %u -- "$current")" = 0
+              observer_mode=$(/usr/bin/stat -Lc %a -- "$current")
+              (( (8#$observer_mode & 8#6022) == 0 ))
+              test "$current" = / && break
+              current=${current%/*}
+              test -n "$current" || current=/
+            done
+          }
+          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs" "$observer_dir/native-model-socket-v1" "$observer_dir/native-model-socket-v1.mjs"; do
+            if [[ -e "$observer_target" || -L "$observer_target" ]]; then test -f "$observer_target"; fi
+            observer_check_chain "$observer_target"
+          done
+          test ! -e "$trusted_node_dir/node" || /usr/bin/cmp -s "$(command -v node)" "$trusted_node_dir/node"
+          echo "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8  scripts/fixtures/native-session-handle-observer" | /usr/bin/sha256sum --check --strict
+          echo "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55  scripts/fixtures/native-session-handle-observer.mjs" | /usr/bin/sha256sum --check --strict
+          for observer_name in native-session-handles-v1 native-session-handles-v1.mjs; do
+            observer_expected=9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8
+            [[ "$observer_name" != *.mjs ]] || observer_expected=7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55
+            if [[ -e "$observer_dir/$observer_name" ]]; then
+              echo "$observer_expected  $observer_dir/$observer_name" | /usr/bin/sha256sum --check --strict
+            fi
+          done
+          # Separate fixed read-only live socket observer; no Stop/erasure authority.
+          echo "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079  scripts/fixtures/native-model-socket-observer" | /usr/bin/sha256sum --check --strict
+          echo "5907972e9bd2b8269142c04d38ab3e713df92d5e8bbeee9930fae1d4605389f2  scripts/fixtures/native-model-socket-observer.mjs" | /usr/bin/sha256sum --check --strict
+          for observer_name in native-model-socket-v1 native-model-socket-v1.mjs; do
+            observer_expected=ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079
+            [[ "$observer_name" != *.mjs ]] || observer_expected=5907972e9bd2b8269142c04d38ab3e713df92d5e8bbeee9930fae1d4605389f2
+            if [[ -e "$observer_dir/$observer_name" ]]; then
+              echo "$observer_expected  $observer_dir/$observer_name" | /usr/bin/sha256sum --check --strict
+            fi
+          done
+          for observer_directory in "$trusted_node_dir" "$observer_dir"; do
+            if [[ ! -e "$observer_directory" ]]; then sudo install -d -o root -g root -m 0755 "$observer_directory"; fi
+          done
+          if [[ ! -e "$trusted_node_dir/node" ]]; then
+            sudo install -o root -g root -m 0755 "$(command -v node)" "$trusted_node_dir/node"
+          fi
+          if [[ ! -e "$observer_dir/native-session-handles-v1" ]]; then
+            sudo install -o root -g root -m 0555 scripts/fixtures/native-session-handle-observer "$observer_dir/native-session-handles-v1"
+          fi
+          if [[ ! -e "$observer_dir/native-session-handles-v1.mjs" ]]; then
+            sudo install -o root -g root -m 0444 scripts/fixtures/native-session-handle-observer.mjs "$observer_dir/native-session-handles-v1.mjs"
+          fi
+          if [[ ! -e "$observer_dir/native-model-socket-v1" ]]; then
+            sudo install -o root -g root -m 0555 scripts/fixtures/native-model-socket-observer "$observer_dir/native-model-socket-v1"
+          fi
+          if [[ ! -e "$observer_dir/native-model-socket-v1.mjs" ]]; then
+            sudo install -o root -g root -m 0444 scripts/fixtures/native-model-socket-observer.mjs "$observer_dir/native-model-socket-v1.mjs"
+          fi
+          /usr/bin/cmp -s "$(command -v node)" "$trusted_node_dir/node"
+          echo "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8  $observer_dir/native-session-handles-v1" | /usr/bin/sha256sum --check --strict
+          echo "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55  $observer_dir/native-session-handles-v1.mjs" | /usr/bin/sha256sum --check --strict
+          echo "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079  $observer_dir/native-model-socket-v1" | /usr/bin/sha256sum --check --strict
+          echo "5907972e9bd2b8269142c04d38ab3e713df92d5e8bbeee9930fae1d4605389f2  $observer_dir/native-model-socket-v1.mjs" | /usr/bin/sha256sum --check --strict
+          for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs" "$observer_dir/native-model-socket-v1" "$observer_dir/native-model-socket-v1.mjs"; do
+            observer_check_chain "$observer_target"
+          done
+          # Run ONLY the finite unprivileged kernel control; the observer itself cannot signal/write.
+          echo "a6fba302c87c6eaefe0c0a10b625cb3f14ae2959956900eeeb314c7912dfdfab  scripts/fixtures/native-session-handle-observer-check.mjs" | /usr/bin/sha256sum --check --strict
+          /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-session-handle-observer-check.mjs
+          echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
+          echo "PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1" >> "$GITHUB_ENV"
+          # Qualify actual same-UID nondumpable completeness and socket ownership before enabling this distinct lane.
+          echo "0e57afb749f82e87df7502dc71ff09a1adbb07dcc614d33b1f7a3e189ad61d13  scripts/fixtures/native-model-socket-observer-check.mjs" | /usr/bin/sha256sum --check --strict
+          /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-model-socket-observer-check.mjs
+          echo "PAPERCLIP_TEST_PRIVILEGED_MODEL_SOCKET_OBSERVER=1" >> "$GITHUB_ENV"
+          # The disposable GitHub image exposes this root-owned PATH directory
+          # as 0777. Lock that known image directory before workspace installs;
+          # self-hosted images retain their operator-managed permissions.
+          if [[ "$ERASER_TEST_RUNNER_ENVIRONMENT" == github-hosted ]]; then
+            eraser_image_bin=/usr/local/bin
+            test "$(/usr/bin/readlink -f -- "$eraser_image_bin")" = "$eraser_image_bin"
+            test "$(/usr/bin/stat -Lc %u -- "$eraser_image_bin")" = 0
+            eraser_image_bin_mode=$(/usr/bin/stat -Lc %a -- "$eraser_image_bin")
+            echo "eraser-profile original-path=$eraser_image_bin uid=0 mode=$eraser_image_bin_mode"
+            if [[ "$eraser_image_bin_mode" == 777 ]]; then
+              sudo chmod 0755 -- "$eraser_image_bin"
+            fi
+          fi
+          # Report the exact fixed binary profile when a hosted runner refuses it.
+          # These are public path/owner/mode facets; no environment values or file bodies.
+          for executable in "$trusted_node_dir/node" /bin/sh /usr/bin/env /usr/bin/readlink /usr/bin/stat /usr/bin/sha256sum /usr/bin/cut /usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin; do
+            current_binary=$(/usr/bin/readlink -f -- "$executable")
+            while :; do
+              /usr/bin/stat -Lc 'eraser-profile path=%n uid=%u mode=%a' -- "$current_binary"
+              test "$current_binary" = / && break
+              current_binary=${current_binary%/*}
+              test -n "$current_binary" || current_binary=/
+            done
+          done
+
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         env:
@@ -576,11 +841,94 @@ jobs:
           pnpm install --frozen-lockfile
           git diff --exit-code -- pnpm-lock.yaml
 
+      - name: Download managed Native provider pack
+        if: matrix.group == 'general-server-without-chat' || matrix.group == 'general-server-managed-native'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: managed-native-provider-pack-${{ github.run_id }}
+          path: ${{ runner.temp }}/paperclip-native-provider-pack-artifact
+
+      - name: Prepare managed Native fixture image bytes
+        if: matrix.group == 'general-server-without-chat' || matrix.group == 'general-server-managed-native'
+        run: &managed_native_image_bytes |
+          artifact_dir="$RUNNER_TEMP/paperclip-native-provider-pack-artifact"
+          provider_pack="$RUNNER_TEMP/paperclip-native-provider-pack"
+          (cd "$artifact_dir" && sha256sum --check provider-pack.sha256)
+          test "$(cat "$artifact_dir/source-commit.txt")" = "$(git rev-parse HEAD)"
+          mkdir -p "$provider_pack"
+          tar -xzf "$artifact_dir/provider-pack.tar.gz" -C "$provider_pack"
+          test -f "$provider_pack/provider-pack.json"
+          test -x "$provider_pack/dist/bin/paperclip-runnerd"
+          echo "PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH=$provider_pack" >> "$GITHUB_ENV"
+          echo "PAPERCLIP_RUNNER_BINARY=$provider_pack/dist/bin/paperclip-runnerd" >> "$GITHUB_ENV"
+          archive="$artifact_dir/openshell-prover-x86_64-unknown-linux-musl.tar.gz"
+          echo "e1c9db66ae459850cab43765d7ad569effe2ac0a338c902a1b895d0cc361fbb0  $archive" | sha256sum --check
+          test "$(tar -tzf "$archive")" = openshell-prover
+          prover_dir="$RUNNER_TEMP/managed-native-openshell-prover-v0.1.2"
+          mkdir -m 700 "$prover_dir"
+          tar -xzf "$archive" -C "$prover_dir" -- openshell-prover
+          prover="$prover_dir/openshell-prover"
+          echo "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1  $prover" | sha256sum --check
+          test -x "$prover"
+          echo "AW_V7_OPENSHELL_PROVER=$prover" >> "$GITHUB_ENV"
+          node --input-type=module - "$provider_pack" "$GITHUB_ENV" <<'NODE'
+          import assert from "node:assert/strict";
+          import { createHash } from "node:crypto";
+          import { accessSync, appendFileSync, constants, lstatSync, readFileSync, realpathSync } from "node:fs";
+          import { resolve, sep } from "node:path";
+          const [pack, environment] = process.argv.slice(2);
+          const root = realpathSync(pack);
+          const manifest = JSON.parse(readFileSync(resolve(root, "provider-pack.json"), "utf8"));
+          const expected = "sha256:513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080";
+          assert.equal(process.platform, "linux"); assert.equal(process.arch, "x64");
+          assert.equal(manifest.schema, "paperclip-runner/remote-provider-pack/v1");
+          assert.deepEqual(manifest.payload.target, { platform: "linux", architecture: "x64" });
+          assert.equal(manifest.payload.pins.opencode, "1.18.32");
+          const artifact = manifest.payload.artifacts.opencodeExecutable;
+          assert.equal(artifact.path, "node_modules/opencode-ai/bin/opencode.exe");
+          assert.equal(artifact.sha256, expected);
+          const binary = realpathSync(resolve(root, artifact.path));
+          assert.ok(binary.startsWith(root + sep), "OpenCode must remain inside the verified pack");
+          const metadata = lstatSync(binary);
+          assert.ok(metadata.isFile() && !metadata.isSymbolicLink());
+          assert.equal(metadata.uid, process.getuid()); assert.equal(metadata.mode & 0o022, 0);
+          accessSync(binary, constants.X_OK);
+          assert.equal("sha256:" + createHash("sha256").update(readFileSync(binary)).digest("hex"), expected);
+          appendFileSync(environment, `PAPERCLIP_QUALIFIED_OPENCODE_BINARY=${binary}\n`);
+          NODE
+
+      - name: Select installed Chrome for managed browser fixtures
+        if: matrix.group == 'general-server-without-chat' || matrix.group == 'general-server-managed-native'
+        run: |
+          # Reuse the exact current partition, so only the browser's shard
+          # needs Chrome even if recorded suite durations change its index.
+          selection="$RUNNER_TEMP/managed-native-selected-suites.json"
+          node scripts/run-vitest-stable.mjs --mode general --group '${{ matrix.group }}' \
+            --shard-index ${{ matrix.shard_index }} --shard-count ${{ matrix.shard_count }} --dry-run > "$selection"
+          browser_selected=$(node --input-type=module - "$selection" <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const selected = JSON.parse(readFileSync(process.argv[2], "utf8")).selectedGeneralServerSuites;
+          assert.ok(Array.isArray(selected) && selected.every(value => typeof value === "string"));
+          process.stdout.write(String(selected.includes("server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts")));
+          NODE
+          )
+          if [[ "$browser_selected" == true ]]; then
+            # Existing hosted image prerequisite, also used by the e2e job.
+            google-chrome --version
+            chrome="$(dirname "$(readlink -f "$(command -v google-chrome)")")/chrome"
+            test -x "$chrome"
+            "$chrome" --version
+            echo "PAPERCLIP_PLAYWRIGHT_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
+          fi
+
       - name: Install generated-code sandbox
-        if: matrix.group == 'general-server-without-chat'
+        if: matrix.group == 'general-server-without-chat' || matrix.group == 'general-server-managed-native'
         run: bash scripts/ci-install-native-sandbox.sh
 
       - name: Run grouped general test suites
+        env:
+          PAPERCLIP_VITEST_REPORT_DIR: ${{ runner.temp }}/vitest-results
         run: |
           if [ -n "${{ matrix.shard_count }}" ]; then
             pnpm test:run:general -- --group '${{ matrix.group }}' \
@@ -588,6 +936,15 @@ jobs:
           else
             pnpm test:run:general -- --group '${{ matrix.group }}'
           fi
+
+      - name: Upload compact Vitest results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: vitest-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.group }}-${{ matrix.shard_index }}
+          path: ${{ runner.temp }}/vitest-results/**/*.json
+          if-no-files-found: warn
+          retention-days: 3
 
   docker_context_integrity:
     name: Docker context integrity
@@ -622,7 +979,7 @@ jobs:
     # Preserve the legacy required-check name while the underlying work runs in parallel.
     name: verify
     if: ${{ always() }}
-    needs: [gate, policy, typecheck_release_registry, general_tests, verify_paperclip_runner, build, docker_context_integrity]
+    needs: [gate, policy, help_docs, typecheck_release_registry, general_tests, verify_paperclip_runner, build, docker_context_integrity]
     runs-on: ${{ needs.gate.outputs.runner }}
     timeout-minutes: 5
 
@@ -631,6 +988,7 @@ jobs:
         env:
           FULL_CI: ${{ needs.gate.outputs.full_ci }}
           POLICY_RESULT: ${{ needs.policy.result }}
+          HELP_DOCS_RESULT: ${{ needs.help_docs.result }}
           TYPECHECK_RELEASE_REGISTRY_RESULT: ${{ needs.typecheck_release_registry.result }}
           GENERAL_TESTS_RESULT: ${{ needs.general_tests.result }}
           RUNNER_VERIFICATION_RESULT: ${{ needs.verify_paperclip_runner.result }}
@@ -638,6 +996,7 @@ jobs:
           DOCKER_CONTEXT_INTEGRITY_RESULT: ${{ needs.docker_context_integrity.result }}
         run: |
           test "$POLICY_RESULT" = "success"
+          test "$HELP_DOCS_RESULT" = "success"
           case "$FULL_CI" in
             true)
               test "$TYPECHECK_RELEASE_REGISTRY_RESULT" = "success"
@@ -894,6 +1253,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Boot the production runtime bundle
+        run: |
+          pnpm exec vitest run server/scripts/bundle-runtime.test.mjs
+          pnpm --filter @paperclipai/server build:runtime
+          bash scripts/server-boot-smoke.sh node server/dist-runtime/index.mjs
+
   verify_serialized_server:
     name: Verify serialized server suites (${{ matrix.shard_label }})
     needs: [gate]
@@ -1091,7 +1456,7 @@ jobs:
 
   e2e_shards:
     name: e2e shard (${{ matrix.shard_label }})
-    needs: [gate]
+    needs: [gate, typecheck_release_registry]
     if: ${{ needs.gate.outputs.full_ci == 'true' }}
     runs-on: ${{ needs.gate.outputs.runner }}
     timeout-minutes: 30
@@ -1203,6 +1568,33 @@ jobs:
           specs="$(node ./scripts/e2e-shard.mjs \
             --shard-index ${{ matrix.shard_index }} --shard-count ${{ matrix.shard_count }})"
           echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          # Exact selected filenames share the existing source-bound pack consumer.
+          managed_connection=false
+          for spec in $specs; do
+            case "$spec" in
+              tests/e2e/connection-intents.spec.ts|tests/e2e/connection-review-approve.spec.ts|tests/e2e/connection-review-decline.spec.ts|tests/e2e/connection-review-always.spec.ts|tests/e2e/connection-review-failure.spec.ts|tests/e2e/mcp-user-stories.spec.ts|tests/e2e/signoff-policy.spec.ts|tests/e2e/pipelines-tutorial-flow.spec.ts)
+                managed_connection=true ;;
+            esac
+          done
+          echo "managed_connection=$managed_connection" >> "$GITHUB_OUTPUT"
+
+      # Reuse the same source-bound build and exact checks as the server lane.
+      - name: Install selected managed connection image Node
+        if: steps.e2e_suites.outputs.managed_connection == 'true'
+        env:
+          ERASER_TEST_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: *managed_native_image_node
+
+      - name: Download selected managed connection provider pack
+        if: steps.e2e_suites.outputs.managed_connection == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: managed-native-provider-pack-${{ github.run_id }}
+          path: ${{ runner.temp }}/paperclip-native-provider-pack-artifact
+
+      - name: Prepare selected managed connection image bytes
+        if: steps.e2e_suites.outputs.managed_connection == 'true'
+        run: *managed_native_image_bytes
 
       - name: Set up pinned optional numerical interpreter
         if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
@@ -1210,8 +1602,8 @@ jobs:
         with:
           python-version: '3.12.14'
 
-      - name: Install selected native numerical sandbox
-        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts')
+      - name: Install selected native sandbox
+        if: contains(steps.e2e_suites.outputs.specs, 'statistical-forecast.spec.ts') || contains(steps.e2e_suites.outputs.specs, 'causal-dowhy.spec.ts') || steps.e2e_suites.outputs.managed_connection == 'true'
         run: bash scripts/ci-install-native-sandbox.sh
 
       - name: Install selected hash-locked numerical runtimes

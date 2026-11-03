@@ -1,5 +1,7 @@
 # Paperclip MCP Server
 
+This package targets the stable MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.4.0), which implements protocol revision `2026-07-28`. The stdio entry uses `serveStdio` and keeps the SDK's legacy-client support enabled; the tool gateway still owns authorization, company scope, approvals, and audit.
+
 Model Context Protocol server for Paperclip.
 
 This package is a thin MCP wrapper over the existing Paperclip REST API. It does

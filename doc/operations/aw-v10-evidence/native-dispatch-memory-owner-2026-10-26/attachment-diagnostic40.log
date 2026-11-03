@@ -1,0 +1,38 @@
+Copied and verified source files 118
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+stderr | src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+attachment stage authority check { withoutAuthority: false }
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (42 tests | 1 failed | 41 skipped) 5328ms
+     × qualifies only the current PG attachment bytes staged by executor admission 1374ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > qualifies only the current PG attachment bytes staged by executor admission
+Error: native_model_input_attachment_stage_rejected
+ ❯ src/services/native-runtime/native-session-executor.ts:7576:11
+    7574|     // Keep only our finite control errors; never propagate raw DB dia…
+    7575|     const message = error instanceof Error ? error.message : "";
+    7576|     throw new Error([
+       |           ^
+    7577|       "native_session_lease_lost", "native_session_lease_ttl_invalid",
+    7578|       "native_model_input_run_binding_changed", "native_model_input_la…
+ ❯ recordNativeModelInputDispatchIntent src/services/native-runtime/native-session-executor.ts:7415:3
+ ❯ Object.onTurnInput src/services/native-runtime/native-session-executor.ts:9626:34
+ ❯ executeNativeSession ../packages/paperclip-runner/src/native-session-runtime.ts:2382:30
+ ❯ trace.measure.parentName src/services/native-runtime/native-session-executor.ts:9541:24
+ ❯ Object.measure src/services/native-runtime/native-run-trace.ts:481:14
+ ❯ executePaperclipNativeSessionWithinScope src/services/native-runtime/native-session-executor.ts:9533:14
+ ❯ executePaperclipNativeSession src/services/native-runtime/native-session-executor.ts:8513:12
+ ❯ executeVerifiedAttachmentCase src/services/native-runtime/native-model-input-dispatch.integration.test.ts:348:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  02:39:23
+   Duration  18.62s (transform 9.56s, setup 73ms, import 13.09s, tests 5.33s, environment 0ms)
+

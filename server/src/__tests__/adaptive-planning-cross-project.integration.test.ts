@@ -3,7 +3,7 @@ import request from "supertest";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, beforeEach, afterAll, describe, expect, it } from "vitest";
-import { adaptivePlanningProposals, agents, analyticalLineageManifests, analyticalSourceSuppressions, authUsers, budgetPolicies, companyMemberships, companies, costEvents, createDb, goals, issues, issueRelations, principalPermissionGrants, projectGoals, projects, projectRoadmapProposals } from "@paperclipai/db";
+import { adaptivePlanningProposals, agents, analyticalLineageManifests, analyticalSourceSuppressions, budgetPolicies, companyMemberships, companies, costEvents, createDb, goals, issues, issueRelations, principalPermissionGrants, projectGoals, projects, projectRoadmapProposals } from "@paperclipai/db";
 import { crossProjectPlanningProfileSchema, portfolioPlanningProfileSchema } from "@paperclipai/shared";
 import { crossProjectPlanningService } from "../services/adaptive-planning/cross-project.js";
 import { projectPlanningService } from "../services/adaptive-planning/project-owner.js";
@@ -20,11 +20,13 @@ import { subscribeCompanyLiveEvents } from "../services/live-events.js";
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { disableV8Rollout } from "./helpers/v8-rollout.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 
 const support = await getEmbeddedPostgresTestSupport(), rationale = "Explicit software joint planning qualification; no staffing, budget or business-impact claim";
 describe.skipIf(!support.supported)("Native same-company cross-project planning proposals", () => {
-  let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string, userId: string, policyId: string;
-  const actor = () => ({ type: "board" as const, source: "session" as const, userId, companyIds: [companyId] });
+  let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string, userId: string, policyId: string, currentHuman: AuthorizationActor;
+  const actor = () => currentHuman;
   const owner = () => crossProjectPlanningService(db);
   beforeAll(async () => { process.env.PAPERCLIP_DECISION_SIGNING_SECRET = "0123456789abcdef0123456789abcdef"; database = await startEmbeddedPostgresTestDatabase("aw-v8-cross-project-"); db = createDb(database.connectionString); });
   afterAll(async () => { await database?.cleanup(); });
@@ -32,14 +34,13 @@ describe.skipIf(!support.supported)("Native same-company cross-project planning 
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ analytical_lineage_v8: true, business_metrics_v8: true, strategy_execution_v8: true, adaptive_planning_v8: true, planning_optimizer_v8: true, enableFoundationV1: true, project_roadmap_v5: true, ai_use_cases_v7: true, governance_evidence_v7: true });
     companyId = randomUUID(); userId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Joint planning software fixture", issuePrefix: randomUUID() });
-    await db.insert(authUsers).values({ id: userId, name: "Current software Human", email: `${userId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "admin" });
-    await db.insert(principalPermissionGrants).values(["company_scope:read", "users:manage_permissions", "project:read", "issue:read", "issue:mutate", "tasks:assign"].map(permissionKey => ({ companyId, principalType: "user", principalId: userId, permissionKey })));
+    currentHuman = await seedCurrentHumanSourceActor(db, [companyId], userId);
     const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["planning"]; policyId = (await aiGovernanceService(db).obligation(actor(), companyId, policy)).id;
   });
   async function fixture() {
-    const projectRows = await db.insert(projects).values(["First", "Second"].map(name => ({ companyId, name }))).returning();
-    const taskRows = await db.insert(issues).values(projectRows.map((project, index) => ({ companyId, projectId: project.id, title: `Native cross-project Task ${index}`, status: "todo", responsibleUserId: userId }))).returning();
+    const createdProjects = await Promise.all(["First", "Second"].map(name => createCanonicalHumanProject(db, companyId, actor(), name)));
+    const taskRows = await Promise.all(createdProjects.map((project, index) => issueService(db).create(companyId, { projectId: project.id, title: `Native cross-project Task ${index}`, status: "todo", responsibleUserId: userId, createdByUserId: userId }, db, undefined, { manualInputActor: actor(), privacyActor: actor() })));
+    const projectRows = await Promise.all(createdProjects.map(async project => (await db.select().from(projects).where(eq(projects.id, project.id)))[0]!));
     await db.insert(issueRelations).values({ companyId, issueId: taskRows[0].id, relatedIssueId: taskRows[1].id, type: "blocks" });
     const profile = crossProjectPlanningProfileSchema.parse({ purpose: "management_intelligence", sensitivity: "internal", retentionDays: 1, governanceObligationRefs: [policyId], projects: projectRows.map(project => ({ id: project.id, expectedUpdatedAt: project.updatedAt.toISOString() })), horizon: { start: new Date(Date.now() + 86400000).toISOString().slice(0, 10), days: 5 }, pools: [{ key: "declared_pool", days: Array.from({ length: 5 }, () => ({ availableMinutes: 480, committedMinutes: 0 })) }], policy: { mandatoryCommitmentsFirst: true, orderBy: [], paretoDimensions: [] }, tasks: taskRows.map(task => ({ key: task.id, expectedUpdatedAt: task.updatedAt.toISOString(), durationDays: 1, demands: [{ poolKey: "declared_pool", minutesPerDay: 480 }], mandatoryCommitment: false, dimensions: {}, rationale })), evidence: [] });
     return { projects: projectRows, tasks: taskRows, profile };
@@ -62,8 +63,8 @@ describe.skipIf(!support.supported)("Native same-company cross-project planning 
     const f = await portfolioFixture(); await db.delete(issueRelations).where(eq(issueRelations.companyId, companyId));
     const existing = await db.update(projects).set({ status: "in_progress", updatedAt: new Date() }).where(eq(projects.companyId, companyId)).returning();
     f.profile.projects = existing.map(project => ({ id: project.id, expectedUpdatedAt: project.updatedAt.toISOString() }));
-    const [third] = await db.insert(projects).values({ companyId, name: "Feasible third initiative" }).returning();
-    const [task] = await db.insert(issues).values({ companyId, projectId: third.id, title: "Feasible native third Task", status: "todo", responsibleUserId: userId }).returning();
+    const third = await createCanonicalHumanProject(db, companyId, actor(), "Feasible third initiative");
+    const task = await issueService(db).create(companyId, { projectId: third.id, title: "Feasible native third Task", status: "todo", responsibleUserId: userId, createdByUserId: userId }, db, undefined, { manualInputActor: actor(), privacyActor: actor() });
     await db.insert(projectGoals).values({ companyId, projectId: third.id, goalId: f.goal.id });
     f.profile.projects.push({ id: third.id, expectedUpdatedAt: third.updatedAt.toISOString() });
     f.profile.tasks.push({ ...f.profile.tasks[0], key: task.id, expectedUpdatedAt: task.updatedAt.toISOString() });

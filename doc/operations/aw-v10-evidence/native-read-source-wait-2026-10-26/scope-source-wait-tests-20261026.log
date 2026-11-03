@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts (15 tests | 1 failed | 14 skipped) 4197ms
+     × does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting 705ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts:208:23
+    206|     try {
+    207|       await new Promise(resolve => setTimeout(resolve, 50));
+    208|       expect(settled).toBe(false);
+       |                       ^
+    209|     } finally {
+    210|       release();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 1 passed | 34 skipped (36)
+   Start at  06:20:59
+   Duration  23.20s (transform 8.42s, setup 122ms, import 14.87s, tests 7.97s, environment 0ms)
+

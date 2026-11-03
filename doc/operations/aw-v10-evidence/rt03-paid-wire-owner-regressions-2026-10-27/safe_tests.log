@@ -1,0 +1,43 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > records a representative task proposal as evidence without creating a business task or approval interaction
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > refuses widened task output while retaining the actual model debit without an output document
+ ✓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > executes exactly once, retains real evidence, and qualifies only after canonical human review 6569ms
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > preserves a tested candidate through navigation while fencing unversioned behavior changes
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > preserves one admitted model execution when only navigation changes during inference
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > does not reuse an older passing test when the latest attempt is unresolved
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > requires current human verification of every saved scenario before clearing the test blocker
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > cannot pass without the canonical explicit human approval even with satisfied criteria
+ ✓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > tests an actual newly prepared Custom Agent without granting creation permissions or activating it 4633ms
+ ✓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > retains an ambiguous model debit and never dispatches again after a lost reply 2871ms
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > refuses stale C3 confirmation, undeclared sharing and request-ID content changes
+ ✓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > fences changed candidates after actual dispatch while retaining the completed model receipt 2067ms
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > withdraws qualification when the actual generated document revision changes
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > withdraws human test qualification after an actual required procedure is revoked
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > withholds a late output after procedure withdrawal while keeping the actual completed debit
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > uses only the selected approved preference through the actual bounded test controller
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > does not admit a paused candidate Memory read after its bound $s changes
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > does not admit a paused candidate Memory read after its bound $s changes
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > does not admit a paused candidate Memory read after its bound $s changes
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > withholds a late result after preference withdrawal while retaining the completed debit
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > consumes only selected approved knowledge through the Original controller with a synthetic provider response
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > withdraws a late knowledge-dependent result after read access is revoked while retaining its financial receipt
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > erases actual knowledge-dependent test copies while retaining the completed model debit
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > erases actual test copies through the Original Skill Source tombstone while retaining the financial debit
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > refuses cross-company, noncreator and revoked-account access without extra model effects
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > closes publication on account withdrawal during dispatch without erasing actual financial use
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > prevents mutable correlations, erased idempotency and ordinary orchestration admission
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > refuses unsupported external authority and stale runtime before producing a spend receipt
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > retains the liability and refuses successful publication when usage exceeds its qualified upper bound
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > counts retained maximum exposure across tests and preserves verification when the admitted ceiling fills a budget
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > refuses a model ceiling above remaining agent budget before creating any test or debit
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > protects an in-flight test from ordinary orphan recovery, then retains unknown spend at its persisted deadline
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > retains readable history without qualification after the installed tariff expires
+ ↓ src/__tests__/v9-agent-safe-tests.integration.test.ts > Representative candidate tests with Native evidence and human review > retains Native budget exposure and correlation if the private candidate is physically erased
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 30 skipped (34)
+   Start at  04:53:07
+   Duration  34.51s (transform 9.81s, setup 76ms, import 14.28s, tests 20.02s, environment 0ms)
+

@@ -1,0 +1,45 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "0164898b802bca7dd83378e6c51666c96dcb5f11",
+  "meaning": "Complete158 current Routine, Task recovery and private-source tests pass without fixture changes; earlier156pass2fail remains in original archive",
+  "logs": [
+    {
+      "name": "up13-routine-workflow-target-current-trace",
+      "exitCode": 0,
+      "rawSha256": "cfcd00d5e9d3a3001137917e59bb05e5bbb28c879cc89ee97ecb1498c2865314",
+      "sanitizedSha256": "29c10b709f1e94d986809e7c3eb7e8b2fa05ba04d84f34d98f70203162ca0c53",
+      "archiveSha256": "0e6d9b938687a3821984d392619196c917de120ee24b40464fbd952e38b0e91d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 1,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 78 skipped (80)",
+        "Duration  23.28s (transform 13.22s, setup 68ms, import 17.99s, tests 5.11s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "up13-full-routine-issue-private-source-current",
+      "exitCode": 0,
+      "rawSha256": "ef767d7e8d724c3ce1fdfe7b899ac3996cd41ea8492242bbce93fd17791b6da2",
+      "sanitizedSha256": "3a2b9ce3914d5a3007bdf25d37319bea26259cff7c9a3150078779bbfef2a21d",
+      "archiveSha256": "c2f4b59502107239141a5f3fc697ba3993f9d88f05d933bb723fb5b2b8b34e7f",
+      "redactions": {
+        "ansi": 48,
+        "bearer": 1,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  158 passed (158)",
+        "Duration  88.93s (transform 11.30s, setup 229ms, import 23.85s, tests 64.49s, environment 0ms)"
+      ]
+    }
+  ]
+}

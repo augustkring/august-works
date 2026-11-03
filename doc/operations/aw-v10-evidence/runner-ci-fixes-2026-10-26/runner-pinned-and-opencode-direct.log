@@ -1,0 +1,99 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/packages/paperclip-runner
+
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects the actual Claude runtime probe on unsupported linux arm64
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects the actual Claude runtime probe on unsupported darwin ia32
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects the actual Claude runtime probe on unsupported freebsd x64
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > anchors dynamic provider package resolution at an explicit root
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > does not fall back through the server package for a missing rooted dependency
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects an unregistered provider exit proof
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > never signals a dead guardian's saved process-group identity
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > does not delegate non-Linux snapshot filesystem lookups
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects host-ancestry file resolutions outside retained descriptors
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > removes every case variant of Node module-loader overrides
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > fails closed when the platform cannot atomically open without following symlinks
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > accepts the exact package, version, executable, and runtime
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > pins Claude ACP direct dependencies outside its package root
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects drift in Claude ACP's qualified dependency versions
+ ✓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > resolves and pins the installed Claude ACP dependency graph 498ms
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > resolves and pins the qualified Codex native runtime through its transitive packages
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects package version and executable digest drift
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects ambiguous and escaping executable metadata
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects runtime version drift
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects an executable symlink even when its target has the expected digest
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > detects pathname replacement before opening a launch lease
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects a hard-linked executable through a replacement directory
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > launches the verified bytes after its pathname is replaced
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > launches the lexical verified snapshot after symlink replacement
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > launches the verified bytes after the open inode is modified
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > drops inherited and caller-supplied Node preload options
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > drops native loader injection variables before spawning
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > drops inherited and caller-supplied Node package search paths
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > loads a verified ESM snapshot with relative imports and arguments
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > pins relative imports when the command directory is replaced
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > keeps descriptor-pinned CommonJS identity across replacement
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > pins direct sibling resource reads across directory replacement
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > pins a bare entry require when the command directory is replaced
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects dependencies that escape through a descendant symlink
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects a final-component module symlink
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects bare entry dependencies outside the verified package
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > loads a separately qualified runtime through a package symlink
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > loads parent-relative modules inside the verified package
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > supports an executable at the verified package root
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > pins package-ancestor dependencies across directory replacement
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > does not admit a transitive package from host ancestry
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > rejects incomplete or duplicate provider credential quorum descriptors
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > keeps the staged credential fenced through owner SIGKILL and reaps the provider group
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > reaps a fenced provider when its lifetime guardian is SIGKILLed
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > reaps a stopped provider after an external guardian kill
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > dismisses the lifetime sentinel only after normal provider-group cleanup
+ ↓ src/drivers/acpx/installation-integrity.test.ts > ACPX installation integrity > reaps a stopped provider across repeated guardian cleanup requests
+stderr | src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > starts an authenticated isolated server, creates a session, streams usage, aborts, and cleans up
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > routes only the explicitly selected Anthropic managed profile to the fixed Paperclip model broker
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > pins the managed source plugin and removes OpenCode built-ins from actual prompt payloads
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > advertises within-turn plans as unsupported
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > normalizes raw OpenCode boundary events into the local-integrity golden identities
+stderr | src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > starts an authenticated isolated server, creates a session, streams usage, aborts, and cleans up
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validFrom/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+unknown format "date-time" ignored in schema at path "#/properties/memoryCandidates/items/properties/validUntil/anyOf/0"
+
+ ✓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > starts an authenticated isolated server, creates a session, streams usage, aborts, and cleans up 532ms
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > maps OpenCode's normal abort error to cancellation without a false provider failure notice
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > keeps OpenCode in an outer supervisor process group when requested
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > uses the native system channel, selected skill tree, instruction root, and assigned MCP gateway
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > sends only the authoritative wake envelope when resuming an existing provider session
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > normalizes native question.asked events and replies with ordered OpenCode answer arrays
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > hands a native question to the durable interaction path without touching permissions
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > recovers a missed pending question from the list endpoint and rejects it
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > normalizes 'legacy' permission events and maps 'accept' to 'once'
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > normalizes 'v2' permission events and maps 'accept_for_session' to 'always'
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > normalizes 'v2' permission events and maps 'decline' to 'reject'
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > pins the allow permission mode while retaining external-directory denial
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > pins the ask permission mode while retaining external-directory denial
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > pins the deny permission mode while retaining external-directory denial
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > clears a stale active turn that already has a persisted terminal fingerprint
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > validates provider/model form
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > returns a repairable tool error for wrong criteria without committing a bad semantic result
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > returns a repairable tool error for missing criteria without committing a bad semantic result
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > returns a repairable tool error for duplicate criteria without committing a bad semantic result
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > normalizes a structured block result
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > designates the substantive pre-finish response instead of a trailing acknowledgement
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > does not promote opening commentary to the final response when work follows it
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > correlates the final response to the native message containing the semantic tool
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > uses provider structure rather than prose length to select a post-tool answer
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > rejects malformed and oversized SSE frames
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > restarts OpenCode when session startup fails transiently
+ ↓ src/drivers/opencode/opencode-server-driver.test.ts > OpenCodeServerDriver > reports startup exit details with stderr captured after spawn and redacted
+
+ Test Files  2 passed (2)
+      Tests  2 passed | 76 skipped (78)
+   Start at  00:10:14
+   Duration  1.58s (transform 889ms, setup 0ms, import 1.11s, tests 1.03s, environment 0ms)
+

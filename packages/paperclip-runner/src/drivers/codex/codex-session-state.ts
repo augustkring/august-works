@@ -90,6 +90,7 @@ export class CodexSessionState {
   readonly opened: OpenedCodexThread;
   readonly taskEnvelope: CodexTaskEnvelope;
   readonly conversationMode: "task" | "direct";
+  readonly verbatimNativeEnvelope: boolean;
   readonly now: () => Date;
   readonly runnerInstanceId: string;
   readonly driverKind: string;
@@ -154,6 +155,7 @@ export class CodexSessionState {
     opened: OpenedCodexThread;
     taskEnvelope: CodexTaskEnvelope;
     conversationMode: "task" | "direct";
+    verbatimNativeEnvelope?: boolean;
     resumed: boolean;
     activeTurnId?: string | null;
     semanticResult?: PersistedHarnessSemanticResult | null;
@@ -187,6 +189,7 @@ export class CodexSessionState {
     this.opened = input.opened;
     this.taskEnvelope = input.taskEnvelope;
     this.conversationMode = input.conversationMode;
+    this.verbatimNativeEnvelope = input.verbatimNativeEnvelope ?? false;
     this.activeTurnId = input.activeTurnId ?? null;
     this.sourceSequence = input.sourceSequence;
     this.now = input.now;

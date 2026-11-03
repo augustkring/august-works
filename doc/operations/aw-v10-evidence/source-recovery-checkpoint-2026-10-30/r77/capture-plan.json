@@ -1,0 +1,19 @@
+{
+  "baseCheckpoint": {
+    "archiveSha256": "17feb1567661f0b8675445e95c16a2dbcad1a4bb6509a956704182b3b3d855a2",
+    "manifestSha256": "d02fa2596bb5c687e46e51801bbc4b218cf592a4370532608117379f429b1f0f",
+    "name": "R76 recovery checkpoint"
+  },
+  "excluded": [
+    "Learning42 raw verbose test log (contains UUID-shaped fixture identifiers); case list retained safely inside receipt.",
+    "Native R147 raw actual-C7 log and private preserved-path inventory.",
+    "R148/R149 raw logs, prior-state snapshots, database/private identity material.",
+    "Native R150 overlay snapshots/private PostgreSQL logs; Native R151 qualification outputs.",
+    "All private DBs/assets, dependency/build caches, full source bundles, Main/Mirror/Git mutation."
+  ],
+  "included": "Sourceowner R9 plan/seed/WIP preview/readiness and deferred metadata references; safe Learning42 qualification receipt/cases/build receipts; CI ripgrep prerequisite candidate plus public failure and executed/deferred publisher sources; closed Native R147 safe status, R148/R149 audit facets, R150 failure receipts, immutable R151 pins/runner; Host R7-R9 helper chain and R9 final source; fresh continuation note.",
+  "inputCount": 91,
+  "mainDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "mainHead": "392dad8bf0f9273897ed91bc6c042a7685980d39",
+  "purpose": "RECOVERY ONLY; R77 closed post-R76 artifacts, no source activation/publication/acceptance claim."
+}

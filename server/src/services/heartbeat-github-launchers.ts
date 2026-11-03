@@ -4,6 +4,38 @@ import { cleanupGitHubOperationLaunchers, prepareGitHubOperationLaunchers } from
 
 type LauncherInput = Parameters<typeof prepareGitHubOperationLaunchers>[0];
 
+/**
+ * Sanitize the pre-selection Native environment without making any claim about
+ * repository contents. Actual workspace/Git discovery runs only after the
+ * managed execution owner and its immutable source authority have been sealed.
+ */
+export function prepareHeartbeatCredentiallessNativeEnvironment(
+  env: Record<string, unknown>,
+  networkAccess: boolean,
+): Record<string, string> {
+  const result: Record<string, string> = {
+    ...githubBrokerEnvironment(env, { url: "", token: "" }),
+    // Without staged wrappers, prevent the provider image's gh config and
+    // shell startup files from restoring ambient credentials/configuration.
+    GH_CONFIG_DIR: "/dev/null",
+    ZDOTDIR: "/dev/null",
+    BASH_ENV: "/dev/null",
+    PAPERCLIP_GITHUB_LAUNCHER_DIR: "",
+    PAPERCLIP_GITHUB_AUTH_MODE: "managed",
+    PAPERCLIP_RUNNER_NETWORK_ACCESS: networkAccess ? "enabled" : "disabled",
+  };
+  delete result.PAPERCLIP_RUNNER_NETWORK_ROOTS;
+  delete result.PAPERCLIP_GIT_METADATA_ROOTS;
+  return result;
+}
+
+/** Only the existing verified projectless owner may assert no repository. */
+export function prepareHeartbeatProjectlessNativeEnvironment(
+  env: Record<string, unknown>, networkAccess: boolean,
+): Record<string, string> {
+  return { ...prepareHeartbeatCredentiallessNativeEnvironment(env, networkAccess), PAPERCLIP_GIT_METADATA_ROOTS: "[]" };
+}
+
 export async function prepareHeartbeatGitHubLaunchers(
   input: LauncherInput & {
     native: boolean;

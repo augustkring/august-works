@@ -1,0 +1,14 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+[13:18:58] [33mWARN[39m: [36missue update rejected with 422[39m [90m{"issueId":"10000000-0000-4000-8000-000000000004","companyId":"10000000-0000-4000-8000-000000000001","assigneePatch":{"assigneeAgentId":"__omitted__","assigneeUserId":"__omitted__"},"currentAssignee":{"assigneeAgentId":"10000000-0000-4000-8000-000000000002","assigneeUserId":null}}[39m
+    error: {
+      "type": "Error"
+    }
+ ✓ src/__tests__/paperclip-semantic-conformance.test.ts > Paperclip semantic mock/production conformance > matches authorization, state, audit, retry, document, continuation, and terminal semantics 6294ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  13:18:35
+   Duration  27.34s (transform 10.73s, setup 78ms, import 15.50s, tests 11.63s, environment 0ms)
+

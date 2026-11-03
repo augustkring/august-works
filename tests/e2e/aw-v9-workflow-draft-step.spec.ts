@@ -87,7 +87,7 @@ for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} e
       await page.getByRole("spinbutton", { name: "Compare with", exact: true }).fill("");
       await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
       await expect(page.locator('#draft-step-value')).toHaveAttribute("aria-invalid", "true");
-      await expect(page.getByRole("alert")).toBeFocused(); expect(posts).toBe(0);
+      await expect(page.locator('main [role="alert"][tabindex="-1"]')).toBeFocused(); expect(posts).toBe(0);
       expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
       await page.locator('#draft-step-value').fill("10000");
     }
@@ -409,7 +409,7 @@ test("guided Native connected step edits explicit values and recovers its only l
     await page.getByRole("spinbutton", { name: "Antal", exact: true }).fill("11");
     await page.getByRole("button", { name: "Gem kladdeændringer", exact: true }).click();
     await expect(page.locator("#draft-step-tool_count")).toHaveAttribute("aria-invalid", "true");
-    await expect(page.getByRole("alert")).toBeFocused(); expect(posts).toBe(0);
+    await expect(page.locator('main [role="alert"][tabindex="-1"]')).toBeFocused(); expect(posts).toBe(0);
     expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
     await page.getByRole("checkbox", { name: "Medtag Antal", exact: true }).uncheck();
     await page.getByRole("combobox", { name: "Medtag inaktive", exact: true }).selectOption("false");

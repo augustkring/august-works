@@ -1,0 +1,59 @@
+{
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/company-portability.test.ts --maxWorkers=1 -t 'exports referenced skills|does not load or emit skills|external instruction roots|exports hire approval policy|exports legacy inline sensitive|explicit current actor|withdraws source-free|previews unstamped v5|same-company legacy|schemaVersions below 5|retired brand color|newer Paperclip'",
+  "firstCapture": {
+    "verdict": "12 passed,83 skipped;76.73s;exit0",
+    "qualification": "Mixed shared dependency versions: Memory privacy changed during capture. Not a qualification of that complete source pin set; preserved as the actual first run. The coherent current capture is recorded separately.",
+    "sourceObservations": {
+      "server/src/__tests__/company-portability.test.ts": {
+        "before": "56e5dcf2b81bcc0189ed75329b668e0d0a89531af2d16299b821505fb698b911",
+        "after": "56e5dcf2b81bcc0189ed75329b668e0d0a89531af2d16299b821505fb698b911",
+        "unchanged": true
+      },
+      "server/src/services/company-portability.ts": {
+        "before": "4ba04be3df98b614fccf91394d4465a6dc11cc53428ebffb4ab6ae389bea14ad",
+        "after": "4ba04be3df98b614fccf91394d4465a6dc11cc53428ebffb4ab6ae389bea14ad",
+        "unchanged": true
+      },
+      "server/src/services/authorization.ts": {
+        "before": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+        "after": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+        "unchanged": true
+      },
+      "server/src/services/memory/memory-privacy.ts": {
+        "before": "6458658edb91dd17295b73cebac7f3f3dbe5e55c7de91f12535226b2f94cabc2",
+        "after": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897",
+        "unchanged": false
+      }
+    },
+    "log": {
+      "path": "up03-portability-unit-native-actor-first.log.txt",
+      "sha256": "c04ef95f861534ae073d3c2e36b8fe4ef3062b8b0889d6dcfcc0b16d6b9f32ee"
+    }
+  },
+  "scope": [
+    "Five source-free export format/privacy assertions retain the existing expectations and supply an explicit native Human actor backed by actual PostgreSQL account and membership rows.",
+    "New negatives reject missing actors and current membership suspension through the unmocked canonical authorization owner.",
+    "Legacy task preview retains its version warning, but application rejects cross-organization source release; same-company legacy tasks lacking actual native proof are also refused.",
+    "The retired company metadata import selects only company metadata, leaving unsupported task transfer excluded. A future bundle declares version9 because the current shape is8."
+  ],
+  "limitations": [
+    "Formatting domain services remain mocked; this is not a full native end-to-end transfer qualification.",
+    "Only12 selected cases ran. The remaining83 tests were deselected and their older actor/source fixtures remain open.",
+    "No production guard, implicit actor fallback, source publication bypass, authorization mock, or credential access was added.",
+    "The latest completed normal server compiler passed before this test-only edit; the next whole-workspace compiler is running and has no final verdict recorded here."
+  ],
+  "currentCapture": {
+    "verdict": "PASS:12 passed,83 skipped;57.13s;exit0",
+    "scope": "The same selected source-free/current-actor/legacy-format cases, against the current frozen Memory dependency. Actual embedded PostgreSQL cleanup completed.",
+    "sourcePinsVerifiedUnchangedAtActualExit": {
+      "server/src/__tests__/company-portability.test.ts": "56e5dcf2b81bcc0189ed75329b668e0d0a89531af2d16299b821505fb698b911",
+      "server/src/services/company-portability.ts": "4ba04be3df98b614fccf91394d4465a6dc11cc53428ebffb4ab6ae389bea14ad",
+      "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+      "server/src/services/memory/memory-privacy.ts": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897"
+    },
+    "log": {
+      "path": "up03-portability-unit-native-actor-current.log.txt",
+      "sha256": "e1b52e38bb816fc7543d2b0181be8510fdfbf120a8f2957954ceb822dc3b2b7c"
+    }
+  }
+}

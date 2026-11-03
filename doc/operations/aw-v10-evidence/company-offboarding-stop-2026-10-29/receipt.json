@@ -1,0 +1,78 @@
+{
+  "scope": "V10-159 canonical archive cascade, exact revoke claim fencing and customer stage labels",
+  "cohorts": [
+    {
+      "cohort": "company-service",
+      "sourceHead": "3fedc501e37a6887a4958853ca1ff1ac2a0c43b4",
+      "passed": 22,
+      "filteredOut": 0,
+      "failed": 0,
+      "exitCode": 0,
+      "testedCurrentSource": {
+        "server/src/services/companies.ts": "3b275479b9e3210f8990916bdfc932f8558e0e76f9ffbbb1bd136369e52c7309",
+        "server/src/services/saas/offboarding.ts": "666c0ef19e4521e73e98fd36a64b4fe69d4106e3de54895be61ff9b3b72e66cc",
+        "server/src/__tests__/companies-service.test.ts": "fe0b18f5124f62a8db9f010ce1424e729e6a44a6454e95236ae168f8f0b9f283"
+      },
+      "rawLogSha256": "7607c97747904095dd9cd64f22669eb5b9c6a9be51f6535848827a26557a1105"
+    },
+    {
+      "cohort": "native-stop",
+      "sourceHead": "3fedc501e37a6887a4958853ca1ff1ac2a0c43b4",
+      "passed": 1,
+      "filteredOut": 32,
+      "failed": 0,
+      "exitCode": 0,
+      "testedCurrentSource": {
+        "server/src/services/companies.ts": "3b275479b9e3210f8990916bdfc932f8558e0e76f9ffbbb1bd136369e52c7309",
+        "server/src/services/saas/offboarding.ts": "666c0ef19e4521e73e98fd36a64b4fe69d4106e3de54895be61ff9b3b72e66cc",
+        "server/src/__tests__/v7-model-reservations.integration.test.ts": "3d8f75875c3396f5ba557e08a522dda3cf5b832f520c8fad00b3e1fc15a25856"
+      },
+      "rawLogSha256": "8c2ac0233ed7e59877c95e334f285a28678acbea3fc64f0f5595c4b0f11cc792"
+    },
+    {
+      "cohort": "lease-barrier",
+      "sourceHead": "4d6f5aec49a9bd90505b9d6b0a95458774a804ca",
+      "passed": 2,
+      "filteredOut": 0,
+      "failed": 0,
+      "exitCode": 0,
+      "testedCurrentSource": {
+        "server/src/services/companies.ts": "3b275479b9e3210f8990916bdfc932f8558e0e76f9ffbbb1bd136369e52c7309",
+        "server/src/services/saas/offboarding.ts": "666c0ef19e4521e73e98fd36a64b4fe69d4106e3de54895be61ff9b3b72e66cc",
+        "server/src/__tests__/company-offboarding-revoke-lease.integration.test.ts": "c9b35f5cf23262544545bca9b2ad532224a29bb3ef879a5d01d100322b19bb59"
+      },
+      "rawLogSha256": "f55f4844c371eeaa662655ca729335317164fa28508d592eb8fa5005b394fc2f"
+    },
+    {
+      "cohort": "deletion-ui",
+      "sourceHead": "4d6f5aec49a9bd90505b9d6b0a95458774a804ca",
+      "passed": 3,
+      "filteredOut": 0,
+      "failed": 0,
+      "exitCode": 0,
+      "testedCurrentSource": {
+        "ui/src/pages/SaasDeletion.tsx": "26895e94931ae7e5a74bcb6c9ddc0ff8263255a5c407eaffbb6f29d73d17cf05",
+        "ui/src/i18n/experience/en.json": "cbf8653359580147419c080e30c5dec396beac60b0912dbe3ab6337441d9c1e3",
+        "ui/src/i18n/experience/da.json": "3251f5f04a315e6bbc079a4ffa6079d311cd010f1473e9b91520e96a4cd70968",
+        "ui/src/pages/SaasDeletion.test.tsx": "903b54eb19acdecc2b30a1d9b710f0d21add726fb245b79b3a130895c618a300"
+      },
+      "rawLogSha256": "46c984b946be922bc7462f6255fa8ad9d25881ec24c12d702dcc429e345e9d0d"
+    }
+  ],
+  "tokenChecks": {
+    "style": {
+      "sha256": "41131a80af6bbf678c0b21b10d486a5b4b5eb6d3639e1a590f59dc983c3be8d0",
+      "result": "clean"
+    },
+    "palette": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "result": "clean"
+    },
+    "cliplab": {
+      "sha256": "b92f7ed17bc016c62364e704e3f51646c76466b511784bc44ed2ef5e432e26e7",
+      "result": "clean"
+    }
+  },
+  "helpReview": "Reviewed export-and-delete EN/DA against the owned changes; four existing mappings updated with explicit no_change decisions.",
+  "limits": "Controlled software and real PostgreSQL/Native gateway execution. No production host/provider/offboarding or restore-completeness claim."
+}

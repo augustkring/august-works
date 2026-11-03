@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+
+ Test Files  4 passed (4)
+      Tests  35 passed (35)
+   Start at  10:53:30
+   Duration  16.23s (transform 9.86s, setup 238ms, import 15.33s, tests 198ms, environment 0ms)
+

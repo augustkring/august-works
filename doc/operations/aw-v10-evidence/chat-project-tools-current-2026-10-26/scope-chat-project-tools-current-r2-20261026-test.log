@@ -1,0 +1,56 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[22:36:06] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_direct_tls_only","deploymentMode":"authenticated"}[39m
+[22:36:06] [32mINFO[39m: [36mplugin job coordinator started — listening to lifecycle events[39m [90m{"service":"plugin-job-coordinator"}[39m
+[22:36:06] [32mINFO[39m: [36mplugin job scheduler started[39m [90m{"service":"plugin-job-scheduler","tickIntervalMs":30000,"maxConcurrentJobs":10}[39m
+[22:36:06] [32mINFO[39m: [36minitializing plugin tool dispatcher[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[22:36:06] [32mINFO[39m: [36mplugin-dev-watcher: initialized[39m [90m{"service":"plugin-dev-watcher","resolvesInstalledPlugins":true}[39m
+[22:36:06] [32mINFO[39m: [36mplugin-loader: loading all ready plugins[39m [90m{"service":"plugin-loader"}[39m
+[22:36:06] [32mINFO[39m: [36mloaded tools from ready plugins[39m [90m{"service":"plugin-tool-dispatcher","readyPlugins":0,"registeredTools":0}[39m
+[22:36:06] [34mDEBUG[39m: [36msubscribed to lifecycle events[39m [90m{"service":"plugin-tool-dispatcher"}[39m
+[22:36:06] [32mINFO[39m: [36mplugin tool dispatcher initialized[39m [90m{"service":"plugin-tool-dispatcher","totalTools":0}[39m
+[22:36:06] [32mINFO[39m: [36mplugin-loader: no ready plugins to load[39m [90m{"service":"plugin-loader"}[39m
+[22:36:07] [33mWARN[39m: [36mPATCH /api/issues/412f231e-ccbc-4018-8687-89e835cdae51 422[39m [90m{"reqBody":{"status":"in_review","comment":"The plan is ready for our next discussion."}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent API call mutate its private conversation 720ms
+ × src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent direct-tool call create a private conversation Task 1588ms
+   → expected [Function] to throw error matching /Private tasks are not available/ but got 'Task privacy source is unavailable'
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects creation, child helpers, and reparenting under a chat, while retaining legacy children 467ms
+[22:36:10] [33mWARN[39m: [36mPOST /api/companies/33d77c0b-17d8-4c3b-9ef4-5ac60a33e808/issues 422[39m [90m{"reqBody":{"visibility":"open","projectId":"c763ca3c-11e2-406f-8ee7-a4e5448a65a8","parentId":null,"title":"MCP handoff","status":"todo","workMode":"standard","priority":"medium","assigneeAgentId":"66790fff-d9a0-4a90-870e-47c4eb4d8966","requestDepth":0,"initialPlan":"# Plan\nImplement in the execution task.","idempotencyKey":"chat-handoff:803a10a8-29c7-45db-a409-e37e8a7e88af:mcp","allowDuplicate":false}}[39m
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > hands off through the same API used by Claude/Codex MCP with the plan present on return 447ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > retains ordinary child delegation and projectless task creation 1702ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > creates one Project through the authenticated Human API when an idempotency request is replayed 1157ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > includes an explicitly selected repository in a Human-created Project workspace 830ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > registers and deduplicates repositories through the authenticated Human Project API 736ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > allows planning documents while denying project/task creation in Plan and Ask mode 2531ms
+ ✓ src/__tests__/chat-project-tools.test.ts > chat project tool handoff > rejects invented repository IDs through Human admission and rejects a cancelled Agent run 537ms
+[22:36:17] [32mINFO[39m: [36mplugin job scheduler stopped[39m [90m{"service":"plugin-job-scheduler","activeJobCount":0}[39m
+[22:36:17] [32mINFO[39m: [36mplugin job coordinator stopped[39m [90m{"service":"plugin-job-coordinator"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/chat-project-tools.test.ts > chat project tool handoff > does not let an unqualified Agent direct-tool call create a private conversation Task
+AssertionError: expected [Function] to throw error matching /Private tasks are not available/ but got 'Task privacy source is unavailable'
+
+- Expected:
+/Private tasks are not available/
+
++ Received:
+"Task privacy source is unavailable"
+
+ ❯ src/__tests__/chat-project-tools.test.ts:73:48
+     71|     const input = { title: "Implement the clarified outcome", projectI…
+     72|     const before = await f.snapshot();
+     73|     await expect(call(f, "create_task", input)).rejects.toThrow(/Priva…
+       |                                                ^
+     74|     const after = await f.snapshot();
+     75|     expect(after.issues).toEqual(before.issues);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  22:35:44
+   Duration  33.29s (transform 12.70s, setup 71ms, import 18.36s, tests 14.73s, environment 0ms)
+

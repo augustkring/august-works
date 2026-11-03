@@ -1,0 +1,78 @@
+{
+  "purpose": "RECOVERY ONLY; no source activation or broad qualification claim",
+  "capturedAtUtc": "2026-11-01T19:29:07.327631+00:00",
+  "mainHead": "2f70e9a3e33f752f95701f2baacb9bbe7a63bfc6",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 71,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 571903,
+    "sha256": "de8da0dbf1018d761872642e6fc94d370c1e1a334d23aa9054086ac6c55129fb",
+    "verifiedEntries": 71
+  },
+  "host68Delta": {
+    "baseCheckpoint": "R70 / Host63",
+    "baseHost63SourcePinsSha256": "cff18656ce91a19a93a407eb1f9c0b898cb364919bb60e9006dcd7e6a3a9f707",
+    "candidateHost68SourcePinsSha256": "83c19270ebeae346571139f6b21127fd929cbd71f86fb0b41c00c92e737f2da0",
+    "sourcePathCounts": {
+      "base": 107,
+      "candidate": 108,
+      "added": 1,
+      "deleted": 0,
+      "changed": 5
+    },
+    "added": [
+      {
+        "path": "deploy/v6/host-agent/sandbox-host-contracts.test.mjs",
+        "candidateSha256": "3810999a1fee63ba2776058dc641ba336bc63197aa7eac6cfdae5fac221a2745"
+      }
+    ],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "deploy/v6/host-agent/openshell.mjs",
+        "baseSha256": "4d849b448f95c26853cc25a05ea3cd740c3a9194b031f5d4dea8f061719cebc8",
+        "candidateSha256": "68da0b3f6814856a383b317846a1f8535adb2a74222c2fce9a799a3557b85fb0",
+        "bytes": 225032
+      },
+      {
+        "path": "deploy/v6/host-agent/openshell.test.mjs",
+        "baseSha256": "528e71e475a8f45a020856c527c0d100981e9191ae60d049ca681a01c0455c8b",
+        "candidateSha256": "a2fc1947c073829d326e549b1d5129657d025482774f31507d1b7033193c718a",
+        "bytes": 193527
+      },
+      {
+        "path": "packages/shared/src/sandbox-host-contracts.ts",
+        "baseSha256": "3a1b71ad5e582731bdb6fc02a3378c13fcbfaef3d8f256f9c99145d765c2455e",
+        "candidateSha256": "324d08e67923c05cd8a543f8da1c166c4427f66a2437a38b8a3c900bdc36c11a",
+        "bytes": 13411
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "baseSha256": "76e961f44b1bb7e0e06d69ab1d6232d137a33e3f6111ec6a6aaa22f4e372e761",
+        "candidateSha256": "d9f7305e40ee7f4401d0b98a00c96f5344b9e2fef7483217910e4c8461e04c97",
+        "bytes": 154103
+      },
+      {
+        "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+        "baseSha256": "a61f71de29bdaa6daf98f925a19c4448e62e07b8930b2b969c37f97f81bea806",
+        "candidateSha256": "5d4315b4e0d96edb160d02145cdfd11c9c09e8f5d1dece418672ff1ff9352a1a",
+        "bytes": 141456
+      }
+    ]
+  },
+  "references": {
+    "R70ManifestSha256": "77a16120859074284c374c55e0b9c4ff493f0707beee2bcee773be39afb8342d",
+    "R70ArchiveSha256": "49cc80f0cdf80cca01bccb5e78597af188b6cef5818c97f2470adc100d124f02",
+    "Host68PinsSha256": "83c19270ebeae346571139f6b21127fd929cbd71f86fb0b41c00c92e737f2da0",
+    "Host68RunnerSha256": "90cc6a1f43706beaf18da713758cb5dd43ebedacde36f9214f045ae0051ea22e",
+    "Native1123PinsSha256": "f407b52c1bebadb157b0080b6147ddcf4ed190712e0e28793fbfef071580426a",
+    "Native1123PatchSha256": "2f7a8dbcc83b3bac684387498b751d0bcc628f3e2c44dd5232f88aa57e006aa9",
+    "Native1124PinsSha256": "57d95df7ce30266e8b60d0787e440822d94c4ca2d74db62a73082f1e0d4e239a",
+    "Native1124PatchSha256": "c24d0d7706afa161512c8544ca17f25731286a52f228d5422d9a489a44d05706",
+    "Native115PinsSha256": "4146703e354f1b832021bbd5888f4584ef2f236c88df77974caba11554d484c1",
+    "Native115PatchSha256": "7dd68825ddfbbba392cacfa015cf6ac1ef2f1d179cfa0410c1ca599257c0cc67",
+    "Native115UnitReceiptSha256": "702ccfaf41caa005b6af5eeb6df6c5a5ad53bff518d0286456f587d32aef88c8"
+  },
+  "qualificationStatus": "Host69 source is frozen but omitted from this bounded capture; its actual Worker run is unrun. Host65 Node tests 74/74 and Host64 TypeScript passed on their scoped candidates; Host68 Oxc/shared/DB/full TypeScript passed but actual Worker still fails on unchunked provider_artifact stdin. R1123/1124 actual PG cases remain unrun; R115 has local producer/receiver validation only, coherent composition pending; R5 is prepared inactive; no Native9/final aggregate acceptance is claimed."
+}

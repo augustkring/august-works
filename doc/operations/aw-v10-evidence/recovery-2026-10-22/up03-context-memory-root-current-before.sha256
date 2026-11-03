@@ -1,0 +1,6 @@
+873914b12cc2fd374c53c1596ad8d47cbbfc73603a99ce6f806103206480db95  packages/db/src/schema/context_memory_roots.ts
+5f075cb91e42197e987121f7601700bede2ab181f33a8afe733dd36249688a54  packages/db/src/migrations/0512_flimsy_satana.sql
+b00eb9279bc934135ed5b1984c7b4210bd35eb17d6d7375ecb937d68e57c54f8  packages/db/src/migrations/meta/_journal.json
+5295ffd462877bfc0bd2db7daa7c7dbbb32da17625897cae2cff072d5dd852cb  packages/db/src/migrations/meta/0512_snapshot.json
+cb5b88c3855b7b4ccb677bda74a2c1fce409751a7f3fb58c963cc2c06f92a658  packages/db/src/context-memory-root-snapshot.test.ts
+3a29f9aa7cd0cd963785d25c8ff203d48f4c4cf1603dbd4006032492f6e6c25c  packages/db/src/native-run-input-source-receipt.test.ts

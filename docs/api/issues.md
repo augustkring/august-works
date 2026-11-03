@@ -51,6 +51,10 @@ POST /api/companies/{companyId}/issues
 }
 ```
 
+An authenticated Human session can create literal Task text linked to a currently readable `parentId`, `projectId`, or both. The new Task keeps those sources’ access restrictions. The links establish privacy dependencies; they do not capture the parent’s content, a model response, or Project workspace configuration as Human-authored Task text. If the parent already belongs to a Project, an explicitly selected Project must match it. Source withdrawal, lost membership, or an expired session prevents the write.
+
+This path does not enable general private Task writes, explicit private creation, generated initial plans, or Agent effects. Those retain their own admission and source requirements. A newly created Task returns `201`; deduplication may return an existing accessible Task with `200`.
+
 ## Update Issue
 
 ```
@@ -247,6 +251,8 @@ POST /api/issues/{issueId}/interactions/{interactionId}/withdraw
 
 Board users can resolve all interactions. Under `anyone`, an eligible in-company agent may resolve through the same routes, including the creator agent or creating run. `not_creator` excludes those creators, and `human_only` excludes agents. Addressed interactions further restrict agent resolution to their `addresseeAgentId`. Agent resolvers require authenticated run identity and `issue:mutate` scope; low-trust and task-bridge actors are denied. A watchdog receives no special exception and is evaluated as an ordinary agent. Confirmations containing `payload.toolAction` are always `human_only`. Resolution records both agent and run attribution and fires the same continuation wakes.
 
+In a current conversation, its authenticated Human owner can use `respond`, `accept`, or `reject` when the card’s resolver policy and audience allow it. A stale plan revision, withdrawn source, expired session, or another member’s conversation is refused. This exception does not authorize unrelated private Task writes.
+
 Resolving a card records the response only. Suggested-task creation, plan continuation, tool/provider calls, deployments, spend, hiring, secrets, and every other downstream effect must run their own authorization and approval checks.
 
 The creator agent or a board user may withdraw a pending interaction. Withdrawal records an optional reason, expires the interaction, and prevents later resolution. Low-trust and task-watchdog agent runs cannot withdraw interactions.
@@ -307,6 +313,8 @@ Delete is board-only in the current implementation.
 POST /api/companies/{companyId}/issues/{issueId}/attachments
 Content-Type: multipart/form-data
 ```
+
+The current authenticated Human owner can upload to their own conversation before the first message. Uploading stores the actual file’s source separately and binds the conversation to that attachment. Listing, downloading, a later first message, and subsequent uploads still require current owner and source access. Another member or an expired session receives no owner exception. A successful upload returns `201`.
 
 ### List
 

@@ -1,3 +1,4 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -6,7 +7,7 @@ import { z } from "zod";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 import { assertMemoryRecordsRetained, lockMemoryPrivacy, memoryPayloadVisible, reapplyMemoryDeletionMarkers } from "./memory-privacy.js";
-import { persistActivity } from "../activity-log.js";
+import { persistActivity, type ActivityPublication } from "../activity-log.js";
 import { executionPrincipalSchema } from "@paperclipai/shared";
 
 import { memoryMaintenanceInputSchema } from "../v4-api-contracts.js";
@@ -50,8 +51,9 @@ async function assertNativeMemoryIndex(db: Db) {
 }
 
 /** Pure native maintenance. All effects and the job receipt commit together. */
-export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$inferSelect) {
+export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$inferSelect, postCommitPublications: ActivityPublication[]) {
   const source = sourceSchema.parse(job.sourceRefJson);
+  await lockAnalyticalCompany(db,job.companyId);
   await lockMemoryPrivacy(db, job.companyId);
   await assertMemoryRecordsRetained(db, job.companyId, source.recordIds);
   const records = await memoryMaintenanceSources(db, job.companyId, source.recordIds, { principal: source.requester });
@@ -78,18 +80,25 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
     }
     let supersededCount = 0;
     for (const group of groups.values()) {
+      // ponytail: consolidate independent roots; keep derived lineages separate
+      // until a dedicated acyclic merge is required and qualified.
+      if(group.some(row=>row.sourceMemoryIds.length))continue;
       group.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id));
       const canonical = group[0]!;
       for (const duplicate of group.slice(1)) {
         const evidence = await db.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, job.companyId), eq(memoryEvidence.memoryRecordId, duplicate.id)));
         if (evidence.length) await db.insert(memoryEvidence).values(evidence.map(({ id: _id, memoryRecordId: _recordId, ...item }) => ({ ...item, memoryRecordId: canonical.id })));
+        // Actual selected source identity, independent of its copied citations.
+        const sourceMemoryIds=[...new Set([...canonical.sourceMemoryIds,duplicate.id])];
+        await db.update(memoryRecords).set({sourceMemoryIds,payloadSourceSnapshot:null,updatedAt:now}).where(and(eq(memoryRecords.companyId,job.companyId),eq(memoryRecords.id,canonical.id)));
+        canonical.sourceMemoryIds=sourceMemoryIds;
         await db.update(memoryRecords).set({ supersededByRecordId: canonical.id, retentionState: "superseded", updatedAt: now })
           .where(and(eq(memoryRecords.companyId, job.companyId), eq(memoryRecords.id, duplicate.id), isNull(memoryRecords.supersededByRecordId)));
         await invalidateCognitiveRecords(db, job.companyId, [duplicate.id]);
         supersededCount++;
       }
     }
-    result = { scannedRecordCount: records.length, supersededCount, canonicalRecordCount: groups.size };
+    result = { scannedRecordCount: records.length, supersededCount, canonicalRecordCount: records.length-supersededCount };
   } else if (job.operationType === "compaction" || job.operationType === "reflection") {
     const reflection = job.operationType === "reflection";
     if (reflection && !source.proposedLesson) throw unprocessable("Reflection requires an explicit owner-proposed lesson");
@@ -102,7 +111,7 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
     const sensitivity = records.reduce((highest, row) => sensitivityRank.indexOf(row.sensitivityLabel) > sensitivityRank.indexOf(highest) ? row.sensitivityLabel : highest, first.sensitivityLabel);
     const dates = (field: "validFrom" | "validUntil" | "expiresAt") => records.flatMap((row) => row[field] ? [row[field]!.getTime()] : []);
     const from = dates("validFrom"), until = dates("validUntil"), expiry = dates("expiresAt");
-    const candidate = await memoryService(db).createCandidate(job.companyId, { bindingId: first.bindingId, memoryType: reflection ? "lesson" : "observation",
+    const candidate = await memoryService(db,{postCommitPublications}).createCandidate(job.companyId, { bindingId: first.bindingId, memoryType: reflection ? "lesson" : "observation",
       scope: { type: first.scopeType, id: first.scopeId }, subject: first.subjectType && first.subjectId ? { type: first.subjectType, id: first.subjectId } : null,
       ownerAgentId: null, title: reflection ? source.proposedLesson!.title : "Collected reviewed summaries", content, summary: null, sensitivity,
       importance: Math.max(...records.map((row) => row.importance)), confidenceScore: Math.min(...records.map((row) => row.confidenceScore)),
@@ -113,7 +122,7 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
       createdByOperationId: `memory-compaction:${job.jobKey}`, metadata: { sourceMemoryRecordIds: source.recordIds, maintenanceJobId: job.id },
       evidence: records.map((row) => ({ sourceClass: "accepted_memory", sourceProvider: "august_works_memory_maintenance", sourceType: "record",
         sourceRef: `memory://${row.id}`, sourceVersion: row.updatedAt.toISOString(), sourceUpdatedAt: row.updatedAt.toISOString(), observedAt: now.toISOString(),
-        excerptHash: createHash("sha256").update(row.summary?.trim() ? row.summary : row.content).digest("hex"), citation: { label: "Reviewed source Memory", href: `/memory/${row.id}` }, trustLevel: "low", relation: "supports" })) }, { principal: source.requester });
+        excerptHash: createHash("sha256").update(row.summary?.trim() ? row.summary : row.content).digest("hex"), citation: { label: "Reviewed source Memory", href: `/memory/${row.id}` }, trustLevel: "low", relation: "supports" })) }, { principal: source.requester }, records.map(row=>row.id));
     result = { proposedRecordId: candidate.record.id, reviewState: candidate.record.reviewState, sourceRecordCount: records.length };
   } else throw unprocessable("Maintenance operation is unavailable");
   const audit = await persistActivity(db, { companyId: job.companyId, actorType: source.requester.type,

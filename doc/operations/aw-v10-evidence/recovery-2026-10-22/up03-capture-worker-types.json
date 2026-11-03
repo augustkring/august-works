@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-10-22T22:50:14.150577+00:00",
+  "sourcePins": {
+    "recordedDuringCapture": "2026-10-22T22:45:05.511117+00:00",
+    "files": {
+      "server/src/services/memory/memory-jobs.ts": "750ec42d4e68b5058f12efdb7d64e4f5c5bfe095f1d2dc9157147001d29790ab",
+      "server/src/services/memory/memory-jobs.test.ts": "81f8847d59b882a2d8321f319d97f2d44c0a38ee64b2d293f16e661a784d8401",
+      "server/src/services/memory/memory-post-run-extraction.ts": "bf48704f3b03c85f8ca8244153a485c2667ec742924167d30cd550ac180155f5",
+      "server/src/services/memory/memory-service.ts": "b97bc5ffb6e6ce48e7786bfffcaede8c3a68ed9082252022b179626e8ab0e112",
+      "server/src/services/memory/memory-privacy.ts": "6458658edb91dd17295b73cebac7f3f3dbe5e55c7de91f12535226b2f94cabc2",
+      "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+      "server/src/services/analytical-reader.ts": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06",
+      "packages/db/src/client.ts": "e6d02b0ed11848d635a06af54cc643873f948b6a3ab2b29da5b475c2592f744e"
+    }
+  },
+  "command": "GOMEMLIMIT=6GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=6144 CARGO_NET_OFFLINE=true pnpm --filter @paperclipai/server typecheck",
+  "sessionId": 62404,
+  "exitCode": 0,
+  "log": "up03-capture-worker-types.log.txt",
+  "scope": "Normal server compiler and original native Runner/plugin prerequisites, no source filtering or bypass.",
+  "limits": [
+    "Source pins recorded during capture and unchanged at exit, not a whole-repository immutable snapshot.",
+    "server/tsconfig.json excludes src/__tests__; adjacent services/memory/*.test.ts are included.",
+    "Whole-workspace typecheck/tests/build and V10 release qualification remain outstanding."
+  ]
+}

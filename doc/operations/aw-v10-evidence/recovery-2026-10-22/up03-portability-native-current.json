@@ -1,0 +1,45 @@
+{
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/company-portability-import-batching.test.ts --maxWorkers=1",
+  "verdict": "FAIL: 10 passed, 2 failed, 1 opt-in benchmark skipped;117.13s",
+  "failures": "Two original empty-warning assertions caught an incorrect format8 timestamp-warning threshold. Source later fixed to preserve timestamp introduction at version7. Assertions were not weakened.",
+  "qualifiedScope": [
+    "Native same-company copy provenance roundtrip and retained source restriction.",
+    "Actual child SQL unique violation rolls back task/comment/document payload transaction.",
+    "Unproven legacy and forged private provenance rejected.",
+    "Observed actual counter row waits followed by Human suspension or viewer demotion deny and leave no copied task/comment.",
+    "Public company run preserved; private task and private Memory context rejected for unsupported native targets.",
+    "Existing standalone work-product batch rollback and other completed cases."
+  ],
+  "sourcePinsVerifiedUnchangedAtActualExit": {
+    "server/src/services/issues.ts": "4e3f0b6647a1b150181beca5be1c2da8fbfc0069c61d700a3b8465d2df5e3b23",
+    "server/src/services/projects.ts": "4480be7295c7eacb87cd42a2040ee396d9073de985226a2d04a0a22656e82c84",
+    "server/src/services/company-portability.ts": "3c2faf459270d9d19a651a7ced56a89f97ebef2f2e78099774e7d621ec2da700",
+    "server/src/services/documents.ts": "44d1a3ab531db3cd40b3fdb045fc0a8d90b353c3340dea6955ad62237e527055",
+    "server/src/services/work-products.ts": "a36eeb7cb016c3bc4656b9b743e2132fd55a92790c3ec083ebce78c6717064ba",
+    "server/src/services/company-search.ts": "de448a1316bee278512560187a3f899c9a0ddd62a9031752d40993b86ce0627d",
+    "server/src/services/company-search-extract.ts": "c3c6b31544f0f18f4c192ad51c334d498e517c5881be7ba6558a35f57aecd276",
+    "server/src/services/task-search.ts": "1a2624ec337b814229188d87ff3d4cb55ca74dcda3b072147b1c5661fac4ffd5",
+    "server/src/routes/issues.ts": "85290fc1bfcf0734ddf8015edc9b75b8a9d7e1d7f05a0bc1fddac5e80af8c249",
+    "server/src/routes/projects.ts": "72dfdb5d8c346778e88ce58ff7538b9e49fb3ac7f3d1e146b183748dc971ff6d",
+    "server/src/routes/companies.ts": "cde03012827f0d9745f7faf83b773dad143819122c845990c69974c66931b3c4",
+    "packages/shared/src/index.ts": "795fad3cb56c04bca566696102be2c39994ed89b376b662da4f1118356497c90",
+    "packages/shared/src/types/company-portability.ts": "81e2f4cc84167cd3e879dfbdb067cf50d0395a3b96fb3e7fb57ce9e5ad86cf39",
+    "packages/shared/src/validators/company-portability.ts": "5de9e8929cae3d32c5b183028436ed9bd7ec85ac49603e03fa9790db14801bb7",
+    "packages/shared/src/validators/index.ts": "5e7e9bcc2746a5ddbb906edbf614a6e61cadba83323970d2ceea76cc552a7c4d",
+    "server/src/__tests__/issues-service.test.ts": "25f307cfd3fdf337c1e71f4d5b0378c4ea14987e2b72b6001dad4156ef816ee4",
+    "server/src/__tests__/issue-list-assignee-filter-routes.test.ts": "cfaac94be187cf77fde8f7f4c838e3aae83c36c367f38c4288329b6e93770c2a",
+    "server/src/__tests__/company-search-service.test.ts": "4f4257dc43bda61812100969db8bfb9a23d8bedb8d166e13f605691dc36917f4",
+    "server/src/__tests__/company-search-extract-service.test.ts": "e8a3f522b16fca536247ef30ae7eb7ef321d13a36cef6b3fd22a123bc66c812b",
+    "server/src/__tests__/company-portability-import-batching.test.ts": "cd71175469f08414a7c98ce88617ac4f81b529150a6831910c707a849fd7e000"
+  },
+  "log": "up03-portability-native-current.log.txt",
+  "logSha256": "395dccdb87886e451e8f944f37c08dde8e152b83978b238568ed2e4e396427a7",
+  "limitations": [
+    "This is a partial failed suite, not a full portability pass.",
+    "The two failed baseline cases stopped at their warning assertions; later identifier/timestamp assertions in those cases did not execute.",
+    "The large benchmark was intentionally skipped.",
+    "No dedicated Foundation-context test ran; source guards delegate to the original analytical Context helper.",
+    "Positive explicit-private and intrinsic conversation-private copy cases and root fallback were added after this capture.",
+    "Full source-publication, private-work delivery graph, unsupported native target provenance and legacy mock fixtures remain open."
+  ]
+}

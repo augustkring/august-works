@@ -1,0 +1,31 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T00:03:20.077829+00:00",
+  "baseCommit": "9274ceeaaeceb06e204ec8808d15aa261bda12a4",
+  "patchBytes": 1770796,
+  "patchSha256": "b1d0764e7f7bdd415a6e6d151ff3bf8f9bb32b9afcd4619898008df33d51cae1",
+  "archiveSha256": "4da0de74f589fcf42058b7bd54939de5983a871092fc75d27e4e8c7d5404270d",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "note": "Atomic per-file capture while integration continues; no cross-file freeze or acceptance claim. Private Resource overlay preserved in r31."
+}

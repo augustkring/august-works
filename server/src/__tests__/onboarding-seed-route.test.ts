@@ -10,6 +10,7 @@ import {
   issues,
   projects,
 } from "@paperclipai/db";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { onboardingSeedRoutes } from "../routes/onboarding-seed.js";
 import { logActivity } from "../services/activity-log.js";
 import {
@@ -51,7 +52,10 @@ describeEmbeddedPostgres("POST /api/companies/:companyId/onboarding-seed", () =>
 
   async function seedCompany() {
     const seeded = await seedCompanyWithBoardAccess(ctx.db, "Onboarding seed");
-    return { ...seeded, app: routeApp(ctx.db, seeded.actor, onboardingSeedRoutes) };
+    const human = await seedCurrentHumanSourceActor(ctx.db, [seeded.companyId], seeded.userId);
+    if (!human.sessionId) throw new Error("Onboarding fixture requires a current Human session");
+    const actor = { ...seeded.actor, source: "session" as const, sessionId: human.sessionId };
+    return { ...seeded, actor, app: routeApp(ctx.db, actor, onboardingSeedRoutes) };
   }
 
   function post(app: ReturnType<typeof routeApp>, companyId: string, body: unknown) {
@@ -68,7 +72,7 @@ describeEmbeddedPostgres("POST /api/companies/:companyId/onboarding-seed", () =>
 
     const response = await post(app, companyId, SEED);
 
-    expect(response.status).toBe(200);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body.applied).toBe(true);
     expect(response.body.changed).toBe(true);
     expect(response.body.revision).toBe(SEED.revision);
@@ -130,7 +134,7 @@ describeEmbeddedPostgres("POST /api/companies/:companyId/onboarding-seed", () =>
 
       const response = await post(app, companyId, SEED);
 
-      expect(response.status).toBe(200);
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
       const companyAgents = await ctx.db.select().from(agents).where(eq(agents.companyId, companyId));
       expect(companyAgents).toHaveLength(1);
       expect(companyAgents[0]?.adapterType).toBe("claude_local");
@@ -203,7 +207,7 @@ describeEmbeddedPostgres("POST /api/companies/:companyId/onboarding-seed", () =>
       mission: "Make robotics boring\nBoring enough that hospitals buy it.",
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
     const companyGoals = await ctx.db.select().from(goals).where(eq(goals.companyId, companyId));
     expect(companyGoals[0]?.title).toBe("Make robotics boring");
     expect(companyGoals[0]?.description).toBe("Boring enough that hospitals buy it.");
@@ -219,7 +223,7 @@ describeEmbeddedPostgres("POST /api/companies/:companyId/onboarding-seed", () =>
 
     const response = await post(app, companyId, { revision: "d".repeat(32) });
 
-    expect(response.status).toBe(200);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body.changed).toBe(true);
     const record = await ctx.db
       .select()
@@ -303,6 +307,20 @@ describeEmbeddedPostgres("POST /api/companies/:companyId/onboarding-seed", () =>
     expect(await ctx.db.select().from(companyOnboardingSeeds)).toHaveLength(0);
   });
 
+  it("keeps the Cloud mission seed separate from Human task creation", async () => {
+    const { companyId, actor } = await seedCompany();
+    const cloudActor = { ...actor, source: "cloud_tenant" as const, sessionId: undefined };
+    const cloudApp = routeApp(ctx.db, cloudActor, onboardingSeedRoutes);
+    const denied = await post(cloudApp, companyId, SEED);
+    expect(denied.status, JSON.stringify(denied.body)).toBe(403);
+    expect(await ctx.db.select().from(issues).where(eq(issues.companyId, companyId))).toHaveLength(0);
+    expect(await ctx.db.select().from(companyOnboardingSeeds).where(eq(companyOnboardingSeeds.companyId, companyId))).toHaveLength(0);
+    const accepted = await post(cloudApp, companyId, { revision: SEED.revision, mission: SEED.mission });
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(200);
+    expect(await ctx.db.select().from(goals).where(eq(goals.companyId, companyId))).toHaveLength(1);
+    expect(await ctx.db.select().from(issues).where(eq(issues.companyId, companyId))).toHaveLength(0);
+  });
+
   it("rejects a body missing the revision", async () => {
     const { companyId, app } = await seedCompany();
 
@@ -348,22 +366,18 @@ describeEmbeddedPostgres("POST /api/companies/:companyId/onboarding-seed", () =>
       .set("x-paperclip-cloud-paperclip-company-name", "Header-supplied mission")
       .send({ revision: "f".repeat(32), mission: "Body-supplied mission" });
 
-    expect(response.status).toBe(200);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
     const companyGoals = await ctx.db.select().from(goals).where(eq(goals.companyId, companyId));
     expect(companyGoals[0]?.title).toBe("Body-supplied mission");
   });
 
   it("reuses an existing Onboarding project instead of creating a second one", async () => {
-    const { companyId, app } = await seedCompany();
-    await ctx.db.insert(projects).values({
-      companyId,
-      name: "Onboarding",
-      status: "in_progress",
-    });
+    const { companyId, app, actor } = await seedCompany();
+    await createCanonicalHumanProject(ctx.db, companyId, actor, "Onboarding", { status: "in_progress" });
 
     const response = await post(app, companyId, SEED);
 
-    expect(response.status).toBe(200);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
     const companyProjects = await ctx.db.select().from(projects).where(eq(projects.companyId, companyId));
     expect(companyProjects).toHaveLength(1);
     const companyIssues = await ctx.db.select().from(issues).where(eq(issues.companyId, companyId));

@@ -1,0 +1,5 @@
+# Retained concurrent Native chat, selected case attempt 132
+
+Attempt 132 ran the one selected concurrent first-send case from `tests/e2e/agent-chat-sessions.spec.ts` against pinned Chromium. Its source snapshot copied 609 files and the pinned Vitest/Oxc parser checked 524 files successfully. The test list guard confirmed exactly one selected case.
+
+The case failed at the unchanged 60-second completion predicate. Both provider processes emitted a completed turn, but the second run remained running with only 14 durable source events; its provider process was still alive. Each of the four blocked PostgreSQL backends waited on the `business-event-privacy` advisory key, with observed wait ages from about 0.2 to 0.6 seconds at the failure sample. The current Task snapshot was version 1 with valid owner bindings, empty policy arrays, and exactly one `comment` input; the comment belongs to the self-owned user conversation. Attempt 132 preceded the self-owned-comment shared-read route, so it does not validate that change.

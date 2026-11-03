@@ -1,0 +1,17 @@
+{
+  "qualification": "GitHub object ETag validator follow-up",
+  "baseHead": "c78a7699e88667c53b11de9dad715fa8ef5bee51",
+  "sourcePaths": [
+    {
+      "path": "server/src/services/github-external-object-provider.ts",
+      "sha256": "05fb62dc3517dd407b1befca7e877af89dee49faae032848ac95fe62aeba6460",
+      "bytes": 17784
+    },
+    {
+      "path": "server/src/__tests__/external-objects-service.test.ts",
+      "sha256": "42871706543eae59c6826513b0f43d69880ad199365b2e9823db170cf3b5e83f",
+      "bytes": 41261
+    }
+  ],
+  "scopeNote": "Only the provider validator guard and its focused tests are follow-up source candidates."
+}

@@ -1,0 +1,39 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts (46 tests | 1 failed | 45 skipped) 4465ms
+     × revalidates retained foreign Project workspace roots through their exact current parent 326ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-model-input-dispatch.integration.test.ts > native model input dispatch intent > revalidates retained foreign Project workspace roots through their exact current parent
+AssertionError: promise rejected "Error: A Native source Project is unavail… { …(2) }" instead of resolving
+ ❯ src/services/native-runtime/native-model-input-dispatch.integration.test.ts:661:112
+    659|     };
+    660|     const valid = await makeOutput("Qualified output Project", [parent…
+    661|     await expect(assertNativeProjectSourceCurrent(db, { companyId, act…
+       |                                                                                                                ^
+    662|
+    663|     const missingParent = await makeOutput("Missing foreign Project so…
+
+Caused by: Error: A Native source Project is unavailable
+ ❯ forbidden src/errors.ts:21:10
+ ❯ assertNativeProjectSourceCurrentInScopeBody src/services/native-direct-input.ts:362:11
+ ❯ assertNativeProjectSourceCurrentInScope src/services/native-direct-input.ts:337:5
+ ❯ src/services/native-direct-input.ts:523:5
+ ❯ src/services/native-direct-input.ts:206:22
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: undefined }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 45 skipped (46)
+   Start at  09:08:45
+   Duration  18.32s (transform 9.99s, setup 73ms, import 13.66s, tests 4.47s, environment 0ms)
+

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, is, sql } from "drizzle-orm";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import { analyticalLineageEdges, analyticalLineageManifests, issues, type Db } from "@paperclipai/db";
 import { planningOutcomeSchema, recordPlanningOutcomeSchema, startPlanningOutcomeLearningSchema, v8FeatureEnabled, type PlanningOutcome, type StartPlanningOutcomeLearning } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
@@ -53,7 +54,10 @@ export async function inspectPlanningOutcome(tx:Db,companyId:string,actor:Author
   return {manifestId,outcome,sourceSensitivity:original.context.profile.sensitivity,manifestIds:[original.manifest.id,manifest.id],expiresAt:new Date(Math.min(original.manifest.expiresAt.getTime(),manifest.expiresAt.getTime()))};
 }
 export function planningOutcomeService(db:Db){return {
-  async detail(companyId:string,projectId:string,actor:AuthorizationActor,proposalId:string,manifestId:string){return db.transaction(raw=>inspectPlanningOutcome(raw as unknown as Db,companyId,actor,projectId,proposalId,manifestId));},
+  async detail(companyId:string,projectId:string,actor:AuthorizationActor,proposalId:string,manifestId:string){
+    const inspect=(tx:Db)=>inspectPlanningOutcome(tx,companyId,actor,projectId,proposalId,manifestId);
+    return is(db,PgTransaction)?inspect(db):db.transaction(raw=>inspect(raw as unknown as Db));
+  },
   async record(companyId:string,projectId:string,actor:AuthorizationActor,proposalId:string,raw:unknown){
     const userId=v7HumanActorId(actor),input=recordPlanningOutcomeSchema.parse(raw);
     return withV7ActivityTransaction(db,async(tx,publications)=>{

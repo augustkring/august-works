@@ -1,0 +1,12 @@
+sourceHead=68d07838add3a9ce77ba876571b0c3af2dc15fa4
+node=v24.19.0
+pnpm=9.15.4
+workingDirectory=/workspace/blentera-v10/server
+command=../node_modules/.bin/vitest run src/__tests__/paperclip-semantic-conformance.test.ts --maxWorkers=1 --reporter=verbose
+serializationLock=/workspace/v10-preparation/v10-pg-tests.lock
+snapshotCommand=python3 /workspace/v10-preparation/snapshot-current-source-for-dependency-check.py doc/operations/aw-v10-evidence/semantic-conformance-native-admission-2026-10-28/r2/source-pins.json
+syntaxCommand=node /workspace/v10-preparation/check-snapshot-syntax.cjs doc/operations/aw-v10-evidence/semantic-conformance-native-admission-2026-10-28/r2/source-pins.json
+snapshotExit=0
+syntaxExit=0
+testExit=0
+result=1 test file passed; 1 test passed

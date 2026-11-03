@@ -123,18 +123,20 @@ describe("Conversation Agent setup uses Native drafts and explicit Human prepara
   it("discovers and invokes the governed SDK tool only under both authoring feature gates", async () => {
     const name = "paperclip-self:create_agent_setup_draft";
     const catalogName = "paperclip-self:list_agent_setup_capabilities";
+    const canonicalName = "blentera.co-worker.setup.propose";
+    const canonicalCatalogName = "blentera.co-worker.capabilities.list";
     await db.insert(toolPolicies).values({ companyId: f.home, name: "Agent setup software fixture", policyType: "allow", selectors: { toolName: name } });
     await db.insert(toolPolicies).values({ companyId: f.home, name: "Agent catalog software fixture", policyType: "allow", selectors: { toolName: catalogName } });
     const gateway = createToolGatewayService(db, { toolActionSigningSecret: "agent-setup-test-only-signing-secret" });
     const session = await gateway.createSession({ companyId: f.home, agentId: f.presence.id, runId, issueId: conversationId });
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(name);
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(catalogName);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(canonicalName);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).toContain(canonicalCatalogName);
     expect(await gateway.executeTool({ sessionToken: session.token, tool: catalogName, parameters: {} })).toMatchObject({
       status: "completed", result: { data: { coverage: "bounded", modelCalled: false, capabilities: [] } } });
     const result = await gateway.executeTool({ sessionToken: session.token, tool: name, parameters: { idempotencyKey: "sdk-setup" } });
     expect(result).toMatchObject({ status: "completed", result: { data: { kind: "custom", creationCreatedAgent: false } } });
     await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(name);
-    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(catalogName);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(canonicalName);
+    expect((await gateway.listToolsForSession(session.token)).map(tool => tool.name)).not.toContain(canonicalCatalogName);
   });
 });

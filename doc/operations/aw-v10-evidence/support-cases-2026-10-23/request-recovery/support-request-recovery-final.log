@@ -1,0 +1,154 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ |@paperclipai/ui| src/App.cases-routing.test.tsx (6 tests | 1 failed) 2190ms
+     × keeps the real work surface mounted behind Help and returns to the same draft 704ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > keeps the real work surface mounted behind Help and returns to the same draft
+AssertionError: expected <body style><div>…(1)</div></body> to be <a …(4)></a> // Object.is equality
+
+- Expected
++ Received
+
++ <body
++   style=""
++ >
++   <div>
++     <div
++       class="contents"
++     >
++       <div
++         aria-label="Global utilities"
++         class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-b border-border bg-background px-3"
++         role="region"
++       >
++         <button
++           aria-controls="mobile-sidebar"
++           aria-expanded="false"
++           aria-label="Open navigation"
++           class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-(--tp-color-background-color-border-color-box-shadow-opacity) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3) aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-10 px-4 py-2 has-[>svg]:px-3 min-h-11 min-w-11 md:hidden"
++           data-size="default"
++           data-slot="button"
++           data-variant="ghost"
++         >
++           <svg
++             aria-hidden="true"
++             class="lucide lucide-menu h-5 w-5"
++             fill="none"
++             height="24"
++             stroke="currentColor"
++             stroke-linecap="round"
++             stroke-linejoin="round"
++             stroke-width="2"
++             viewBox="0 0 24 24"
++             width="24"
++             xmlns="http://www.w3.org/2000/svg"
++           >
++             <path
++               d="M4 5h16"
++             />
++             <path
++               d="M4 12h16"
++             />
++             <path
++               d="M4 19h16"
++             />
++           </svg>
++         </button>
++         <button
++           class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-(--tp-color-background-color-border-color-box-shadow-opacity) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-(length:--rad-3) aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-10 px-4 py-2 has-[>svg]:px-3 min-h-11"
++           data-size="default"
++           data-slot="button"
++           data-variant="ghost"
++           type="button"
++         >
++           Ask August
++         </button>
++         <span>
++           Language
++         </span>
+          <a
+            class="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            data-discover="true"
+            data-support-help-entry="true"
+            href="/PAP/company/support"
+          >
+            Help / Support
+          </a>
++         <a
++           class="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++           href="mailto:support@blentera.com"
++         >
++           Contact support
++         </a>
++         <a
++           aria-label="User account"
++           class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
++           data-discover="true"
++           href="/PAP/company/settings/instance/profile"
++         >
++           <svg
++             aria-hidden="true"
++             class="lucide lucide-user-round h-5 w-5"
++             fill="none"
++             height="24"
++             stroke="currentColor"
++             stroke-linecap="round"
++             stroke-linejoin="round"
++             stroke-width="2"
++             viewBox="0 0 24 24"
++             width="24"
++             xmlns="http://www.w3.org/2000/svg"
++           >
++             <circle
++               cx="12"
++               cy="8"
++               r="5"
++             />
++             <path
++               d="M20 21a8 8 0 0 0-16 0"
++             />
++           </svg>
++         </a>
++       </div>
++       <output
++         data-testid="work-location"
++       >
++         /PAP/work
++         ?view=assigned
++         #today
++       </output>
++       <label>
++         Unsent work
++         <textarea
++           aria-label="Unsent work"
++         >
++           Private unsent work
++         </textarea>
++       </label>
++     </div>
++   </div>
++ </body>
+
+ ❯ src/App.cases-routing.test.tsx:229:36
+    227|     expect(container.querySelector('textarea[aria-label="Unsent work"]…
+    228|     expect(draft.value).toBe("Private unsent work");
+    229|     expect(document.activeElement).toBe(container.querySelector('a[dat…
+       |                                    ^
+    230|     unmountApp(root);
+    231|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 20 passed (21)
+   Start at  19:06:10
+   Duration  79.97s (transform 43.31s, setup 133ms, import 70.55s, tests 4.12s, environment 4.17s)
+

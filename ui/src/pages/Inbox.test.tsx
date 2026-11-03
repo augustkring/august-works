@@ -294,6 +294,8 @@ function createFailedRun(overrides: Partial<HeartbeatRun> = {}): HeartbeatRun {
     id: "run-1",
     companyId: "company-1",
     agentId: "agent-1",
+    scopeKind: "company",
+    issueId: null,
     responsibleUserId: null,
     invocationSource: "assignment",
     triggerDetail: null,

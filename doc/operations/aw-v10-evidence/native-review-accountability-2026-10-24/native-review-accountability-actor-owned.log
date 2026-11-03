@@ -1,0 +1,1336 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts (82 tests | 80 failed) 323137ms
+     × creates board-authored interactions 60141ms
+     × wakes the addressed agent when an interaction is created 8321ms
+     × does not route agent attention for a human-only interaction 5893ms
+     × returns 400 for agent-addressed tool-action confirmations 7781ms
+     × accepts suggested tasks and wakes created assignees plus the current assignee 3152ms
+     × answers questions through the durable delivery service 2791ms
+     × routes wake-on-accept question answers through the same causal delivery service 3458ms
+     × submits item verdicts and emits one continuation wake with resolved item ids 2123ms
+     × allows a board user to withdraw and wakes the assignee 3949ms
+     × cancels the bound native run when its question is withdrawn 5451ms
+     × keeps a durable withdrawal intent when immediate native cancellation fails 4847ms
+     × allows the creator agent to withdraw and wakes a different assignee 3454ms
+     × allows the assignee agent to withdraw without waking itself 2790ms
+     × rejects withdrawal by an unrelated agent 2528ms
+     × lets a watchdog-scoped assignee withdraw through ordinary containment 5174ms
+     × rejects withdrawal by low-trust actors 3606ms
+     × cancels question interactions and emits a continuation wake 3215ms
+     × durably marks a board-cancelled native question before cancelling its run 3671ms
+     × accepts request confirmations and wakes the current assignee when configured for accept-only wakeups 3350ms
+     × executes an accepted tool-action confirmation through the gateway callback 3179ms
+     × wakes with failure instructions after an accepted tool action fails 4453ms
+     × wakes with fresh-approval instructions after an accepted tool action expires 5661ms
+     × rejects client-supplied tool-action metadata on interaction creation 4397ms
+     × rejects client-supplied secret-proposal metadata on interaction creation 4918ms
+     × executes an accepted secret-proposal confirmation and wakes with verification instructions 4990ms
+     × records a failed secret-proposal execution and posts a thread comment 4078ms
+     × forwards plan-document confirmations to the interaction service for revision validation 3765ms
+     × accepts request checkbox confirmations with selected option ids and wakes the assignee 4303ms
+     × preserves accepted empty checkbox selections in assignee wake context 3960ms
+     × forces a fresh workspace-aware session when accepting a planning confirmation with 'explicit' issueId 3431ms
+     × forces a fresh workspace-aware session when accepting a planning confirmation with 'omitted' issueId 1765ms
+     × forces a fresh workspace-aware session when accepting a planning confirmation with 'null' issueId 2374ms
+     × does not project an explicitly different issue's approved plan into the current issue wake 3463ms
+     × forces a fresh workspace-aware session when accepting a plan document confirmation on a standard-work issue 3449ms
+     × wakes the returned agent when accepting an agent-authored confirmation from a board review assignee 4202ms
+     × does not emit a continuation wake when request confirmations are rejected 3232ms
+     × wakes the assignee to revise a rejected plan even when its policy is accept-only 2817ms
+     × delivers generic confirmation rejection feedback as the next turn message 3268ms
+     × returns a rejected native completion review with a narrow reviewer-reason continuation 2850ms
+     × overrides accept-only continuation when rejection consumes the last review path 2351ms
+     × wakes with decline instructions when a tool-action confirmation is rejected 3253ms
+     × does not emit an accept-only continuation wake for rejected suggested tasks 1864ms
+     × allows agent-authored interaction creation and stamps the active run id 2054ms
+     × allows a different in-scope agent run to respond when policy permits 2958ms
+     × allows an agent to accept another agent's pending review confirmation by default 3465ms
+     × allows an agent to reject a pending review confirmation by default 2948ms
+     × keeps an unrelated pending confirmation human-only on an in-review issue 1648ms
+     × keeps a same-requester sibling confirmation human-only 2607ms
+     × rejects an agent review verdict when 'it addresses a different agent' 2265ms
+     × rejects an agent review verdict when 'the agent created it' 3097ms
+     × rejects an agent review verdict when 'the same run created it' 2356ms
+     × rejects an agent review-confirmation verdict under human_only with actionable copy 1623ms
+     × rejects an agent 'accept' verdict under human_only when a user review transition omitted the interaction binding 2304ms
+     × rejects an agent 'reject' verdict under human_only when a user review transition omitted the interaction binding 3765ms
+     × allows an unrelated agent-resolvable confirmation under a restrictive issue review policy 2344ms
+     × allows only the addressed agent or board to resolve an addressed interaction 2686ms
+     × preserves creator exclusion for legacy board_or_agents rows 2333ms
+     × allows the creator agent and creating run under anyone 2051ms
+     × lets the creator and same run resolve 'suggest_tasks' through anyone 2400ms
+     × lets the creator and same run resolve 'ask_user_questions' through anyone 2417ms
+     × lets the creator and same run resolve 'request_confirmation' through anyone 2331ms
+     × lets the creator and same run resolve 'request_checkbox_confirmation' through anyone 1461ms
+     × lets the creator and same run resolve 'request_item_verdicts' through anyone 1731ms
+     × enforces same-run exclusion under not_creator and requires a resolver run id 1590ms
+     × rejects an invalid run attribution before resolving or waking 2082ms
+     × hides cross-company interactions before resolver evaluation 1866ms
+     × contains task-bridge resolvers at the ordinary issue mutation boundary 2653ms
+     × reauthorizes suggested-task effects before resolving the interaction 2717ms
+     × blocks human-only and tool-action interactions for agents 1762ms
+     × lets watchdog-scoped agents use the ordinary resolver and contains low-trust agents 2570ms
+     × fails a capped run closed on cross-issue 'accept' with no interaction effect 2782ms
+     × fails a capped run closed on cross-issue 'reject' with no interaction effect 2492ms
+     × fails a capped run closed on cross-issue 'respond' with no interaction effect 2404ms
+     × fails a capped run closed on cross-issue 'verdicts' with no interaction effect 4112ms
+     × charges one shared cross-issue observation for an allowed 'accept' 2076ms
+     × charges one shared cross-issue observation for an allowed 'reject' 2437ms
+     × charges one shared cross-issue observation for an allowed 'respond' 2899ms
+     × charges one shared cross-issue observation for an allowed 'verdicts' 2270ms
+     × does not charge a same-issue resolution even past the cap 2406ms
+     × leaves board resolutions outside the per-run counter 2602ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 80 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > creates board-authored interactions
+Error: Hook timed out in 60000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:318:3
+    316|
+    317| describe.sequential("issue thread interaction routes", () => {
+    318|   beforeEach(async () => {
+       |   ^
+    319|     vi.resetModules();
+    320|     vi.doUnmock("../routes/issues.js");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > wakes the addressed agent when an interaction is created
+AssertionError: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:684:24
+    682|       });
+    683|
+    684|     expect(res.status).toBe(201);
+       |                        ^
+    685|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+    686|       ASSIGNEE_AGENT_ID,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > does not route agent attention for a human-only interaction
+AssertionError: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:740:24
+    738|       });
+    739|
+    740|     expect(res.status).toBe(201);
+       |                        ^
+    741|     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+    742|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > returns 400 for agent-addressed tool-action confirmations
+AssertionError: expected 500 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:772:24
+    770|       });
+    771|
+    772|     expect(res.status).toBe(400);
+       |                        ^
+    773|     expect(res.body.error).toContain("cannot be addressed");
+    774|     expect(mockInteractionService.create).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > accepts suggested tasks and wakes created assignees plus the current assignee
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:784:24
+    782|       .send({ selectedClientKeys: ["task-1"] });
+    783|
+    784|     expect(res.status).toBe(200);
+       |                        ^
+    785|     expect(mockInteractionService.acceptInteraction).toHaveBeenCalledW…
+    786|       expect.objectContaining({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > answers questions through the durable delivery service
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:832:24
+    830|       });
+    831|
+    832|     expect(res.status).toBe(200);
+       |                        ^
+    833|     expect(mockInteractionService.answerQuestions).toHaveBeenCalled();
+    834|     expect(mockQuestionResponseDeliveries.deliver).toHaveBeenCalledWit…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > routes wake-on-accept question answers through the same causal delivery service
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:865:24
+    863|       .send({ answers: [{ questionId: "scope", optionIds: ["phase-1"] …
+    864|
+    865|     expect(res.status).toBe(200);
+       |                        ^
+    866|     expect(mockQuestionResponseDeliveries.deliver).toHaveBeenCalledWit…
+    867|     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > submits item verdicts and emits one continuation wake with resolved item ids
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:879:24
+    877|       });
+    878|
+    879|     expect(res.status).toBe(200);
+       |                        ^
+    880|     expect(mockInteractionService.submitItemVerdicts).toHaveBeenCalled…
+    881|       expect.objectContaining({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows a board user to withdraw and wakes the assignee
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:938:24
+    936|       .send({ reason: "Replanning" });
+    937|
+    938|     expect(res.status).toBe(200);
+       |                        ^
+    939|     expect(mockInteractionService.withdrawInteraction).toHaveBeenCalle…
+    940|       expect.objectContaining({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > cancels the bound native run when its question is withdrawn
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:973:24
+    971|       .send({ reason: "No longer needed" });
+    972|
+    973|     expect(res.status).toBe(200);
+       |                        ^
+    974|     expect(mockRequestNativeQuestionRunCancellation).toHaveBeenCalledW…
+    975|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > keeps a durable withdrawal intent when immediate native cancellation fails
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1011:24
+    1009|       .send({ reason: "No longer needed" });
+    1010|
+    1011|     expect(res.status).toBe(200);
+       |                        ^
+    1012|     expect(mockRequestNativeQuestionRunCancellation).toHaveBeenCalledW…
+    1013|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows the creator agent to withdraw and wakes a different assignee
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1035:24
+    1033|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    1034|       .send({});
+    1035|     expect(res.status).toBe(200);
+       |                        ^
+    1036|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(ASSIGNEE_…
+    1037|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows the assignee agent to withdraw without waking itself
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1045:24
+    1043|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    1044|       .send({});
+    1045|     expect(res.status).toBe(200);
+       |                        ^
+    1046|     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+    1047|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects withdrawal by an unrelated agent
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1054:24
+    1052|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    1053|       .send({});
+    1054|     expect(res.status).toBe(403);
+       |                        ^
+    1055|     expect(mockInteractionService.withdrawInteraction).not.toHaveBeenC…
+    1056|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > lets a watchdog-scoped assignee withdraw through ordinary containment
+AssertionError: expected "vi.fn()" to be called with arguments: [ Anything, …(4) ]
+
+Number of calls: 0
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1071:56
+    1069|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    1070|       .send({});
+    1071|     expect(mockInteractionService.withdrawInteraction).toHaveBeenCalle…
+       |                                                        ^
+    1072|       expect.anything(),
+    1073|       "interaction-withdraw",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects withdrawal by low-trust actors
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1096:24
+    1094|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    1095|       .send({});
+    1096|     expect(res.status).toBe(403);
+       |                        ^
+    1097|     expect(res.body).toMatchObject({ code: "interaction_scope_denied" …
+    1098|     expect(mockInteractionService.withdrawInteraction).not.toHaveBeenC…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > cancels question interactions and emits a continuation wake
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1108:24
+    1106|       .send({});
+    1107|
+    1108|     expect(res.status).toBe(200);
+       |                        ^
+    1109|     expect(res.body.status).toBe("cancelled");
+    1110|     expect(mockInteractionService.cancelQuestions).toHaveBeenCalledWit…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > durably marks a board-cancelled native question before cancelling its run
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1145:24
+    1143|       .send({});
+    1144|
+    1145|     expect(res.status).toBe(200);
+       |                        ^
+    1146|     expect(mockRequestNativeQuestionRunCancellation).toHaveBeenCalledW…
+    1147|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > accepts request confirmations and wakes the current assignee when configured for accept-only wakeups
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1192:24
+    1190|       .send({});
+    1191|
+    1192|     expect(res.status).toBe(200);
+       |                        ^
+    1193|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledTimes(1);
+    1194|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > executes an accepted tool-action confirmation through the gateway callback
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1241:24
+    1239|       .send({});
+    1240|
+    1241|     expect(res.status).toBe(200);
+       |                        ^
+    1242|     expect(approveToolActionRequest).toHaveBeenCalledWith({
+    1243|       companyId: "company-1",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > wakes with failure instructions after an accepted tool action fails
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1298:24
+    1296|       .send({});
+    1297|
+    1298|     expect(res.status).toBe(200);
+       |                        ^
+    1299|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+    1300|       ASSIGNEE_AGENT_ID,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > wakes with fresh-approval instructions after an accepted tool action expires
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1348:24
+    1346|       .send({});
+    1347|
+    1348|     expect(res.status).toBe(200);
+       |                        ^
+    1349|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+    1350|       ASSIGNEE_AGENT_ID,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects client-supplied tool-action metadata on interaction creation
+AssertionError: expected 500 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1394:24
+    1392|       });
+    1393|
+    1394|     expect(res.status).toBe(422);
+       |                        ^
+    1395|     expect(res.body.error).toContain("payload.toolAction is server-own…
+    1396|     expect(mockInteractionService.create).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects client-supplied secret-proposal metadata on interaction creation
+AssertionError: expected 500 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1422:24
+    1420|       });
+    1421|
+    1422|     expect(res.status).toBe(422);
+       |                        ^
+    1423|     expect(res.body.error).toContain("payload.secretProposal is server…
+    1424|     expect(mockInteractionService.create).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > executes an accepted secret-proposal confirmation and wakes with verification instructions
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1457:24
+    1455|       .send({});
+    1456|
+    1457|     expect(res.status).toBe(200);
+       |                        ^
+    1458|     expect(approveSecretProposal).toHaveBeenCalledWith({
+    1459|       companyId: "company-1",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > records a failed secret-proposal execution and posts a thread comment
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1516:24
+    1514|       .send({});
+    1515|
+    1516|     expect(res.status).toBe(200);
+       |                        ^
+    1517|     expect(mockInteractionService.recordSecretProposalExecutionResult)…
+    1518|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > forwards plan-document confirmations to the interaction service for revision validation
+AssertionError: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1559:24
+    1557|     // (assertRequestConfirmationTargetIsCurrent). The route must pass…
+    1558|     // through unchanged rather than pre-checking it non-atomically.
+    1559|     expect(res.status).toBe(201);
+       |                        ^
+    1560|     expect(mockInteractionService.create).toHaveBeenCalledWith(
+    1561|       expect.objectContaining({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > accepts request checkbox confirmations with selected option ids and wakes the assignee
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1612:24
+    1610|       .send({ selectedOptionIds: ["file-b"] });
+    1611|
+    1612|     expect(res.status).toBe(200);
+       |                        ^
+    1613|     expect(mockInteractionService.acceptInteraction).toHaveBeenCalledW…
+    1614|       expect.objectContaining({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > preserves accepted empty checkbox selections in assignee wake context
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1692:24
+    1690|       .send({ selectedOptionIds: [] });
+    1691|
+    1692|     expect(res.status).toBe(200);
+       |                        ^
+    1693|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledTimes(1);
+    1694|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > forces a fresh workspace-aware session when accepting a planning confirmation with 'explicit' issueId
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > forces a fresh workspace-aware session when accepting a planning confirmation with 'omitted' issueId
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > forces a fresh workspace-aware session when accepting a planning confirmation with 'null' issueId
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1767:24
+    1765|       .send({});
+    1766|
+    1767|     expect(res.status).toBe(200);
+       |                        ^
+    1768|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledTimes(1);
+    1769|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > does not project an explicitly different issue's approved plan into the current issue wake
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1839:29
+    1837|       .post(`/api/issues/${ISSUE_ID}/interactions/interaction-other-pl…
+    1838|       .send({});
+    1839|     expect(response.status).toBe(200);
+       |                             ^
+    1840|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledTimes(1);
+    1841|     const wake = mockHeartbeatService.wakeup.mock.calls[0]?.[1] as unk…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > forces a fresh workspace-aware session when accepting a plan document confirmation on a standard-work issue
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1891:24
+    1889|       .send({});
+    1890|
+    1891|     expect(res.status).toBe(200);
+       |                        ^
+    1892|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledTimes(1);
+    1893|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > wakes the returned agent when accepting an agent-authored confirmation from a board review assignee
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:1952:24
+    1950|       .send({});
+    1951|
+    1952|     expect(res.status).toBe(200);
+       |                        ^
+    1953|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledTimes(1);
+    1954|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > does not emit a continuation wake when request confirmations are rejected
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2013:24
+    2011|       .send({ reason: "Needs changes" });
+    2012|
+    2013|     expect(res.status).toBe(200);
+       |                        ^
+    2014|     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+    2015|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > wakes the assignee to revise a rejected plan even when its policy is accept-only
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2054:24
+    2052|       .send({ reason: "Keep the API smaller and add a Unicode test." }…
+    2053|
+    2054|     expect(res.status).toBe(200);
+       |                        ^
+    2055|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+    2056|       ASSIGNEE_AGENT_ID,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > delivers generic confirmation rejection feedback as the next turn message
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2115:24
+    2113|       .send({ reason: "Read T1, append T2, and verify both lines." });
+    2114|
+    2115|     expect(res.status).toBe(200);
+       |                        ^
+    2116|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+    2117|       ASSIGNEE_AGENT_ID,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > returns a rejected native completion review with a narrow reviewer-reason continuation
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2167:24
+    2165|       .send({ reason: "Run the external verification and report only t…
+    2166|
+    2167|     expect(res.status).toBe(200);
+       |                        ^
+    2168|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+    2169|       ASSIGNEE_AGENT_ID,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > overrides accept-only continuation when rejection consumes the last review path
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2214:24
+    2212|       .send({ reason: "Needs changes" });
+    2213|
+    2214|     expect(res.status).toBe(200);
+       |                        ^
+    2215|     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+    2216|       ASSIGNEE_AGENT_ID,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > wakes with decline instructions when a tool-action confirmation is rejected
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2265:24
+    2263|       .send({ reason: "Use the sandbox sheet instead" });
+    2264|
+    2265|     expect(res.status).toBe(200);
+       |                        ^
+    2266|     const expectedToolAction = {
+    2267|       toolName: "google_sheets_add_row",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > does not emit an accept-only continuation wake for rejected suggested tasks
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2312:24
+    2310|       .send({ reason: "Not now" });
+    2311|
+    2312|     expect(res.status).toBe(200);
+       |                        ^
+    2313|     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+    2314|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows agent-authored interaction creation and stamps the active run id
+AssertionError: expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2335:24
+    2333|       });
+    2334|
+    2335|     expect(res.status).toBe(201);
+       |                        ^
+    2336|     expect(mockInteractionService.create).toHaveBeenCalledWith(
+    2337|       expect.objectContaining({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows a different in-scope agent run to respond when policy permits
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2363:24
+    2361|       .send({ answers: [{ questionId: "scope", optionIds: ["phase-1"] …
+    2362|
+    2363|     expect(res.status).toBe(200);
+       |                        ^
+    2364|     expect(mockInteractionService.answerQuestions).toHaveBeenCalledWit…
+    2365|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows an agent to accept another agent's pending review confirmation by default
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2428:24
+    2426|       .send({});
+    2427|
+    2428|     expect(res.status).toBe(200);
+       |                        ^
+    2429|     expect(mockInteractionService.acceptInteraction).toHaveBeenCalledW…
+    2430|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows an agent to reject a pending review confirmation by default
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2482:24
+    2480|       .send({ reason: "Needs changes" });
+    2481|
+    2482|     expect(res.status).toBe(200);
+       |                        ^
+    2483|     expect(mockInteractionService.rejectInteraction).toHaveBeenCalledW…
+    2484|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > keeps an unrelated pending confirmation human-only on an in-review issue
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2528:24
+    2526|       .send({});
+    2527|
+    2528|     expect(res.status).toBe(403);
+       |                        ^
+    2529|     expect(res.body).toMatchObject({
+    2530|       error: "This issue-thread interaction is human-only",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[45/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > keeps a same-requester sibling confirmation human-only
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2569:24
+    2567|       .send({});
+    2568|
+    2569|     expect(res.status).toBe(403);
+       |                        ^
+    2570|     expect(res.body).toMatchObject({
+    2571|       error: "This issue-thread interaction is human-only",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[46/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects an agent review verdict when 'it addresses a different agent'
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects an agent review verdict when 'the agent created it'
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects an agent review verdict when 'the same run created it'
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2632:24
+    2630|       .send({});
+    2631|
+    2632|     expect(res.status).toBe(403);
+       |                        ^
+    2633|     expect(res.body).toMatchObject({ code });
+    2634|     expect(mockInteractionService.acceptInteraction).not.toHaveBeenCal…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[47/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects an agent review-confirmation verdict under human_only with actionable copy
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2670:24
+    2668|       .send({});
+    2669|
+    2670|     expect(res.status).toBe(403);
+       |                        ^
+    2671|     expect(res.body).toMatchObject({
+    2672|       error: "This issue-thread interaction is human-only",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects an agent 'accept' verdict under human_only when a user review transition omitted the interaction binding
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects an agent 'reject' verdict under human_only when a user review transition omitted the interaction binding
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2716:24
+    2714|       .send(body);
+    2715|
+    2716|     expect(res.status).toBe(403);
+       |                        ^
+    2717|     expect(res.body).toMatchObject({
+    2718|       details: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows an unrelated agent-resolvable confirmation under a restrictive issue review policy
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2780:50
+    2778|       .send({});
+    2779|
+    2780|     expect(res.status, JSON.stringify(res.body)).toBe(200);
+       |                                                  ^
+    2781|     expect(mockInteractionService.acceptInteraction).toHaveBeenCalled(…
+    2782|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows only the addressed agent or board to resolve an addressed interaction
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2819:30
+    2817|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    2818|       .send({ answers: [] });
+    2819|     expect(addressee.status).toBe(200);
+       |                              ^
+    2820|     expect(mockQuestionResponseDeliveries.deliver).toHaveBeenCalledWit…
+    2821|     expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > preserves creator exclusion for legacy board_or_agents rows
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2866:24
+    2864|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    2865|       .send({ answers: [] });
+    2866|     expect(res.status).toBe(403);
+       |                        ^
+    2867|     expect(res.body).toMatchObject({ code: "interaction_creator_exclud…
+    2868|     expect(mockInteractionService.answerQuestions).not.toHaveBeenCalle…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows the creator agent and creating run under anyone
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2898:24
+    2896|       .send({ answers: [] });
+    2897|
+    2898|     expect(res.status).toBe(200);
+       |                        ^
+    2899|     expect(mockInteractionService.answerQuestions).toHaveBeenCalledWit…
+    2900|       expect.anything(),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > lets the creator and same run resolve 'suggest_tasks' through anyone
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > lets the creator and same run resolve 'ask_user_questions' through anyone
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > lets the creator and same run resolve 'request_confirmation' through anyone
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > lets the creator and same run resolve 'request_checkbox_confirmation' through anyone
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > lets the creator and same run resolve 'request_item_verdicts' through anyone
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2980:24
+    2978|       .send(body);
+    2979|
+    2980|     expect(res.status).toBe(200);
+       |                        ^
+    2981|     expect(mockInteractionService[service as keyof typeof mockInteract…
+    2982|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > enforces same-run exclusion under not_creator and requires a resolver run id
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3004:28
+    3002|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    3003|       .send({ answers: [] });
+    3004|     expect(sameRun.status).toBe(403);
+       |                            ^
+    3005|     expect(sameRun.body).toMatchObject({ code: "interaction_creator_ex…
+    3006|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > rejects an invalid run attribution before resolving or waking
+AssertionError: expected 500 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3043:24
+    3041|       .send({ answers: [] });
+    3042|
+    3043|     expect(res.status).toBe(422);
+       |                        ^
+    3044|     expect(res.body).toMatchObject({ code: "interaction_run_attributio…
+    3045|     expect(mockInteractionService.answerQuestions).not.toHaveBeenCalle…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[56/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > hides cross-company interactions before resolver evaluation
+AssertionError: expected 500 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3068:24
+    3066|       .send({ answers: [] });
+    3067|
+    3068|     expect(res.status).toBe(404);
+       |                        ^
+    3069|     expect(mockInteractionService.getForIssue).not.toHaveBeenCalled();
+    3070|     expect(mockInteractionService.answerQuestions).not.toHaveBeenCalle…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[57/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > contains task-bridge resolvers at the ordinary issue mutation boundary
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3094:24
+    3092|       .send({ answers: [] });
+    3093|
+    3094|     expect(res.status).toBe(403);
+       |                        ^
+    3095|     expect(res.body).toMatchObject({ code: "interaction_scope_denied" …
+    3096|     expect(mockInteractionService.answerQuestions).not.toHaveBeenCalle…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[58/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > reauthorizes suggested-task effects before resolving the interaction
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3142:24
+    3140|       .send({ selectedClientKeys: ["assigned"] });
+    3141|
+    3142|     expect(res.status).toBe(403);
+       |                        ^
+    3143|     expect(res.body).toMatchObject({ code: "interaction_governed_actio…
+    3144|     expect(mockInteractionService.acceptInteraction).not.toHaveBeenCal…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[59/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > blocks human-only and tool-action interactions for agents
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3182:27
+    3180|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    3181|       .send({});
+    3182|     expect(capped.status).toBe(403);
+       |                           ^
+    3183|     expect(capped.body.error).toContain("human-only");
+    3184|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[60/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > lets watchdog-scoped agents use the ordinary resolver and contains low-trust agents
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3213:29
+    3211|       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interact…
+    3212|       .send({ answers: [] });
+    3213|     expect(watchdog.status).toBe(200);
+       |                             ^
+    3214|     expect(mockInteractionService.answerQuestions).toHaveBeenCalledTim…
+    3215|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[61/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > fails a capped run closed on cross-issue 'accept' with no interaction effect
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > fails a capped run closed on cross-issue 'reject' with no interaction effect
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > fails a capped run closed on cross-issue 'respond' with no interaction effect
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > fails a capped run closed on cross-issue 'verdicts' with no interaction effect
+AssertionError: expected 500 to be 429 // Object.is equality
+
+- Expected
++ Received
+
+- 429
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3297:26
+    3295|         .send(body);
+    3296|
+    3297|       expect(res.status).toBe(429);
+       |                          ^
+    3298|       expect(res.body.details).toMatchObject({
+    3299|         code: "cross_issue_influence_cap_exceeded",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[62/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > charges one shared cross-issue observation for an allowed 'accept'
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > charges one shared cross-issue observation for an allowed 'reject'
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > charges one shared cross-issue observation for an allowed 'respond'
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > charges one shared cross-issue observation for an allowed 'verdicts'
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3338:26
+    3336|         .send(body);
+    3337|
+    3338|       expect(res.status).toBe(200);
+       |                          ^
+    3339|       expect(mockInteractionService[service]).toHaveBeenCalledTimes(1);
+    3340|       expect(mockCrossIssueInfluence.inserted).toEqual([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[63/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > does not charge a same-issue resolution even past the cap
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3370:24
+    3368|       .send({ answers: [] });
+    3369|
+    3370|     expect(res.status).toBe(200);
+       |                        ^
+    3371|     expect(mockInteractionService.answerQuestions).toHaveBeenCalledTim…
+    3372|     expect(mockCrossIssueInfluence.inserted).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[64/80]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > leaves board resolutions outside the per-run counter
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:3385:24
+    3383|       .send({ answers: [] });
+    3384|
+    3385|     expect(res.status).toBe(200);
+       |                        ^
+    3386|     expect(mockInteractionService.answerQuestions).toHaveBeenCalledTim…
+    3387|     expect(mockDbTransaction).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[65/80]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  80 failed | 17 passed (97)
+   Start at  14:33:06
+   Duration  380.06s (transform 57.59s, setup 850ms, import 21.04s, tests 356.23s, environment 2ms)
+

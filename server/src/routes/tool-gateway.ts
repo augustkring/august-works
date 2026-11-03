@@ -17,6 +17,7 @@ import { ToolGatewayHttpError, type ToolGatewayService } from "../services/tool-
 import { forbidden, HttpError } from "../errors.js";
 import { accessService } from "../services/index.js";
 import { listConnectionLifecycleEvents } from "../services/tool-connection-activity.js";
+import { selectMcpProtocolVersion } from "../services/mcp-http.js";
 
 const TOOL_ACTIVITY_EVENT_TYPES = [
   "call_completed",
@@ -55,23 +56,57 @@ function callerHeaders(req: { headers: Record<string, string | string[] | undefi
   return headers;
 }
 
+// Qualification is a fixed platform protocol. Neither provider/DB errors nor
+// arbitrary details/cause text may cross either HTTP boundary.
+function qualificationPublicError(error: unknown) {
+  const known: Record<string, { message: string; statuses: number[] }> = {
+    sandbox_qualification_credential_required: { message: "Qualification credential capability is required", statuses: [401,403] },
+    sandbox_qualification_tool_mismatch: { message: "Qualification request does not match its one-use body", statuses: [403] },
+    sandbox_qualification_capability_replayed: { message: "Qualification capability was already consumed", statuses: [409] },
+    sandbox_qualification_target_changed: { message: "Qualification target is no longer current", statuses: [409] },
+    sandbox_qualification_fixture_changed: { message: "Qualification fixture changed", statuses: [409] },
+    sandbox_qualification_grant_revoked: { message: "Qualification credential grant was revoked", statuses: [403,409] },
+    sandbox_qualification_result_invalid: { message: "Qualification echo result changed", statuses: [502] },
+    sandbox_qualification_probe_failed: { message: "Qualification credential probe failed", statuses: [502] },
+  };
+  const reasonCode = error instanceof ToolGatewayHttpError && Object.hasOwn(known,error.reasonCode)
+    ? error.reasonCode : "sandbox_qualification_probe_failed";
+  const contract = known[reasonCode]!;
+  const status = error instanceof ToolGatewayHttpError && contract.statuses.includes(error.status)
+    ? error.status : contract.statuses[0]!;
+  return { status, reasonCode, message: contract.message };
+}
+
 async function handleMcpGatewayProtocol(
   req: Request,
   res: Response,
   toolGateway: ToolGatewayService,
   locator: { gatewayId?: string | null; gatewayPublicId?: string | null },
 ) {
+  let qualificationRequest = false;
   try {
     const token = bearerToken(req);
-    if (!token) {
-      res.status(401).json({ error: "Bearer token is required" });
-      return;
-    }
     const headers = callerHeaders(req);
     const body = (req.body ?? {}) as { jsonrpc?: string; id?: unknown; method?: string; params?: Record<string, unknown> };
     const id = body.id ?? null;
+    if (!token) {
+      const params = body.params ?? {};
+      const name = typeof params.name === "string" ? params.name : "";
+      if (body.method === "tools/call" && locator.gatewayPublicId && name &&
+        await toolGateway.isSandboxQualificationCanaryCall({ gatewayPublicId: locator.gatewayPublicId, tool: name })) {
+        res.status(401).json({ error: { message: "A one-use sandbox qualification capability is required", data: { reasonCode: "sandbox_qualification_credential_required" } } });
+      } else res.status(401).json({ error: "Bearer token is required" });
+      return;
+    }
+    const qualificationToken = toolGateway.isSandboxQualificationCredentialToken(token);
+    qualificationRequest = qualificationToken;
+    if (qualificationToken && body.jsonrpc !== "2.0")
+      throw new ToolGatewayHttpError(403, "Qualification request does not match its one-use protocol body", "sandbox_qualification_tool_mismatch");
+    if (qualificationToken && body.method !== "tools/call") {
+      throw new ToolGatewayHttpError(403, "Qualification credential is valid only for its one-use tool call", "sandbox_qualification_tool_mismatch");
+    }
     if (body.method === "initialize") {
-      await toolGateway.initializeNamedGatewayProtocol({
+      const binding = await toolGateway.describeNamedGatewayRunBinding({
         ...locator,
         bearerToken: token,
         callerHeaders: headers,
@@ -80,12 +115,13 @@ async function handleMcpGatewayProtocol(
         jsonrpc: "2.0",
         id,
         result: {
-          protocolVersion: "2025-03-26",
+            protocolVersion: selectMcpProtocolVersion(body.params?.protocolVersion),
           capabilities: { tools: {}, resources: {}, prompts: {} },
-          serverInfo: { name: "Paperclip MCP Gateway", version: "1.0.0" },
+          serverInfo: { name: "blentera-mcp-gateway", version: "2.0.0" },
           _meta: {
             "paperclip/mcp-app-ui": "unsupported",
             "paperclip/mcp-app-ui-detail": "Interactive ui:// iframe hosting is not available in Paperclip Runner.",
+            ...(binding ? { "blentera/governed-run-binding.v1": binding } : {}),
           },
         },
       });
@@ -112,26 +148,23 @@ async function handleMcpGatewayProtocol(
             description: tool.description,
             inputSchema: tool.parametersSchema ?? { type: "object", properties: {} },
             })),
-            {
+            ...(!toolGateway.isSandboxBrokerToken(token) ? [{
               name: "paperclip_list_resources",
               description: "List resources from fully assigned MCP connections.",
               inputSchema: { type: "object", properties: {}, additionalProperties: false },
-            },
-            {
+            }, {
               name: "paperclip_read_resource",
               description: "Read a resource URI returned by paperclip_list_resources.",
               inputSchema: { type: "object", required: ["uri"], properties: { uri: { type: "string" } }, additionalProperties: false },
-            },
-            {
+            }, {
               name: "paperclip_list_prompts",
               description: "List prompts from fully assigned MCP connections.",
               inputSchema: { type: "object", properties: {}, additionalProperties: false },
-            },
-            {
+            }, {
               name: "paperclip_get_prompt",
               description: "Get a prompt returned by paperclip_list_prompts.",
               inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" }, arguments: { type: "object" } }, additionalProperties: false },
-            },
+            }] : []),
           ],
         },
       });
@@ -142,6 +175,21 @@ async function handleMcpGatewayProtocol(
       const name = typeof params.name === "string" ? params.name : "";
       if (!name) {
         res.status(400).json({ jsonrpc: "2.0", id, error: { code: -32602, message: "params.name is required" } });
+        return;
+      }
+      if (qualificationToken) {
+        if (typeof id !== "string" || !uuidPattern.test(id) || Object.keys(params).some(key => key !== "name" && key !== "arguments"))
+          throw new ToolGatewayHttpError(403, "Qualification request does not match its one-use body", "sandbox_qualification_tool_mismatch");
+        const result = await toolGateway.executeSandboxQualificationCredentialTool({
+          capabilityToken: token, gatewayPublicId: locator.gatewayPublicId ?? "", commandId: id,
+          tool: name, parameters: params.arguments ?? {},
+        });
+        const resultRecord = result.result && typeof result.result === "object" && !Array.isArray(result.result)
+          ? result.result as Record<string, unknown> : null;
+        const contentText = typeof resultRecord?.content === "string"
+          ? resultRecord.content : JSON.stringify(resultRecord?.data ?? result.result ?? null);
+        res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: contentText }],
+          structuredContent: resultRecord?.structuredContent ?? resultRecord?.data ?? null, isError: false } });
         return;
       }
       const contextMethods = {
@@ -164,14 +212,26 @@ async function handleMcpGatewayProtocol(
         res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result, isError: false } });
         return;
       }
-      const result = await toolGateway.executeTool({
-        sessionToken: token,
-        gatewayId: locator.gatewayId ?? null,
-        gatewayPublicId: locator.gatewayPublicId ?? null,
-        tool: name,
-        parameters: params.arguments ?? {},
-        callerHeaders: req.headers,
-      });
+      const brokerMeta = params._meta && typeof params._meta === "object" && !Array.isArray(params._meta)
+        ? params._meta as Record<string, unknown>
+        : null;
+      const brokerOperationId = brokerMeta?.["paperclip/operationId"];
+      const result = toolGateway.isSandboxBrokerToken(token)
+        ? await toolGateway.executeSandboxBrokerTool({
+            capabilityToken: token,
+            gatewayPublicId: locator.gatewayPublicId ?? "",
+            operationId: typeof brokerOperationId === "string" ? brokerOperationId : "",
+            tool: name,
+            parameters: params.arguments ?? {},
+          })
+        : await toolGateway.executeTool({
+            sessionToken: token,
+            gatewayId: locator.gatewayId ?? null,
+            gatewayPublicId: locator.gatewayPublicId ?? null,
+            tool: name,
+            parameters: params.arguments ?? {},
+            callerHeaders: req.headers,
+          });
       const resultRecord = result.result && typeof result.result === "object" && !Array.isArray(result.result)
         ? result.result as Record<string, unknown>
         : null;
@@ -202,7 +262,18 @@ async function handleMcpGatewayProtocol(
     }
     res.status(404).json({ jsonrpc: "2.0", id, error: { code: -32601, message: "Method not found" } });
   } catch (err) {
+    if (qualificationRequest) {
+      const safe = qualificationPublicError(err);
+      const requestedId = req.body?.id;
+      const id = typeof requestedId === "string" && uuidPattern.test(requestedId) ? requestedId : null;
+      res.status(safe.status).json({jsonrpc:"2.0",id,error:{code:safe.status >= 500 ? -32603 : -32000,
+        message:safe.message,data:{reasonCode:safe.reasonCode}}});
+      return;
+    }
     if (err instanceof ToolGatewayHttpError) {
+      if (err.status === 429 && typeof err.details.retryAfterMs === "number" && Number.isFinite(err.details.retryAfterMs)) {
+        res.setHeader("Retry-After", String(Math.max(1, Math.ceil(err.details.retryAfterMs / 1000))));
+      }
       const id = (req.body as { id?: unknown } | undefined)?.id ?? null;
       // Provider tool failures are MCP tool results, not successful calls or
       // protocol errors. The service has already recorded the failed invocation.
@@ -227,6 +298,41 @@ async function handleMcpGatewayProtocol(
 
 export function mcpGatewayProtocolRoutes(toolGateway: ToolGatewayService) {
   const router = Router();
+  router.post("/mcp/qualification/credential-echo", async (req, res) => {
+    try {
+      const body = req.body;
+      // The owned endpoint exposes only its fixed, non-model metadata during
+      // connection health/catalogue setup. Invocation still requires both the
+      // one-use scoped capability and observed current canary credential.
+      if (Object.keys(req.query).length === 0 && body?.jsonrpc === "2.0" && body.method === "tools/list" &&
+          typeof body.id === "string" && body.id.length > 0 && body.id.length <= 200 &&
+          Object.keys(body).every(key => ["jsonrpc", "id", "method", "params"].includes(key)) &&
+          (body.params === undefined || (body.params && typeof body.params === "object" && !Array.isArray(body.params) && Object.keys(body.params).length === 0))) {
+        res.json({ jsonrpc: "2.0", id: body.id, result: { tools: [{ name: "read_canary",
+          description: "Observe the one-use platform qualification credential challenge.",
+          inputSchema: { type: "object", properties: { fixtureId: { type: "string" }, caseId: { type: "string" }, nonce: { type: "string" } },
+            required: ["fixtureId", "caseId", "nonce"], additionalProperties: false },
+          annotations: { readOnlyHint: true },
+        }] } });
+        return;
+      }
+      if (Object.keys(req.query).length > 0 || !body || typeof body !== "object" || Array.isArray(body) || body.jsonrpc !== "2.0" ||
+          typeof body.id !== "string" || !uuidPattern.test(body.id) || body.method !== "tools/call" ||
+          Object.keys(body).sort().join(",") !== "id,jsonrpc,method,params" ||
+          !body.params || typeof body.params !== "object" || Array.isArray(body.params) ||
+          Object.keys(body.params).sort().join(",") !== "arguments,name" || typeof body.params.name !== "string")
+        throw new ToolGatewayHttpError(403, "Qualification echo requires its fixed request", "sandbox_qualification_tool_mismatch");
+      const token = req.header("x-paperclip-qualification-capability") ?? "";
+      const result = await toolGateway.executeSandboxQualificationCredentialTool({
+        capabilityToken: token, gatewayPublicId: "", commandId: body.id,
+        tool: body.params.name, parameters: body.params.arguments,
+      }, req.header("authorization") ?? "");
+      res.json(result);
+    } catch (error) {
+      const safe=qualificationPublicError(error);
+      res.status(safe.status).json({error:safe.message,reasonCode:safe.reasonCode});
+    }
+  });
   router.get("/mcp/gateways/:gatewayPublicId", async (req, res) => {
     res.json({
       transport: "streamable_http",
@@ -313,6 +419,9 @@ function outcomeCondition(outcome: string) {
 
 function sendGatewayError(res: import("express").Response, err: unknown) {
   if (err instanceof ToolGatewayHttpError) {
+    if (err.status === 429 && typeof err.details.retryAfterMs === "number" && Number.isFinite(err.details.retryAfterMs)) {
+      res.setHeader("Retry-After", String(Math.max(1, Math.ceil(err.details.retryAfterMs / 1000))));
+    }
     res.status(err.status).json({
       error: err.message,
       reasonCode: err.reasonCode,
@@ -477,7 +586,7 @@ export function toolGatewayRoutes(db: Db, toolGateway: ToolGatewayService) {
 
       const companyId = req.actor.type === "agent" ? req.actor.companyId : body.companyId;
       const agentId = req.actor.type === "agent" ? req.actor.agentId : body.agentId;
-      const runId = req.actor.type === "agent" ? (req.actor.runId ?? body.runId) : body.runId;
+      const runId = req.actor.type === "agent" ? req.actor.runId : body.runId;
       if (!companyId || !agentId || !runId) {
         res.status(400).json({ error: "companyId, agentId, and runId are required" });
         return;
@@ -493,6 +602,7 @@ export function toolGatewayRoutes(db: Db, toolGateway: ToolGatewayService) {
         ttlMs: body.ttlMs,
         actorType: actor.actorType,
         actorId: actor.actorId,
+        authorizationActor: req.actor,
       });
 
       res.status(201).json({

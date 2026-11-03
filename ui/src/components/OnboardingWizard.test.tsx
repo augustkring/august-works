@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 // --- Mocks (hoisted so vi.mock factories can close over them) ----------------
 
@@ -3343,7 +3344,7 @@ describe("OnboardingWizard restore-gate (stale localStorage across accounts)", (
       const { root } = await openStep4({ adapterType: "claude_local" });
       await pickSource(/Claude/);
       expect(document.body.textContent).toContain("claude auth login");
-      expect(document.body.textContent).toContain("machine running Paperclip");
+      expect(document.body.textContent).toContain(`machine running ${PRODUCT_IDENTITY.productName}`);
       expect(document.body.textContent).not.toContain("No managed sandbox");
       expect(mockAgentsApi.startClaudeSetupTokenLogin).not.toHaveBeenCalled();
       const connect = [...document.body.querySelectorAll("button")].find(b => b.textContent?.trim().startsWith("Connect"));

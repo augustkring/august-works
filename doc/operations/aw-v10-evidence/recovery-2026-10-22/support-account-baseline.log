@@ -1,0 +1,89 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts (9 tests | 2 failed | 6 skipped) 19093ms
+     × erases local support content with deletion markers before completing personal account erasure 827ms
+     × keeps held support ownership as a scrubbed principal and leaves account erasure pending 324ms
+ ❯ |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts (15 tests | 1 failed | 14 skipped) 128190ms
+     × replays account erasure without restoring access or falsely completing held support content 73057ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts > native support case storage and erasure boundaries > replays account erasure without restoring access or falsely completing held support content
+Error: Failed query: delete from "user" where "user"."id" = $1
+params: 3afb6ad2-ea74-4624-8ada-1abc495c6105
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/services/saas/quarantine.ts:234:7
+    232|           ),
+    233|         );
+    234|       await tx.delete(authUsers).where(eq(authUsers.id, user.user_id));
+       |       ^
+    235|     });
+    236|   }
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ prepareRestoredQuarantine src/services/saas/quarantine.ts:204:5
+ ❯ src/__tests__/support-case-storage.integration.test.ts:209:9
+
+Caused by: PostgresError: update or delete on table "user" violates foreign key constraint "support_case_events_author_user_id_user_id_fk" on table "support_case_events"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23503', detail: 'Key (id)=(3afb6ad2-ea74-4624-8ada-1abc495c6105) is still referenced from table "support_case_events".', schema_name: 'public', table_name: 'support_case_events', constraint_name: 'support_case_events_author_user_id_user_id_fk', file: 'ri_triggers.c', routine: 'ri_ReportViolation', query: 'delete from "user" where "user"."id" = $1', parameters: [ '3afb6ad2-ea74-4624-8ada-1abc495c6105' ], args: [ '3afb6ad2-ea74-4624-8ada-1abc495c6105' ], types: [ 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > erases local support content with deletion markers before completing personal account erasure
+AssertionError: expected [ { …(23) } ] to have a length of +0 but got 1
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:584:9
+    582|           .from(supportCases)
+    583|           .where(eq(supportCases.id, supportCase.id)),
+    584|       ).toHaveLength(0);
+       |         ^
+    585|       expect(
+    586|         await db
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v6-account-deletion.integration.test.ts > V6 personal account offboarding > keeps held support ownership as a scrubbed principal and leaves account erasure pending
+AssertionError: expected { id: 'support-held-delete', …(8) } to match object { name: 'Deleted account', …(3) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "emailVerified": false,
+    "image": null,
+-   "locale": null,
++   "locale": "da",
+    "name": "Deleted account",
+  }
+
+ ❯ src/__tests__/v6-account-deletion.integration.test.ts:655:9
+    653|             .where(eq(authUsers.id, "support-held-delete"))
+    654|         )[0],
+    655|       ).toMatchObject({
+       |         ^
+    656|         name: "Deleted account",
+    657|         image: null,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 1 passed | 20 skipped (24)
+   Start at  16:54:30
+   Duration  253.55s (transform 57.85s, setup 909ms, import 103.54s, tests 147.28s, environment 3ms)
+

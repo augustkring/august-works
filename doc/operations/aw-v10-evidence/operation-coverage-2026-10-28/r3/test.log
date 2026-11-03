@@ -1,0 +1,13 @@
+✔ accepts classified material operations and explicit Human-only actions (8.022664ms)
+✔ fails closed when a new material manifest operation lacks UI classification (1.225911ms)
+✔ rejects an unmapped mounted UI operation instead of accepting a wildcard (0.86081ms)
+✔ fails when a new UI client mutation appears while the inventory stays unchanged (2.679877ms)
+✔ rejects inventory entries that are absent from the canonical manifest (0.497551ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 266.555925

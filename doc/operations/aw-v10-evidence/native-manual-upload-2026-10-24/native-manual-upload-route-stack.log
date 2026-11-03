@@ -1,0 +1,70 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts (33 tests | 2 failed | 31 skipped) 40862ms
+     × canonicalizes paperclip artifact metadata before creating a work product 3135ms
+     × rejects paperclip artifact metadata that references another issue's attachment 2443ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > canonicalizes paperclip artifact metadata before creating a work product
+AssertionError: TypeError: db.select is not a function
+    at canActorReadIssuePrivacy (/workspace/blentera-v10/server/src/services/authorization.ts:701:20)
+    at assertPublicTaskWriteAdmission (/workspace/blentera-v10/server/src/routes/issues.ts:3548:19)
+    at /workspace/blentera-v10/server/src/routes/issues.ts:3560:22
+    at processTicksAndRejections (node:internal/process/task_queues:104:5): expected 500 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 500
+
+ ❯ canActorReadIssuePrivacy src/services/authorization.ts:701:20
+    699|
+    700| export async function canActorReadIssuePrivacy(db: Db | DbTransaction,…
+    701|   return (await db.select({ id: issues.id }).from(issues).where(and(eq…
+       |                    ^
+    702| }
+    703| export async function canActorReadProjectPrivacy(db: Db | DbTransactio…
+ ❯ assertPublicTaskWriteAdmission src/routes/issues.ts:3548:19
+ ❯ src/routes/issues.ts:3560:22
+ ❯ src/__tests__/issue-attachment-routes.test.ts:801:87
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-attachment-routes.test.ts > issue attachment routes > rejects paperclip artifact metadata that references another issue's attachment
+AssertionError: TypeError: db.select is not a function
+    at canActorReadIssuePrivacy (/workspace/blentera-v10/server/src/services/authorization.ts:701:20)
+    at assertPublicTaskWriteAdmission (/workspace/blentera-v10/server/src/routes/issues.ts:3548:19)
+    at /workspace/blentera-v10/server/src/routes/issues.ts:3560:22
+    at processTicksAndRejections (node:internal/process/task_queues:104:5): expected 500 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 500
+
+ ❯ canActorReadIssuePrivacy src/services/authorization.ts:701:20
+    699|
+    700| export async function canActorReadIssuePrivacy(db: Db | DbTransaction,…
+    701|   return (await db.select({ id: issues.id }).from(issues).where(and(eq…
+       |                    ^
+    702| }
+    703| export async function canActorReadProjectPrivacy(db: Db | DbTransactio…
+ ❯ assertPublicTaskWriteAdmission src/routes/issues.ts:3548:19
+ ❯ src/routes/issues.ts:3560:22
+ ❯ src/__tests__/issue-attachment-routes.test.ts:848:87
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 31 skipped (33)
+   Start at  12:58:16
+   Duration  41.74s (transform 29.39s, setup 173ms, import 274ms, tests 40.86s, environment 0ms)
+

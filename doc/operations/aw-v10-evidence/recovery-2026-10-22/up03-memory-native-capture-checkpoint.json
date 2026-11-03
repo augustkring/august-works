@@ -1,0 +1,151 @@
+{
+  "status": "Bounded native source-purpose checkpoint; principal row pins and wider temporal graph remain OPEN",
+  "productionChanges": [
+    "Same original candidate transaction supports capture-only resolutionKind/replayed result; exact server fingerprint replay under existing operation lock without native private row ID conflicts.",
+    "Native source comparison/capture/effect checks use actual current job, lease, native succeeded run and Agent/Human, bound to physical backend/top-level transaction; child savepoints retain identity.",
+    "All fresh source roots are currently checked before qualification/commit; ordinary candidate DTO always requires current ordinary read; completed-run generic readers stay denied outside capture purpose.",
+    "Existing native publication arrays defer all eleven Memory publication drains when called inside original outer transaction."
+  ],
+  "red": {
+    "log": "up03-memory-steered-new-red.log",
+    "sha256": "aea2b9effb8015e8d829addb28cc3acc27bdcd360e627f96ed1d3e05265b7655",
+    "result": "1 actual PG failure, 72.59s; legitimate persisted native Human steering caused returned private source UUID and committed derivative; private prose canary not returned.",
+    "historicalOpenReceipt": "up03-memory-steered-producer-open.json"
+  },
+  "captures": [
+    {
+      "log": "up03-memory-native-capture-green.log",
+      "sha256": "ee1839e09ad69ee970a4f2f8ce8718d41318b4f55b8318262294c9393fab9d08",
+      "command": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/memory-native-capture-purpose.integration.test.ts server/src/__tests__/memory-candidate-steered-producer.integration.test.ts server/src/__tests__/memory-resolver-private-lineage.integration.test.ts --maxWorkers=1",
+      "result": "CLOSED exit1:12 PASS,1 fixture FAIL,3files,183.94s",
+      "pins": [
+        {
+          "path": "server/src/services/memory/memory-service.ts",
+          "sha256": "b97bc5ffb6e6ce48e7786bfffcaede8c3a68ed9082252022b179626e8ab0e112"
+        },
+        {
+          "path": "server/src/services/memory/memory-privacy.ts",
+          "sha256": "6458658edb91dd17295b73cebac7f3f3dbe5e55c7de91f12535226b2f94cabc2"
+        },
+        {
+          "path": "server/src/services/authorization.ts",
+          "sha256": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774"
+        },
+        {
+          "path": "server/src/services/analytical-reader.ts",
+          "sha256": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06"
+        },
+        {
+          "path": "server/src/services/context/context-manifest.ts",
+          "sha256": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8"
+        },
+        {
+          "path": "server/src/services/learning/learning-analytical-sources.ts",
+          "sha256": "d866a84b51773948e0c52094a95b9b41085f7d9d319343647e21a8a377cc41c4"
+        },
+        {
+          "path": "server/src/services/foundation-authoring-source.ts",
+          "sha256": "d733fe594344887cbfdd7e36dc102bbd78df9c3d08c413542547337db342eb51"
+        },
+        {
+          "path": "server/src/services/run-identity.ts",
+          "sha256": "1316cdd648edcf77fe51d459c1d0bc2ab5605b0efb689169bc744ab0c7092b05"
+        },
+        {
+          "path": "packages/db/src/migrations/0506_wild_thanos.sql",
+          "sha256": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+        },
+        {
+          "path": "server/src/__tests__/memory-native-capture-purpose.integration.test.ts",
+          "sha256": "0b88dd332290bdede3b45bb4f825cba573fa418c3595c561735252f67a54646f"
+        },
+        {
+          "path": "server/src/__tests__/memory-candidate-steered-producer.integration.test.ts",
+          "sha256": "11d79fbdb78e8cbd79d7295d2a75585b547aaa4923e55a1f46450526ffc0ec85"
+        },
+        {
+          "path": "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts",
+          "sha256": "c955f1e2bd01301c913156a74ba1cf49d73920c4ccbae1e2a61d97657d0602ae"
+        }
+      ],
+      "pinsAfter": "All12 checked unchanged after actual exit; PostgreSQL cleanup closed.",
+      "limits": "New Foundation/Learning diamond fixture omitted canonical active Agent membership; denial was correct. Steering1, resolver6 and five other source-purpose cases passed. No production edits during capture."
+    },
+    {
+      "log": "up03-memory-native-capture-green-2.log",
+      "sha256": "a024fdb339ed87367342c72029efe3ebe29e9ce560456c9652f898108159b280",
+      "command": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/memory-native-capture-purpose.integration.test.ts --maxWorkers=1",
+      "result": "CLOSED exit0:6 PASS,1file,84.70s",
+      "pins": [
+        {
+          "path": "server/src/services/memory/memory-service.ts",
+          "sha256": "b97bc5ffb6e6ce48e7786bfffcaede8c3a68ed9082252022b179626e8ab0e112"
+        },
+        {
+          "path": "server/src/services/memory/memory-privacy.ts",
+          "sha256": "6458658edb91dd17295b73cebac7f3f3dbe5e55c7de91f12535226b2f94cabc2"
+        },
+        {
+          "path": "server/src/services/authorization.ts",
+          "sha256": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774"
+        },
+        {
+          "path": "server/src/services/analytical-reader.ts",
+          "sha256": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06"
+        },
+        {
+          "path": "server/src/services/context/context-manifest.ts",
+          "sha256": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8"
+        },
+        {
+          "path": "server/src/services/learning/learning-analytical-sources.ts",
+          "sha256": "d866a84b51773948e0c52094a95b9b41085f7d9d319343647e21a8a377cc41c4"
+        },
+        {
+          "path": "server/src/services/foundation-authoring-source.ts",
+          "sha256": "d733fe594344887cbfdd7e36dc102bbd78df9c3d08c413542547337db342eb51"
+        },
+        {
+          "path": "server/src/services/run-identity.ts",
+          "sha256": "1316cdd648edcf77fe51d459c1d0bc2ab5605b0efb689169bc744ab0c7092b05"
+        },
+        {
+          "path": "server/src/services/memory/memory-jobs.ts",
+          "sha256": "750ec42d4e68b5058f12efdb7d64e4f5c5bfe095f1d2dc9157147001d29790ab"
+        },
+        {
+          "path": "server/src/services/memory/memory-post-run-extraction.ts",
+          "sha256": "bf48704f3b03c85f8ca8244153a485c2667ec742924167d30cd550ac180155f5"
+        },
+        {
+          "path": "packages/db/src/migrations/0506_wild_thanos.sql",
+          "sha256": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+        },
+        {
+          "path": "server/src/__tests__/memory-native-capture-purpose.integration.test.ts",
+          "sha256": "615db50189f17ee48b1bd9628147802db64da8217ce3e727985dde7e31a3be87"
+        }
+      ],
+      "pinsAfter": "All12 checked unchanged after actual exit; PostgreSQL cleanup closed.",
+      "fixtureCorrection": "Only new disjoint test changed: actual active Agent membership plus explicit current canonical foundation:read allow assertion. Negative real Memory/Foundation/Learning cycle assertion unchanged; production identical to initial13 capture."
+    }
+  ],
+  "actualCases": [
+    "Same backend/top-level xid through two nested savepoints",
+    "Wrong pooled connection denied despite inherited purpose",
+    "Escaped callback denied while same transaction remains alive",
+    "Changed lease denied inside same transaction",
+    "Completed producer new/replay/semantic duplicate returns only minimal counts, preserves private root",
+    "Completed producer Foundation/Learning diamond admitted; actual retained cycle denied",
+    "Earlier native Human-steering new-candidate RED now passes before any durable candidate commit",
+    "Six existing native resolver lineage regressions remain PASS"
+  ],
+  "limits": [
+    "Current principal rows are freshly checked but not yet pinned through outer commit; next approved NOWAIT pin wave remains OPEN.",
+    "Production native job claim/lease settlement and deferred publication integration proof is owned separately by Root; this file seeds a genuine persisted lease to qualify source-purpose mechanisms only.",
+    "Native job receipt is server-only; no actor/JWT/HTTP fields added.",
+    "Canonical SQL Context Memory/Foundation closure, policy-anchor versus exact-payload temporal distinction, source-dependent permission grant pinning and mixed-writer/rollback admission remain OPEN.",
+    "This is not whole V10 or all-egress/all-channel readiness.",
+    "Normal full server compiler62404 was still active when checkpoint prepared; no new final typecheck PASS claimed here."
+  ]
+}

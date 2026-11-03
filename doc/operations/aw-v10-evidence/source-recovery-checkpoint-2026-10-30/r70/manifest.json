@@ -1,0 +1,58 @@
+{
+  "purpose": "RECOVERY ONLY; no activation, integration or broad qualification claim",
+  "capturedAtUtc": "2026-11-01T19:00:47.938170+00:00",
+  "mainHead": "3d968e58071591ade903648bef4370724fb70b23",
+  "mainDirtyPatchSha256": "d54ecc657147be02958b154994a755b0d6fbb42c5008572f84a9118708c0605d",
+  "sourceFileCount": 32,
+  "archive": {
+    "path": "private-candidates.tar.gz",
+    "bytes": 421409,
+    "sha256": "49cc80f0cdf80cca01bccb5e78597af188b6cef5818c97f2470adc100d124f02",
+    "verifiedEntries": 32
+  },
+  "host63Delta": {
+    "baseCheckpoint": "R69 / Host61",
+    "baseHost61SourcePinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+    "candidateHost63SourcePinsSha256": "cff18656ce91a19a93a407eb1f9c0b898cb364919bb60e9006dcd7e6a3a9f707",
+    "sourcePathCounts": {
+      "base": 107,
+      "candidate": 107,
+      "added": 0,
+      "deleted": 0,
+      "changed": 1
+    },
+    "added": [],
+    "deleted": [],
+    "changed": [
+      {
+        "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "baseSha256": "61035078d069a2df31df00289417db7038f9b30c0f1c6990c9e6b92a78ecf87e",
+        "candidateSha256": "d69212faf7be8b1e0632502e53ac08fca34ce51f892bf2cec32348b42e13f9b6",
+        "bytes": 225006
+      }
+    ]
+  },
+  "codeActualPostgres": {
+    "status": "PASS scoped",
+    "tests": 36,
+    "failed": 0,
+    "skipped": 0,
+    "receiptSha256": "4369dcac3fe2e32f5bf56b992af6be95631e502bedf9ffbcd6aa1323ad1ce3ed"
+  },
+  "r113": {
+    "scope": "local renderer/schema/collector only; no DB currentness or SDK dispatch",
+    "receiptSha256": "d454a83b2fa880a8a184e1df8b882e266f76dbce525a3381c3c7375c5bb24e6c"
+  },
+  "references": {
+    "R69ManifestSha256": "a4afa0caccb4a27ade3ecde642f02082415e2cbb394160226aebfec8cb8d3097",
+    "R69ArchiveSha256": "239412180fba2b71d8dd9abf181f1703027e519eccc08460912908f75dc629dd",
+    "Host61PinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+    "Host63PinsSha256": "cff18656ce91a19a93a407eb1f9c0b898cb364919bb60e9006dcd7e6a3a9f707",
+    "Host63RunnerSha256": "5c8b4ae9de4a479258f994c5dbdd40cda221be5cfe661463a6a0ae9c55b5a7ee",
+    "Host62PinsSha256": "6b0e758479af47e346c5890020111a71cda28105b0011e592d09cd2dc8784752",
+    "Host62FocusedRunnerSha256": "5a827d6f2f320c1e3a72226e6a3a7ca57183a6b9490bbbbce0d729f344e8173d",
+    "CodeFinalPatchSha256": "ad1debc41696eccdff9e953fd5309ab8ed823fc8893383f541f833f14985414e",
+    "CodeFinalPinsSha256": "16e8814ac1130c7c9455be5042cfe5c1db138c3e99141cba6a16bef5b268d0cb"
+  },
+  "qualificationStatus": "Host63 candidate is frozen; its active qualification outputs are excluded from this checkpoint. Host61 and Host62 were restored after focused runs but each actual Worker path failed at distinct pre-model checks. R113 is local proof only. Code actual PostgreSQL 36/36 is scoped to exact committed Native Agent reconciliation. Native9, Project2/Learning42, whole-workspace aggregate, CI, physical/runtime vendor and paid-provider acceptance are not claimed."
+}

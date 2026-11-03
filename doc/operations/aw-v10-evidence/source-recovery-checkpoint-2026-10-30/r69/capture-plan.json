@@ -1,0 +1,46 @@
+{
+  "capturePlan": "Small R69 delta from R68 Host60 to frozen Host61: changed/new sources only, Host61 pins/freeze/runner/composed R1102 patch, Native R1102 selected-provider patch/pins and actual PostgreSQL 8/8 receipt, R4 inventory plan/pins/audit/docs and final-freeze plan, current root note/aggregate. Do not copy R68 bundle, storage/PG archives, dependencies, or Host61 active qualification outputs.",
+  "baseR68ArchiveSha256": "0b08edc795f0c05f9a2c84769fdde3761b992ad7c0a1325d82a3d74c486068b3",
+  "baseHost60PinsSha256": "5c3aa8eb95c8eb351bb2cb00aa9f16b9b568fcd0f92f9c9b3384ade1518134c4",
+  "candidateHost61PinsSha256": "ba86bef12c35883826529b8164812de1ea6f06b8942074ff32215b9fd4a8dcc8",
+  "changedPaths": [
+    "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts"
+  ],
+  "addedPaths": [
+    "server/src/__tests__/native-selected-provider-preparation.integration.test.ts",
+    "server/src/services/native-runtime/prepare-native-run.ts"
+  ],
+  "deletedPaths": [],
+  "inputs": {
+    "delta/host61-delta.json": "/workspace/v10-preparation/r69-recovery-prepared-nov01.building/host61-delta.json",
+    "final-freeze/PLAN.md": "/workspace/v10-preparation/final-freeze-sequence-nov01/PLAN.md",
+    "host61-delta/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/files/server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+    "host61-delta/files/server/src/__tests__/native-selected-provider-preparation.integration.test.ts": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/files/server/src/__tests__/native-selected-provider-preparation.integration.test.ts",
+    "host61-delta/files/server/src/services/native-runtime/prepare-native-run.ts": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/files/server/src/services/native-runtime/prepare-native-run.ts",
+    "host61/composed-r1102-delta.patch": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/composed-r1102-delta.patch",
+    "host61/freeze.json": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/freeze.json",
+    "host61/qualify-r14.38.4.61-selected-opencode-worker-provider.sh": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/qualify-r14.38.4.61-selected-opencode-worker-provider.sh",
+    "host61/source-pins.json": "/workspace/v10-preparation/v10-149-r14.38.4.61-selected-opencode-worker-provider-private/source-pins.json",
+    "inventory-r4/README.md": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/README.md",
+    "inventory-r4/updated-owner-plan-r4-audit.json": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r4-audit.json",
+    "inventory-r4/updated-owner-plan-r4-pins.json": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r4-pins.json",
+    "inventory-r4/updated-owner-plan-r4.json": "/workspace/v10-preparation/final-metadata-inventory-audit-nov01/updated-owner-plan-r4.json",
+    "native-r1102-pg-r1/restore.log": "/workspace/v10-preparation/native-provider-preparation-controls-r111/qualification-r1/restore.log",
+    "native-r1102-pg-r1/run.sh": "/workspace/v10-preparation/native-provider-preparation-controls-r111/run.sh",
+    "native-r1102-pg-r1/test-pins.json": "/workspace/v10-preparation/native-provider-preparation-controls-r111/test-pins.json",
+    "native-r1102-pg-r1/test.exit": "/workspace/v10-preparation/native-provider-preparation-controls-r111/qualification-r1/test.exit",
+    "native-r1102-pg-r1/test.log": "/workspace/v10-preparation/native-provider-preparation-controls-r111/qualification-r1/test.log",
+    "native-r1102/qualification-receipt.json": "/workspace/v10-preparation/native-selected-provider-preparation-r1102/qualification-receipt.json",
+    "native-r1102/selected-provider-preparation.patch": "/workspace/v10-preparation/native-selected-provider-preparation-r1102/selected-provider-preparation.patch",
+    "native-r1102/source-pins.json": "/workspace/v10-preparation/native-selected-provider-preparation-r1102/source-pins.json",
+    "root/root-continuation-20261101-current.md": "/workspace/v10-preparation/root-continuation-20261101-current.md",
+    "root/run-final-workspace-aggregate-20261101.sh": "/workspace/v10-preparation/run-final-workspace-aggregate-20261101.sh"
+  },
+  "excluded": [
+    "active Host61 qualification output",
+    "unchanged Host61 sources",
+    "full R68 source bundle and previous checkpoint archives",
+    "PG data/dependency/provider packs",
+    "MAIN/MIRROR/Git mutations"
+  ]
+}

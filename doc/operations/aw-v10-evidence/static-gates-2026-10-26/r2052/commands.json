@@ -1,0 +1,50 @@
+{
+  "docker-deps": [
+    "node",
+    "scripts/check-docker-deps-stage.mjs"
+  ],
+  "node-policy": [
+    "node",
+    "scripts/check-node-version-policy.mjs"
+  ],
+  "no-git-push": [
+    "node",
+    "scripts/check-no-git-push.mjs"
+  ],
+  "module-boundaries": [
+    "node",
+    "scripts/check-module-boundaries.mjs"
+  ],
+  "release-package-map": [
+    "node",
+    "scripts/release-package-map.mjs",
+    "check"
+  ],
+  "tokens": [
+    "node",
+    "scripts/check-forbidden-tokens.mjs"
+  ],
+  "token-gates": [
+    "node",
+    "scripts/check-token-gates.mjs"
+  ],
+  "palette": [
+    "node",
+    "scripts/sync-agent-palette-tokens.mjs",
+    "--check"
+  ],
+  "character": [
+    "node",
+    "scripts/sync-cliplab-character.mjs",
+    "--check"
+  ],
+  "help-docs": [
+    "node",
+    "scripts/check-help-docs.mjs"
+  ],
+  "generated-help": [
+    "node",
+    "server/scripts/generate-company-search-help.mjs",
+    "--check"
+  ]
+}

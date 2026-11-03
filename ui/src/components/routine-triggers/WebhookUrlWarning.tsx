@@ -1,10 +1,11 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { InlineBanner } from "@/components/InlineBanner";
 import { webhookUrlWarningReason } from "@/lib/webhook-url-warning";
 
 const warnings = {
   loopback: {
     title: "Other apps can’t reach this localhost URL",
-    message: "This address points back to the machine sending the request. Services such as GitHub can’t use it to reach Paperclip on your computer.",
+    message: `This address points back to the machine sending the request. Services such as GitHub can’t use it to reach ${PRODUCT_IDENTITY.productName} on your computer.`,
   },
   private: {
     title: "This webhook URL appears to be private",

@@ -7,7 +7,7 @@ import {
   type NativeRuntimeContextSnapshot,
 } from "../../vendor/paperclip-runner/index.js";
 
-export function nativeRuntimeContextFixture(): NativeRuntimeContextSnapshot {
+export function nativeRuntimeContextFixture(rootPath = "/tmp/paperclip-runtime-context-fixture"): NativeRuntimeContextSnapshot {
   const digest = "0".repeat(64);
   const context = {
     prompt: {
@@ -21,7 +21,7 @@ export function nativeRuntimeContextFixture(): NativeRuntimeContextSnapshot {
         schema: NATIVE_RUNTIME_ASSET_SCHEMA,
         digest,
         manifestDigest: digest,
-        rootPath: "/tmp/paperclip-runtime-context-fixture",
+        rootPath,
         fileCount: 1,
         totalBytes: 1,
       },

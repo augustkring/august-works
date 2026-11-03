@@ -1,0 +1,198 @@
+{
+  "scope": "closed Hosts54\u201359 only; compact pass/fail and restore receipts; logs hash-referenced",
+  "hosts": [
+    {
+      "host": 54,
+      "candidate": "v10-149-r14.38.4.54-projector-diagnostic-private",
+      "sourcePinsSha256": "e294a4dce397898f0c72aa4ce4f3ff4e8e1c4303cd86ebc1a6d9e2313d0ab53e",
+      "sourceCount": 104,
+      "freezeSha256": "9c480b605628097680b87c563e7d4441ea02236ba4428131fa8372d9afc9e50a",
+      "qualificationDir": "qualification-r14.38.4.54-projector-diagnostic",
+      "steps": {
+        "db-build": "0",
+        "host-session-node": "1",
+        "managed-source-target-vitest": "1",
+        "managed-worker-lifecycle-vitest": "1",
+        "qualification-clock-vitest": "0",
+        "server-tsc": "0",
+        "shared-build": "0",
+        "source-oxc": "0"
+      },
+      "resultBeforeRestore": {
+        "source-oxc": 0,
+        "shared-build": 0,
+        "db-build": 0,
+        "server-tsc": 0,
+        "host-session-node": 1,
+        "qualification-clock-vitest": 0,
+        "managed-source-target-vitest": 1,
+        "managed-worker-lifecycle-vitest": 1
+      },
+      "restoreSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "logSha256": {
+        "db-build.log": "9deb19621ad658ecd5071fb80672a359d016632581e955a7864d34975c21e95b",
+        "host-session-node.log": "b311b5d809ca247a88ddca90f883551de711dde04a5b12fae6813701e18b867c",
+        "managed-source-target-vitest.log": "728407486869285bf4954613f9771f9a0f3b1edc6877781438214773d214d693",
+        "managed-worker-lifecycle-vitest.log": "14faf43ab72f09f03f8aa7e52fc8903957ec082afdb796925706dc23b3da1239",
+        "parser-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "qualification-clock-vitest.log": "39116700e43f918658db278730ad91c114c9b49d055059096c2446af67c138f1",
+        "restore.log": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+        "server-tsc.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "shared-build.log": "a3fff155f3cada0fd3bbe60d179d745e62b13b102dd26c06c99e26b0d2d393ed",
+        "snapshot.log": "6d91c27928a6ff1d9956604d8377224b56c3e7a6ed9525dfef87f9220bd6b16e",
+        "source-oxc.log": "ed42cc54f5a275b515ace527cc0f3366125551462a455fc5aed0879a60142124"
+      }
+    },
+    {
+      "host": 55,
+      "candidate": "v10-149-r14.38.4.55-backend-apply-diagnostic-private",
+      "sourcePinsSha256": "6e5ba4f6a81543adbf691ee09bec17e91ae071c8d05696362736f56cc5e5bea9",
+      "sourceCount": 104,
+      "freezeSha256": "12c8a6a7a49c675f778e408c2f033d22ef0fc00ed8e5535c32a82aeac2df2663",
+      "qualificationDir": "qualification-r14.38.4.55-backend-apply-diagnostic",
+      "steps": {
+        "db-build": "0",
+        "host-session-node": "1",
+        "managed-source-target-vitest": "1",
+        "managed-worker-lifecycle-vitest": "1",
+        "qualification-clock-vitest": "0",
+        "server-tsc": "0",
+        "shared-build": "0",
+        "source-oxc": "0"
+      },
+      "resultBeforeRestore": {
+        "source-oxc": 0,
+        "shared-build": 0,
+        "db-build": 0,
+        "server-tsc": 0,
+        "host-session-node": 1,
+        "qualification-clock-vitest": 0,
+        "managed-source-target-vitest": 1,
+        "managed-worker-lifecycle-vitest": 1
+      },
+      "restoreSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "logSha256": {
+        "db-build.log": "9deb19621ad658ecd5071fb80672a359d016632581e955a7864d34975c21e95b",
+        "host-session-node.log": "ade502eb70273aca6e02439efb6d179fb08ebd2d41c70dae736d6e6d248c9220",
+        "managed-source-target-vitest.log": "af3d27657f4ecdbbfcbeb664d2c01250e52198b472a0029d1f8301c79d3930a4",
+        "managed-worker-lifecycle-vitest.log": "65656473d305de27400687675ab0c4d7482fa971f9d8e04bb5f0c24c8429512c",
+        "parser-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "qualification-clock-vitest.log": "20b03972f615a4995ee24fc2b30c6af8afeb8148d90d7e37a294de092f681d1f",
+        "restore.log": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+        "server-tsc.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "shared-build.log": "a3fff155f3cada0fd3bbe60d179d745e62b13b102dd26c06c99e26b0d2d393ed",
+        "snapshot.log": "6d91c27928a6ff1d9956604d8377224b56c3e7a6ed9525dfef87f9220bd6b16e",
+        "source-oxc.log": "ed42cc54f5a275b515ace527cc0f3366125551462a455fc5aed0879a60142124"
+      }
+    },
+    {
+      "host": 56,
+      "candidate": "v10-149-r14.38.4.56-boundary-proof-reason-private",
+      "sourcePinsSha256": "b09089e8d0ec384a0eed177e6a4e1418d548bffa7a60879d9b2f7c5a480639f6",
+      "sourceCount": 104,
+      "freezeSha256": "9daececfd6260881c261eeab8e70e3e2be3a0c1f660b932186de78b52d3bdd9f",
+      "qualificationDir": "qualification-r14.38.4.56-boundary-proof-reason",
+      "steps": {
+        "db-build": "0",
+        "server-tsc": "0",
+        "shared-build": "0",
+        "source-oxc": "0",
+        "targeted-worker-vitest": "1"
+      },
+      "resultBeforeRestore": {
+        "source-oxc": 0,
+        "shared-build": 0,
+        "db-build": 0,
+        "server-tsc": 0,
+        "targeted-worker-vitest": 1
+      },
+      "restoreSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "logSha256": {
+        "db-build.log": "9deb19621ad658ecd5071fb80672a359d016632581e955a7864d34975c21e95b",
+        "parser-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "restore.log": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+        "server-tsc.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "shared-build.log": "a3fff155f3cada0fd3bbe60d179d745e62b13b102dd26c06c99e26b0d2d393ed",
+        "snapshot.log": "6d91c27928a6ff1d9956604d8377224b56c3e7a6ed9525dfef87f9220bd6b16e",
+        "source-oxc.log": "ed42cc54f5a275b515ace527cc0f3366125551462a455fc5aed0879a60142124",
+        "targeted-worker-vitest.log": "e31c79d0a665c85a42bc061f47076c661cd0bbbe1bf47a4af1f4dc7fddb0b6ec"
+      }
+    },
+    {
+      "host": 57,
+      "candidate": "v10-149-r14.38.4.57-filesystem-proof-facts-private",
+      "sourcePinsSha256": "171bd473dc2f820d35f2f3db74ced7135989af4df2b6eebdb28b13fda1015f5b",
+      "sourceCount": 104,
+      "freezeSha256": "78b4a867794b9ea19f3f6010a4131b7313004c8b5dfa2c793f5492058ef02e2b",
+      "qualificationDir": "qualification-r14.38.4.57-filesystem-proof-facts",
+      "steps": {
+        "source-oxc": "0",
+        "targeted-worker-vitest": "1"
+      },
+      "resultBeforeRestore": {
+        "source-oxc": 0,
+        "targeted-worker-vitest": 1
+      },
+      "restoreSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "logSha256": {
+        "parser-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "restore.log": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+        "snapshot.log": "6d91c27928a6ff1d9956604d8377224b56c3e7a6ed9525dfef87f9220bd6b16e",
+        "source-oxc.log": "ed42cc54f5a275b515ace527cc0f3366125551462a455fc5aed0879a60142124",
+        "targeted-worker-vitest.log": "49229a9ddfb1f18e487510894e44a1496bc4ee6587628388e0d57ca0886f1214"
+      }
+    },
+    {
+      "host": 58,
+      "candidate": "v10-149-r14.38.4.58-boundary-membership-private",
+      "sourcePinsSha256": "74d48f5a704d202eb62e86891a7e067a57af3ee696590ce1ca446129086f55ba",
+      "sourceCount": 104,
+      "freezeSha256": "1dd89e50aa6bdc8a935c92fdd6a33126770595156cd5ae423668e55deebe0a7c",
+      "qualificationDir": "qualification-r14.38.4.58-boundary-membership",
+      "steps": {
+        "source-oxc": "0",
+        "targeted-worker-vitest": "1"
+      },
+      "resultBeforeRestore": {
+        "source-oxc": 0,
+        "targeted-worker-vitest": 1
+      },
+      "restoreSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "logSha256": {
+        "parser-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "restore.log": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+        "snapshot.log": "6d91c27928a6ff1d9956604d8377224b56c3e7a6ed9525dfef87f9220bd6b16e",
+        "source-oxc.log": "ed42cc54f5a275b515ace527cc0f3366125551462a455fc5aed0879a60142124",
+        "targeted-worker-vitest.log": "86eeec5b2481b9bfed4b0a3e0457dd7978d576e0e9808cb65aca382de162ea75"
+      }
+    },
+    {
+      "host": 59,
+      "candidate": "v10-149-r14.38.4.59-exact-task-boundary-private",
+      "sourcePinsSha256": "0731ece10b3fa7647f23ff282625decf87c6a0c700a19c13dbe0fa812b0ce2eb",
+      "sourceCount": 104,
+      "freezeSha256": "535a6ac03b390de86cd9bf2ccf061e78109076ac26be13d154a3b9507f7508c1",
+      "qualificationDir": "qualification-r14.38.4.59-exact-task-boundary",
+      "steps": {
+        "host-session-node": "1",
+        "source-oxc": "0",
+        "targeted-worker-vitest": "1"
+      },
+      "resultBeforeRestore": {
+        "source-oxc": 0,
+        "host-session-node": 1,
+        "targeted-worker-vitest": 1
+      },
+      "restoreSha256": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+      "logSha256": {
+        "host-session-node.log": "0942c2ce9721290433e97cd701bab785ecdd3a4dd38fe1972527ee2baaa1ebae",
+        "parser-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "restore.log": "22f576297855a531d97608db0ae44fc32f0dde4c317820d5d49768a8566e3b44",
+        "snapshot.log": "6d91c27928a6ff1d9956604d8377224b56c3e7a6ed9525dfef87f9220bd6b16e",
+        "source-oxc.log": "ed42cc54f5a275b515ace527cc0f3366125551462a455fc5aed0879a60142124",
+        "targeted-worker-vitest.log": "5666b3a009a8df0036924460cc3b3606a973fc96cdd12317e4c8a0dbab5b78ee"
+      }
+    }
+  ],
+  "interpretation": "Hosts54\u201355 passed source/build checks but failed Host and managed source/Worker route steps; Hosts56\u201359 preserve targeted source/test diagnostics with failing Worker route, and Host59 Host-session step failed. Every captured restore receipt confirms source and compiled outputs restored. These are diagnostic/failure evidence, not end-to-end qualification."
+}

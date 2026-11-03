@@ -1,0 +1,1836 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders a page-level warning about instability and lack of guarantees
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > projects lifecycle and unqualified release evidence from the shared catalog
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > uses Danish lifecycle labels and accessible maturity wording
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults memory connectors off and persists an explicit toggle in both directions
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults chat connectors off and persists an explicit toggle in both directions
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Streamlined UI experimental toggle on and off
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > keeps Blentera Runner default-off and exposes an explicit opt-in
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Classic Task Interface experimental toggle on and off
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Decisions experimental toggle
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Goals Sidebar Link experimental toggle
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > hides the isolated-workspaces-by-default toggle while isolated workspaces are off
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the isolated-workspaces-by-default toggle on and off
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > reflects a stored isolated-workspaces-by-default value as checked
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the worktree run-execution toggle when in a worktree
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the cutoff-copy for the worktree run-execution toggle when off
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the armed timestamp when the flag matches the current instance
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the flag was armed in another instance
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the activation cutoff is missing
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Built-in Agents experimental toggle
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Beta skills experimental toggle
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Summaries experimental toggle
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > enables Summaries when enabling the Status Cards experimental toggle
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > disables Status Cards when disabling Summaries
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Server Info Debug View experimental toggle
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches Blentera Developer Mode
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders a managed key locked with the badge while unmanaged keys stay editable
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed isolated-workspaces-by-default setting locked
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed chat connectors setting locked
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Status Cards when managed Summaries is disabled
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Summaries on when managed Status Cards is enabled
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders no managed badge and keeps toggles editable without managedKeys (self-hosted)
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > groups developer and legacy settings into sections
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > renders setting cards without a background color
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > renders nothing for an operator-hidden toggle and keeps the rest
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > keeps only permitted controls in alphabetical order, including when hidden features are enabled
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > retains a section when one of its controls is visible
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+stderr | src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > shows every toggle when nothing is hidden
+An error occurred in the <Link> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+ ❯ |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx (48 tests | 37 failed) 940ms
+     × renders a page-level warning about instability and lack of guarantees 78ms
+     × projects lifecycle and unqualified release evidence from the shared catalog 28ms
+     × uses Danish lifecycle labels and accessible maturity wording 19ms
+     × defaults memory connectors off and persists an explicit toggle in both directions 30ms
+     × defaults chat connectors off and persists an explicit toggle in both directions 19ms
+     × renders and patches the Streamlined UI experimental toggle on and off 18ms
+     × keeps Blentera Runner default-off and exposes an explicit opt-in 17ms
+     × renders and patches the Classic Task Interface experimental toggle on and off 20ms
+     × renders and patches the Decisions experimental toggle 19ms
+     × renders and patches the Goals Sidebar Link experimental toggle 17ms
+     × hides the isolated-workspaces-by-default toggle while isolated workspaces are off 19ms
+     × renders and patches the isolated-workspaces-by-default toggle on and off 18ms
+     × reflects a stored isolated-workspaces-by-default value as checked 20ms
+     × renders and patches the worktree run-execution toggle when in a worktree 21ms
+     × shows the cutoff-copy for the worktree run-execution toggle when off 18ms
+     × shows the armed timestamp when the flag matches the current instance 20ms
+     × fails closed with a re-enable hint when the flag was armed in another instance 30ms
+     × fails closed with a re-enable hint when the activation cutoff is missing 17ms
+     × renders and patches the Built-in Agents experimental toggle 15ms
+     × renders and patches the Beta skills experimental toggle 16ms
+     × renders and patches the Summaries experimental toggle 19ms
+     × enables Summaries when enabling the Status Cards experimental toggle 22ms
+     × disables Status Cards when disabling Summaries 26ms
+     × renders and patches the Server Info Debug View experimental toggle 17ms
+     × renders and patches Blentera Developer Mode 15ms
+     × renders a managed key locked with the badge while unmanaged keys stay editable 15ms
+     × keeps a managed isolated-workspaces-by-default setting locked 12ms
+     × keeps a managed chat connectors setting locked 12ms
+     × locks Status Cards when managed Summaries is disabled 13ms
+     × locks Summaries on when managed Status Cards is enabled 14ms
+     × renders no managed badge and keeps toggles editable without managedKeys (self-hosted) 11ms
+     × groups developer and legacy settings into sections 15ms
+     × renders setting cards without a background color 12ms
+     × renders nothing for an operator-hidden toggle and keeps the rest 13ms
+     × keeps only permitted controls in alphabetical order, including when hidden features are enabled 24ms
+     × retains a section when one of its controls is visible 15ms
+     × shows every toggle when nothing is hidden 13ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 37 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders a page-level warning about instability and lack of guarantees
+AssertionError: the given combination of arguments (undefined and string) is invalid for this assertion. You can use an array, a map, an object, a set, a string, or a weakset instead of a string
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:222:34
+    220|       alert.textContent?.includes("Experimental features may break at …
+    221|     );
+    222|     expect(warning?.textContent).toContain("Experimental features may …
+       |                                  ^
+    223|     expect(warning?.textContent).toContain("no compatibility guarantee…
+    224|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > projects lifecycle and unqualified release evidence from the shared catalog
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:230:93
+    228|
+    229|     const lifecycle = container.querySelector('[data-testid="capabilit…
+    230|     expect(container.querySelector('[aria-label="Capability maturity: …
+       |                                                                                             ^
+    231|     expect(lifecycle?.textContent).toContain("no compatibility guarant…
+    232|     expect(lifecycle?.textContent).toContain("Not recorded");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > uses Danish lifecycle labels and accessible maturity wording
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:242:98
+    240|     await renderPage();
+    241|
+    242|     expect(container.querySelector('[aria-label="Kapabilitetens modenh…
+       |                                                                                                  ^
+    243|     expect(container.querySelector('[data-testid="capability-lifecycle…
+    244|       .toBe("Kapabilitetens livscyklus og udgivelsesbeviser");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults memory connectors off and persists an explicit toggle in both directions
+AssertionError: expected undefined to be 'false' // Object.is equality
+
+- Expected:
+"false"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:258:77
+    256|     await renderPage();
+    257|     const selector = 'button[aria-label="Toggle memory connectors expe…
+    258|     expect(container.querySelector(selector)?.getAttribute("aria-check…
+       |                                                                             ^
+    259|     expect(container.textContent).toContain("Existing connections keep…
+    260|     for (const enabled of [true, false]) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > defaults chat connectors off and persists an explicit toggle in both directions
+AssertionError: expected undefined to be 'false' // Object.is equality
+
+- Expected:
+"false"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:277:77
+    275|     await renderPage();
+    276|     const selector = 'button[aria-label="Toggle chat connectors experi…
+    277|     expect(container.querySelector(selector)?.getAttribute("aria-check…
+       |                                                                             ^
+    278|     expect(container.textContent).toContain("Existing chat connections…
+    279|     for (const enabled of [true, false]) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Streamlined UI experimental toggle on and off
+AssertionError: expected '' to contain 'Streamlined UI'
+
+- Expected
++ Received
+
+- Streamlined UI
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:319:35
+    317|     await renderPage();
+    318|
+    319|     expect(container.textContent).toContain("Streamlined UI");
+       |                                   ^
+    320|     expect(container.textContent).toContain(
+    321|       "Use the simplified main sidebar, shared Tasks and Inbox present…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > keeps Blentera Runner default-off and exposes an explicit opt-in
+AssertionError: expected '' to contain 'Blentera Runner'
+
+- Expected
++ Received
+
+- Blentera Runner
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:362:35
+    360|     await renderPage();
+    361|
+    362|     expect(container.textContent).toContain("Blentera Runner");
+       |                                   ^
+    363|     expect(container.textContent).toContain("Onboarding continues to u…
+    364|     const toggle = container.querySelector<HTMLButtonElement>(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Classic Task Interface experimental toggle on and off
+AssertionError: expected '' to contain 'Classic Task Interface'
+
+- Expected
++ Received
+
+- Classic Task Interface
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:383:35
+    381|     await renderPage();
+    382|
+    383|     expect(container.textContent).toContain("Classic Task Interface");
+       |                                   ^
+    384|     expect(container.textContent).toContain(
+    385|       "Restores the previous task detail page",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Decisions experimental toggle
+AssertionError: expected '' to contain 'Decisions'
+
+- Expected
++ Received
+
+- Decisions
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:431:35
+    429|     await renderPage();
+    430|
+    431|     expect(container.textContent).toContain("Decisions");
+       |                                   ^
+    432|     expect(container.textContent).toContain(
+    433|       "Show the Decisions item in the main sidebar",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Goals Sidebar Link experimental toggle
+AssertionError: expected '' to contain 'Goals Sidebar Link'
+
+- Expected
++ Received
+
+- Goals Sidebar Link
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:453:35
+    451|     await renderPage();
+    452|
+    453|     expect(container.textContent).toContain("Goals Sidebar Link");
+       |                                   ^
+    454|     expect(container.textContent).toContain(
+    455|       "Restore the Goals item in the main sidebar while the goals surf…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > hides the isolated-workspaces-by-default toggle while isolated workspaces are off
+AssertionError: expected null not to be null
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:475:78
+    473|     await renderPage();
+    474|
+    475|     expect(container.querySelector(ISOLATED_WORKSPACES_TOGGLE_SELECTOR…
+       |                                                                              ^
+    476|     expect(
+    477|       container.querySelector(ISOLATED_WORKSPACES_BY_DEFAULT_TOGGLE_SE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the isolated-workspaces-by-default toggle on and off
+AssertionError: expected '' to contain 'Use Isolated Workspaces By Default'
+
+- Expected
++ Received
+
+- Use Isolated Workspaces By Default
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:505:35
+    503|     await renderPage();
+    504|
+    505|     expect(container.textContent).toContain("Use Isolated Workspaces B…
+       |                                   ^
+    506|     expect(container.textContent).toContain("per-task worktree");
+    507|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > reflects a stored isolated-workspaces-by-default value as checked
+AssertionError: expected undefined to be 'true' // Object.is equality
+
+- Expected:
+"true"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:545:50
+    543|       ISOLATED_WORKSPACES_BY_DEFAULT_TOGGLE_SELECTOR,
+    544|     );
+    545|     expect(toggle?.getAttribute("aria-checked")).toBe("true");
+       |                                                  ^
+    546|   });
+    547|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the worktree run-execution toggle when in a worktree
+AssertionError: expected '' to contain 'Run tasks in this worktree'
+
+- Expected
++ Received
+
+- Run tasks in this worktree
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:561:35
+    559|     await renderPage();
+    560|
+    561|     expect(container.textContent).toContain("Run tasks in this worktre…
+       |                                   ^
+    562|     expect(container.textContent).toContain(
+    563|       "isolated git-worktree preview instance",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the cutoff-copy for the worktree run-execution toggle when off
+AssertionError: expected '' to contain 'Only tasks created after enabling wil…'
+
+- Expected
++ Received
+
+- Only tasks created after enabling will run automatically
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:584:35
+    582|     await renderPage();
+    583|
+    584|     expect(container.textContent).toContain(
+       |                                   ^
+    585|       "Only tasks created after enabling will run automatically",
+    586|     );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > shows the armed timestamp when the flag matches the current instance
+AssertionError: expected '' to contain 'Running tasks created after'
+
+- Expected
++ Received
+
+- Running tasks created after
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:604:35
+    602|     await renderPage();
+    603|
+    604|     expect(container.textContent).toContain("Running tasks created aft…
+       |                                   ^
+    605|     expect(container.textContent).not.toContain("Execution is suppress…
+    606|     const toggle = container.querySelector<HTMLButtonElement>(WORKTREE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the flag was armed in another instance
+AssertionError: expected '' to contain 'Execution is suppressed'
+
+- Expected
++ Received
+
+- Execution is suppressed
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:621:35
+    619|     await renderPage();
+    620|
+    621|     expect(container.textContent).toContain("Execution is suppressed");
+       |                                   ^
+    622|     expect(container.textContent).toContain("armed in a different inst…
+    623|     expect(container.textContent).toContain("Toggle it off and back on…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > fails closed with a re-enable hint when the activation cutoff is missing
+AssertionError: expected '' to contain 'Execution is suppressed'
+
+- Expected
++ Received
+
+- Execution is suppressed
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:638:35
+    636|     await renderPage();
+    637|
+    638|     expect(container.textContent).toContain("Execution is suppressed");
+       |                                   ^
+    639|     expect(container.textContent).toContain("missing its activation cu…
+    640|     expect(container.textContent).not.toContain("Running tasks created…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Built-in Agents experimental toggle
+AssertionError: expected '' to contain 'Built-in Agents'
+
+- Expected
++ Received
+
+- Built-in Agents
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:646:35
+    644|     await renderPage();
+    645|
+    646|     expect(container.textContent).toContain("Built-in Agents");
+       |                                   ^
+    647|     expect(container.textContent).toContain("Show Blentera-managed bui…
+    648|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Beta skills experimental toggle
+AssertionError: expected '' to contain 'Beta skills'
+
+- Expected
++ Received
+
+- Beta skills
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:666:35
+    664|     await renderPage();
+    665|
+    666|     expect(container.textContent).toContain("Beta skills");
+       |                                   ^
+    667|     expect(container.textContent).toContain("pin beta releases of the …
+    668|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Summaries experimental toggle
+AssertionError: expected '' to contain 'Summaries'
+
+- Expected
++ Received
+
+- Summaries
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:686:35
+    684|     await renderPage();
+    685|
+    686|     expect(container.textContent).toContain("Summaries");
+       |                                   ^
+    687|     expect(container.textContent).toContain("Show Summarizer-generated…
+    688|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > enables Summaries when enabling the Status Cards experimental toggle
+AssertionError: expected '' to contain 'Status Cards'
+
+- Expected
++ Received
+
+- Status Cards
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:706:35
+    704|     await renderPage();
+    705|
+    706|     expect(container.textContent).toContain("Status Cards");
+       |                                   ^
+    707|     expect(container.textContent).toContain("experimental shared statu…
+    708|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > disables Status Cards when disabling Summaries
+AssertionError: expected "vi.fn()" to be called with arguments: [ { enableSummaries: false, …(1) } ]
+
+Number of calls: 0
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:741:56
+    739|     await flushReact();
+    740|
+    741|     expect(mockInstanceSettingsApi.updateExperimental).toHaveBeenCalle…
+       |                                                        ^
+    742|       enableSummaries: false,
+    743|       enableStatusCards: false,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches the Server Info Debug View experimental toggle
+AssertionError: expected '' to contain 'Server Info Debug View'
+
+- Expected
++ Received
+
+- Server Info Debug View
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:754:35
+    752|     await renderPage();
+    753|
+    754|     expect(container.textContent).toContain("Server Info Debug View");
+       |                                   ^
+    755|     expect(container.textContent).toContain(
+    756|       'Show a "Server" section in the account drawer with the current …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — Conference Room Chat card (PAP-11233) > renders and patches Blentera Developer Mode
+AssertionError: expected '' to contain 'Blentera Developer Mode'
+
+- Expected
++ Received
+
+- Blentera Developer Mode
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:776:35
+    774|     await renderPage();
+    775|
+    776|     expect(container.textContent).toContain("Blentera Developer Mode");
+       |                                   ^
+    777|     expect(container.textContent).toContain("including Honeycomb trace…
+    778|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders a managed key locked with the badge while unmanaged keys stay editable
+AssertionError: expected '' to contain 'Managed by legacy Paperclip Cloud'
+
+- Expected
++ Received
+
+- Managed by legacy Paperclip Cloud
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:848:35
+    846|     });
+    847|
+    848|     expect(container.textContent).toContain(MANAGED_BADGE_TEXT);
+       |                                   ^
+    849|
+    850|     const builtInAgentsToggle = container.querySelector<HTMLButtonElem…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed isolated-workspaces-by-default setting locked
+AssertionError: expected undefined to be 'true' // Object.is equality
+
+- Expected:
+"true"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:883:50
+    881|       ISOLATED_WORKSPACES_BY_DEFAULT_TOGGLE_SELECTOR,
+    882|     );
+    883|     expect(toggle?.getAttribute("aria-checked")).toBe("true");
+       |                                                  ^
+    884|     expect(toggle?.disabled).toBe(true);
+    885|     expect(container.textContent).toContain(MANAGED_BADGE_TEXT);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > keeps a managed chat connectors setting locked
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:898:30
+    896|     });
+    897|     const toggle = container.querySelector<HTMLButtonElement>('button[…
+    898|     expect(toggle?.disabled).toBe(true);
+       |                              ^
+    899|     expect(toggle?.getAttribute("aria-checked")).toBe("false");
+    900|     expect(container.textContent).toContain(MANAGED_BADGE_TEXT);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Status Cards when managed Summaries is disabled
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:914:41
+    912|
+    913|     const statusCardsToggle = container.querySelector<HTMLButtonElemen…
+    914|     expect(statusCardsToggle?.disabled).toBe(true);
+       |                                         ^
+    915|
+    916|     await act(() => statusCardsToggle?.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > locks Summaries on when managed Status Cards is enabled
+AssertionError: expected undefined to be true // Object.is equality
+
+- Expected:
+true
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:932:39
+    930|
+    931|     const summariesToggle = container.querySelector<HTMLButtonElement>…
+    932|     expect(summariesToggle?.disabled).toBe(true);
+       |                                       ^
+    933|
+    934|     await act(() => summariesToggle?.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — cloud-managed keys > renders no managed badge and keeps toggles editable without managedKeys (self-hosted)
+AssertionError: expected undefined to be false // Object.is equality
+
+- Expected:
+false
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:945:43
+    943|
+    944|     const builtInAgentsToggle = container.querySelector<HTMLButtonElem…
+    945|     expect(builtInAgentsToggle?.disabled).toBe(false);
+       |                                           ^
+    946|
+    947|     await act(() => builtInAgentsToggle?.click());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > groups developer and legacy settings into sections
+AssertionError: expected [] to deeply equal [ 'Experimental features', …(3) ]
+
+- Expected
++ Received
+
+- [
+-   "Experimental features",
+-   "V5 agent runtime and project control",
+-   "Blentera Developer Mode",
+-   "Legacy",
+- ]
++ []
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:999:22
+    997|       (heading) => heading.textContent ?? "",
+    998|     );
+    999|     expect(headings).toEqual([
+       |                      ^
+    1000|       "Experimental features",
+    1001|       "V5 agent runtime and project control",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — card ordering and headings (PAP-393) > renders setting cards without a background color
+AssertionError: expected 0 to be greater than 10
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1035:26
+    1033|
+    1034|     const cards = [...container.querySelectorAll('[data-slot="card"]')…
+    1035|     expect(cards.length).toBeGreaterThan(10);
+       |                          ^
+    1036|     expect(cards.every((card) => card.classList.contains("bg-transpare…
+    1037|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > renders nothing for an operator-hidden toggle and keeps the rest
+AssertionError: expected '' to contain 'Beta skills'
+
+- Expected
++ Received
+
+- Beta skills
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1093:35
+    1091|
+    1092|     expect(container.textContent).not.toContain("Enable Environments");
+    1093|     expect(container.textContent).toContain("Beta skills");
+       |                                   ^
+    1094|     expect(container.textContent).not.toContain("Show the Apps navigat…
+    1095|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > keeps only permitted controls in alphabetical order, including when hidden features are enabled
+AssertionError: expected [] to deeply equal [ 'Enable External Objects', …(2) ]
+
+- Expected
++ Received
+
+- [
+-   "Enable External Objects",
+-   "Memory connectors",
+-   "Simplified English Interactions",
+- ]
++ []
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1113:89
+    1111|     );
+    1112|
+    1113|     expect([...container.querySelectorAll("h3")].map((heading) => head…
+       |                                                                                         ^
+    1114|       "Enable External Objects",
+    1115|       "Memory connectors",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > retains a section when one of its controls is visible
+AssertionError: expected undefined to be 'Blentera Developer Mode' // Object.is equality
+
+- Expected:
+"Blentera Developer Mode"
+
++ Received:
+undefined
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1128:99
+    1126|     const visible = new Set(["enablePaperclipDeveloperMode", "enableGo…
+    1127|     await renderPage(INSTANCE_FEATURE_KEYS.filter((key) => !visible.ha…
+    1128|     expect(container.querySelector('[aria-labelledby="developer-mode-h…
+       |                                                                                                   ^
+    1129|     expect(container.querySelector('[aria-labelledby="legacy-heading"]…
+    1130|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/37]⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceExperimentalSettings.test.tsx > InstanceExperimentalSettings — operator-hidden cards > shows every toggle when nothing is hidden
+AssertionError: expected '' to contain 'Enable Environments'
+
+- Expected
++ Received
+
+- Enable Environments
+
+ ❯ src/pages/InstanceExperimentalSettings.test.tsx:1135:35
+    1133|     await renderPage();
+    1134|
+    1135|     expect(container.textContent).toContain("Enable Environments");
+       |                                   ^
+    1136|     expect(container.textContent).toContain("Beta skills");
+    1137|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/37]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 48 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders a page-level warning about instability and lack of guarantees". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "projects lifecycle and unqualified release evidence from the shared catalog". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "uses Danish lifecycle labels and accessible maturity wording". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render an Apps experimental setting". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "defaults memory connectors off and persists an explicit toggle in both directions". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not offer a retired MCP aggregators toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "defaults chat connectors off and persists an explicit toggle in both directions". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render the Conference Room Chat experimental setting for now". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render the Pipelines experimental setting for now". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render the toggle even when the stored flag is currently enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Streamlined UI experimental toggle on and off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not render a Task Watchdogs toggle because watchdogs are always enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "does not expose the retired Runner Preview Ingress setting separately". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps Blentera Runner default-off and exposes an explicit opt-in". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Classic Task Interface experimental toggle on and off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Decisions experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Goals Sidebar Link experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "hides the isolated-workspaces-by-default toggle while isolated workspaces are off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps the dependent toggle hidden even when its stored flag is already on". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the isolated-workspaces-by-default toggle on and off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "reflects a stored isolated-workspaces-by-default value as checked". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "hides the worktree run-execution toggle when not running in a worktree". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the worktree run-execution toggle when in a worktree". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "shows the cutoff-copy for the worktree run-execution toggle when off". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "shows the armed timestamp when the flag matches the current instance". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "fails closed with a re-enable hint when the flag was armed in another instance". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "fails closed with a re-enable hint when the activation cutoff is missing". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Built-in Agents experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Beta skills experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Summaries experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "enables Summaries when enabling the Status Cards experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "disables Status Cards when disabling Summaries". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches the Server Info Debug View experimental toggle". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders and patches Blentera Developer Mode". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders a managed key locked with the badge while unmanaged keys stay editable". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps a managed isolated-workspaces-by-default setting locked". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps a managed chat connectors setting locked". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "locks Status Cards when managed Summaries is disabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "locks Summaries on when managed Status Cards is enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders no managed badge and keeps toggles editable without managedKeys (self-hosted)". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "groups developer and legacy settings into sections". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "alphabetizes cards by their displayed title within each section". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders setting cards without a background color". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "no longer renders an 'Experimental' secondary badge on any card". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "renders nothing for an operator-hidden toggle and keeps the rest". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "keeps only permitted controls in alphabetical order, including when hidden features are enabled". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "retains a section when one of its controls is visible". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: Cannot destructure property 'basename' of 'React10.useContext(...)' as it is null.
+ ❯ LinkWithRef ../v10-dep-qualification/node_modules/.pnpm/react-router@7.18.2_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/react-router/dist/development/chunk-62JRHF6Z.mjs:10518:11
+ ❯ Object.react_stack_bottom_frame ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateForwardRef ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:9724:19
+ ❯ beginWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:12117:18
+ ❯ runWithFiberInDEV ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+ ❯ performWorkOnRoot ../v10-dep-qualification/node_modules/.pnpm/react-dom@19.2.8_react@19.2.8/node_modules/react-dom/cjs/react-dom-client.development.js:16583:35
+
+This error originated in "ui/src/pages/InstanceExperimentalSettings.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "shows every toggle when nothing is hidden". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  37 failed | 34 passed (71)
+     Errors  48 errors
+   Start at  08:27:45
+   Duration  4.74s (transform 2.33s, setup 41ms, import 3.76s, tests 1.05s, environment 697ms)
+

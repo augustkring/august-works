@@ -1,0 +1,4 @@
+
+> @paperclipai/adapter-utils@0.3.1 typecheck /workspace/blentera-v10/packages/adapter-utils
+> tsc --noEmit
+

@@ -1,0 +1,56 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/feedback-share-client.test.ts (11 tests | 2 failed) 214ms
+     × does not authorize private feedback with telemetry settings (feedback destination: undefined) 22ms
+     × does not authorize private feedback with telemetry settings (feedback destination: https://feedback.example.test) 11ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/feedback-share-client.test.ts > feedback trace share client > does not authorize private feedback with telemetry settings (feedback destination: undefined)
+AssertionError: expected 'https://telemetry.example.test' to be undefined // Object.is equality
+
+- Expected:
+undefined
+
++ Received:
+"https://telemetry.example.test"
+
+ ❯ src/__tests__/feedback-share-client.test.ts:34:47
+     32|       vi.stubEnv("PAPERCLIP_TELEMETRY_BACKEND_TOKEN", "synthetic-telem…
+     33|       const config = loadConfig();
+     34|       expect(config.feedbackExportBackendUrl).toBe(destination);
+       |                                               ^
+     35|       expect(config.feedbackExportBackendToken).toBeUndefined();
+     36|       const client = createFeedbackTraceShareClientFromConfig(config);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/feedback-share-client.test.ts > feedback trace share client > does not authorize private feedback with telemetry settings (feedback destination: https://feedback.example.test)
+AssertionError: expected 'synthetic-telemetry-only-token' to be undefined
+
+- Expected:
+undefined
+
++ Received:
+"synthetic-telemetry-only-token"
+
+ ❯ src/__tests__/feedback-share-client.test.ts:35:49
+     33|       const config = loadConfig();
+     34|       expect(config.feedbackExportBackendUrl).toBe(destination);
+     35|       expect(config.feedbackExportBackendToken).toBeUndefined();
+       |                                                 ^
+     36|       const client = createFeedbackTraceShareClientFromConfig(config);
+     37|       const result = client.uploadTraceBundle({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 9 passed (11)
+   Start at  19:25:59
+   Duration  7.98s (transform 4.17s, setup 455ms, import 6.84s, tests 214ms, environment 0ms)
+

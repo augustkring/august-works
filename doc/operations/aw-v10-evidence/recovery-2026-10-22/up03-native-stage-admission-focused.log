@@ -1,0 +1,52 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts (469 tests | 2 failed | 465 skipped) 567ms
+     × stages from the authenticated run snapshot and cleans up after the provider turn 139ms
+     × does not admit the provider when staged attachment capture persistence fails 34ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > stages from the authenticated run snapshot and cleans up after the provider turn
+AssertionError: promise rejected "ReferenceError: runId is not defined" instead of resolving
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7959:6
+    7957|         useRunnerd: true,
+    7958|       }),
+    7959|     ).resolves.toBeDefined();
+       |      ^
+    7960|     expect(providerAdmissionReached).toBe(true);
+    7961|
+
+Caused by: ReferenceError: runId is not defined
+ ❯ src/services/native-runtime/native-session-executor.ts:8209:21
+ ❯ Object.transaction src/services/native-runtime/native-session-executor.test.ts:4736:7
+ ❯ Object.onSessionAdmission src/services/native-runtime/native-session-executor.ts:8205:32
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7913:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > does not admit the provider when staged attachment capture persistence fails
+AssertionError: expected [Function] to throw error including 'native_attachment_stage_capture_write…' but got 'runId is not defined'
+
+Expected: "native_attachment_stage_capture_write_failed"
+Received: "runId is not defined"
+
+ ❯ src/services/native-runtime/native-session-executor.test.ts:8039:8
+    8037|       runnerInstanceId: "runner-attachment-capture-failure",
+    8038|       useRunnerd: true,
+    8039|     })).rejects.toThrow("native_attachment_stage_capture_write_failed"…
+       |        ^
+    8040|     expect(providerAdmissionReached).toBe(false);
+    8041|     expect(state.createTransport).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed | 465 skipped (469)
+   Start at  12:11:28
+   Duration  39.03s (transform 26.76s, setup 250ms, import 37.49s, tests 567ms, environment 0ms)
+

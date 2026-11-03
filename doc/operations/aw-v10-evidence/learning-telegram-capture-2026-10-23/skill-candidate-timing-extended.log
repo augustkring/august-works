@@ -1,0 +1,124 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:5 66879.80737
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:6 66884.52951
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:7 66888.494405
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:8 66891.568596
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:10 67226.83469
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:17 68568.438289
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:20 68570.589116
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:21 68578.404131
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:22 68580.907148
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:23 68590.597325
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:24 68613.358493
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:25 68640.674153
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:26 68642.637568
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:27 68653.860963
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:28 68659.112038
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:29 68666.857092
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:30 68701.319577
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:31 68722.88616
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:32 68766.050887
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:35 68782.972303
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:38 68821.676102
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:39 68836.667994
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:40 68853.829081
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:41 68858.429542
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:42 68878.100836
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:43 68898.253261
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:44 68933.731266
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:45 68941.064292
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:127 72898.639566
+
+stdout | src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+skill-step:130 72910.29577
+
+ ❯ |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts (42 tests | 1 failed | 41 skipped) 15390ms
+     × retains complete actual Skill candidate Source before native body and snapshot consumption 6269ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+Error: Mandatory Context provider failed: task
+ ❯ src/services/context/context-engine.ts:230:17
+    228|         if (provider.requirement === "mandatory") {
+    229|           if (error instanceof HttpError) throw error;
+    230|           throw new HttpError(503, `Mandatory Context provider failed:…
+       |                 ^
+    231|             code: "source_unavailable",
+    232|             providerKey: provider.key,
+ ❯ runContextProviders src/services/context/context-engine.ts:199:20
+ ❯ Object.assemble src/services/context/context-engine.ts:718:30
+ ❯ freshContext src/services/agent-runtime-fabric.ts:48:20
+ ❯ Object.prepare src/services/agent-runtime-fabric.ts:178:23
+ ❯ src/__tests__/v7-learning.integration.test.ts:1069:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 41 skipped (42)
+   Start at  23:27:17
+   Duration  73.30s (transform 35.14s, setup 165ms, import 57.37s, tests 15.39s, environment 0ms)
+

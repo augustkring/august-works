@@ -1,0 +1,60 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Enterprise page now requires explicit actual operating-envelope facts before saving an identity-policy draft, preserves stored facts on edits, keeps qualification separate, localizes EN/DA, and passes focused UI/i18n tests, UI typecheck, and token gates.",
+  "logs": [
+    {
+      "name": "enterprise-operating-facts-focused-final-20261025",
+      "exitCode": 0,
+      "exitSidecar": "enterprise-operating-facts-focused-final-20261025.log.exit",
+      "rawSha256": "34f00f2604b7494f422c858f47652d54633aed09a87a42278de7adec04b4ca61",
+      "sanitizedSha256": "34f00f2604b7494f422c858f47652d54633aed09a87a42278de7adec04b4ca61",
+      "archiveSha256": "66b0e84ca8ad387001ce4c065b0ee6373ab48dc866a3788977e1c3190ec87220",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  10 passed (10)",
+        "Duration  4.76s (transform 2.51s, setup 61ms, import 3.79s, tests 345ms, environment 1.01s)"
+      ]
+    },
+    {
+      "name": "enterprise-operating-facts-typecheck-rerun-20261025",
+      "exitCode": 0,
+      "exitSidecar": "enterprise-operating-facts-typecheck-rerun-20261025.log.exit",
+      "rawSha256": "95d09526415f43fb0567543e66baf52e473a4f2dedb40ab03dc04279fd41a946",
+      "sanitizedSha256": "95d09526415f43fb0567543e66baf52e473a4f2dedb40ab03dc04279fd41a946",
+      "archiveSha256": "51b51d82df881ecd499e32e7df647abf69925522eba47f2c2681bd0e667f8e6f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "enterprise-operating-facts-token-gates-20261025",
+      "exitCode": 0,
+      "exitSidecar": "enterprise-operating-facts-token-gates-20261025.log.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

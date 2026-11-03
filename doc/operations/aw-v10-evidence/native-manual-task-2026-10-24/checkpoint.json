@@ -1,0 +1,56 @@
+{
+  "parentCommit": "3786634e20f254a43d7ae0fbcfdce32cd61f0a04",
+  "requirements": [
+    "UP-03",
+    "UP-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeOwnerAndPublicProjection": {
+      "exit": 0,
+      "passed": 19,
+      "suites": 2
+    },
+    "builtCookieSessionBrowser": {
+      "exit": 0,
+      "passed": 1,
+      "suites": 1
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "tokenGates": {
+      "exit": 0
+    },
+    "broaderLegacyRoutes": {
+      "exit": 1,
+      "failed": 3,
+      "passed": 30,
+      "suites": 4,
+      "status": "open"
+    },
+    "parentProductionControl": {
+      "exit": 1,
+      "failed": 3,
+      "unselected": 12,
+      "suites": 2,
+      "status": "same three test cases fail with original parent production files; current source restored exactly"
+    }
+  },
+  "observations": [
+    "The original HTTP owner supplies the actual native session actor through a server-only fifth service option; creator UID alone cannot activate capture. Only an independent open manual backlog/todo Task without related/assigned/generated/history inputs is supported.",
+    "Current native User/session and non-viewer company membership are pinned on the original transaction, canonical issue mutation sees the actual stored resource status/assignees, and final DB wall-clock/deletion checks reject expiry after real company-counter waits. A native instance-role fallback needs recent phishing-resistant proof and still passes canonical resource policy.",
+    "The original new Task insert chooses protocol1 and binds the actual stored row through the existing canonical DB body hash and digest. The actual Human capture audit shares the same transaction; a scoped real audit failure rolls back both. Dedup replay does not restamp old rows.",
+    "Operational edits preserve captured body proof; real body edits invalidate through the existing updater and monotonic DB latch. No historical protocol upgrade/rebinding API exists.",
+    "The first current PG run found an incomplete canonical resource descriptor (403); it was corrected from the stored row. The first built browser run then reproduced internal-proof fields in the create response. Create/dedup/update and known nested update comments now reuse the existing public-row projector.",
+    "The final built app uses actual native signup/bootstrap/company/HTTP cookie transport and checks the public create DTO plus the actual migrated DB snapshot/audit, then finishes the existing native authenticator lifecycle. Structural actor-carrier PG cases do not claim cookie or WebAuthn qualification.",
+    "An independent read-only review suggested allowing completed account-deletion tombstones. That suggestion was rejected: the original completion transaction deletes the User before completion and shared native authentication also withholds that identity. No same-UID resurrection path was added."
+  ],
+  "limits": [
+    "This is the first narrow direct Human Task producer. Other constructors, derived bodies, assignments, private work, retained workspaces and complete Native run input receipts are unqualified; unsupported/historical rows remain unknown.",
+    "Empty upstream inputs record this admitted direct Human request, not a private-source grant, author permission cache, full input protocol or a model/provider delivery receipt.",
+    "The original private-Memory/temporal source failures remain open, as do typed workflow/routine origins, complete canonical source reads, portability and Context/readiness.",
+    "The wider legacy route cases are still open and reproduce on the parent production code. No checks are presented as green by skipping or weakening them.",
+    "Software localhost/browser/PG fixtures do not qualify physical authenticators/providers/hosts, mixed deployments, representative accessibility or complete V10/release/PR readiness. No PR, merge or deployment occurred."
+  ]
+}

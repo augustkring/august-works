@@ -1,0 +1,4 @@
+
+> @paperclipai/server@0.3.1 typecheck /workspace/blentera-v10/server
+> pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded
+

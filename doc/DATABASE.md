@@ -146,6 +146,13 @@ See [Supabase pricing](https://supabase.com/pricing) for current details.
 
 ## Connection loss during a transaction
 
+The root database client does not replay statements after a disconnect. A lost
+acknowledgement can hide an already committed write; even a `SELECT` or CTE can
+have side effects. A `write CONNECTION_CLOSED` error does not establish that
+PostgreSQL did not execute the statement. The owning domain must reconcile its
+durable operation identity before retrying an uncertain effect. Connection
+recovery still lets a new operation use a fresh pooled connection.
+
 When a database connection closes, its transaction fails. Paperclip does not
 replay that transaction. New requests can use a fresh connection from the pool.
 Queries from the failed transaction must keep failing, even after the pool
@@ -198,6 +205,41 @@ When authoring migrations or one-time backfills:
 - Do not hand-edit a snapshot to resolve a merge conflict. Renumber your migration and run `generate` again, as `packages/db/.gitattributes` describes.
 - The repo keeps only the newest 5 snapshots. `generate` runs `prune:snapshots` afterwards to delete older ones. Drizzle only reads the newest snapshot, and each snapshot is a full copy of the schema (over 1 MB each). Older snapshots are still in git history.
 - `packages/db/src/migration-snapshot-drift.test.ts` is the enforcement backstop. It repeats the diff that `generate` performs and fails when the newest snapshot no longer matches `packages/db/src/schema/`.
+
+## Process-local durable-work notifications
+
+`createDb` installs the transaction lifecycle used by `signalDatabaseWork`.
+An opted-in producer awaits registration before writing its existing durable
+queue. Nested savepoints share the outer transaction's hints; consumers receive
+settlement only after that outer operation finishes. An escaped transaction
+callback cannot register new work. Transactions without opted-in work issue no
+additional notification SQL.
+
+Failed outcomes retain their PostgreSQL transaction ID for a fresh-pool
+`pg_xact_status` check before the next queue scan. An unresolved transaction
+stays pending; committed, aborted and aged-out outcomes release the hint so the
+owner can inspect durable state. This never retries a mutating statement.
+Listener failures cannot alter transaction success or expose listener error
+content through warnings.
+
+These notifications are process-local hints, not a cross-process event log.
+Periodic durable scans remain necessary for restart, other processes, direct
+database writes and lost hints. Installing the lifecycle does not itself
+enable deadline workers or qualify idle/runtime shutdown behavior.
+
+## Workflow step durations
+
+Migration `0531_regular_bug.sql` widens `workflow_step_runs.duration_ms` from
+`integer` to `bigint`. Existing values and nulls are preserved; long-running
+steps can retain their actual elapsed milliseconds beyond the approximately
+25-day integer limit. The application continues to expose a JavaScript number.
+This changes neither execution deadlines nor Stop, retry or budget authority.
+
+PostgreSQL may rewrite and lock this table during the type change. Schedule
+the upgrade against the actual table size and available maintenance window.
+After durations exceed the old integer range, a downcast cannot preserve the
+data. Use a compatible application rollback, a forward fix, or a tested restore
+rather than assuming the schema change can be reversed without data loss.
 
 ## Cloud runtime identity singleton
 
@@ -352,6 +394,11 @@ non-system database schemas such as `public`, the Drizzle migration journal, and
 plugin-owned database schemas. See `doc/DEVELOPING.md` for the current
 `paperclipai db:backup` / `pnpm db:backup` commands and backup retention
 configuration.
+
+The JavaScript logical backup preserves both identity generation modes, their
+sequence ownership, options and current values. Restore imports the original
+identity values and retains generation for subsequent inserts and triggers.
+Identity columns are not reconstructed as plain integers with a missing default.
 
 Database backups do not include non-database instance files such as local-disk
 uploads, workspace files, or the local encrypted secrets master key. Back those paths

@@ -1,0 +1,288 @@
+{
+  "passed": 119,
+  "failed": 0,
+  "sourceFiles": [
+    "server/src/__tests__/v7-agent-packages.integration.test.ts",
+    "server/src/services/saas/activation-owner.ts",
+    "server/src/services/saas/activation.ts",
+    "server/src/services/saas/activation-connection-consent.ts",
+    "ui/src/pages/Activation.tsx",
+    "ui/src/pages/Activation.test.tsx",
+    "ui/src/components/OrchestrationVerification.tsx",
+    "ui/src/components/OrchestrationVerification.test.tsx"
+  ],
+  "archiveSha256": "84d33c308c5276745792f7fffdafad088e8c9399c8c25601a066b1e57f123fcd",
+  "files": [
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-syntax.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.source.patch",
+      "bytes": 700583,
+      "sha256": "ac9d60462c553f39d808ff630cda7265d6139b686bedffc9b077d183d7ffb8a0"
+    },
+    {
+      "path": "token-gates-source-pins.json",
+      "bytes": 228917,
+      "sha256": "dd07eb63d52ba4e048c20c884686ee99d0a1c1f5658334ea676f400861e2c188"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-build-snapshot.log",
+      "bytes": 38,
+      "sha256": "e544706f580e1d09872e93b388bf19db185ed45351b4c82adbde478b6a1f3b3d"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-runner.txt",
+      "bytes": 115,
+      "sha256": "e11dbb09e113c8fc1169178f79c7e5cc342a1658654b5208bedca738cafde8f8"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-build-inputs.json",
+      "bytes": 978145,
+      "sha256": "f14d610bba71e18b21ae7e52754b0ba4da60c6b711425da48162bf4bd785be6e"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-dist.sha256",
+      "bytes": 67398,
+      "sha256": "9af88dbffb91f99a57280378f81cf3520d32548c8138d1fc3d6f927676ea478b"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-binary.path",
+      "bytes": 124,
+      "sha256": "f9de8f8c28ee85cc6cd346d81a952ff0792e0098ac97168000211cf99995cb99"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-build.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "stage-list.txt",
+      "bytes": 363,
+      "sha256": "0612796f56c4cb47c21f3caedf07a24563cc664a26c91550d10d35b15ee7bdd5"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-snapshot.log",
+      "bytes": 38,
+      "sha256": "e544706f580e1d09872e93b388bf19db185ed45351b4c82adbde478b6a1f3b3d"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-test.log",
+      "bytes": 54440,
+      "sha256": "0aa7d279e30d52259699fa5d8e131bd272cca57d9f9ed4cb4f8f62ba63fb6a86"
+    },
+    {
+      "path": "token-gates-2026-10-30.log",
+      "bytes": 314,
+      "sha256": "6785d71ee920cc77d4264b31a76ba3e0e9e0c78d375d43a02a9038cdd705ed26"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-snapshot.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-build.log",
+      "bytes": 31840,
+      "sha256": "392c46d6948695806d1c5ed8e9e8d34b7c7ed22b8fd0f5c4fdbb3e590c3b4b34"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-test.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-binary.sha256",
+      "bytes": 65,
+      "sha256": "dcac393b6edf8f0341f95b5a83f0031acdf2ae2df82e686ffd50a6f6de575d62"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-syntax.log",
+      "bytes": 61,
+      "sha256": "f20e344807c386f8bf1cec3ceaf22722dab527589b9daab028acdf1466b37203"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-build-source-pins.json",
+      "bytes": 188387,
+      "sha256": "e59793afea2b9863dd3a23725c886a7c9086d1e750fd45b06397a7bd978013cc"
+    },
+    {
+      "path": "diff-check.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "v10-118-agent-packages-full-r33-20261030-ui-build-inputs-verified.log",
+      "bytes": 50,
+      "sha256": "d2aa5c1257f4af3b8db67099c8de79cdaff17a66547bec8498837d297674c3b8"
+    },
+    {
+      "path": "prior-token-gate-receipt-2026-10-25.log",
+      "bytes": 539,
+      "sha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3221,
+      "sha256": "b2ae933db35edcb64f8eef54500b4c060079b46df82cd55357971fef6a44621a"
+    },
+    {
+      "path": "qualified-source-matches.tsv",
+      "bytes": 2033,
+      "sha256": "f5e989adf89e946c848830b9998614c9b286652b1c8bc36603907681f111ecd7"
+    },
+    {
+      "path": "reconstruction/v10-118-agent-packages-full-r33-20261030-source-pins.json",
+      "bytes": 188261,
+      "sha256": "6d673f484f418a7674d9db72166772b5c1ee3299e6de652bebf45c2be2ca4436"
+    },
+    {
+      "path": "reconstruction/managed-starter-composite.patch",
+      "bytes": 63252,
+      "sha256": "51b92777ea035e5471ed4165e5585f64f8405bf31f516f019e5fc5e5ae0f00f5"
+    },
+    {
+      "path": "reconstruction/v10-118-agent-packages-full-r33-20261030-source-pins.source.patch",
+      "bytes": 700583,
+      "sha256": "ac9d60462c553f39d808ff630cda7265d6139b686bedffc9b077d183d7ffb8a0"
+    },
+    {
+      "path": "reconstruction/qualification-newfiles.tar.gz",
+      "bytes": 57863,
+      "sha256": "29091a6445ad54f6851f022ad6c75ab4a897f5b91ffdbb2f55ca121f5817c290"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "reconstruction/ui-build-source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    },
+    {
+      "path": "reconstruction/source-files/scripts/platform-skill-operating-knowledge.test.mjs",
+      "bytes": 3871,
+      "sha256": "7aa45b84616742ae82839daf80795b4717c3b0b032c0038ffb591d93d834ffce"
+    },
+    {
+      "path": "reconstruction/source-files/scripts/run-platform-skill-evals.mjs",
+      "bytes": 4384,
+      "sha256": "908efdbab66fcb584307a739f86e38cc1c6767e196a2f6e2c48e4bcb6a945eb3"
+    },
+    {
+      "path": "reconstruction/source-files/scripts/platform-skill-operating-knowledge.mjs",
+      "bytes": 20828,
+      "sha256": "200916494687c0d79a634be92a80e3ed91579e13d37b335f57bb57183c535ddf"
+    },
+    {
+      "path": "reconstruction/source-files/scripts/check-platform-skill-operating-knowledge.mjs",
+      "bytes": 677,
+      "sha256": "b2a0da45e3986b86546e37740173a798d4f46d3b223a8495b3361be9ea04a227"
+    },
+    {
+      "path": "reconstruction/source-files/packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "reconstruction/source-files/packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "reconstruction/source-files/server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    },
+    {
+      "path": "reconstruction/source-files/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "reconstruction/source-files/server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "reconstruction/source-files/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15809,
+      "sha256": "cec8ea59bdf966cb42ebe5afe77abbd6f80a6d655c8b79c1e233ee2ab8256890"
+    },
+    {
+      "path": "reconstruction/source-files/evals/platform-skill/cases.json",
+      "bytes": 3541,
+      "sha256": "996f58a6131c2e92e3568e6938756a6717bc24ce800e5ab07d08ab538865404b"
+    },
+    {
+      "path": "reconstruction/source-files/evals/platform-skill/operating-knowledge.json",
+      "bytes": 4458,
+      "sha256": "536a03a0ff95b6105cb504cc1a34285c879c0cc3288aa547df75905a532c71a4"
+    },
+    {
+      "path": "reconstruction/source-files/evals/platform-skill/README.md",
+      "bytes": 2751,
+      "sha256": "e82cba4d9b9a8a8d828f59a4c1057f50356b414f3aa647d2a645f8c4e74b8c59"
+    }
+  ],
+  "limits": "Controlled authenticated browser/software fixture, not live provider/customer qualification; exact historical r33 source reconstruction and current matching eight source paths are preserved in archive."
+}

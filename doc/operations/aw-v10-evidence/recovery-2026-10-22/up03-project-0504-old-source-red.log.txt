@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authorization-service.test.ts (80 tests | 1 failed | 79 skipped) 11319ms
+     × project source privacy preserves all actual roots across updates and source erasure 586ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service > project source privacy preserves all actual roots across updates and source erasure
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/authorization-service.test.ts:2957:78
+    2955|     const [project] = await db.insert(projects).values({ companyId: f.…
+    2956|     expect(await canActorReadProjectPrivacy(db, f.human(f.owner), proj…
+    2957|     expect(await canActorReadProjectPrivacy(db, f.human(f.reader), pro…
+       |                                                                              ^
+    2958|     const additionalSource = await createIssue(db, f.company.id);
+    2959|     await db.update(projects).set({ sourceIssueIds: [additionalSource.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 79 skipped (80)
+   Start at  20:44:56
+   Duration  28.27s (transform 8.74s, setup 244ms, import 16.19s, tests 11.32s, environment 0ms)
+

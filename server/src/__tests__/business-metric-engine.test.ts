@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@paperclipai/shared";
-import { calculateNativeMetric, prepareNativeMetric, type NativeMetricInput } from "../services/business-metrics/native-engine.js";
+import { calculateNativeMetric, prepareNativeMetric, prepareNativeMetricInput, type NativeMetricInput } from "../services/business-metrics/native-engine.js";
 import { metricDefinition } from "./helpers/business-metric-fixture.js";
 const definition = metricDefinition(randomUUID());
 const query = queryBusinessMetricSchema.parse({ metricId: randomUUID(), versionId: randomUUID(), from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", dimensions: ["project"] });
@@ -39,6 +39,17 @@ describe("native metric known-answer engine", () => {
     const second=calculate([{...done,status:"todo"},todo]);expect(second.value).toBe(0);expect(second.inputHash).not.toBe(first.inputHash);expect(second.definitionHash).toBe(first.definitionHash);
     expect(()=>calculate([{...done,createdAt:until}])).toThrow(/outside/);
     expect(()=>calculate([done,done])).toThrow(/Duplicate/);
+  });
+  it("reuses an immutable exact input hash across metric definitions without changing any result", () => {
+    const input = row("done"), token = prepareNativeMetricInput({ ...query, dimensions: [], maxRows: 1 }, [input]);
+    input.status = "todo";
+    const original = { ...input, status: "done" };
+    for (const status of ["todo", "done", "blocked", "in_progress", "backlog"]) {
+      const metric = businessMetricDefinitionSchema.parse({ ...definition, calculation: { kind: "native_ratio", numerator: { entity: "issue", statuses: [status], projectId: null }, denominator: { entity: "issue", statuses: ["todo", "done", "blocked", "in_progress", "backlog"], projectId: null } } });
+      const exactQuery = { ...query, dimensions: [], maxRows: 1 };
+      expect(prepareNativeMetric(metric, exactQuery)(token)).toEqual(calculateNativeMetric(metric, exactQuery, [original]));
+    }
+    expect(() => prepareNativeMetric(definition, { ...query, until: "2026-01-03T00:00:00Z", dimensions: [], maxRows: 1 })(token)).toThrow(/exact metric query/);
   });
   it("changes input lineage when current state changes and never substitutes a native result for external authority", () => {
     const input = row("todo"); const before = calculateNativeMetric(definition, query, [input]);

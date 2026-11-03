@@ -28,6 +28,8 @@ import type {
   PluginWebhookDeliveryStatus,
 } from "@paperclipai/shared";
 import { conflict, notFound } from "../errors.js";
+import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notifications.js";
+import { lockCompanyRuntimeAgents, synchronizeCompanyAgentRuntimeOwners } from "./agent-runtime-owner-assignments.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -325,35 +327,18 @@ export function pluginRegistryService(db: Db) {
     upsertConfig: async (pluginId: string, companyId: string, input: UpsertPluginConfig) => {
       const plugin = await getById(pluginId);
       if (!plugin) throw notFound("Plugin not found");
-
-      const existing = await db
-        .select()
-        .from(pluginConfig)
-        .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId)))
-        .then((rows) => rows[0] ?? null);
-
-      if (existing) {
-        return db
-          .update(pluginConfig)
-          .set({
-            configJson: input.configJson,
-            lastError: null,
-            updatedAt: new Date(),
-          })
-          .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId)))
-          .returning()
-          .then((rows) => rows[0]);
-      }
-
-      return db
-        .insert(pluginConfig)
-        .values({
-          pluginId,
-          companyId,
-          configJson: input.configJson,
-        })
-        .returning()
-        .then((rows) => rows[0]);
+      return db.transaction(async tx => {
+        const transaction = tx as unknown as Db;
+        const lockedAgents = await lockCompanyRuntimeAgents(transaction, companyId);
+        await notifyDeliveryWork(transaction, DELIVERY_QUEUES.pluginLifecycle);
+        const existing = await tx.select().from(pluginConfig).where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId))).then(rows => rows[0] ?? null);
+        const result = existing
+          ? await tx.update(pluginConfig).set({ configJson: input.configJson, lastError: null, updatedAt: new Date() })
+            .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId))).returning().then(rows => rows[0])
+          : await tx.insert(pluginConfig).values({ pluginId, companyId, configJson: input.configJson }).returning().then(rows => rows[0]);
+        await synchronizeCompanyAgentRuntimeOwners(transaction, companyId, lockedAgents);
+        return result;
+      });
     },
 
     /**
@@ -363,36 +348,18 @@ export function pluginRegistryService(db: Db) {
     patchConfig: async (pluginId: string, companyId: string, input: PatchPluginConfig) => {
       const plugin = await getById(pluginId);
       if (!plugin) throw notFound("Plugin not found");
-
-      const existing = await db
-        .select()
-        .from(pluginConfig)
-        .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId)))
-        .then((rows) => rows[0] ?? null);
-
-      if (existing) {
-        const merged = { ...existing.configJson, ...input.configJson };
-        return db
-          .update(pluginConfig)
-          .set({
-            configJson: merged,
-            lastError: null,
-            updatedAt: new Date(),
-          })
-          .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId)))
-          .returning()
-          .then((rows) => rows[0]);
-      }
-
-      return db
-        .insert(pluginConfig)
-        .values({
-          pluginId,
-          companyId,
-          configJson: input.configJson,
-        })
-        .returning()
-        .then((rows) => rows[0]);
+      return db.transaction(async tx => {
+        const transaction = tx as unknown as Db;
+        const lockedAgents = await lockCompanyRuntimeAgents(transaction, companyId);
+        await notifyDeliveryWork(transaction, DELIVERY_QUEUES.pluginLifecycle);
+        const existing = await tx.select().from(pluginConfig).where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId))).then(rows => rows[0] ?? null);
+        const result = existing
+          ? await tx.update(pluginConfig).set({ configJson: { ...existing.configJson, ...input.configJson }, lastError: null, updatedAt: new Date() })
+            .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId))).returning().then(rows => rows[0])
+          : await tx.insert(pluginConfig).values({ pluginId, companyId, configJson: input.configJson }).returning().then(rows => rows[0]);
+        await synchronizeCompanyAgentRuntimeOwners(transaction, companyId, lockedAgents);
+        return result;
+      });
     },
 
     /**
@@ -411,14 +378,15 @@ export function pluginRegistryService(db: Db) {
     },
 
     /** Delete a plugin's config row. */
-    deleteConfig: async (pluginId: string, companyId: string) => {
-      const rows = await db
-        .delete(pluginConfig)
-        .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId)))
-        .returning();
-
-      return rows[0] ?? null;
-    },
+    deleteConfig: async (pluginId: string, companyId: string) => db.transaction(async tx => {
+      const transaction = tx as unknown as Db;
+      const lockedAgents = await lockCompanyRuntimeAgents(transaction, companyId);
+      await notifyDeliveryWork(transaction, DELIVERY_QUEUES.pluginLifecycle);
+      const [row] = await tx.delete(pluginConfig)
+        .where(and(eq(pluginConfig.pluginId, pluginId), eq(pluginConfig.companyId, companyId))).returning();
+      await synchronizeCompanyAgentRuntimeOwners(transaction, companyId, lockedAgents);
+      return row ?? null;
+    }),
 
     // ----- Company settings ----------------------------------------------
 
@@ -441,41 +409,19 @@ export function pluginRegistryService(db: Db) {
     ): Promise<PluginCompanySettings> => {
       const plugin = await getById(pluginId);
       if (!plugin) throw notFound("Plugin not found");
-
-      const existing = await db
-        .select()
-        .from(pluginCompanySettings)
-        .where(and(
-          eq(pluginCompanySettings.pluginId, pluginId),
-          eq(pluginCompanySettings.companyId, companyId),
-        ))
-        .then((rows) => rows[0] ?? null);
-
-      if (existing) {
-        return db
-          .update(pluginCompanySettings)
-          .set({
-            enabled: input.enabled ?? existing.enabled,
-            settingsJson: input.settingsJson,
-            lastError: input.lastError ?? null,
-            updatedAt: new Date(),
-          })
-          .where(eq(pluginCompanySettings.id, existing.id))
-          .returning()
-          .then((rows) => rows[0]) as Promise<PluginCompanySettings>;
-      }
-
-      return db
-        .insert(pluginCompanySettings)
-        .values({
-          pluginId,
-          companyId,
-          enabled: input.enabled ?? true,
-          settingsJson: input.settingsJson,
-          lastError: input.lastError ?? null,
-        })
-        .returning()
-        .then((rows) => rows[0]) as Promise<PluginCompanySettings>;
+      return db.transaction(async tx => {
+        const transaction = tx as unknown as Db;
+        const lockedAgents = await lockCompanyRuntimeAgents(transaction, companyId);
+        await notifyDeliveryWork(transaction, DELIVERY_QUEUES.pluginLifecycle);
+        const existing = await tx.select().from(pluginCompanySettings).where(and(eq(pluginCompanySettings.pluginId, pluginId), eq(pluginCompanySettings.companyId, companyId))).then(rows => rows[0] ?? null);
+        const result = existing
+          ? await tx.update(pluginCompanySettings).set({ enabled: input.enabled ?? existing.enabled, settingsJson: input.settingsJson,
+            lastError: input.lastError ?? null, updatedAt: new Date() }).where(eq(pluginCompanySettings.id, existing.id)).returning().then(rows => rows[0])
+          : await tx.insert(pluginCompanySettings).values({ pluginId, companyId, enabled: input.enabled ?? true,
+            settingsJson: input.settingsJson, lastError: input.lastError ?? null }).returning().then(rows => rows[0]);
+        await synchronizeCompanyAgentRuntimeOwners(transaction, companyId, lockedAgents);
+        return result as PluginCompanySettings;
+      });
     },
 
     // ----- Entities -------------------------------------------------------

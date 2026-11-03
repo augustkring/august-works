@@ -2831,7 +2831,7 @@ export function TaskChatThread(props: TaskChatThreadProps) {
                   aria-label="Loading conversation"
                 >
                   <div className="mx-auto flex w-full max-w-(--tc-shell-max-w) flex-col gap-4 px-4 py-3">
-                    {threadHeader}
+                    <Skeleton className="h-8 w-3/4 animate-none" />
                     <Skeleton className="h-16 w-3/4 animate-none" />
                     <Skeleton className="h-24 w-4/5 self-end animate-none" />
                     <Skeleton className="h-16 w-3/4 animate-none" />

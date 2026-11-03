@@ -1,0 +1,3 @@
+# Full chat integration run 074: incomplete timeout
+
+The complete `chat-channels.integration.test.ts` invocation exited 124 at its 600-second outer harness cap. Vitest did not emit a completion summary or executed-test count, so this is an incomplete run, not a pass or an assertion-failure result. At cutoff the single Vitest worker was CPU-active while its embedded PostgreSQL connections were idle; the run log had not advanced for about 90 seconds. The exact test-owned embedded PostgreSQL directory was checked for live process, file descriptor, pidfile, and listener references and then removed; the cleanup receipt is included.

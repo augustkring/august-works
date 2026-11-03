@@ -1,0 +1,47 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses missing required procedures without installing a catalog or disabling the Role Pack
+ × src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > uses all default required procedures in a pinned Task-only runtime without executable capabilities 2023ms
+   → expected [ …(3) ] to have a length of 4 but got 3
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a resumed run after an approved procedure is revoked
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > refuses a missing or superseded worker definition pin even when required procedures stay identical
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > rejects a cached definition before writing retained runtime copies and accepts the actual current version
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not load unrelated optional catalog procedures
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > pins procedure bodies and refuses an actual active version replacement
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > consumes the exact approved Playbook even when its ordinary trigger does not match
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > captures exact authored sources and retained Memory roots for the combined runtime input
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > keeps draft Playbook edits outside the pin and refuses replacement of the approved revision
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > erases only actual consuming Playbook runtime copies and refuses restoration of the erased identity
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > retains exact approved preference roots before copying their body and physically erases only their consumer
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > loads only pinned approved knowledge into the actual read-only runtime envelope
+ ↓ src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > closes and deletes actual knowledge runtime copies while preserving an unrelated consumer
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > uses all default required procedures in a pinned Task-only runtime without executable capabilities
+AssertionError: expected [ …(3) ] to have a length of 4 but got 3
+
+- Expected
++ Received
+
+- 4
++ 3
+
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts:114:70
+    112|     expect(prepared!.contextMarkdown).toContain(f.task.description);
+    113|     const context = await buildNativeRuntimeContext({ db, agent: f.age…
+    114|     expect(context.mcp.bindingId).toBeNull(); expect(context.skills).t…
+       |                                                                      ^
+    115|     const platformAsset = context.skills.find(skill => skill.versionId…
+    116|     const platformFiles = await readNativeRuntimeAssetText(platformAss…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 skipped (15)
+   Start at  12:29:58
+   Duration  22.06s (transform 10.50s, setup 86ms, import 15.73s, tests 6.12s, environment 0ms)
+

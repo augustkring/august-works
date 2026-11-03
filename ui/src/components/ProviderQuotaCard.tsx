@@ -1,3 +1,5 @@
+import { useCostFormatting } from "../hooks/useCostFormatting";
+import { useTranslation } from "../i18n";
 import { useMemo } from "react";
 import type { CostByProviderModel, CostWindowSpendRow, QuotaWindow } from "@paperclipai/shared";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -25,6 +27,8 @@ interface ProviderQuotaCardProps {
   totalCompanySpendCents: number;
   /** spend in the current calendar week in cents, this provider only */
   weekSpendCents: number;
+  /** unpriced events in the current calendar week, this provider only */
+  weekUnpricedEventCount: number;
   /** rolling window rows for this provider: 5h, 24h, 7d */
   windowRows: CostWindowSpendRow[];
   showDeficitNotch: boolean;
@@ -41,6 +45,7 @@ export function ProviderQuotaCard({
   budgetMonthlyCents,
   totalCompanySpendCents,
   weekSpendCents,
+  weekUnpricedEventCount,
   windowRows,
   showDeficitNotch,
   quotaWindows = [],
@@ -48,6 +53,9 @@ export function ProviderQuotaCard({
   quotaSource = null,
   quotaLoading = false,
 }: ProviderQuotaCardProps) {
+  const formatCost = useCostFormatting();
+  const { t } = useTranslation("experience");
+  const unpricedEvents = rows.reduce((sum, row) => sum + (row.unpricedEventCount ?? 0), 0);
   // single-pass aggregation over rows — memoized so the 8 derived values are not
   // recomputed on every parent render tick (providers tab polls every 30s, and each
   // card is mounted twice: once in the "all" tab grid and once in its per-provider tab).
@@ -153,30 +161,40 @@ export function ProviderQuotaCard({
             </CardDescription>
           </div>
           <span className="text-xl font-bold tabular-nums shrink-0">
-            {formatCents(totalCostCents)}
+            {formatCost(totalCostCents, unpricedEvents)}
           </span>
         </div>
       </CardHeader>
 
       <CardContent className="px-4 pb-4 pt-3 space-y-4">
-        {hasBudget && (
+        {hasBudget && unpricedEvents === 0 && (
           <div className="space-y-3">
             <QuotaBar
               label="Period spend"
               percentUsed={budgetPct}
-              leftLabel={formatCents(totalCostCents)}
+              leftLabel={formatCost(totalCostCents, unpricedEvents)}
               rightLabel={`${Math.round(budgetPct)}% of allocation`}
               showDeficitNotch={showDeficitNotch}
             />
-            <QuotaBar
-              label="This week"
-              percentUsed={weekPct}
-              leftLabel={formatCents(weekSpendCents)}
-              rightLabel={`~${formatCents(Math.round(weeklyBudgetShare))} / wk`}
-              showDeficitNotch={weekPct >= 100}
-            />
+            {weekUnpricedEventCount === 0 ? (
+              <QuotaBar
+                label="This week"
+                percentUsed={weekPct}
+                leftLabel={formatCost(weekSpendCents)}
+                rightLabel={`~${formatCents(Math.round(weeklyBudgetShare))} / wk`}
+                showDeficitNotch={weekPct >= 100}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">This week: {formatCost(weekSpendCents, weekUnpricedEventCount)}</p>
+            )}
           </div>
         )}
+        {hasBudget && unpricedEvents > 0 ? (
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <p>{t("costPricing.recordedPeriodSpend", { amount: formatCost(totalCostCents, unpricedEvents) })}</p>
+            <p>{t("costPricing.recordedWeekSpend", { amount: formatCost(weekSpendCents, weekUnpricedEventCount) })}</p>
+          </div>
+        ) : null}
 
         {/* rolling window consumption — always shown when data is available */}
         {windowRows.length > 0 && (
@@ -201,14 +219,16 @@ export function ProviderQuotaCard({
                         <span className="text-muted-foreground font-mono flex-1">
                           {formatTokens(tokens)} tok
                         </span>
-                        <span className="font-medium tabular-nums">{formatCents(cents)}</span>
+                        <span className="font-medium tabular-nums">{formatCost(cents, row.unpricedEventCount)}</span>
                       </div>
-                      <div className="h-2 w-full border border-border overflow-hidden">
-                        <div
-                          className="h-full bg-primary/60 transition-(--tp-width) duration-150"
-                          style={{ width: `${barPct}%` }}
-                        />
-                      </div>
+                      {unpricedEvents === 0 && windowRows.every((windowRow) => (windowRow.unpricedEventCount ?? 0) === 0) ? (
+                        <div className="h-2 w-full border border-border overflow-hidden">
+                          <div
+                            className="h-full bg-primary/60 transition-(--tp-width) duration-150"
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -280,7 +300,7 @@ export function ProviderQuotaCard({
                         <span className="text-muted-foreground">
                           {formatTokens(rowTokens)} tok
                         </span>
-                        <span className="font-medium">{formatCents(row.costCents)}</span>
+                        <span className="font-medium">{formatCost(row.costCents, row.unpricedEventCount)}</span>
                       </div>
                     </div>
                     {/* token share bar */}

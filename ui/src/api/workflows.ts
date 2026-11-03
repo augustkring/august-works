@@ -364,11 +364,12 @@ export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
     workflowId: string,
     input: StartWorkflowRun,
     idempotencyKey: string,
+    humanCoverageId?: string | null,
   ) =>
     api.post<WorkflowRunDetail>(
       `/companies/${companyId}/workflows/${workflowId}/run`,
       input,
-      { headers: { "Idempotency-Key": idempotencyKey } },
+      { headers: { "Idempotency-Key": idempotencyKey, ...(humanCoverageId ? { "X-Human-Workflow-Coverage-Id": humanCoverageId } : {}) } },
     ),
 
   startTaskRun: (
@@ -377,11 +378,12 @@ export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
     workflowId: string,
     input: StartWorkflowRun,
     idempotencyKey: string,
+    humanCoverageId?: string | null,
   ) =>
     api.post<WorkflowRunDetail>(
       `/companies/${companyId}/issues/${issueId}/workflows/${workflowId}/run`,
       input,
-      { headers: { "Idempotency-Key": idempotencyKey } },
+      { headers: { "Idempotency-Key": idempotencyKey, ...(humanCoverageId ? { "X-Human-Workflow-Coverage-Id": humanCoverageId } : {}) } },
     ),
 
   getRun: (companyId: string, runId: string) =>

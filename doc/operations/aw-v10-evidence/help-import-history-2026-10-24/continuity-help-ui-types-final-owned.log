@@ -1,0 +1,8 @@
+
+> @paperclipai/ui@0.3.1 typecheck /workspace/blentera-v10/ui
+> tsc -b
+
+src/components/ui/dialog.tsx(52,3): error TS2322: Type 'false' is not assignable to type 'true'.
+/workspace/blentera-v10/ui:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/ui@0.3.1 typecheck: `tsc -b`
+Exit status 1

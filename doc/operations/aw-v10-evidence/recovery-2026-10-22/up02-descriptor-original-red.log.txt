@@ -1,0 +1,45 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/adapter-utils| src/execution-target-stdin-race.test.ts (38 tests | 3 failed | 34 skipped) 1109ms
+     × T26 retains the real probe descriptor through cleanup and closes it (success) 379ms
+     × T26 retains the real probe descriptor through cleanup and closes it (path_failure) 185ms
+     × T26 retains the real probe descriptor through cleanup and closes it (remove_failure) 257ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/adapter-utils| src/execution-target-stdin-race.test.ts > deterministic remote process-session wrapper shutdown (PAP-5316) > T26 retains the real probe descriptor through cleanup and closes it (success)
+ FAIL  |@paperclipai/adapter-utils| src/execution-target-stdin-race.test.ts > deterministic remote process-session wrapper shutdown (PAP-5316) > T26 retains the real probe descriptor through cleanup and closes it (path_failure)
+ FAIL  |@paperclipai/adapter-utils| src/execution-target-stdin-race.test.ts > deterministic remote process-session wrapper shutdown (PAP-5316) > T26 retains the real probe descriptor through cleanup and closes it (remove_failure)
+AssertionError: expected [ { kind: 'path', …(1) } ] to deeply equal [ { kind: 'path', …(1) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     "descriptorOpen": true,
++     "descriptorOpen": false,
+      "kind": "path",
+    },
+  ]
+
+ ❯ src/execution-target-stdin-race.test.ts:2218:22
+    2216|       const events = await readTrace();
+    2217|       const checks = events.filter((event) => event.kind === "path");
+    2218|       expect(checks).toEqual(mode === "stat_failure" ? [] : [{ kind: "…
+       |                      ^
+    2219|       expect(events.filter((event) => event.kind === "closed")).toEqua…
+    2220|       const probePath = path.join(wrapper.sessionDir, `.paperclip-birt…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed | 34 skipped (38)
+   Start at  19:38:18
+   Duration  14.87s (transform 9.46s, setup 0ms, import 13.29s, tests 1.11s, environment 0ms)
+

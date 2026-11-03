@@ -1424,6 +1424,9 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
   workspaceDurableSeed?: WorkspaceDurableSeedPaths;
   workspaceBaseline?: DirectorySnapshot;
   workspaceGitSnapshot?: GitWorkspaceSnapshot | null;
+  workspaceRepositoryMode?: "discover" | "server_verified_none";
+  /** Internal capability set only by the verified Native workspace-sync owner. */
+  nativeWorkspacePreparation?: boolean;
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: AdapterManagedRuntimeAsset[];
@@ -1504,6 +1507,8 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
     workspaceDurableSeed: input.workspaceDurableSeed,
     workspaceBaseline: input.workspaceBaseline,
     workspaceGitSnapshot: input.workspaceGitSnapshot,
+    workspaceRepositoryMode: input.workspaceRepositoryMode,
+    nativeWorkspacePreparation: input.nativeWorkspacePreparation,
     workspaceExclude: input.workspaceExclude,
     preserveAbsentOnRestore: input.preserveAbsentOnRestore,
     assets: input.assets,
@@ -1586,41 +1591,9 @@ async function githubOperationLauncherBasePath(
 }
 
 /** Read only execution-target Git context; never import the controller's credentials into SSH. */
-export async function prepareGitHubExecutionEnvironment(input: {
-  target: AdapterExecutionTarget | null | undefined;
-  cwd: string;
-  env: Record<string, string>;
-  hostCredentials: boolean;
-  networkAccess: boolean;
-}): Promise<Record<string, string>> {
-  const script = String.raw`
-const fs = require('node:fs');
-const path = require('node:path');
-const cp = require('node:child_process');
-const env = {};
-env.PAPERCLIP_RUNNER_NETWORK_ROOTS = JSON.stringify(['/etc/resolv.conf','/etc/hosts','/etc/nsswitch.conf','/etc/ssl/certs','/etc/ssl/cert.pem'].flatMap(p => { try { return [fs.realpathSync(p)]; } catch { return []; } }));
-if (process.argv[1] === 'host') {
-  for (const [key, value] of Object.entries(process.env)) {
-    if (/^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN|PAPERCLIP_GIT_TOKEN|GH_CONFIG_DIR|GIT_CONFIG_(GLOBAL|SYSTEM|NOSYSTEM|COUNT|KEY_\d+|VALUE_\d+)|GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|GIT_SSH_COMMAND|GIT_SSH)$/.test(key)) env[key] = value;
-  }
-  env.PAPERCLIP_GITHUB_HOST_HOME = process.env.HOME || '';
-  env.GH_CONFIG_DIR ||= path.join(process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || '', '.config'), 'gh');
-}
-try {
-  const top = cp.execFileSync('git', ['rev-parse', '--show-toplevel'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();
-  if (fs.realpathSync(top) === fs.realpathSync(process.cwd())) {
-    env.PAPERCLIP_GIT_METADATA_ROOTS = JSON.stringify(cp.execFileSync('git', ['rev-parse','--path-format=absolute','--git-common-dir','--git-dir'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim().split('\n').map(p => fs.realpathSync(p)));
-  }
-} catch {}
-process.stdout.write("\0" + JSON.stringify(env) + "\0");
-`;
-  const args = ["-e", script, input.hostCredentials ? "host" : "managed"];
-  const remote = input.target?.kind === "remote" ? input.target : null;
-  let discovered: Record<string, string>;
-  if (remote) {
-    // A legacy SSH host may run a standalone agent binary without Node. Use
-    // only the shell and Git, and emit bounded, NUL-framed environment records.
-    const probe = String.raw`
+/** Exact managed-mode metadata program shared with RuntimeControl's
+ * credentialless Native workspace command validator. */
+export const NATIVE_GIT_CONTEXT_PROBE_SCRIPT = String.raw`
 printf '\0PAPERCLIP_GIT_CONTEXT_V1\0'
 if [ "$1" = host ]; then
   for key in GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN PAPERCLIP_GIT_TOKEN GH_CONFIG_DIR GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_ASKPASS SSH_ASKPASS SSH_AUTH_SOCK GIT_SSH_COMMAND GIT_SSH; do
@@ -1662,11 +1635,53 @@ if [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" = "$cwd" ]; then
 fi
 printf '\0PAPERCLIP_GIT_CONTEXT_END\0'
 `;
+
+export async function prepareGitHubExecutionEnvironment(input: {
+  target: AdapterExecutionTarget | null | undefined;
+  cwd: string;
+  env: Record<string, string>;
+  hostCredentials: boolean;
+  networkAccess: boolean;
+  /** Server-owned selected Native workspace preparation only. */
+  nativeWorkspacePreparation?: boolean;
+}): Promise<Record<string, string>> {
+  const script = String.raw`
+const fs = require('node:fs');
+const path = require('node:path');
+const cp = require('node:child_process');
+const env = {};
+env.PAPERCLIP_RUNNER_NETWORK_ROOTS = JSON.stringify(['/etc/resolv.conf','/etc/hosts','/etc/nsswitch.conf','/etc/ssl/certs','/etc/ssl/cert.pem'].flatMap(p => { try { return [fs.realpathSync(p)]; } catch { return []; } }));
+if (process.argv[1] === 'host') {
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN|PAPERCLIP_GIT_TOKEN|GH_CONFIG_DIR|GIT_CONFIG_(GLOBAL|SYSTEM|NOSYSTEM|COUNT|KEY_\d+|VALUE_\d+)|GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)|GIT_ASKPASS|SSH_ASKPASS|SSH_AUTH_SOCK|GIT_SSH_COMMAND|GIT_SSH)$/.test(key)) env[key] = value;
+  }
+  env.PAPERCLIP_GITHUB_HOST_HOME = process.env.HOME || '';
+  env.GH_CONFIG_DIR ||= path.join(process.env.XDG_CONFIG_HOME || path.join(process.env.HOME || '', '.config'), 'gh');
+}
+try {
+  const top = cp.execFileSync('git', ['rev-parse', '--show-toplevel'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();
+  if (fs.realpathSync(top) === fs.realpathSync(process.cwd())) {
+    env.PAPERCLIP_GIT_METADATA_ROOTS = JSON.stringify(cp.execFileSync('git', ['rev-parse','--path-format=absolute','--git-common-dir','--git-dir'], {encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim().split('\n').map(p => fs.realpathSync(p)));
+  }
+} catch {}
+process.stdout.write("\0" + JSON.stringify(env) + "\0");
+`;
+  const args = ["-e", script, input.hostCredentials ? "host" : "managed"];
+  const remote = input.target?.kind === "remote" ? input.target : null;
+  if (input.nativeWorkspacePreparation && (!remote || remote.transport !== "sandbox" || input.hostCredentials))
+    throw new Error("native_git_context_prepare_scope_invalid");
+  let discovered: Record<string, string>;
+  if (remote) {
+    // A legacy SSH host may run a standalone agent binary without Node. Use
+    // only the shell and Git, and emit bounded, NUL-framed environment records.
+
     const result = await adapterExecutionTargetCommandRunner(remote).execute({
-      command: "sh", args: ["-c", probe, "paperclip-git-context", input.hostCredentials ? "host" : "managed"],
+      command: "sh", args: ["-c", NATIVE_GIT_CONTEXT_PROBE_SCRIPT, "paperclip-git-context", input.hostCredentials ? "host" : "managed"],
       // The caller's cwd belongs to the controller. Copied sandbox/SSH
       // workspaces can live at a different path on the execution target.
       cwd: remote.remoteCwd, timeoutMs: 15_000,
+      ...(input.nativeWorkspacePreparation ? { nativePreparationPurpose: "native_workspace_prepare" as const,
+        bypassSession: true, useSession: false } : {}),
     });
     if (result.exitCode !== 0) throw new Error("Could not read execution-target Git context");
     const payload = result.stdout.split("\0PAPERCLIP_GIT_CONTEXT_V1\0")[1]?.split("\0PAPERCLIP_GIT_CONTEXT_END\0")[0];
@@ -2772,33 +2787,6 @@ function nextProbeFileName() {
 // have this call follow it, because "wx" fails closed on an existing path
 // instead of following a link to it.
 //
-// Cleanup checks identity, not only ownership of the initial create. This
-// wrapper reads the probe file's identity, (dev, ino, ctimeMs), off the open
-// file descriptor itself (fstat), not off the path, so a peer that swaps the
-// path in the short gap after create cannot poison the identity this
-// wrapper trusts as its own. Right before removal, this wrapper reads the
-// path's identity again and removes it only when that identity still
-// matches. A same-sandbox peer that deletes the probe file and creates its
-// own entry at the same path in between leaves a different identity behind,
-// so this wrapper leaves that entry untouched instead of removing it. This
-// covers a peer's replacement file, a peer's replacement directory, and a
-// peer's replacement symbolic link alike, because all three change the
-// identity this wrapper reads back. The identity check includes ctimeMs,
-// not only (dev, ino): a filesystem can hand this call's freed inode number
-// straight back out to a peer's very next create at the same path, so
-// (dev, ino) alone can match a path this call no longer owns; ctimeMs resets
-// on every create, so a peer's replacement carries a different one even when
-// the inode number repeats. Node's filesystem API has no call that removes a
-// path only when its identity still matches an earlier read as one atomic
-// step, so a gap remains between this wrapper's final identity read and the
-// removal call itself. A peer that wins this gap can put any entry at the
-// probe path before the removal call runs. This can include a pre-existing
-// file the peer renames into place, not only a file the peer creates fresh.
-// The removal call then removes whatever entry sits at the probe path at
-// that moment. Two bounds still hold on that removal. The path always
-// stays under dirPath. If the entry is a symbolic link, the removal call
-// removes the link itself instead of following it to a different target.
-// A non-recursive removal call also fails if the entry is a directory.
 async function birthtimeSurvivesProbe(dirPath) {
   let before;
   try {
@@ -2821,12 +2809,9 @@ async function birthtimeSurvivesProbe(dirPath) {
   let ownedIdentity = null;
   try {
     const createdStats = await handle.stat();
-    // ctimeMs guards against inode reuse; see the function comment above.
     ownedIdentity = { dev: createdStats.dev, ino: createdStats.ino, ctimeMs: createdStats.ctimeMs };
   } catch {
     ownedIdentity = null;
-  } finally {
-    await handle.close().catch(() => undefined);
   }
   if (!ownedIdentity) {
     // fstat on this call's own just-opened descriptor failed. This call then
@@ -2836,6 +2821,7 @@ async function birthtimeSurvivesProbe(dirPath) {
     // entry instead of this call's own file. Fail closed right here instead
     // of falling through to the birthtime comparison below, so a failed
     // identity read can never let this probe report success.
+    await handle.close().catch(() => undefined);
     return "its own probe file's identity could not be read from the open file descriptor";
   }
   // The one gap the fs API cannot close: this lstat and the removal below
@@ -2844,14 +2830,18 @@ async function birthtimeSurvivesProbe(dirPath) {
   // the probe path, including a pre-existing file it renames into place,
   // and the removal call below removes whatever entry is there when it
   // runs.
-  const currentStats = await fs.lstat(probePath).catch(() => null);
-  const stillOwned =
-    currentStats !== null &&
-    currentStats.dev === ownedIdentity.dev &&
-    currentStats.ino === ownedIdentity.ino &&
-    currentStats.ctimeMs === ownedIdentity.ctimeMs;
-  if (stillOwned) {
-    await fs.rm(probePath, { force: true }).catch(() => undefined);
+  try {
+    const currentStats = await fs.lstat(probePath).catch(() => null);
+    const stillOwned =
+      currentStats !== null &&
+      currentStats.dev === ownedIdentity.dev &&
+      currentStats.ino === ownedIdentity.ino &&
+      currentStats.ctimeMs === ownedIdentity.ctimeMs;
+    if (stillOwned) {
+      await fs.rm(probePath, { force: true }).catch(() => undefined);
+    }
+  } finally {
+    await handle.close().catch(() => undefined);
   }
   let after;
   try {

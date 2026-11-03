@@ -1,0 +1,171 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "b87b1b7c9050e1486b93fd5046d10c3b2c4afcf6",
+  "meaning": "Configured Human operator safe case response/strict durable receipt. Native HTTP22PASS and full OpenAPI25PASS combined47PASS; all15 missing mounted routes documented. Actual provider inbound automation/staffed support not qualified.",
+  "logs": [
+    {
+      "name": "support-operator-suite-final",
+      "exitCode": 0,
+      "rawSha256": "40db051d72193e6a8036fb9bff9149e2e8598793caee344741302ad88796b2f0",
+      "sanitizedSha256": "40db051d72193e6a8036fb9bff9149e2e8598793caee344741302ad88796b2f0",
+      "archiveSha256": "b903ec8328a5bde5e9b4058bdaf5962f30d1eec1b7330c626c6b48f6479b63e8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  22 passed (22)",
+        "Duration  21.30s (transform 8.81s, setup 78ms, import 12.55s, tests 8.57s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-operator-review-final2",
+      "exitCode": 0,
+      "rawSha256": "d67fa051dc45d6b7bebf8f4abe141e07db23be0ba25f027fdeaa96b839ab4819",
+      "sanitizedSha256": "d67fa051dc45d6b7bebf8f4abe141e07db23be0ba25f027fdeaa96b839ab4819",
+      "archiveSha256": "994f3aa26a1ff718b8a9d2c65f8e10667aeb0a4f3a848a845c026ac6f200bd5d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  22 passed (22)",
+        "Duration  21.01s (transform 8.72s, setup 71ms, import 12.37s, tests 8.45s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-operator-final3",
+      "exitCode": 0,
+      "rawSha256": "a5743360d17581aee101551320cc5785ded5044aaf559a1fe1ed08cabb174191",
+      "sanitizedSha256": "a5743360d17581aee101551320cc5785ded5044aaf559a1fe1ed08cabb174191",
+      "archiveSha256": "aad633f01a832bd8c2e5c8a1440a1f3bb824060cd141f8c2d50f23941dd6fe37",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  22 passed (22)",
+        "Duration  21.84s (transform 9.23s, setup 69ms, import 13.08s, tests 8.57s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-operator-route-contract-final3",
+      "exitCode": 0,
+      "rawSha256": "6efb15bf44abdb768563d38e7c99639bd740ec015bdad7ee6c6bede244421896",
+      "sanitizedSha256": "6efb15bf44abdb768563d38e7c99639bd740ec015bdad7ee6c6bede244421896",
+      "archiveSha256": "e557305e24a9206e21a32f10c90ececb51a8aa92800e064d51a54a2dae3df8d5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  23 passed | 23 skipped (46)",
+        "Duration  23.68s (transform 9.26s, setup 121ms, import 14.64s, tests 8.69s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "openapi-route-coverage-initial",
+      "exitCode": 1,
+      "rawSha256": "bbc98210551432d9e9ec16dd428cd11ef944f0c18e7779b33a422177ca01b5fb",
+      "sanitizedSha256": "bbc98210551432d9e9ec16dd428cd11ef944f0c18e7779b33a422177ca01b5fb",
+      "archiveSha256": "eab92b015bcdc87bbbc0c17c8d872e55e01eb93307cff537fbd5545a42478148",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  1 failed | 44 passed (45)",
+        "Duration  31.41s (transform 12.92s, setup 130ms, import 19.84s, tests 11.19s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "openapi-route-coverage-candidates",
+      "exitCode": 0,
+      "rawSha256": "99489b9749cf77d7d6f3bc8ad9d3cbd40d60cdb4012299f66a08562f1513bf4f",
+      "sanitizedSha256": "99489b9749cf77d7d6f3bc8ad9d3cbd40d60cdb4012299f66a08562f1513bf4f",
+      "archiveSha256": "613a2053a2dc4547e716a7f55a52d6cee46f4053911acedad97b97ef153434b0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  24 passed (24)",
+        "Duration  5.57s (transform 2.40s, setup 71ms, import 3.99s, tests 1.40s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-operator-contract-reviewed",
+      "exitCode": 0,
+      "rawSha256": "275838f2821cf4e7b0405ae28f8c2d17fa7c3f9c3d005ad7953419bd629217f7",
+      "sanitizedSha256": "275838f2821cf4e7b0405ae28f8c2d17fa7c3f9c3d005ad7953419bd629217f7",
+      "archiveSha256": "edd9a6ef02d13dd675de5d8f4a71f7073e0f23e6b245afbf717e867624685faf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  47 passed (47)",
+        "Duration  28.18s (transform 10.65s, setup 126ms, import 16.59s, tests 11.20s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-operator-help-reviewed",
+      "exitCode": 0,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "support-operator-source-review",
+      "exitCode": 0,
+      "rawSha256": "4615ae37a72eaab7afa9d7aeabe7d5b13e1c0597ba91e6929ce6faf58b11e9e2",
+      "sanitizedSha256": "4615ae37a72eaab7afa9d7aeabe7d5b13e1c0597ba91e6929ce6faf58b11e9e2",
+      "archiveSha256": "4d1a3b08606320a8683cf97cc6791c1fa85979f014d28909d75557455d53c3ed",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

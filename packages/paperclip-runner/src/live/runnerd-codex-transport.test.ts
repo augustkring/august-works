@@ -74,6 +74,7 @@ import {
   rehydrateRunnerdUsageNotification,
   rehydrateRunnerdWorkspaceChangeNotification,
   runnerdCanonicalNotificationMethod,
+  runnerdEnvironmentInternals,
   runnerdLaunchProfileInternals,
   runnerdRecoveryInternals,
   resolveRunnerdAcpxPermissionMode,
@@ -381,6 +382,41 @@ it("publishes spawned runner ownership before waiting for provider startup", asy
 it("launches runnerd with its production durable outbox limits", () => {
   expect(runnerdLaunchProfileInternals.maxOutboxBytes).toBe(16 * 1024 * 1024);
   expect(runnerdLaunchProfileInternals.p0ReserveBytes).toBe(1024 * 1024);
+});
+
+it("forwards only a complete bounded managed-model tuple through the OpenCode runner environment", () => {
+  const safe = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({
+    PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+    PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+    PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+    ANTHROPIC_API_KEY: "caller-secret-must-not-pass",
+    OPENAI_API_KEY: "caller-secret-must-not-pass",
+    UNRELATED_PRIVATE_VALUE: "must-not-pass",
+  });
+  expect(safe.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN).toBe("https://broker.example.test");
+  expect(safe.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND).toBe("12000");
+  expect(safe.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS).toBe("1024");
+  expect(safe.ANTHROPIC_API_KEY).toBeUndefined();
+  expect(safe.OPENAI_API_KEY).toBeUndefined();
+  expect(safe.UNRELATED_PRIVATE_VALUE).toBeUndefined();
+
+  for (const invalid of [
+    { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "http://broker.example.test" },
+    { PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://user:pass@broker.example.test" },
+    { PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "2000001" },
+    { PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "32000" },
+    { PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "01024" },
+  ]) {
+    const stripped = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://broker.example.test",
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+      ...invalid,
+    });
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN).toBeUndefined();
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND).toBeUndefined();
+    expect(stripped.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS).toBeUndefined();
+  }
 });
 
 it("requires an explicit retained state directory before adopting a runner", () => {
@@ -1037,6 +1073,72 @@ it.each(["before", "after"] as const)(
   },
 );
 
+it.each(["rejected", "pending"] as const)(
+  "keeps an exact %s process cleanup completion unsettled after durable suspension",
+  async (cleanupCompletion) => {
+    const directory = await mkdtemp(join(tmpdir(), "runnerd-close-completion-"));
+    const steps: string[] = [];
+    let process: ReturnType<typeof spawn> | undefined;
+    let physicalExit: Promise<void> | undefined;
+    const runnerState = async () => JSON.parse(await readFile(
+      join(directory, "runner", "runner-state.json"), "utf8"));
+    const bundle = createCapabilityRunnerdCodexTransport({
+      runnerBinary: defaultCapabilityRunnerdBinary(),
+      codexCommand: fakeCodex,
+      codexArgs: fakeCodexArgs(directory),
+      stateDirectory: directory,
+      lifecyclePolicy: { mode: "warm", idleTimeoutMs: 60_000 },
+      closeGraceMs: 4_000,
+      readRunnerState: runnerState,
+      controlPlaneRegistration: async (authority) => {
+        await authority.start();
+        return {
+          release: () => { steps.push("release"); },
+          checkpoint: async (settlement) => {
+            expect((await runnerState()).lifecycle).toBe("suspended");
+            steps.push(`checkpoint:${settlement}`);
+          },
+        };
+      },
+      runnerProcessLauncher: (spec) => {
+        const child = spawn(spec.command, [...spec.args], {
+          cwd: spec.cwd, env: spec.environment, stdio: "ignore",
+        });
+        process = child;
+        physicalExit = new Promise<void>((resolveExit) => {
+          child.once("exit", () => resolveExit());
+        });
+        // Like the remote launcher, physical child exit precedes completion
+        // of its original awaited broker Stop. Neither a rejected nor a still
+        // pending cleanup promise can establish that Stop's acknowledgement.
+        const completion = new Promise<durableControlPlane.RunnerProcessResult>((_resolve, reject) => {
+          child.once("error", reject);
+          child.once("exit", () => {
+            if (cleanupCompletion === "rejected") reject(new Error("fixed_cleanup_ack_unavailable"));
+          });
+        });
+        return { child, completion };
+      },
+    });
+    try {
+      await bundle.transport.request("thread/start", { cwd: directory, dynamicTools: [] });
+      const close = bundle.transport.close();
+      await expect(close).rejects.toMatchObject({ code: "native_session_close_unrecoverable" });
+      expect(bundle.transport.close()).toBe(close);
+      expect(steps).toEqual(["release", "checkpoint:unsettled"]);
+      await physicalExit;
+      expect(process?.exitCode).not.toBeNull();
+      expect((await runnerState()).lifecycle).toBe("suspended");
+    } finally {
+      await bundle.transport.close().catch(() => undefined);
+      process?.kill("SIGKILL");
+      await physicalExit;
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+  20_000,
+);
+
 it("quiesces the control route before checkpoint and containment regardless of process completion", async () => {
   const settledSteps: string[] = [];
   await runnerdRecoveryInternals.releaseRunnerProcessOwnership({
@@ -1520,6 +1622,54 @@ it("preserves OpenCode runtime bindings when a durable runner is respawned", () 
   );
 });
 
+it("uses the explicit server-selected managed OpenCode tuple instead of ambient values", () => {
+  const names = [
+    "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+    "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
+    "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
+  ] as const;
+  const previous = names.map((name) => process.env[name]);
+  try {
+    process.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN = "https://ambient.example.test";
+    process.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND = "9000";
+    process.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS = "2048";
+    const environment = createCapabilityRunnerdProviderEnvironment({
+      provider: "opencode",
+      options: {
+        provider: "opencode",
+        environment: {
+          PATH: "/bin",
+          PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://selected.example.test",
+          PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+          PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+        },
+      },
+      identity: {
+        runnerInstanceId: "runner-1",
+        environmentLeaseId: "lease-1",
+        runId: "run-1",
+        normalizedSessionId: "session-1",
+        turnId: "turn-1",
+        itemId: "item-1",
+      },
+      codexHome: "/isolated/codex-home",
+      runtimeContextPath: "/isolated/runtime-context.json",
+      hasRuntimeContext: false,
+    });
+    expect(environment).toMatchObject({
+      PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: "https://selected.example.test",
+      PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: "12000",
+      PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: "1024",
+    });
+  } finally {
+    names.forEach((name, index) => {
+      const value = previous[index];
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    });
+  }
+});
+
 it("passes the configured Codex API key only through the provider process environment", () => {
   const environment = createCapabilityRunnerdProviderEnvironment({
     provider: "codex",
@@ -1644,6 +1794,19 @@ it("uses file-backed AWS workload identity without forwarding access keys or Pap
   expect(environment.AWS_SHARED_CREDENTIALS_FILE).toBeUndefined();
   expect(environment.PAPERCLIP_NATIVE_MCP_URL).toBeUndefined();
   expect(environment.PAPERCLIP_NATIVE_MCP_TOKEN).toBeUndefined();
+});
+
+it("does not merge ambient API credentials into an explicit OpenCode environment", () => {
+  const prior = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = "ambient-server-only-key";
+  try {
+    const environment = runnerdEnvironmentInternals.createSanitizedOpenCodeRunnerEnvironment({ PATH: "/bin" });
+    expect(environment.PATH).toBe("/bin");
+    expect(environment.OPENROUTER_API_KEY).toBeUndefined();
+  } finally {
+    if (prior === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = prior;
+  }
 });
 
 it.each([

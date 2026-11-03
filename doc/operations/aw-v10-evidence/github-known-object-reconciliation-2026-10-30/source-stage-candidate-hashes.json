@@ -1,0 +1,37 @@
+{
+  "qualification": "V10-069/072 applicable GitHub known-object reconciliation",
+  "baseHead": "45e3edba7a712d765636e6aa44a2e52844dcb4ff",
+  "sourcePaths": [
+    {
+      "path": "doc/connections/CONNECTOR-PLAYBOOK.md",
+      "sha256": "f6b0850aa28e498a4add503f3220fab6183ba249c051c4850fb0e6da7d5cc245",
+      "bytes": 124286
+    },
+    {
+      "path": "server/src/services/external-objects.ts",
+      "sha256": "b569573b2ec3aa6006f0ea2a67be54fe4bbbf6837e7525c5b355d8e890ccbf62",
+      "bytes": 42412
+    },
+    {
+      "path": "server/src/services/github-connection-events.ts",
+      "sha256": "b7b678a04fffb4d6d902894ca40595072fe4350df237a1b913ed31aa08316a1e",
+      "bytes": 24065
+    },
+    {
+      "path": "server/src/services/github-external-object-provider.ts",
+      "sha256": "183be78583e9d36d9bfda13dd0ce1adf7434af38d3ac014442c81d7fbe95d248",
+      "bytes": 17438
+    },
+    {
+      "path": "server/src/__tests__/external-objects-service.test.ts",
+      "sha256": "025bd9a662569693cb5722262cf2c8204cdd444b507d907f83cb09c2208bec1a",
+      "bytes": 38652
+    },
+    {
+      "path": "server/src/__tests__/github-connection-events.test.ts",
+      "sha256": "d9b2fb7fd52e4cee1c86275437c27de77ada8ce60880523c02b1ba4026dabc7d",
+      "bytes": 20218
+    }
+  ],
+  "scopeNote": "Six source paths only; unrelated dirty worktree changes are excluded from the stage candidate."
+}

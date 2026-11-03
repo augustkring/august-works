@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-23",
+  "correction": "Root initially used Add File on an existing test path, replacing seven V6 approval tests. Restored their exact bodies from dba57adfc and appended five case tests with merged imports; no original assertion changed. Initial five-case run remains bounded and archived.",
+  "tests": {
+    "passed": 12,
+    "seconds": 13.06,
+    "observedExit": 0,
+    "durableExit": 0
+  },
+  "sharedTypecheck": {
+    "observedExit": 0,
+    "durableExit": 0
+  },
+  "files": {
+    "packages/shared/src/customer-support.ts": "dff6ac51ef4ce6084630cf5ce24828999fde028379899b5ccb5bb2a244c6b281",
+    "packages/shared/src/customer-support.test.ts": "7af1a8255b8ef53e5ff251a4f63cb518f08087ee960779b1ef4ac1bbd414015c"
+  },
+  "scope": "Shared policy only. No case storage, authority, delivery, lifecycle or UI qualification. All check sessions closed."
+}

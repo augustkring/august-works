@@ -1,0 +1,77 @@
+   Compiling paperclip-runner-core v0.0.0 (/workspace/blentera-v10/packages/paperclip-runner/runner/crates/runner-core)
+warning: unused import: `OpenOptions`
+ --> crates/runner-core/src/process_supervisor.rs:3:27
+  |
+3 | use std::fs::{self, File, OpenOptions};
+  |                           ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:709:17
+    |
+709 |             let mut inherited = launch.inherited_command()?;
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/runner-core/src/process_supervisor.rs:710:17
+    |
+710 |             let mut result = Self::spawn_command(
+    |                 ----^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: fields `config` and `system_instructions` are never read
+    --> crates/runner-core/src/claude_managed_provider.rs:1248:5
+     |
+1232 | pub struct ClaudeManagedProvider {
+     |            --------------------- fields in this struct
+...
+1248 |     config: ClaudeManagedProviderConfig,
+     |     ^^^^^^
+1249 |     system_instructions: String,
+     |     ^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `validate_tool_result_contract` is never used
+    --> crates/runner-core/src/provider_bridge.rs:1043:4
+     |
+1043 | fn validate_tool_result_contract(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `paperclip-runner-core` (lib test) generated 5 warnings (run `cargo fix --lib -p paperclip-runner-core --tests` to apply 3 suggestions)
+    Finished `release` profile [optimized] target(s) in 1m 37s
+     Running unittests src/lib.rs (target/release/deps/paperclip_runner_core-660ecf9691f8d606)
+
+running 23 tests
+test codex_provider::tests::admits_only_exact_local_facade_provider_driver_pairs ... ok
+test codex_provider::tests::bounds_all_retained_pending_tool_request_data_in_aggregate ... ok
+test codex_provider::tests::bounds_all_retained_runtime_request_data_in_aggregate ... ok
+test codex_provider::tests::bounds_messages_buffered_while_waiting_for_a_response ... ok
+test codex_provider::tests::codex_provider_accepts_only_the_controller_derived_external_sandbox_bit ... ok
+test codex_provider::tests::converts_codex_questions_and_responses_without_provider_leakage ... ok
+test codex_provider::tests::does_not_forward_an_ambient_opencode_command_override ... ok
+test codex_provider::tests::exited_child_reader_deadline_bounds_continuous_descendant_stdout ... ok
+test codex_provider::tests::exited_child_reader_deadline_precedes_buffered_output_and_is_generation_scoped ... ok
+test codex_provider::tests::exited_child_reader_timeout_preserves_only_observed_turn_authority ... ok
+test codex_provider::tests::exited_child_waits_for_held_actual_terminal_reader_before_certifying_exit ... ok
+test codex_provider::tests::finds_only_active_turns_during_resume ... ok
+test codex_provider::tests::github_credentials_cross_only_the_bounded_provider_environment ... ok
+test codex_provider::tests::preserves_canonical_opencode_questions_and_wraps_the_validated_resolution ... ok
+test codex_provider::tests::rejects_non_input_and_malformed_opencode_runtime_requests ... ok
+test codex_provider::tests::rejects_notifications_bound_to_another_thread_or_active_turn ... ok
+test codex_provider::tests::rejects_requests_bound_to_any_non_active_turn_nonfatally ... ok
+test codex_provider::tests::restored_provider_turn_identity_is_retained_in_release_builds ... ok
+test codex_provider::tests::restores_the_complete_durable_provider_turn_ledger ... ok
+test codex_provider::tests::settled_provider_turn_history_never_evicts_exact_identities ... ok
+test codex_provider::tests::startup_observer_failure_reaps_the_exact_child_before_any_initialization_rpc ... ok
+test codex_provider::tests::verified_opencode_proxy_executes_the_descriptor_safe_commonjs_bundle ... ok
+test codex_provider::tests::warm_attachment_accepts_normalized_usage_for_the_completed_turn ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 270 filtered out; finished in 8.06s
+

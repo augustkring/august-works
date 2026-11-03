@@ -1,0 +1,21 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > claim time > derives the issue prefix from the company name and writes no placeholder description
+ ↓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > claim time > derives the prefix from the humanized stack slug when no company name header is sent
+ ↓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > claim time > suffixes the derived prefix when another company already holds it
+ ✓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > authoritative local membership state > does not revive a suspended membership in the debounce window or on a later sync 160ms
+ ✓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > authoritative local membership state > does not revive a archived membership in the debounce window or on a later sync 48ms
+ ✓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > authoritative local membership state > refreshes an active membership without resetting initialized grants 44ms
+ ✓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > authoritative local membership state > does not recreate a user or membership after account deletion is recorded 37ms
+ ✓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > authoritative local membership state > keeps a concurrent local revocation authoritative over a Cloud refresh 185ms
+ ↓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > legacy provisioning repair > re-derives the prefix, clears the placeholder, and re-keys both identifier tables
+ ↓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > legacy provisioning repair > is a no-op on a second pass
+ ↓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > legacy provisioning repair > clears only the placeholder description when the prefix is not the legacy hash
+ ↓ src/__tests__/cloud-tenant-company-provisioning.test.ts > cloud tenant company provisioning > legacy provisioning repair > leaves an operator-written description alone while it re-derives the prefix
+
+ Test Files  1 passed (1)
+      Tests  5 passed | 7 skipped (12)
+   Start at  17:25:23
+   Duration  22.99s (transform 12.36s, setup 133ms, import 18.14s, tests 4.59s, environment 0ms)
+

@@ -1,0 +1,100 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts (8 tests | 4 failed) 213ms
+     × omits complete ceremony and recovery payloads from HTTP 200 logs 50ms
+     × omits complete ceremony and recovery payloads from HTTP 401 logs 15ms
+     × omits complete ceremony and recovery payloads from HTTP 403 logs 28ms
+     × omits complete ceremony and recovery payloads from HTTP 500 logs 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > native authentication payload privacy > omits complete ceremony and recovery payloads from HTTP 200 logs
+AssertionError: expected '{"level":30,"time":1792813952344,"pid…' not to contain 'CANARY'
+
+- Expected
++ Received
+
+- CANARY
++ {"level":30,"time":1792813952344,"pid":173369,"hostname":"96e1d066eecd","req":{"id":1,"method":"POST","url":"/api/auth/passkey/verify-authentication","params":{},"headers":{"host":"[::1]:40171","accept-encoding":"gzip, deflate","x-blentera-expected-user":"EXPECTED-USER-CANARY","x-blentera-expected-session":"EXPECTED-SESSION-CANARY","content-type":"application/json","content-length":"175","connection":"close"},"remoteAddress":"::1","remotePort":36410},"res":{"statusCode":200,"headers":{"x-powered-by":"Express"}},"responseTime":2,"msg":"POST /api/auth/passkey/verify-authentication 200"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:77:24
+     75|       } }).expect(status);
+     76|     const output = chunks.join("");
+     77|     expect(output).not.toContain("CANARY");
+       |                        ^
+     78|     const log = JSON.parse(output.trim());
+     79|     expect(log.req.url).toBe("/api/auth/:operation");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > native authentication payload privacy > omits complete ceremony and recovery payloads from HTTP 401 logs
+AssertionError: expected '{"level":40,"time":1792813952365,"pid…' not to contain 'CANARY'
+
+- Expected
++ Received
+
+- CANARY
++ {"level":40,"time":1792813952365,"pid":173369,"hostname":"96e1d066eecd","req":{"id":1,"method":"POST","url":"/api/auth/passkey/verify-authentication","params":{},"headers":{"host":"[::1]:36201","accept-encoding":"gzip, deflate","x-blentera-expected-user":"EXPECTED-USER-CANARY","x-blentera-expected-session":"EXPECTED-SESSION-CANARY","content-type":"application/json","content-length":"175","connection":"close"},"remoteAddress":"::1","remotePort":49624},"reqBody":{"code":"OTP-CANARY","backupCode":"RECOVERY-CANARY","response":{"id":"CREDENTIAL-ID-CANARY","response":{"clientDataJSON":"CLIENT-DATA-CANARY","signature":"SIGNATURE-CANARY"}}},"routePath":"/api/auth/passkey/verify-authentication","res":{"statusCode":401,"headers":{"x-powered-by":"Express"}},"responseTime":1,"msg":"POST /api/auth/passkey/verify-authentication 401"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:77:24
+     75|       } }).expect(status);
+     76|     const output = chunks.join("");
+     77|     expect(output).not.toContain("CANARY");
+       |                        ^
+     78|     const log = JSON.parse(output.trim());
+     79|     expect(log.req.url).toBe("/api/auth/:operation");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > native authentication payload privacy > omits complete ceremony and recovery payloads from HTTP 403 logs
+AssertionError: expected '{"level":40,"time":1792813952395,"pid…' not to contain 'CANARY'
+
+- Expected
++ Received
+
+- CANARY
++ {"level":40,"time":1792813952395,"pid":173369,"hostname":"96e1d066eecd","req":{"id":1,"method":"POST","url":"/api/auth/passkey/verify-authentication","params":{},"headers":{"host":"[::1]:34377","accept-encoding":"gzip, deflate","x-blentera-expected-user":"EXPECTED-USER-CANARY","x-blentera-expected-session":"EXPECTED-SESSION-CANARY","content-type":"application/json","content-length":"175","connection":"close"},"remoteAddress":"::1","remotePort":57200},"reqBody":{"code":"OTP-CANARY","backupCode":"RECOVERY-CANARY","response":{"id":"CREDENTIAL-ID-CANARY","response":{"clientDataJSON":"CLIENT-DATA-CANARY","signature":"SIGNATURE-CANARY"}}},"routePath":"/api/auth/passkey/verify-authentication","res":{"statusCode":403,"headers":{"x-powered-by":"Express"}},"responseTime":1,"msg":"POST /api/auth/passkey/verify-authentication 403"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:77:24
+     75|       } }).expect(status);
+     76|     const output = chunks.join("");
+     77|     expect(output).not.toContain("CANARY");
+       |                        ^
+     78|     const log = JSON.parse(output.trim());
+     79|     expect(log.req.url).toBe("/api/auth/:operation");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/http-log-authentication-boundary.test.ts > native authentication payload privacy > omits complete ceremony and recovery payloads from HTTP 500 logs
+AssertionError: expected '{"level":50,"time":1792813952402,"pid…' not to contain 'CANARY'
+
+- Expected
++ Received
+
+- CANARY
++ {"level":50,"time":1792813952402,"pid":173369,"hostname":"96e1d066eecd","req":{"id":1,"method":"POST","url":"/api/auth/passkey/verify-authentication","params":{},"headers":{"host":"[::1]:42979","accept-encoding":"gzip, deflate","x-blentera-expected-user":"EXPECTED-USER-CANARY","x-blentera-expected-session":"EXPECTED-SESSION-CANARY","content-type":"application/json","content-length":"175","connection":"close"},"remoteAddress":"::1","remotePort":48914},"reqBody":{"code":"OTP-CANARY","backupCode":"RECOVERY-CANARY","response":{"id":"CREDENTIAL-ID-CANARY","response":{"clientDataJSON":"CLIENT-DATA-CANARY","signature":"SIGNATURE-CANARY"}}},"routePath":"/api/auth/passkey/verify-authentication","res":{"statusCode":500,"headers":{"x-powered-by":"Express"}},"err":{"type":"Error","message":"SDK-ERROR-CEREMONY-CANARY","stack":"Error: SDK-ERROR-CEREMONY-CANARY\n    at /workspace/blentera-v10/server/src/__tests__/http-log-authentication-boundary.test.ts:67:44\n    at Layer.handleRequest (/workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at next (/workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:157:13)\n    at Route.dispatch (/workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/route.js:117:3)\n    at handle (/workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:435:11)\n    at Layer.handleRequest (/workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js:152:17)\n    at /workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:295:15\n    at processParams (/workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:582:12)\n    at next (/workspace/blentera-v10/node_modules/.pnpm/router@2.2.0/node_modules/router/index.js:291:5)\n    at loggingMiddleware (/workspace/blentera-v10/node_modules/.pnpm/pino-http@11.0.0/node_modules/pino-http/logger.js:206:7)"},"responseTime":0,"msg":"POST /api/auth/passkey/verify-authentication 500 — SDK-ERROR-CEREMONY-CANARY"}
++
+
+ ❯ src/__tests__/http-log-authentication-boundary.test.ts:77:24
+     75|       } }).expect(status);
+     76|     const output = chunks.join("");
+     77|     expect(output).not.toContain("CANARY");
+       |                        ^
+     78|     const log = JSON.parse(output.trim());
+     79|     expect(log.req.url).toBe("/api/auth/:operation");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 4 passed (8)
+   Start at  03:52:31
+   Duration  1.19s (transform 143ms, setup 192ms, import 312ms, tests 213ms, environment 0ms)
+

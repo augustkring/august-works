@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/workspace/v10-preparation/cleanup-stale-playwright-postgres-socket.py", line 16, in <module>
+    assert state in ('Z','missing'), f'Recorded PostgreSQL PID is {state}; refusing cleanup'
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Recorded PostgreSQL PID is S; refusing cleanup

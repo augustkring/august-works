@@ -538,6 +538,37 @@ export function isPaperclipCloudConnectorStrategy(value: unknown): boolean {
   return value === "paperclip_cloud_connector" || value === "paperclip_id_connector";
 }
 
+export const MANAGED_SLACK_OAUTH_METHOD_KEY = "managed-oauth";
+
+/** The managed Slack gallery path is available only when the operator has
+ * provisioned both credentials for the Blentera-owned Slack OAuth app. */
+export function slackManagedOAuthConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(
+    env.PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_ID?.trim() &&
+    env.PAPERCLIP_TOOL_OAUTH_SLACK_CLIENT_SECRET?.trim(),
+  );
+}
+
+export function appWithSlackManagedOAuthAvailability(
+  app: AppDefinition,
+  env: NodeJS.ProcessEnv = process.env,
+): AppDefinition {
+  if (app.slug !== "slack") return app;
+  const available = slackManagedOAuthConfigured(env);
+  const methods = app.methods.filter(
+    (method) => method.key !== MANAGED_SLACK_OAUTH_METHOD_KEY || available,
+  );
+  return {
+    ...app,
+    methods,
+    ownershipAvailability: {
+      ...DEFAULT_OWNERSHIP_AVAILABILITY,
+      ...app.ownershipAvailability,
+      platform_shared: available,
+    },
+  };
+}
+
 /** Use the same signed instance profiles for catalog display and setup validation. */
 export function appWithPaperclipCloudConnectorAvailability(
   app: AppDefinition,

@@ -1,0 +1,15 @@
+{
+  "scope": "Host61 closed exact-restore cohort",
+  "phaseExitCodes": {
+    "source-oxc": 0,
+    "shared-build": 0,
+    "db-build": 0,
+    "server-tsc": 0,
+    "host-session-node": 0,
+    "native-first-claim-vitest": 0,
+    "native-provider-preparation-vitest": 0,
+    "targeted-worker-vitest": 1
+  },
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte",
+  "summary": "Earlier Host/DB/TypeScript/provider checks passed; actual Worker failed at provider-artifact compatibility. No complete Worker/Host acceptance claim."
+}

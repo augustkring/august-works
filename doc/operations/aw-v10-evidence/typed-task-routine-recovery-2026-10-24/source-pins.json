@@ -1,0 +1,16 @@
+{
+  "server/src/services/authorization.ts": "0d1d56f90f7cbdaf9f97302b0682fd5752723975cb0f41f6df6f8779dd8dc3e2",
+  "server/src/services/issues.ts": "d12e339cefcf3a02476c74b1488f0b58a1e810753e5ce79c82dabcd69913747d",
+  "server/src/services/routines.ts": "64ca80fb89f6415cca73574b6df35d18f1d600d4e33a68a97c0cb43ec40bdcb3",
+  "server/src/services/company-portability.ts": "367b25284a4b7aaee966a030c190666237e736e6d8fc443baa5a44c1da78c479",
+  "server/src/services/import-write-types.ts": "8e5241f7540421788723874e00c9ed45cd3baf9707dc6a5b5aaede6eefd3b555",
+  "server/src/__tests__/typed-task-origin.integration.test.ts": "4ebaaa56a786b3bb20fdfc299e891560b581dd08c7d052327785b6286e33439e",
+  "server/src/__tests__/routine-source-identity.integration.test.ts": "3d26c731f0e7043ea44aaf7b8cc3af9fc0d2c7aca3e96f101408b5be373395cb",
+  "server/src/__tests__/routines-service.test.ts": "d667198fe18178499311f96531a3788b678fde3fb563d57bdaeb893b23f9d84b",
+  "server/src/__tests__/routine-pending-assignment.integration.test.ts": "208502ef09358276b0485773fee62a782599126b9b5c5dadbad76d3226706e14",
+  "server/src/__tests__/typed-task-private-sources.integration.test.ts": "65a7c40fa986fa68586881dbee162ec865bf14e0c21edce5cccb143694791b10",
+  "packages/db/src/schema/issue_privacy_sources.ts": "08a3d8077650376fe4bc9add3ff5b1b3bf0b07a3783f57de4a938f2cb1fdff1f",
+  "packages/shared/src/types/company-portability.ts": "ac0d9312153556b747fe3b21fbd00907cd2970220665cb80129d43945b726703",
+  "packages/shared/src/validators/company-portability.ts": "2bbd08828a4a704e9837d55f8c680bb7e59c4e02204c4bb5f4206c16e48032c6",
+  "packages/db/src/migrations/0526_flimsy_bulldozer.sql": "b696f0e3fdde97f8be9f77dce53c36063764850f085473b5b01e73935d3f3da8"
+}

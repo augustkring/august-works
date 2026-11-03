@@ -1,0 +1,184 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-29T23:31:21.610198+00:00",
+  "baseCommit": "e1c371540ab7358f3486fb9e41c01e299d22bbb3",
+  "patchBytes": 1726236,
+  "patchSha256": "6499aba379dbc3a81029aa6864e69fac6347df4f5aadd203bebf365191a2cc98",
+  "archiveSha256": "19b1a4729e641c3aa6a901330633a3264c3a7cd5f76750341835e70e054ae66e",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/shared/src/resource-governance.test.ts",
+      "bytes": 2495,
+      "sha256": "484ff87ecbd16b0c0e7897be4939ea63dc63e8d0337a6422623ce35f329232e8"
+    },
+    {
+      "path": "packages/shared/src/resource-governance.ts",
+      "bytes": 2483,
+      "sha256": "7dfa3d66fe0562b6c5e093da516f130f8e42bffd54889ca92e8381f9a2f885c6"
+    },
+    {
+      "path": "server/src/__tests__/resource-governance.integration.test.ts",
+      "bytes": 39931,
+      "sha256": "239fdd2e3e2a355a676f6a0be3d201d09ff309647f59a3f56bd131f8156215d9"
+    },
+    {
+      "path": "server/src/services/resource-governance.ts",
+      "bytes": 4436,
+      "sha256": "03c26a8e4108a11c3b6559dc458206fc61f6b7b64e1e585071b10906fe9f93b6"
+    }
+  ],
+  "privateRecoveryFiles": [
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-governance-current.sql",
+      "archive": "private-recovery-0-b-resource-governance-current.sql.gz",
+      "bytes": 18639,
+      "sha256": "06a09db9ee76d79f02d8c32a696ddda7a0da23bc49b5314b062b06e1ae2af9d7",
+      "archiveSha256": "2774a94b04a94c91fce8e6af0887e32107a4d459d06e02b977fa3f23cc4eafca",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/manifest.json",
+      "archive": "private-recovery-1-manifest.json.gz",
+      "bytes": 1737,
+      "sha256": "ca82eb8e684c3b39dab9bdbe450b198e5838736c073b5e089a2a9b68f46c0652",
+      "archiveSha256": "045255d8a92731497a2ec001ea557a92464653f81b1807103c65b2bd7eae9a2a",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-resource-governance-qualified-r14-20261029.sh",
+      "archive": "private-recovery-2-run-resource-governance-qualified-r14-20261029.sh.gz",
+      "bytes": 14426,
+      "sha256": "567af50bdab2308c2578380a0d23f690f1ddfb8587c896a1535a34c7a5a63438",
+      "archiveSha256": "1e1f55c10a8db8b54ec19395ccc738c6d3ce71e8e69a01292484ee563bea106c",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/run-pinned-managed-browser-test.sh",
+      "archive": "private-recovery-3-run-pinned-managed-browser-test.sh.gz",
+      "bytes": 6690,
+      "sha256": "d256b425ae103954f3f44df195268425182e97d1ee1ba71282d9f8fdc6a659de",
+      "archiveSha256": "b19929924702bcd1b3d3575dab3f3f734ed6222424cac70be4d735bb9408515a",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/record-static-ui-build-inputs.py",
+      "archive": "private-recovery-4-record-static-ui-build-inputs.py.gz",
+      "bytes": 941,
+      "sha256": "19bcc6e9be6d2a92d72d3c7ddbf81252bc4c16c39819023fcb79a18df17008ca",
+      "archiveSha256": "409f8e80cbf0b46641b638dc9d5d07dce9c754b6b7be15a30280fb6732b0664b",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/inactive-test-caches-archive-20261029-2312/receipt.json",
+      "archive": "private-recovery-5-receipt.json.gz",
+      "bytes": 3879,
+      "sha256": "d331afa8ed0281011bb81f5b379ba718e35dd172f1f05623cff9f944cff0a11a",
+      "archiveSha256": "0276a62f1771ba0df187c5b1b3e6b533408d4fd6f61464ccbb582095d5d46f39",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/preparation-deduplication-20261029-2315.json",
+      "archive": "private-recovery-6-preparation-deduplication-20261029-2315.json.gz",
+      "bytes": 72445,
+      "sha256": "91a2a7d64ee489ec70450177628983c9c56a1f74f6a967fe5dcbe221721a6ef8",
+      "archiveSha256": "57c93d769404a10a1dcd30788e256c440dc21583012d4a657e5300c0efe874c5",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/resource-governance-qualified-r14-20261029/assembled.sql",
+      "archive": "private-recovery-7-assembled.sql.gz",
+      "bytes": 22486,
+      "sha256": "f6a864d30917b526d97e4ad62bcca58b238dc88a41832a2e04e3bcfe966a7dab",
+      "archiveSha256": "78eb1d7e409b64ad4ad01bb7306a2bc7837b7c25a51be414e7dd7aab70a9fc71",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/resource-governance-qualified-r14-20261029/generated.sql",
+      "archive": "private-recovery-8-generated.sql.gz",
+      "bytes": 3393,
+      "sha256": "93266f853b9c417e714d6308d4f604a2b21857934dc4a28e55d6213de44e1276",
+      "archiveSha256": "72ecf00eca6ebb89c838603f7db7d755f42aa3b6e85c7519deaac9133f5b6d41",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/resource-governance-qualified-r14-20261029/snapshot-0564.json",
+      "archive": "private-recovery-9-snapshot-0564.json.gz",
+      "bytes": 2795166,
+      "sha256": "5f0ad007274ca08a867f19951bfb5792d066f367b9272be667046944a85f024a",
+      "archiveSha256": "dcca73112527d1ce7332b5f7ffa30b760b7d56e2a614b3ff26167c635e0e4e49",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/resource-governance-qualified-r14-20261029/migration-tag",
+      "archive": "private-recovery-10-migration-tag.gz",
+      "bytes": 24,
+      "sha256": "f147ee212d51b8d3defcc2e0fe6bcf2a91764d0155bb196c213f73ece634d1ee",
+      "archiveSha256": "7c1b70765b3b8c58e17392813f4b268047562333dfbc5459e5875eb98f9c09fd",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/resource-governance-qualified-r14-20261029/resource-source-preconditions.json",
+      "archive": "private-recovery-11-resource-source-preconditions.json.gz",
+      "bytes": 3464,
+      "sha256": "58896b387382f11c4fe5cab4f5a774a2374467516477e1d77e534fb25e4abb4f",
+      "archiveSha256": "81a885b76d8927c97ec4fd69ab9c37b7c830a2f8ea1cda26071014ba73a00dda",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/environment_leases.ts",
+      "archive": "private-recovery-12-environment_leases.ts.gz",
+      "bytes": 3901,
+      "sha256": "88222db0df8a135ccfca439ea8cbe624df8bd8df1209a8de48f775254a278b96",
+      "archiveSha256": "bb13edaf33582d439b929ab23fd77029d6b856323bf0d9a622725bd529bd94d7",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/heartbeat_run_events.ts",
+      "archive": "private-recovery-13-heartbeat_run_events.ts.gz",
+      "bytes": 2059,
+      "sha256": "f887d01bfb4173faa88f62f9df680b7710b57336221af70fc988e35968998388",
+      "archiveSha256": "d55c1e393163059db6010d17cc1a46596b122e2705672a853294014e41bde970",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/heartbeat_runs.ts",
+      "archive": "private-recovery-14-heartbeat_runs.ts.gz",
+      "bytes": 10566,
+      "sha256": "98463a00ffaedd8da1bf9e35a944fd1411e338f76f01e9a49ee28a472ec1cac3",
+      "archiveSha256": "e6d413c18f557752a9270218630611e207eaea280fcc98056b4f83580de3a924",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/memory_jobs.ts",
+      "archive": "private-recovery-15-memory_jobs.ts.gz",
+      "bytes": 5735,
+      "sha256": "d6767af727ccabb5109141fa9ff2ce0f03fd41c119232bdcd9a3b9467df3258b",
+      "archiveSha256": "cd28ee7e9f803c4bd9c097b030522410639c47c85b1e54ad7a5e9221968d0f9c",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/native_run_finalizations.ts",
+      "archive": "private-recovery-16-native_run_finalizations.ts.gz",
+      "bytes": 4394,
+      "sha256": "4dffb87a6701eba9882ca168b69530c9c37dbd8a20e762382c1784f4df1fb288",
+      "archiveSha256": "3a8a8c15ee8793bdad037e07d71f8215e76cfdba6aedc377ea92f4293fb30b96",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/packages/db/src/schema/workflows.ts",
+      "archive": "private-recovery-17-workflows.ts.gz",
+      "bytes": 19713,
+      "sha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4",
+      "archiveSha256": "f991e74488813c6819d5231a222210cbc06871f85cc5faae60aa812d8d74067c",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    },
+    {
+      "originalPath": "/workspace/v10-preparation/b-resource-0564-schema-overlay-20261029/server/src/services/execution-blocker.ts",
+      "archive": "private-recovery-18-execution-blocker.ts.gz",
+      "bytes": 4238,
+      "sha256": "4e93263aae7d464206ac401ba4bf3dc9f4d8a72fd90c40f3e042351b556b1777",
+      "archiveSha256": "7206e5e429e655d3c19413a25673768ec200f3e3b13177d4ac37e8a243716625",
+      "purpose": "recovery_only_not_implementation_or_qualification"
+    }
+  ]
+}

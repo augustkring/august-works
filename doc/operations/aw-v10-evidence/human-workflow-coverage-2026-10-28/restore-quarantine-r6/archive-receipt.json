@@ -1,0 +1,39 @@
+{
+  "scope": "Two real PostgreSQL restore quarantine cases only; not aggregate V10 acceptance",
+  "tests": {
+    "passed": 2,
+    "skipped": 15
+  },
+  "files": [
+    {
+      "original": "source-pins.json",
+      "stored": "source-pins.json",
+      "originalSha256": "26dca6be6415129aee7c798b7328bbc018b6972800879ad01048126bc155bed9",
+      "storedSha256": "26dca6be6415129aee7c798b7328bbc018b6972800879ad01048126bc155bed9"
+    },
+    {
+      "original": "test.log",
+      "stored": "test.log.gz",
+      "originalSha256": "dd27678de0154ac8bd0c59273382bfeebe4e9645d10a967125e90843f3c1778e",
+      "storedSha256": "4ba3cf9ce4cd600a8de66381da7d92ad10337702a48e88b6b82d2fd44262a7ed"
+    },
+    {
+      "original": "test.exit",
+      "stored": "test.exit",
+      "originalSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "original": "exit",
+      "stored": "exit",
+      "originalSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "storedSha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "original": "SHA256SUMS",
+      "stored": "original-SHA256SUMS",
+      "originalSha256": "798f35e90dcddd2ce2a6668a5cfe64541d72a34801addef3d20130fdf5d26676",
+      "storedSha256": "798f35e90dcddd2ce2a6668a5cfe64541d72a34801addef3d20130fdf5d26676"
+    }
+  ]
+}

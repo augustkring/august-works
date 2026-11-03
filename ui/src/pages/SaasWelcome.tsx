@@ -5,7 +5,10 @@ import { api } from "@/api/client";
 import { saasApi, saasAuthAction } from "@/api/saas";
 import { useCompany } from "@/context/CompanyContext";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Button } from "@/components/ui/button";
+import { AccountExperienceLanguageSelect } from "@/components/AccountExperienceLanguageSelect";
+import { useTranslation } from "@/i18n";
 import { Link, useNavigate } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -18,16 +21,21 @@ const STAGES = [
   "first_task",
   "complete",
 ];
-const LABELS = [
-  "Organization",
-  "Plan",
-  "Runtime",
-  "Model provider",
-  "Agent",
-  "First task",
-  "Complete",
+const LABEL_KEYS = [
+  "stageOrganization",
+  "stagePlan",
+  "stageRuntime",
+  "stageProvider",
+  "stageAgent",
+  "stageTask",
+  "stageComplete",
 ];
 export function SaasWelcomePage() {
+  const { t, i18n } = useTranslation("experience");
+  const defaultAgentName = useRef(t("saasWelcome.firstAgentDefault"));
+  useEffect(() => {
+    defaultAgentName.current = t("saasWelcome.firstAgentDefault");
+  }, [i18n.language, t]);
   const {
     selectedCompanyId,
     reloadCompanies,
@@ -40,7 +48,7 @@ export function SaasWelcomePage() {
   const [mission, setMission] = useState("");
   const [runtimeChoice, setRuntimeChoice] = useState("byo");
   const [agentId, setAgentId] = useState("");
-  const [firstAgentName, setFirstAgentName] = useState("Chief of staff");
+  const [firstAgentName, setFirstAgentName] = useState(() => defaultAgentName.current);
   const [firstTaskId, setFirstTaskId] = useState("");
   const [providerSecretId, setProviderSecretId] = useState(""),
     [rolePackId, setRolePackId] = useState("");
@@ -63,7 +71,7 @@ export function SaasWelcomePage() {
     setName("");
     setMission("");
     setAgentId("");
-    setFirstAgentName("Chief of staff");
+    setFirstAgentName(defaultAgentName.current);
     setFirstTaskId("");
     setProviderSecretId("");
     setRolePackId("");
@@ -277,12 +285,12 @@ export function SaasWelcomePage() {
     update.error ??
     verify.error;
   if (capabilities.isPending || session.isPending)
-    return <p role="status">Loading setup…</p>;
+    return <p role="status">{t("saasWelcome.loading")}</p>;
   if (!capabilities.data?.onboarding)
     return (
       <main className="saas-page">
-        <h1 className="saas-title">Organization setup</h1>
-        <p>Setup is not available in this deployment.</p>
+        <h1 className="saas-title">{t("saasWelcome.organizationSetup")}</h1>
+        <p>{t("saasWelcome.unavailable")}</p>
       </main>
     );
   const stage = run.data?.currentStage;
@@ -293,19 +301,15 @@ export function SaasWelcomePage() {
     prefix ? `/${prefix}/${path}` : `/${path}`;
   return (
     <main className="saas-page">
-      <h1 className="saas-title">Set up your organization</h1>
-      <p className="saas-muted">
-        Your progress is saved with your organization. Model credentials stay in
-        your company vault.
-      </p>
-      {error && (
-        <p role="alert" className="saas-error">
-          {error.message}
-        </p>
-      )}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="saas-title">{t("saasWelcome.title")}</h1>
+        <AccountExperienceLanguageSelect userId={session.data?.user.id ?? null} key={session.data?.user.id ?? "signed-out"} />
+      </header>
+      <p className="saas-muted">{t("saasWelcome.intro")}</p>
+      {error && <p role="alert" className="saas-error">{t("saasWelcome.requestUnconfirmed")}</p>}
       {verify.isSuccess && (
         <p role="status">
-          A verification link has been requested. Check your email.
+          {t("saasWelcome.verificationRequested")}
         </p>
       )}
       {!selectedCompanyId ? (
@@ -317,7 +321,7 @@ export function SaasWelcomePage() {
           }}
         >
           <label className="saas-label">
-            Organization name
+            {t("saasWelcome.organizationName")}
             <input
               className="saas-input"
               required
@@ -333,29 +337,28 @@ export function SaasWelcomePage() {
               disabled={verify.isPending}
               onClick={() => verify.mutate()}
             >
-              Resend verification
+              {t("saasWelcome.resendVerification")}
             </Button>
             <Button disabled={create.isPending || !name.trim()} type="submit">
-              Create organization
+              {t("saasWelcome.createOrganization")}
             </Button>
           </div>
         </form>
       ) : (
         <>
-          <ol className="saas-steps" aria-label="Setup progress">
+          <ol className="saas-steps" aria-label={t("saasWelcome.progress")}>
             {STAGES.map((step, index) => (
               <li key={step} aria-current={stage === step ? "step" : undefined}>
-                {LABELS[index]}
+                {t(`saasWelcome.${LABEL_KEYS[index]}`)}
               </li>
             ))}
           </ol>
-          {run.isPending && <p role="status">Loading saved progress…</p>}
+          {run.isPending && <p role="status">{t("saasWelcome.loadingProgress")}</p>}
           {run.data && (
             <section className="saas-section">
               {stage === "organization" && (
                 <label className="saas-label">
-                  What should your organization achieve? (saved as a Foundation
-                  draft)
+                  {t("saasWelcome.mission")}
                   <textarea
                     className="saas-input"
                     value={mission}
@@ -366,36 +369,35 @@ export function SaasWelcomePage() {
               )}
               {stage === "plan" && (
                 <>
-                  <h2 className="saas-subtitle">Choose a plan</h2>
+                  <h2 className="saas-subtitle">{t("saasWelcome.choosePlan")}</h2>
                   <p>
-                    Complete checkout, then return here. Your payment must be
-                    confirmed before setup continues.
+                    {t("saasWelcome.checkoutHelp")}
                   </p>
                   <Link
                     className="saas-link"
                     to={companyLink("company/settings/billing")}
                   >
-                    View plans and billing
+                    {t("saasWelcome.viewBilling")}
                   </Link>
                 </>
               )}
               {stage === "runtime" && (
                 <>
-                  <h2 className="saas-subtitle">Where should agents run?</h2>
+                  <h2 className="saas-subtitle">{t("saasWelcome.runtimeQuestion")}</h2>
                   <label className="saas-label">
-                    Runtime
+                    {t("saasWelcome.runtime")}
                     <select
                       className="saas-input"
                       value={runtimeChoice}
                       onChange={(event) => setRuntimeChoice(event.target.value)}
                     >
-                      <option value="byo">Bring your own Gateway</option>
+                      <option value="byo">{t("saasWelcome.byoGateway")}</option>
                       {capabilities.data.runtime && (
                         <option value="hosted">
-                          August Works managed runtime
+                          {t("saasWelcome.managedRuntime", { productName: PRODUCT_IDENTITY.productName })}
                         </option>
                       )}
-                      <option value="skip">Decide later</option>
+                      <option value="skip">{t("saasWelcome.decideLater")}</option>
                     </select>
                   </label>
                   <Link
@@ -406,19 +408,18 @@ export function SaasWelcomePage() {
                         : "apps",
                     )}
                   >
-                    Configure runtime
+                    {t("saasWelcome.configureRuntime")}
                   </Link>
                 </>
               )}
               {stage === "model_provider" && (
                 <>
-                  <h2 className="saas-subtitle">Connect your model provider</h2>
+                  <h2 className="saas-subtitle">{t("saasWelcome.connectProvider")}</h2>
                   <p>
-                    Use your own API key. Your provider bills model usage
-                    directly.
+                    {t("saasWelcome.providerHelp")}
                   </p>
                   <label className="saas-label">
-                    Vault credential
+                    {t("saasWelcome.vaultCredential")}
                     <select
                       className="saas-input"
                       value={providerSecretId}
@@ -426,7 +427,7 @@ export function SaasWelcomePage() {
                         setProviderSecretId(event.target.value)
                       }
                     >
-                      <option value="">Choose a credential</option>
+                      <option value="">{t("saasWelcome.chooseCredential")}</option>
                       {secretOptions.data
                         ?.filter(
                           (secret) =>
@@ -441,23 +442,23 @@ export function SaasWelcomePage() {
                     </select>
                   </label>
                   {secretOptions.error && (
-                    <p role="alert">{secretOptions.error.message}</p>
+                    <p role="alert">{t("saasWelcome.credentialLoadFailed")}</p>
                   )}
                   <Link
                     className="saas-link"
                     to={companyLink("company/settings/secrets")}
                   >
-                    Add a vault credential
+                    {t("saasWelcome.addCredential")}
                   </Link>
                 </>
               )}
               {stage === "agent" && (
                 <>
-                  <h2 className="saas-subtitle">Choose your first agent</h2>
+                  <h2 className="saas-subtitle">{t("saasWelcome.chooseFirstAgent")}</h2>
                   {!run.data?.answers.createdFirstAgentId && (
                     <>
                       <label className="saas-label">
-                        First agent name
+                        {t("saasWelcome.firstAgentName")}
                         <input
                           className="saas-input"
                           value={firstAgentName}
@@ -473,27 +474,24 @@ export function SaasWelcomePage() {
                         }
                         onClick={() => firstAgent.mutate()}
                       >
-                        Create first agent
+                        {t("saasWelcome.createFirstAgent")}
                       </Button>
                     </>
                   )}
                   <p>
-                    Creation preserves company approval rules. Approve the hire,
-                    bind its runtime and provider credential, then start the
-                    agent when you are ready. Creation sends no task and starts
-                    no model call.
+                    {t("saasWelcome.agentHelp")}
                   </p>
                   <Link className="saas-link" to={companyLink("agents")}>
-                    Create or configure an agent
+                    {t("saasWelcome.configureAgent")}
                   </Link>
                   <label className="saas-label">
-                    Agent
+                    {t("saasWelcome.agent")}
                     <select
                       className="saas-input"
                       value={agentId}
                       onChange={(event) => setAgentId(event.target.value)}
                     >
-                      <option value="">Select an agent</option>
+                      <option value="">{t("saasWelcome.selectAgent")}</option>
                       {agentOptions.data?.map((agent) => (
                         <option key={agent.id} value={agent.id}>
                           {agent.name}
@@ -505,13 +503,13 @@ export function SaasWelcomePage() {
                     roleOptions.data?.some((pack) => pack.publishedVersionId),
                   ) && (
                     <label className="saas-label">
-                      Published Role Pack
+                      {t("saasWelcome.publishedRolePack")}
                       <select
                         className="saas-input"
                         value={rolePackId}
                         onChange={(event) => setRolePackId(event.target.value)}
                       >
-                        <option value="">Use the agent’s default role</option>
+                        <option value="">{t("saasWelcome.defaultRole")}</option>
                         {roleOptions.data
                           ?.filter((pack) => pack.publishedVersionId)
                           .map((pack) => (
@@ -526,7 +524,7 @@ export function SaasWelcomePage() {
               )}
               {stage === "first_task" && (
                 <>
-                  <h2 className="saas-subtitle">Create your first task</h2>
+                  <h2 className="saas-subtitle">{t("saasWelcome.createFirstTask")}</h2>
                   <Button
                     variant="outline"
                     disabled={
@@ -534,11 +532,10 @@ export function SaasWelcomePage() {
                     }
                     onClick={() => starter.mutate()}
                   >
-                    Create a safe starter task
+                    {t("saasWelcome.createStarterTask")}
                   </Button>
                   <p className="saas-muted">
-                    Open the task and run it after configuring and qualifying
-                    your agent. Setup completes after a successful run.
+                    {t("saasWelcome.starterHelp")}
                   </p>
                   <Link
                     className="saas-link"
@@ -546,16 +543,16 @@ export function SaasWelcomePage() {
                       firstTaskId ? "issues/" + firstTaskId : "issues",
                     )}
                   >
-                    Open task
+                    {t("saasWelcome.openTask")}
                   </Link>
                   <label className="saas-label">
-                    Task
+                    {t("saasWelcome.task")}
                     <select
                       className="saas-input"
                       value={firstTaskId}
                       onChange={(event) => setFirstTaskId(event.target.value)}
                     >
-                      <option value="">Select a task</option>
+                      <option value="">{t("saasWelcome.selectTask")}</option>
                       {taskOptions.data?.map((task) => (
                         <option key={task.id} value={task.id}>
                           {task.title}
@@ -567,9 +564,9 @@ export function SaasWelcomePage() {
               )}
               {stage === "complete" ? (
                 <>
-                  <h2 className="saas-subtitle">Your organization is ready</h2>
+                  <h2 className="saas-subtitle">{t("saasWelcome.ready")}</h2>
                   <Link className="saas-link" to={companyLink("dashboard")}>
-                    Open dashboard
+                    {t("saasWelcome.openDashboard")}
                   </Link>
                 </>
               ) : (
@@ -579,7 +576,7 @@ export function SaasWelcomePage() {
                     disabled={update.isPending}
                     onClick={() => update.mutate(false)}
                   >
-                    Save progress
+                    {t("saasWelcome.saveProgress")}
                   </Button>
                   <Button
                     disabled={
@@ -589,7 +586,7 @@ export function SaasWelcomePage() {
                     }
                     onClick={() => update.mutate(true)}
                   >
-                    Continue
+                    {t("saasWelcome.continue")}
                   </Button>
                 </div>
               )}

@@ -1,9 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
+import { PRODUCT_IDENTITY } from "../../packages/shared/src/index.ts";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 import { mockOnboardingLocalAiConnection } from "./helpers/onboarding-ai-connection";
 import {
   expectLandsOnFirstTaskWithoutDashboardBounce,
   instrumentNavLog,
 } from "./helpers/onboarding-landing";
+
+registerEnglishAccountLocaleIsolation(test);
 
 /**
  * E2E: post-wizard onboarding launch.
@@ -19,7 +23,7 @@ import {
  * exactly that failing condition.
  */
 
-const FIRST_TASK_TITLE = "Paperclip onboarding";
+const FIRST_TASK_TITLE = `${PRODUCT_IDENTITY.productName} onboarding`;
 
 /**
  * Intercept authentication, environment checks, and hiring so no real CLI check
@@ -38,12 +42,15 @@ async function installLaunchIntercepts(page: Page, baseURL?: string) {
   await page.route("**/agent-hires", async (route) => {
     const req = route.request();
     const body = JSON.parse(req.postData() || "{}");
-    const auth = req.headers().authorization;
+    const headers = req.headers();
     const real = await fetch(new URL(req.url(), baseURL).toString(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(auth ? { Authorization: auth } : {}),
+        ...(headers.authorization ? { Authorization: headers.authorization } : {}),
+        ...(headers.cookie ? { Cookie: headers.cookie } : {}),
+        ...(headers.origin ? { Origin: headers.origin } : {}),
+        ...(headers.referer ? { Referer: headers.referer } : {}),
       },
       body: JSON.stringify({
         name: body.name,

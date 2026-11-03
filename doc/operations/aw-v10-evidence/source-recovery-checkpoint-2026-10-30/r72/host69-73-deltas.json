@@ -1,0 +1,120 @@
+{
+  "baseR71Host68PinsSha256": "83c19270ebeae346571139f6b21127fd929cbd71f86fb0b41c00c92e737f2da0",
+  "deltas": [
+    {
+      "candidate": "69",
+      "basePaths": 108,
+      "candidatePaths": 109,
+      "added": [
+        "server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts"
+      ],
+      "changed": [
+        "server/src/services/native-runtime/native-session-executor.ts"
+      ],
+      "deleted": [],
+      "addedPins": [
+        {
+          "path": "server/src/services/native-runtime/native-sandbox-artifact-staging.test.ts",
+          "candidateSha256": "2accce1e3156584d0806b247b32ff245424ee88d3c14d9df926eb3926b73fcea"
+        }
+      ],
+      "changedPins": [
+        {
+          "path": "server/src/services/native-runtime/native-session-executor.ts",
+          "baseSha256": "5b87b8d42a517c16de8a52d19fc4f71b7d93ed2b7be37f7f71cf13d8c1e2d4b4",
+          "candidateSha256": "614e1e561efca35be5b5ddb024b845848f3310ffd6baa88644a67dea5d76acd8"
+        }
+      ]
+    },
+    {
+      "candidate": "70",
+      "basePaths": 109,
+      "candidatePaths": 110,
+      "added": [
+        "server/src/__tests__/v7-worker-model-gateway.integration.test.ts"
+      ],
+      "changed": [
+        "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "server/src/services/runtime/control.ts"
+      ],
+      "deleted": [],
+      "addedPins": [
+        {
+          "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+          "candidateSha256": "55551f115fde5f9822089bddfebf84f2843057f3b6fbee9a59dcc257ed95c1f1"
+        }
+      ],
+      "changedPins": [
+        {
+          "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+          "baseSha256": "d69212faf7be8b1e0632502e53ac08fca34ce51f892bf2cec32348b42e13f9b6",
+          "candidateSha256": "648a939c691db47eaa6697a359ec6d6145fe4e78e54792feb3eed6679d6a2f0b"
+        },
+        {
+          "path": "server/src/services/runtime/control.ts",
+          "baseSha256": "34198ad65cb47ded193c0f8cad0022b48e5f9727fe9b0b89c65114e779145984",
+          "candidateSha256": "54527afa70ae5d2e4379595b61a8aabe798c18f0bd0cf7c0493904a9042c60a6"
+        }
+      ]
+    },
+    {
+      "candidate": "72c",
+      "basePaths": 110,
+      "candidatePaths": 113,
+      "added": [
+        "server/src/__tests__/environment-execution-target.test.ts",
+        "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+        "server/src/services/environment-execution-target.ts"
+      ],
+      "changed": [
+        "server/src/services/native-runtime/paperclip-runner-tool-authority.ts"
+      ],
+      "deleted": [],
+      "addedPins": [
+        {
+          "path": "server/src/__tests__/environment-execution-target.test.ts",
+          "candidateSha256": "ddb9c89df2be1488e83f91b3004971af24e334d22a2f9a039e9cde4fc08de28a"
+        },
+        {
+          "path": "server/src/__tests__/v9-native-task-source-erasure.integration.test.ts",
+          "candidateSha256": "edf104acac20c2f600c5e281516b036cf8130f7d26877074a4258b02b663d5e2"
+        },
+        {
+          "path": "server/src/services/environment-execution-target.ts",
+          "candidateSha256": "3c0437216ddbe45f19c3294bfdae44b815ab07740371691a1c29a240d8befe93"
+        }
+      ],
+      "changedPins": [
+        {
+          "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+          "baseSha256": "eee8d9a45767f8ccc45fcb3c3bb707aa1cd75185fb68a685b9eea4b54b44cfa2",
+          "candidateSha256": "27fe646ec991a32a761bffcf884a504ede28d9c5d74744b4021ebc9f1c53e90c"
+        }
+      ]
+    },
+    {
+      "candidate": "73",
+      "basePaths": 113,
+      "candidatePaths": 113,
+      "added": [],
+      "changed": [
+        "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts"
+      ],
+      "deleted": [],
+      "addedPins": [],
+      "changedPins": [
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+          "baseSha256": "d9f7305e40ee7f4401d0b98a00c96f5344b9e2fef7483217910e4c8461e04c97",
+          "candidateSha256": "8da5a1fcdd7e07b447dfb00e3d6924af3c5c58fb4485806126656d8f9e03ee7d"
+        },
+        {
+          "path": "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+          "baseSha256": "6d8313079b6eec2829b34de1b179ad858aa6b3527d7084a058387326d5c2cd8f",
+          "candidateSha256": "e03315398d5aead8954ba447d6845ff015f03efa69d88b121f620ec878fea320"
+        }
+      ]
+    }
+  ]
+}

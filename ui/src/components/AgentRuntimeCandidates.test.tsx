@@ -20,7 +20,11 @@ const draft: AgentAuthoringDraftView = { id: id(2), companyId: id(1), createdByU
   status: "draft", step: "runtime", baselineHash: "a".repeat(64), kind: "custom", package: null,
   content: agentAuthoringContentSchema.parse({ name: "Saved draft", ownerUserId: "author" }), preparation: null,
   createdAt: "2026-10-13T00:00:00Z", updatedAt: "2026-10-13T00:00:00Z" };
-const catalog = { companyId: id(1), draftId: id(2), version: 2, agentId: id(3), identityId: id(9), choices: [{ modelProfileId: id(4),
+const catalog = { companyId: id(1), draftId: id(2), version: 2, agentId: id(3), identityId: id(9),
+  lifecycleInventory: { profileId: id(8), model: "incumbent-fixture-model", status: "deprecated" as const, owner: "Model operations",
+    retirementAt: "2027-01-01T00:00:00.000Z", replacementProfileId: id(4), regionOrRoutingProfile: "fixture-region",
+    dataUseProfile: "fixture-no-training", unresolvedProfileReference: false,
+    publishedWorkflows: [{ workflowId: id(10), revisionId: id(11), name: "Quarterly report" }] }, choices: [{ modelProfileId: id(4),
   model: "qualified-fixture-model", configurationHash: "b".repeat(64), maxOutputTokens: 256, maximumMinorPerCall: 3,
   currency: "USD" as const, requiresConformance: true as const, changesLive: false as const }] };
 const candidate = { id: id(6), companyId: id(1), draftId: id(2), agentId: id(3), modelProfileId: id(4), configurationHash: "b".repeat(64),
@@ -58,6 +62,13 @@ async function click(label: string) { const button = [...container.querySelector
 it("does not read private alternative profiles until Advanced is opened", async () => {
   await mount(); expect(agentAuthoringApi.runtimeCandidateCatalog).not.toHaveBeenCalled();
   await expand(); expect(agentAuthoringApi.runtimeCandidateCatalog).toHaveBeenCalledTimes(1);
+});
+it("shows only the current owner-declared model lifecycle and published workflow references", async () => {
+  await mount(); await expand();
+  expect(container.textContent).toContain("Lifecycle status: deprecated");
+  expect(container.textContent).toContain("Owner-declared retirement time: 2027-01-01T00:00:00.000Z");
+  expect(container.textContent).toContain("Quarterly report");
+  expect(container.textContent).toContain("Data-use profile: fixture-no-training");
 });
 it("keeps an unknown creation immutable and recovers by original read without creating twice", async () => {
   const create = vi.spyOn(agentAuthoringApi, "createRuntimeCandidate").mockRejectedValue(new Error("PRIVATE-ERROR"));

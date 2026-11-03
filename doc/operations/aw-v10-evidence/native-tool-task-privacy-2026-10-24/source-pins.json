@@ -1,0 +1,10 @@
+{
+  "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": "aaf73a8bcdda2e0c32089a526b698063ea4f2c2c5b6711f4183b4f86422978ec",
+  "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts": "aa6d21feddc6e5ded3d614f21d8771b205b22d934f64e8a2db8814b6baceaa28",
+  "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts": "4dca776aa7990e72552aa6d89d17d7f53975ed91f95fcf08ac2d9686d42cf448",
+  "server/src/services/authorization.ts": "3e2b0bbf78061ddb5fe97007d3fb756b5f3b92fba225cb78ff5c0ae4fdabb91d",
+  "server/src/services/issues.ts": "c0d48f11e8ff2cbd7da84a23499bb1623f5b4be05f534967b7301c0bbbc18ed4",
+  "packages/db/src/schema/issue_access_grants.ts": "3402c713a28cdd662650c239bf1bfb65d89e1465f87002fdcdb89a752331d4cb",
+  "packages/db/src/schema/issue_privacy_sources.ts": "5890ffe82a4eb54ddbe3a85742d341c7972ddb02a60be088db68e75af44997c2",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}

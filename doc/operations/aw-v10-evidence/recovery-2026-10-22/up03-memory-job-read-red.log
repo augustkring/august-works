@@ -1,0 +1,37 @@
+[33m[PLUGIN_TIMINGS] [0mYour build spent 34% of 4.5s inside plugin hooks (1.5s).
+Measured inside the callback, so queue time is excluded and time the callback itself awaited is not:
+  - vite:native-config-compat-check transform (32%, 1.5s, 1 call)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts (4 tests | 4 skipped) 12962ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority
+Error: Invalid V9 feature dependencies: maintenance_autopilot_v9 requires core_stewards_v7
+ ❯ badRequest src/errors.ts:13:10
+     11|
+     12| export function badRequest(message: string, details?: unknown) {
+     13|   return new HttpError(400, message, details);
+       |          ^
+     14| }
+     15|
+ ❯ write src/services/instance-settings.ts:640:19
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:21:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 skipped (4)
+   Start at  23:37:05
+   Duration  87.60s (transform 50.26s, setup 408ms, import 69.14s, tests 12.96s, environment 0ms)
+

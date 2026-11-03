@@ -1,0 +1,1 @@
+{"status":"observed_pass","exit_code":0,"summary_file":"/workspace/v10-preparation/up13-monitor-process-restart-20261025.summary.txt","provenance":"Summarizes Vitest output observed from functions.exec session 10406; not raw stdout.","test_file":"server/src/__tests__/issue-monitor-scheduler.test.ts","lock":"/workspace/v10-preparation/v10-pg-tests.lock"}

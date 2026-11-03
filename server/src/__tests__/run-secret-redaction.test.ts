@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { REDACTED_EVENT_VALUE } from "../redaction.js";
 import type { Db } from "@paperclipai/db";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { createRunSecretRedactionRegistry, redactRegisteredSecretValues } from "../services/run-secret-redaction.js";
+import { createRunSecretRedactionRegistry, redactRegisteredSecretValues, runContextWithoutSecretRedactionRegistry } from "../services/run-secret-redaction.js";
+
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 
 const secret = "q2a-exact-secret-value";
 
@@ -123,5 +125,34 @@ describe("batched run secret redaction", () => {
     expect(select).not.toHaveBeenCalled();
     resolveVersion.mockRejectedValueOnce(new Error("unavailable"));
     await expect(registry.redactForRuns("company", [{ id: "a", text: secret }])).rejects.toThrow("unavailable");
+  });
+});
+
+
+describe("run context authority projection", () => {
+  it("omits only rotating top-level redaction bookkeeping without mutating the context", () => {
+    const context = { issueId: "issue", conversationSessionGeneration: 2,
+      nested: { paperclipSecretRedactions: "semantic nested value", text: secret },
+      paperclipSecretRedactions: [{ fingerprintSha256: "first", material: { ciphertext: "one" } }] };
+    const before = structuredClone(context);
+    const projected = runContextWithoutSecretRedactionRegistry(context);
+    expect(projected).toEqual({ issueId: "issue", conversationSessionGeneration: 2, nested: context.nested });
+    expect(context).toEqual(before);
+    const rotated = { ...context, paperclipSecretRedactions: [...context.paperclipSecretRedactions,
+      { fingerprintSha256: "second", material: { ciphertext: "two" } }] };
+    expect(nativeSha256(runContextWithoutSecretRedactionRegistry(rotated))).toBe(nativeSha256(projected));
+    expect(nativeSha256(runContextWithoutSecretRedactionRegistry({ ...rotated, conversationSessionGeneration: 3 })))
+      .not.toBe(nativeSha256(projected));
+    expect(nativeSha256(runContextWithoutSecretRedactionRegistry({ ...rotated,
+      nested: { ...context.nested, paperclipSecretRedactions: "changed semantic nested value" } })))
+      .not.toBe(nativeSha256(projected));
+    expect(nativeSha256(runContextWithoutSecretRedactionRegistry({ ...rotated, newAuthorityField: true })))
+      .not.toBe(nativeSha256(projected));
+  });
+
+  it("preserves null, nonobjects, arrays and contexts without a registry", () => {
+    for (const value of [null, undefined, true, 1, "unchanged", ["nested"], { issueId: "issue" }]) {
+      expect(runContextWithoutSecretRedactionRegistry(value)).toBe(value);
+    }
   });
 });

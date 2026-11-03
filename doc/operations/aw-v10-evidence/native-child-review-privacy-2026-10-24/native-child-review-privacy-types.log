@@ -1,0 +1,6 @@
+src/services/native-runtime/child-review-outcomes-privacy.integration.test.ts(90,57): error TS2769: No overload matches this call.
+  The last overload gave the following error.
+    Object literal may only specify known properties, and 'id' does not exist in type '{ addresseeAgentId?: string | Placeholder<string, any> | SQL<unknown> | null | undefined; addresseeUserId?: string | Placeholder<string, any> | SQL<unknown> | null | undefined; ... 26 more ...; updatedAt?: Date | ... 2 more ... | undefined; }[]'.
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded --incremental --tsBuildInfoFile /workspace/v10-preparation/v10-server-check.tsbuildinfo

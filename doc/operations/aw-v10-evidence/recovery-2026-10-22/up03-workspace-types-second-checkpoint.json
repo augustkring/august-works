@@ -1,0 +1,17 @@
+{
+  "recordedAt": "2026-10-22T23:07:11.100543+00:00",
+  "command": "npm_config_workspace_concurrency=1 GOMEMLIMIT=6GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=6144 CARGO_NET_OFFLINE=true pnpm -r typecheck",
+  "sessionId": 28199,
+  "exitCode": 0,
+  "workspaceScope": "35 of 36 projects, package concurrency=1",
+  "sourcePins": "up03-workspace-types-second-source-pins.json",
+  "unchangedPinnedFiles": 7704,
+  "log": "up03-workspace-types-second.log.txt",
+  "scope": "Actual normal package typechecks including Runner Rust and protocol prerequisites, DB migrations, server, UI and CLI. No compiler source filtering/bypass added.",
+  "limits": [
+    "Initial pin inventory covers 7704 tracked TS/TSX/JSON/TOML/Rust files outside documentation. New excluded __tests__ regression files were added during this run; normal server config excludes them and this is not compiler proof for those tests.",
+    "The earlier first whole-workspace failure remains retained separately.",
+    "New actual PostgreSQL regressions for paused running producer, deleted source provenance and Task payload authority remain open; successful types do not establish functional completion.",
+    "Whole test:run/build and full V10 acceptance remain outstanding."
+  ]
+}

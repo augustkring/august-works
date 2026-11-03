@@ -1,0 +1,41 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "8782c64cfe11843797073ef7d3c4565088bf3ba3",
+  "meaning": "Native expired delivery state and lock-order maintenance; no external dispatch, provider acknowledgement or complete gateway qualification.",
+  "logs": [
+    {
+      "name": "support-delivery-lock-order",
+      "exitCode": 0,
+      "rawSha256": "2ed95e802a073d31f61fd7552afe45676c9222bdccdc6f8a4c98d61e390abaa5",
+      "sanitizedSha256": "2ed95e802a073d31f61fd7552afe45676c9222bdccdc6f8a4c98d61e390abaa5",
+      "archiveSha256": "88fd197e6bb81f618158de74d4a506f024cf717ca37435998fe9675fad3c2462",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  55 passed (55)",
+        "Duration  24.63s (transform 10.94s, setup 68ms, import 15.26s, tests 9.19s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "support-delivery-help-check",
+      "exitCode": 0,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

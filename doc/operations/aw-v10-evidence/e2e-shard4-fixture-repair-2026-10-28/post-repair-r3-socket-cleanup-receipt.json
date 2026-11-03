@@ -1,0 +1,12 @@
+{
+  "pid": 161619,
+  "state": "Z",
+  "dataDir": "/tmp/paperclip-e2e-home-km6n9K/instances/playwright-e2e/db",
+  "port": 54329,
+  "noTcpListener": true,
+  "pathsRemoved": [
+    "/tmp/.s.PGSQL.54329",
+    "/tmp/.s.PGSQL.54329.lock"
+  ],
+  "databaseFilesPreserved": true
+}

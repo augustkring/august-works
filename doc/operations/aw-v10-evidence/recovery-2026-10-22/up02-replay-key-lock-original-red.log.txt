@@ -1,0 +1,31 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/board-auth.test.ts (23 tests | 2 failed | 21 skipped) 38089ms
+     × rechecks membership authority after an approved replay waits for the real key lock 167ms
+     × rechecks instance_admin authority after an approved replay waits for the real key lock 83ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/board-auth.test.ts > CLI challenge authority and transitions (real PostgreSQL) > rechecks membership authority after an approved replay waits for the real key lock
+ FAIL  |@paperclipai/server| src/services/board-auth.test.ts > CLI challenge authority and transitions (real PostgreSQL) > rechecks instance_admin authority after an approved replay waits for the real key lock
+AssertionError: expected { value: { status: 'approved', …(2) } } to have property "error"
+ ❯ src/services/board-auth.test.ts:193:20
+    191|     } finally { release(); await holder; }
+    192|     const result = await replay;
+    193|     expect(result).toHaveProperty("error");
+       |                    ^
+    194|     expect("error" in result ? result.error : null).toMatchObject({ st…
+    195|     expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 21 skipped (23)
+   Start at  19:51:53
+   Duration  52.71s (transform 30.78s, setup 200ms, import 13.97s, tests 38.09s, environment 0ms)
+

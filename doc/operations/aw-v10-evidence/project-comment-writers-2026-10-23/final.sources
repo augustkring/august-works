@@ -1,0 +1,5 @@
+a5ef24bc7c928f197a32fcb08f54f02855d0b8bce0ddfd3f478ca34d92f25bdd  server/src/services/projects.ts
+0d4e508722e0cedbbf389adbc410462583fd7891332de15400a66383444af9ad  server/src/services/issues.ts
+2e2f85dcdafe8c325938d780ff3f487a57434f3c4162b74fd9e69d71f242d127  server/src/services/execution-workspace-policy.ts
+fd9f22deecad429b17d84f57a9ef33eb7d66e31e33413d56d81ccb30929caf0a  server/src/__tests__/native-payload-source-binding.integration.test.ts
+0109375162721854ffbac7ea51e96c675bb5e9d6e18ee401698b27f84ac70649  server/src/__tests__/execution-workspace-policy.test.ts

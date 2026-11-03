@@ -10,7 +10,9 @@ export async function writeOrchestrationContract(tx: Db, companyId: string, issu
   const [previous] = await tx.select().from(completionContracts).where(and(eq(completionContracts.companyId, companyId), eq(completionContracts.issueId, issueId))).orderBy(desc(completionContracts.revision)).limit(1);
   const revision = (previous?.revision ?? 0) + 1;
   const contract = { revision: String(revision), objective: input.objective, criteria: [
-    ...input.requiredOutputs.map(output => ({ id: `output_${output.key}`, requirement: `Save the required ${output.key} document on this canonical Task; the server will verify its current revision and declared schema.` })),
+    ...input.requiredOutputs.map(output => ({ id: `output_${output.key}`, requirement: output.kind === "private_project"
+      ? `Create one private current Project with its server-managed local workspace from this run's exact qualified Native Project receipt.`
+      : `Save the required ${output.key} document on this canonical Task; the server will verify its current revision and declared schema.` })),
     ...input.businessInvariants.map((requirement, index) => ({ id: `invariant_${index}`, requirement })),
     ...input.evidenceRequirements.map((requirement, index) => ({ id: `evidence_${index}`, requirement })),
     ...input.prohibitedOutcomes.map((outcome, index) => ({ id: `prohibited_${index}`, requirement: `Do not produce this outcome: ${outcome}` })),

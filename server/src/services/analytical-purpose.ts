@@ -9,11 +9,12 @@ import {assertMemorySourcesRetained} from "./memory/memory-privacy.js";
  * to approve an analytical population or purpose. */
 type PurposeProfile = NonNullable<GovernanceObligation["analyticalPurpose"]>;
 export type AnalyticalPurposeDefinition = Pick<BusinessMetricDefinition, "governanceObligationRefs" | "sensitivity" | "retentionDays"> & { purpose: PurposeProfile["purpose"] };
-export async function currentAnalyticalPurpose(tx: Db, companyId: string, definition: AnalyticalPurposeDefinition, capability: PurposeProfile["capabilities"][number], now = new Date()) {
+export async function currentAnalyticalPurpose(tx: Db, companyId: string, definition: AnalyticalPurposeDefinition,
+  capability: PurposeProfile["capabilities"][number], now = new Date(), lockMode: "read" | "write" = "write") {
   const refs = [...new Set(definition.governanceObligationRefs)];
   const rows = await tx.select().from(governanceObligations).where(and(eq(governanceObligations.companyId, companyId), inArray(governanceObligations.id, refs))).for("share");
   if (rows.length !== refs.length) throw conflict("Current company analytical purpose evidence is required");
-  await assertMemorySourcesRetained(tx,companyId,refs.map(id=>({sourceProvider:"august_works_analytical_input",sourceRef:`governance_obligation://${id}`})));
+  await assertMemorySourcesRetained(tx,companyId,refs.map(id=>({sourceProvider:"august_works_analytical_input",sourceRef:`governance_obligation://${id}`})),lockMode);
   let approved = false;
   for (const row of rows) {
     const parsed = governanceObligationSchema.safeParse(row.obligation);

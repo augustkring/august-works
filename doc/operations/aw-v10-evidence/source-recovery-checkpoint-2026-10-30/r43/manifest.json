@@ -1,0 +1,388 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T05:41:51.499505+00:00",
+  "baseCommit": "edee3361248e93a98a0d98690a19c8d6617060c1",
+  "patchBytes": 1880466,
+  "patchSha256": "399e692a260b4ba307cfc504d909c9b9fdb9175bed1ce6da5f63b4c88584bd30",
+  "archiveSha256": "1dca36609a781d490ad7668108dfac65adc6f21be805f27aa328627d29859884",
+  "untrackedSourceFiles": [
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    }
+  ],
+  "privateCandidateFiles": [
+    {
+      "path": "preparation/build-v10-safe-change-inventory-draft-current.py",
+      "bytes": 16550,
+      "sha256": "0d97599ef6c32ef431d44d2c3c36b72268597a8087f9b0ab63d1177918971271"
+    },
+    {
+      "path": "preparation/check-private-safe-change-merge.mjs",
+      "bytes": 11838,
+      "sha256": "f76278970632e8d857c990632cc52481135d99631b185b4c4c06813d4839f715"
+    },
+    {
+      "path": "preparation/merge-safe-change-inventory-current.py",
+      "bytes": 4328,
+      "sha256": "1a354a2eedb7ae98d75fbe3a2812163716050b7a494e2d6b2a433b394dc6afd2"
+    },
+    {
+      "path": "preparation/native-source-obligations-r38-candidate/candidate.diff",
+      "bytes": 18578,
+      "sha256": "653ba906226f0f0251f3ee6d9e3f22b728ea6fbbbd837405153de66443e5acc9"
+    },
+    {
+      "path": "preparation/native-source-obligations-r38-candidate/manifest.json",
+      "bytes": 731,
+      "sha256": "65853874698a0615dc0f2bd8e96fa8aa9f8f1ada47acc5b3182068c67b6bc14f"
+    },
+    {
+      "path": "preparation/native-source-obligations-r38-candidate/r37-safety-delta.diff",
+      "bytes": 10133,
+      "sha256": "250513f045acc2a4efb58d4777b128924058038afc7e84d53c8d3fb0ffe4889a"
+    },
+    {
+      "path": "preparation/pr42-body-current-20261030-0535.md",
+      "bytes": 7868,
+      "sha256": "b418935384c59715d725d0972e3f13b297f1e1ec1bd093d08eae4e74bfb2ba5f"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline-manifest.json",
+      "bytes": 2073,
+      "sha256": "cf360a49e156819773712b1766793736945128747924d1aec6742833983dc547"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/packages/shared/src/experience.ts",
+      "bytes": 12953,
+      "sha256": "b99030a6e1337bb28d64e560f72824acec17de5ecbb72aa76e73066ea479a5d2"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 46347,
+      "sha256": "04ee7a7064f8759327c9b1a04ed7e7d9b9bea2d4d1f6ab67d1df8015db74efbe"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+      "bytes": 5493,
+      "sha256": "e09b8086233cbc953f68c05636254aee6f3fa64c0e8187fab95a3d7e7dd622db"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/server/src/services/experience/projection.ts",
+      "bytes": 5779,
+      "sha256": "5bcc62901a2257382d3f2870ccd9acf43b32933bd1d2c274b5a0925b5cf7f255"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/server/src/services/experience/routine-responsibility-attention.ts",
+      "bytes": 7140,
+      "sha256": "d00e93226149f46062da85d3ff5eb96cfed45318066fe9777e0a7803d3ad4777"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/server/src/services/experience/service.ts",
+      "bytes": 37660,
+      "sha256": "1b694d00af556e94764349048ae26fd08556a9ed0bc0afcd8a2fff11c23a8fc6"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/ui/src/pages/CompanyAccess.test.tsx",
+      "bytes": 46805,
+      "sha256": "195f2051584a15ca763cbea3260c6aff0e2a896fb1ef86614e7e88820a5a96dc"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/baseline/ui/src/pages/CompanyAccess.tsx",
+      "bytes": 65680,
+      "sha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/candidate-manifest.json",
+      "bytes": 2153,
+      "sha256": "c2db6da66cfda5b4d7ba715ed73d48dba4121f59b97671191a7c8d2c3d1bd048"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/candidate/packages/shared/src/experience.ts",
+      "bytes": 12953,
+      "sha256": "b99030a6e1337bb28d64e560f72824acec17de5ecbb72aa76e73066ea479a5d2"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/candidate/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 52371,
+      "sha256": "6e0e28a1a829654402eb26fa39fdf25fd71c59d1bd92e70f59d86fa5ffaa720a"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/candidate/server/src/services/experience/projection.ts",
+      "bytes": 5779,
+      "sha256": "5bcc62901a2257382d3f2870ccd9acf43b32933bd1d2c274b5a0925b5cf7f255"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/candidate/server/src/services/experience/service.ts",
+      "bytes": 36377,
+      "sha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/candidate/ui/src/pages/CompanyAccess.test.tsx",
+      "bytes": 49540,
+      "sha256": "23762fe543721dec6da8cbecaa11099e1306edae014465b4074f940868169ce8"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/candidate/ui/src/pages/CompanyAccess.tsx",
+      "bytes": 66083,
+      "sha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/deletions.json",
+      "bytes": 233,
+      "sha256": "2d03d008105a89ef8a76422ba970b72b21ced48cb5900ca93e3ba90a73302135"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r4-20261030/dependency-pins.json",
+      "bytes": 933,
+      "sha256": "7c6331b92b8f2ff03ee97f0b32f89c6f9190b1af197484a47b6e68377c6661ea"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline-manifest.json",
+      "bytes": 2073,
+      "sha256": "cf360a49e156819773712b1766793736945128747924d1aec6742833983dc547"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/packages/shared/src/experience.ts",
+      "bytes": 12953,
+      "sha256": "b99030a6e1337bb28d64e560f72824acec17de5ecbb72aa76e73066ea479a5d2"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 46347,
+      "sha256": "04ee7a7064f8759327c9b1a04ed7e7d9b9bea2d4d1f6ab67d1df8015db74efbe"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/server/src/__tests__/routine-responsibility-attention.integration.test.ts",
+      "bytes": 5493,
+      "sha256": "e09b8086233cbc953f68c05636254aee6f3fa64c0e8187fab95a3d7e7dd622db"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/server/src/services/experience/projection.ts",
+      "bytes": 5779,
+      "sha256": "5bcc62901a2257382d3f2870ccd9acf43b32933bd1d2c274b5a0925b5cf7f255"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/server/src/services/experience/routine-responsibility-attention.ts",
+      "bytes": 7140,
+      "sha256": "d00e93226149f46062da85d3ff5eb96cfed45318066fe9777e0a7803d3ad4777"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/server/src/services/experience/service.ts",
+      "bytes": 37660,
+      "sha256": "1b694d00af556e94764349048ae26fd08556a9ed0bc0afcd8a2fff11c23a8fc6"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/ui/src/pages/CompanyAccess.test.tsx",
+      "bytes": 46805,
+      "sha256": "195f2051584a15ca763cbea3260c6aff0e2a896fb1ef86614e7e88820a5a96dc"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/baseline/ui/src/pages/CompanyAccess.tsx",
+      "bytes": 65680,
+      "sha256": "ef2e4a643a9e16b79de7228d038e8bfbda72fd70bd7b18c8a13c45117ba912d7"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/candidate-manifest.json",
+      "bytes": 2153,
+      "sha256": "9b7c0636ce7919553e2311b51617edd09cf599864f325c412b33331324d810d1"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/candidate/packages/shared/src/experience.ts",
+      "bytes": 12953,
+      "sha256": "b99030a6e1337bb28d64e560f72824acec17de5ecbb72aa76e73066ea479a5d2"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/candidate/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 52371,
+      "sha256": "6e0e28a1a829654402eb26fa39fdf25fd71c59d1bd92e70f59d86fa5ffaa720a"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/candidate/server/src/services/experience/projection.ts",
+      "bytes": 5779,
+      "sha256": "5bcc62901a2257382d3f2870ccd9acf43b32933bd1d2c274b5a0925b5cf7f255"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/candidate/server/src/services/experience/service.ts",
+      "bytes": 36377,
+      "sha256": "1097d875101c74ac9a779f0a32614371ffeb2a22d66df0f10d45d2ac01bf67e1"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/candidate/ui/src/pages/CompanyAccess.test.tsx",
+      "bytes": 49585,
+      "sha256": "5af6ef7ef3fb56de783bb2acd4dc09c4e461e31d893e2fab553e354e840c0b2d"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/candidate/ui/src/pages/CompanyAccess.tsx",
+      "bytes": 66083,
+      "sha256": "cb8e6e85bfa94a7ed88fca1b3d6881c5fee77ad044f84845ef78f59fdfe8d553"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/deletions.json",
+      "bytes": 233,
+      "sha256": "2d03d008105a89ef8a76422ba970b72b21ced48cb5900ca93e3ba90a73302135"
+    },
+    {
+      "path": "preparation/responsibility-routine-retirement-r7-20261030/dependency-pins.json",
+      "bytes": 933,
+      "sha256": "7c6331b92b8f2ff03ee97f0b32f89c6f9190b1af197484a47b6e68377c6661ea"
+    },
+    {
+      "path": "preparation/root-continuation-20261030-0531.md",
+      "bytes": 10049,
+      "sha256": "1bcd1a7c4a9c9db0d65d8e19804fffc1263a0322c1fe58148feda5beee1ba626"
+    },
+    {
+      "path": "preparation/root-continuation-latest.md",
+      "bytes": 10049,
+      "sha256": "1bcd1a7c4a9c9db0d65d8e19804fffc1263a0322c1fe58148feda5beee1ba626"
+    },
+    {
+      "path": "preparation/v10-001-060-current-gap-audit-20261030.json",
+      "bytes": 75616,
+      "sha256": "5252b00226e2db01e9041a9806e28da75905d82aad8806a65a02bc7fd8e0cab3"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/README.md",
+      "bytes": 1455,
+      "sha256": "3b1d5100d08b913d21bab60c741f154f0099e7be3968a709b9b62f3215abcd02"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/SHA256SUMS",
+      "bytes": 1234,
+      "sha256": "fa0227f05943c359b9240c090492b36dd18ce0fe5781531e592ca025a0c97eda"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/current-gate.command.json",
+      "bytes": 162,
+      "sha256": "ffe6aa3fe1f1bc33e83eac6f126a3299d06b6c7649ab487ee40dc32346df4e1c"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/current-gate.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/current-gate.log",
+      "bytes": 197,
+      "sha256": "0470eea50d5b632c7b4e9d248d7b0943db304d29c2b8a14d810b5d23991633e4"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/inventory-guard-12.command.json",
+      "bytes": 181,
+      "sha256": "2ebb73647f18327553240806d614045881a74a658dbf2d232fc42b7d7d9b5068"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/inventory-guard-12.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/inventory-guard-12.log",
+      "bytes": 1231,
+      "sha256": "a752e84068a5b7e27663bdf53a071c7ad308ce0e1f1a519b7d883f9ee50bb076"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/refresh-dry-run.command.json",
+      "bytes": 164,
+      "sha256": "6e74edb5f5616d8c1130b2bd790ea51717fe452654648b80483b1e3216127243"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/refresh-dry-run.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/refresh-dry-run.log",
+      "bytes": 210,
+      "sha256": "86fadca0c6bbc759dddde64ed569be5aa96527c38e030a66ba913e7133524fc8"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/refresh-helper-8.command.json",
+      "bytes": 183,
+      "sha256": "c3c8a119068c61e030e08b559f9787371d94322d33cbdab38b84a95be10b7412"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/refresh-helper-8.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/refresh-helper-8.log",
+      "bytes": 887,
+      "sha256": "2818c4c2b55d4862fc84d25776473d8ae31a92ee5ed4d7b9187653e6a0267c10"
+    },
+    {
+      "path": "preparation/v10-121-operation-coverage-refresh-20261030/source-pins.json",
+      "bytes": 2026,
+      "sha256": "c6c1649e2b40a5ec418ac51b37f4af113a3c1f7973255cb32e33ecb1e00a0c73"
+    },
+    {
+      "path": "preparation/v10-169-061-120-current-gap-audit-luna-20261030.json",
+      "bytes": 267129,
+      "sha256": "a890d05a099d5d410e0dee2c990cebd92fc069b780ff9366f52591acd0c90d0e"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.SHA256SUMS",
+      "bytes": 228,
+      "sha256": "5eb0b4f3ba244b44c75c143377a58ca4bb3abe97c9aa2d5ef178551c8be947bf"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.json",
+      "bytes": 51731,
+      "sha256": "67ef0579d562007331c153debbdbfbad7e36f621cec2ae1b6000293f92e7d345"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.json.pre-current-update.bak",
+      "bytes": 40243,
+      "sha256": "a9962c011755bcc94b880efc533b62a0ed701bc1e5b625430702f41307bade25"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.md",
+      "bytes": 6896,
+      "sha256": "3caf0d4ad7a18e3a33ecc2206d38e16e3db76c92ffea480e6fc874b33d2c978e"
+    },
+    {
+      "path": "preparation/v10-169-current-assessment-overlay-20261030.md.pre-current-update.bak",
+      "bytes": 3860,
+      "sha256": "6a29fa12b71c5662cbe984f144c27a1aaacbc7e983971dd6d1cef4eebeb4c8d1"
+    },
+    {
+      "path": "preparation/v10-169-current-gap-audit-20261030.md",
+      "bytes": 14355,
+      "sha256": "df06754e85628d692883bf915fd3c997989b394b7d990a567b63fdc5a4f88e53"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.SHA256SUMS",
+      "bytes": 223,
+      "sha256": "c6d625fca7ced49c11ae3f2e87b89d519da55a81cbf0c4a3d62b3f5ec1ddc514"
+    },
+    {
+      "path": "preparation/v10-169-full-current-evidence-map-20261030.json",
+      "bytes": 1304003,
+      "sha256": "724d50052e9ce9356c4e6669c7db7a03e11e583542dfea8b5b96ec753ed7cae7"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.SHA256SUMS",
+      "bytes": 271,
+      "sha256": "b40388245af254cf5d53efe62ae49d44f32a0ccc8ea42ea1dd394bce7acd6c4f"
+    },
+    {
+      "path": "preparation/v10-169-full-current-gap-audit-20261030.json",
+      "bytes": 847568,
+      "sha256": "7aebbfe260ceb83dda3afb0f1ad87ebfa9abc02f04dc854ca7d000e96d79419e"
+    }
+  ],
+  "privateCandidateArchiveSha256": "a0f6fafae6b58f96361e2ec5287d6332df43b151296b26158e6d15486bfb833f"
+}

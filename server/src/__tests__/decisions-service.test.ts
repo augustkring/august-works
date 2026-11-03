@@ -316,26 +316,20 @@ describePg("decisionService", () => {
     expect((await db.select().from(issues).where(eq(issues.id, unreviewedChildId)))[0]?.status).toBe("todo");
   });
 
-  it("bounds cyclic issue traversal for snapshots and cancel-tree execution", async () => {
+  it("rejects cyclic issue source chains before decision snapshots or cancellation", async () => {
     const childId = randomUUID();
     await db.insert(issues).values({ id: childId, companyId, title: "Cycle child", status: "todo", priority: "medium",
       parentId: targetIssueId, responsibleUserId: decidedByUserId });
     await db.update(issues).set({ parentId: childId }).where(eq(issues.id, targetIssueId));
-    const created = await service().create({
+    await expect(service().create({
       companyId, actor: agentActor(), agentId, runId, title: "Cancel cycle?", body: "Body",
       options: [{ id: "cancel", label: "Cancel", style: "destructive", effects: [{
         type: "cancel_issue_tree", targetIssueId, staleness: "strict", reasonComment: "cleanup",
       }] }],
-    });
-
-    expect((created.targetSnapshots as Record<string, { descendantCount: number }>)[targetIssueId]?.descendantCount).toBe(1);
-    const result = await service().decide({ id: created.id, optionId: "cancel", decidedByUserId, userActor: boardActor() });
-    expect(result.executions[0]).toMatchObject({ status: "executed", result: { cancelledIssueIds: [childId, targetIssueId] } });
-    expect(await db.select({ id: issues.id, status: issues.status }).from(issues).where(eq(issues.companyId, companyId)))
-      .toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: targetIssueId, status: "cancelled" }),
-        expect.objectContaining({ id: childId, status: "cancelled" }),
-      ]));
+    })).rejects.toMatchObject({ status: 403, message: "Decision target is outside the origin visibility boundary" });
+    expect(await db.select().from(decisions).where(eq(decisions.title, "Cancel cycle?"))).toHaveLength(0);
+    expect((await db.select().from(issues).where(eq(issues.id, targetIssueId)))[0]?.status).toBe("todo");
+    expect((await db.select().from(issues).where(eq(issues.id, childId)))[0]?.status).toBe("todo");
   });
 
   it("fails closed when the deciding user lacks assignment capability", async () => {

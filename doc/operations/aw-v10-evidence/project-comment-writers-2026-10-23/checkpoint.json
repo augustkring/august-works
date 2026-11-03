@@ -1,0 +1,57 @@
+{
+  "baseCommit": "58a374240b12f281859b27ba718926518380dbd2",
+  "sources": {
+    "server/src/__tests__/execution-workspace-policy.test.ts": "0109375162721854ffbac7ea51e96c675bb5e9d6e18ee401698b27f84ac70649",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "3ff58c760741b86b3e503ccab665a9f481d481e97b9b027ec9fa8076f9c34a3c",
+    "server/src/__tests__/project-routes-env.test.ts": "fdab95ff6daf617d35807f14283d64fe7257d4214c5384e901a09fefa645c2b1",
+    "server/src/services/execution-workspace-policy.ts": "2e2f85dcdafe8c325938d780ff3f487a57434f3c4162b74fd9e69d71f242d127",
+    "server/src/services/issues.ts": "1c74b2196499a016874c8799732f424091dbb65f37fb9724016f6dbaf1a38d97",
+    "server/src/services/projects.ts": "7dc54fe391d290a7aabc0255e94857b99275b545947c08e5112f28cad68691d3"
+  },
+  "checks": {
+    "baseline": {
+      "exit": 1,
+      "tests": "Tests  4 failed | 15 skipped (19)",
+      "duration": "Duration  48.76s (transform 26.75s, setup 220ms, import 38.38s, tests 9.69s, environment 0ms)"
+    },
+    "final": {
+      "exit": 0,
+      "tests": "Tests  50 passed (50)",
+      "duration": "Duration  42.11s (transform 20.51s, setup 218ms, import 31.75s, tests 9.61s, environment 0ms)"
+    },
+    "race-baseline": {
+      "exit": 1,
+      "tests": "Tests  2 failed | 19 skipped (21)",
+      "duration": "Duration  57.79s (transform 37.04s, setup 186ms, import 48.22s, tests 8.87s, environment 0ms)"
+    },
+    "atomic": {
+      "exit": 1,
+      "tests": "Tests  3 failed | 57 passed (60)",
+      "duration": "Duration  101.60s (transform 27.99s, setup 609ms, import 52.17s, tests 47.34s, environment 0ms)"
+    },
+    "route-final": {
+      "exit": 0,
+      "tests": "Tests  3 passed (3)",
+      "duration": "Duration  50.95s (transform 23.50s, setup 203ms, import 34.15s, tests 16.13s, environment 0ms)"
+    },
+    "server-types": {
+      "exit": 0,
+      "tests": null,
+      "duration": null
+    }
+  },
+  "interpretation": [
+    "Initial4 failures: native Project text/JSON updates and Comment tombstone reject stale snapshots with SQLSTATE23514; Project environment removal returns0 because the native parser drops environmentId.",
+    "Initial two-file50PASS42.11s verifies generic Project body preservation/invalidation, comment tombstone and parser fix before replacing environment-selection loops.",
+    "Actual blocked-row race baseline2FAIL/19skipped57.79s: both old scan/update loops overwrite a newly committed environment selection and incorrectly report1 cleared. Test observes the real PostgreSQL UPDATE lock before releasing the competing writer.",
+    "Atomic stage57PASS/3FAIL101.60s: binding21/helper31/shortname5 pass, including both lock races and unchanged empty-comment body capture. Three legacy route fixtures still pass a fake empty transaction and fail500.",
+    "Route fixtures now use actual stored Human/admin membership, UUID companies, real native Project create/update and original physical transaction forwarding. Secret normalization and activity/telemetry projections remain controlled; no authentication, credential or secret-provider qualification.",
+    "First native route run2PASS/1FAIL56.06s: old create matcher omitted newly forwarded native transaction/actor arguments. Full transaction-object matcher dump is compressed separately; credential-key and connection-URL scans match0. Final assertions retain original company/input checks and additionally verify transaction and actual actor.",
+    "Final native routes3PASS50.95s. Product sources unchanged since atomic57PASS and server compiler0; no combined60PASS claim. Native compiler excludes test files."
+  ],
+  "limits": [
+    "Structural snapshots do not qualify complete authenticated producers, input receipts, source-free admission or payload readers. No protocol upgrades, rebind or constructor activation.",
+    "Generic Project updates compare actual candidate body under the original lock and DB hash. Environment removal is one tenant-scoped jsonb_set UPDATE per original owner, retaining unrelated current fields and rechecking changed rows after waits.",
+    "Other Project roadmap/plugin reset, Comment metadata, Memory and Document writers remain open, together with original privacy/temporal and portability regressions and full workspace/V10/PR gates."
+  ]
+}

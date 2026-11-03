@@ -1,0 +1,35 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/access-routes-permissions-upgrade.test.ts (4 tests | 1 failed | 3 skipped) 7707ms
+     × does not let local implicit administrator access read, create, or revoke Human workflow coverage 154ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/access-routes-permissions-upgrade.test.ts > access routes permissions upgrade compatibility > does not let local implicit administrator access read, create, or revoke Human workflow coverage
+TypeError: Cannot read properties of undefined (reading 'code')
+ ❯ src/__tests__/access-routes-permissions-upgrade.test.ts:139:83
+    137|     const { company, owner } = await createCompanyWithOwner(db);
+    138|     const http = request(await createApp(db, company.id, owner.princip…
+    139|     await http.get(`/api/companies/${company.id}/workflow-coverages`).…
+       |                                                                                   ^
+    140|       expect(response.body.details.code).toBe("workflow_coverage_sessi…
+    141|     });
+ ❯ src/__tests__/access-routes-permissions-upgrade.test.ts:140:36
+ ❯ ../../v10-dep-qualification/node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../../v10-dep-qualification/node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../../v10-dep-qualification/node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../../v10-dep-qualification/node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../../v10-dep-qualification/node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 1 passed | 25 skipped (27)
+   Start at  16:02:51
+   Duration  33.81s (transform 11.62s, setup 151ms, import 19.07s, tests 14.29s, environment 0ms)
+

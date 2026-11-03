@@ -1,0 +1,78 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[22:23:20] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"4de80fb2-ccbd-4c13-9f9c-2d84ac59d645"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[22:23:20] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"4de80fb2-ccbd-4c13-9f9c-2d84ac59d645","failureCode":"adapter_failed"}[39m
+[22:23:25] [31mERROR[39m: [36mheartbeat execution setup failed[39m [90m{"runId":"33821e71-d208-46ef-b6f1-5ebb992f3a5a","failureCode":"setup_failed"}[39m
+[22:23:32] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"ac90cb90-d075-4aad-8685-3f67fd8823df"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[22:23:32] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"ac90cb90-d075-4aad-8685-3f67fd8823df","failureCode":"adapter_failed"}[39m
+ ❯ src/__tests__/v7-worker-model-gateway.integration.test.ts (66 tests | 2 failed) 259646ms
+     × forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review 6936ms
+     × withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation 6948ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review
+AssertionError: expected { …(75) } to match object { status: 'succeeded', …(3) }
+(115 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "driverKind": "aw_text_messages",
+    "responsibleUserId": "user-c5b82589-9669-4073-bd33-8b863784c9b2",
+    "runtimeMode": "native",
+-   "status": "succeeded",
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/v7-worker-model-gateway.integration.test.ts:593:25
+    591|         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
+    592|       expect(actualRun?.issueId, "the exercised scheduler run must ret…
+    593|       expect(actualRun).toMatchObject({
+       |                         ^
+    594|         status: "succeeded",
+    595|         runtimeMode: "native",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/__tests__/v7-worker-model-gateway.integration.test.ts > Native bounded worker model gateway > withholds draft publication after human Pause during the actual heartbeat model call and retains its reservation
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/v7-worker-model-gateway.integration.test.ts:711:21
+    709|       );
+    710|       await heartbeat.drainActiveRunExecutions();
+    711|       expect(calls).toBe(1);
+       |                     ^
+    712|       expect(
+    713|         await documentService(db).getIssueDocumentByKey(task.id, "resu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 64 passed (66)
+   Start at  22:22:35
+   Duration  275.60s (transform 11.19s, setup 77ms, import 15.74s, tests 259.65s, environment 0ms)
+

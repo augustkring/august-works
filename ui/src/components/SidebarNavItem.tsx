@@ -41,6 +41,8 @@ interface SidebarNavItemProps {
    */
   iconNode?: ReactNode;
   end?: boolean;
+  state?: unknown;
+  helpCenterEntryId?: string;
   className?: string;
   labelClassName?: string;
   badge?: number;
@@ -73,6 +75,8 @@ export function SidebarNavItem({
   icon: Icon,
   iconNode,
   end,
+  state,
+  helpCenterEntryId,
   className,
   labelClassName,
   badge,
@@ -116,9 +120,11 @@ export function SidebarNavItem({
   const link = (
     <NavLink
       to={to}
-      state={SIDEBAR_SCROLL_RESET_STATE}
+      state={state ?? SIDEBAR_SCROLL_RESET_STATE}
       end={end}
       aria-label={railAriaLabel}
+      id={helpCenterEntryId}
+      data-help-center-entry={helpCenterEntryId ? "" : undefined}
       onClick={() => { if (isMobile) setSidebarOpen(false); }}
       className={({ isActive }) =>
         cn(

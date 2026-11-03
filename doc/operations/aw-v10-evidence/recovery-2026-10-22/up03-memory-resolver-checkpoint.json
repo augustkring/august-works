@@ -1,0 +1,89 @@
+{
+  "scope": "Original Memory candidate resolver attachment only; actual PostgreSQL with canonical full migrator and native Memory/Context owners",
+  "owners": [
+    "server/src/services/memory/memory-service.ts",
+    "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts"
+  ],
+  "command": "source /workspace/v10-preparation/env.sh; NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/memory-resolver-private-lineage.integration.test.ts --maxWorkers=1",
+  "captures": [
+    {
+      "log": "up03-memory-resolver-red.log",
+      "exit": 1,
+      "failed": 4,
+      "passed": 0,
+      "seconds": 60.89,
+      "source_pins": {
+        "server/src/services/memory/memory-service.ts": "ff012e23e5eb0c87dce2d4cca134807299b34886aeb42c92f7326f4006eae617",
+        "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0",
+        "server/src/services/context/context-manifest.ts": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+        "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts": "778c692ec6f5f46c4ed5f11b086d6a17cd3665919eb7c9a30f388586b748e7f9",
+        "packages/db/src/migrations/0506_wild_thanos.sql": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+      },
+      "qualification": "All six upfront pins verified unchanged. Three native duplicate/corroboration paths committed a target self-root; native distinct descendant case committed extra roots/version instead of rolling back. Fixture catches operation rejection and queries committed row independently. Assertions stop at row corruption, so later reader/error assertions are not separately labelled RED."
+    },
+    {
+      "log": "up03-memory-resolver-green.log",
+      "exit": 0,
+      "failed": 0,
+      "passed": 4,
+      "seconds": 58.04,
+      "source_pins": {
+        "server/src/services/memory/memory-service.ts": "2ec4a5ea5efa4a90bba274dedea89f26e6520fb8885683a7ad4679a7571b6164",
+        "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0",
+        "server/src/services/context/context-manifest.ts": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+        "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts": "778c692ec6f5f46c4ed5f11b086d6a17cd3665919eb7c9a30f388586b748e7f9",
+        "packages/db/src/migrations/0506_wild_thanos.sql": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+      },
+      "qualification": "Four original native cases pass; all six upfront pins unchanged after exit and embedded PostgreSQL cleanup closed."
+    },
+    {
+      "log": "up03-memory-resolver-green-2.log",
+      "exit": 0,
+      "failed": 0,
+      "passed": 6,
+      "seconds": 74.86,
+      "source_pins": {
+        "server/src/services/memory/memory-service.ts": "2ec4a5ea5efa4a90bba274dedea89f26e6520fb8885683a7ad4679a7571b6164",
+        "server/src/services/memory/memory-privacy.ts": "fed411e5c8715992c4a487d7487675cfdd0d96e64c140041680c2ea89b8565b0",
+        "server/src/services/context/context-manifest.ts": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+        "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts": "c955f1e2bd01301c913156a74ba1cf49d73920c4ccbae1e2a61d97657d0602ae",
+        "packages/db/src/migrations/0506_wild_thanos.sql": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+      },
+      "qualification": "Same production fix, plus test-only strict negatives for missing native receipt and actual stale Context after second-run corroboration. All six upfront pins unchanged after exit and embedded PostgreSQL cleanup closed."
+    }
+  ],
+  "actual_coverage": [
+    "Native private creation → sharing → Human review → Context selection → duplicate/corroboration preserves readable target and original private Human/Agent roots.",
+    "Pure duplicate with no novel evidence or source-set consequence does not bump version.",
+    "Duplicate with an additional actual private Context root retains that dependency and its actual erasure propagates.",
+    "Distinct native descendant attachment returns409 with exact original target/evidence rollback.",
+    "An internal UUID alone cannot replace native Context receipt.",
+    "An older Context receipt after actual second-run corroboration returns409 without modifying the newer target/evidence."
+  ],
+  "behavior": [
+    "Fresh target lock/version/current-source check before attachment.",
+    "Fresh direct target self-reference is excluded only after exact current native Context root plus canonical selected Memory item proof; all existing and other fresh source roots remain.",
+    "Original in-transaction canonical source owner rejects unavailable or cyclic result before commit, including evidence/audit rollback."
+  ],
+  "limits": [
+    "No physical provider/transport acknowledgement qualification; fixtures exercise actual native service and database effects.",
+    "Strict self receipt requires current target version in every retained producer Context target root; older or unsupported internal self receipts409 rather than being silently dropped.",
+    "No generic cycle bypass or historical cleanup; existing corrupted rows remain withheld.",
+    "Known separate raw-new-result producer path may disclose private historical source IDs after legitimate Human steering; its regression and producer/postrun contract review are pending.",
+    "Current Task/Project SQL Memory/Foundation coverage, exact temporal payload snapshot contract, native run qualification and mixed-writer/rollback admission remain open.",
+    "Normal full server typecheck passed before this Memory resolver production edit; it is not claimed for this new source yet. Existing older Memory service fixture lacking current auth account/run admission is not claimed passing."
+  ],
+  "resources": {
+    "workers": 1,
+    "node_heap_mib": 2048,
+    "postgres_pool_max_connections": 3
+  },
+  "log_sha256": {
+    "up03-memory-resolver-red.log": "a97d9ed4f26521340f3caafca1af2c26bcc0415a0366af40eab6a01d28b70058",
+    "up03-memory-resolver-green.log": "360f7a42ee7c54b234e341167f347650ec1f051e96d7e1c308107516d3ddd024",
+    "up03-memory-resolver-green-2.log": "0e2e606197134924de847208598303d96766eaa7ddb26ae43ce2e90450a16e10"
+  }
+}

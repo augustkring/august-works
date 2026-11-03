@@ -1,6 +1,10 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { listenOnFetchAllowedPort } from "./fetch-allowed-port";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { withManagedConnectionIntent } from "./fixtures/managed-connection-intent";
+
+registerEnglishAccountLocaleIsolation(test);
 
 type Json = Record<string, unknown>;
 type Seed = { companyId: string; prefix: string };
@@ -112,100 +116,7 @@ async function startFakeProvider() {
   };
 }
 
-function connectionAwareScript(connectionId: string) {
-  return `
-const post = async (url, body, token = process.env.PAPERCLIP_RUNTIME_TOOLS_TOKEN) => {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { authorization: \`Bearer \${token}\`, "content-type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  if (!response.ok) throw new Error(\`\${response.status}: \${await response.text()}\`);
-  return await response.json();
-};
-const apiHeaders = { authorization: \`Bearer \${process.env.PAPERCLIP_API_KEY}\`, "content-type": "application/json", "x-paperclip-run-id": process.env.PAPERCLIP_RUN_ID };
-const runResponse = await fetch(\`\${process.env.PAPERCLIP_API_URL}/api/heartbeat-runs/\${process.env.PAPERCLIP_RUN_ID}\`, { headers: apiHeaders });
-if (!runResponse.ok) throw new Error(await runResponse.text());
-const run = await runResponse.json();
-const issueId = process.env.PAPERCLIP_TASK_ID ?? run.contextSnapshot.issueId;
-if (!issueId) throw new Error("Missing task binding");
-const search = await post(process.env.PAPERCLIP_RUNTIME_TOOLS_CONNECTIONS_SEARCH_URL, { query: "notion" });
-const notion = search.results.find((result) => result.service === "notion");
-if (!notion) throw new Error("Notion was not advertised");
-if (notion.state !== "ready") {
-  const requested = await post(process.env.PAPERCLIP_RUNTIME_TOOLS_CONNECTION_REQUEST_URL, { service: notion.service });
-  if (requested.state !== "needs_user_action") throw new Error("Expected a user-action request");
-  const comment = await fetch(\`\${process.env.PAPERCLIP_API_URL}/api/issues/\${issueId}/comments\`, {
-    method: "POST",
-    headers: apiHeaders,
-    body: JSON.stringify({ body: "Requested Notion access through the connection card." })
-  });
-  if (!comment.ok) throw new Error(await comment.text());
-  console.log("waiting for connection intent");
-  process.exit(0);
-}
-const sessionResponse = await fetch(\`\${process.env.PAPERCLIP_API_URL}/api/tool-gateway/sessions\`, {
-  method: "POST",
-  headers: apiHeaders,
-  body: JSON.stringify({ runId: process.env.PAPERCLIP_RUN_ID, ttlMs: 60000 })
-});
-if (!sessionResponse.ok) throw new Error(await sessionResponse.text());
-const session = await sessionResponse.json();
-const toolsResponse = await fetch(\`\${process.env.PAPERCLIP_API_URL}/api/tool-gateway/tools\`, {
-  headers: { "x-paperclip-tool-gateway-token": session.token }
-});
-const tools = await toolsResponse.json();
-const tool = tools.find((entry) => entry.connectionId === ${JSON.stringify(connectionId)} && entry.upstreamToolName === "notion:list_pages");
-if (!tool) throw new Error("Continuation did not receive the installed Notion tool");
-const call = await fetch(\`\${process.env.PAPERCLIP_API_URL}/api/tool-gateway/tools/call\`, {
-  method: "POST",
-  headers: { "x-paperclip-tool-gateway-token": session.token, "content-type": "application/json" },
-  body: JSON.stringify({ tool: tool.name, parameters: {} })
-});
-if (!call.ok) throw new Error(await call.text());
-console.log(await call.text());
-// Successful tool use must end with a durable task disposition.
-const completion = await fetch(\`\${process.env.PAPERCLIP_API_URL}/api/issues/\${issueId}\`, {
-  method: "PATCH",
-  headers: apiHeaders,
-  body: JSON.stringify({ status: "done", comment: "Read the requested Notion page inventory." })
-});
-if (!completion.ok) throw new Error(await completion.text());
-`;
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-async function waitForAgentRun(
-  request: APIRequestContext,
-  companyId: string,
-  agentId: string,
-) {
-  let terminalRun: { id: string; status: string } | null = null;
-  await expect
-    .poll(
-      async () => {
-        const runs = await json<Array<{ id: string; status: string }>>(
-          await request.get(
-            `/api/companies/${companyId}/heartbeat-runs?agentId=${agentId}&limit=10`,
-          ),
-        );
-        terminalRun =
-          runs.find((run) => !["queued", "running"].includes(run.status)) ??
-          null;
-        return terminalRun?.status ?? null;
-      },
-      { timeout: 45_000 },
-    )
-    .toBe("succeeded");
-  if (!terminalRun)
-    throw new Error("Agent run completed without a run receipt");
-  return terminalRun;
-}
-
-test("store setup and task connection intent share one fake provider through continuation", async ({
+test("the store refuses an opaque MCP action before provider dispatch", async ({
   page,
   request,
 }) => {
@@ -274,133 +185,27 @@ test("store setup and task connection intent share one fake provider through con
     await expect(
       page.getByRole("heading", { name: "Test List fixture pages" }),
     ).toBeVisible({ timeout: 30_000 });
+    const refused = page.waitForResponse(response => response.request().method() === "POST"
+      && new URL(response.url()).pathname === `/api/tool-connections/${connectionId}/test-calls`);
     await page.getByRole("button", { name: "Run", exact: true }).click();
-    await expect(page.getByText("Fixture page inventory")).toBeVisible({
-      timeout: 30_000,
-    });
+    const refusal = await refused;
+    expect(refusal.status()).toBe(409);
+    expect(await refusal.json()).toMatchObject({ reasonCode: "tool_model_effect_unqualified" });
+    await expect(page.getByText("Fixture page inventory")).toHaveCount(0);
+    expect(provider.captures.filter(capture => capture.method === "tools/call")).toHaveLength(0);
+    const runs = await json<unknown[]>(await request.get(`/api/companies/${seed.companyId}/heartbeat-runs?agentId=${holder.id}&limit=10`));
+    expect(runs).toHaveLength(0);
 
-    const callsBeforeContinuation = provider.captures.filter(
-      (capture) => capture.method === "tools/call" && capture.toolName === "notion:list_pages",
-    ).length;
-
-    // Entry point two: a scripted agent requests Notion, then the same shared
-    // provider is reused from the task dialog and appears in the fresh run.
-    const scout = await createAgent(
-      request,
-      seed.companyId,
-      "Connection requester",
-    );
-    await json(
-      await request.patch(`/api/agents/${scout.id}`, {
-        data: {
-          adapterType: "process",
-          adapterConfig: {
-            command: process.execPath,
-            args: [
-              "--input-type=module",
-              "-e",
-              connectionAwareScript(connectionId),
-            ],
-          },
-          replaceAdapterConfig: true,
-        },
-      }),
-    );
-    const issue = await json<{ id: string; identifier: string }>(
-      await request.post(`/api/companies/${seed.companyId}/issues`, {
-        data: {
-          title: "Read our Notion pages",
-          status: "in_progress",
-          assigneeAgentId: scout.id,
-        },
-      }),
-    );
-    // Assigning an in-progress task is the production wake path. Waiting for
-    // that run avoids creating a second artificial request from an explicit
-    // heartbeat invocation.
-    const firstRun = await waitForAgentRun(request, seed.companyId, scout.id);
-
-    const taskUrl = `/${seed.prefix}/issues/${issue.identifier}`;
-    await page.goto(taskUrl);
-    await expect(
-      page.getByText("Connection requester needs Notion"),
-    ).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Connect / Use existing" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Use an existing connection" }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: new RegExp(escapeRegExp(connection.name)) })
-      .click();
-
-    await expect(page.getByText("Notion connected")).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page).toHaveURL(new RegExp(`${taskUrl}$`));
-    await expect(
-      page
-        .getByTestId("connection-intent-focus-target")
-        .filter({ hasText: "Notion connected" }),
-    ).toBeFocused();
-    expect(await page.locator("body").innerText()).not.toMatch(
-      /\/authorize\?|authorizationUrl/,
-    );
-
-    await expect
-      .poll(
-        async () => {
-          const runs = await json<Array<{ id: string; status: string }>>(
-            await request.get(
-              `/api/companies/${seed.companyId}/heartbeat-runs?agentId=${scout.id}&limit=10`,
-            ),
-          );
-          return runs.find((run) => run.id !== firstRun.id)?.status ?? null;
-        },
-        { timeout: 45_000 },
-      )
-      .toBe("succeeded");
-    await expect
-      .poll(() =>
-        provider.captures.filter(
-          (capture) =>
-            capture.method === "tools/call" &&
-            capture.toolName === "notion:list_pages",
-        ).length,
-      )
-      .toBe(callsBeforeContinuation + 1);
-    const completedIssue = await json<{ status: string }>(
-      await request.get(`/api/issues/${issue.id}`),
-    );
-    expect(completedIssue.status).toBe("done");
-    const finalRuns = await json<Array<{ id: string; status: string }>>(
-      await request.get(`/api/companies/${seed.companyId}/heartbeat-runs?agentId=${scout.id}&limit=10`),
-    );
-    expect(finalRuns).toHaveLength(2);
-    expect(finalRuns.every((run) => run.status === "succeeded")).toBe(true);
-
-    const interactions = await json<Array<{ kind: string; status: string }>>(
-      await request.get(`/api/issues/${issue.id}/interactions`),
-    );
-    const connectionIntents = interactions.filter(
-      (interaction) => interaction.kind === "connection_intent",
-    );
-    expect(
-      connectionIntents.filter(
-        (interaction) => interaction.status === "accepted",
-      ),
-    ).toHaveLength(1);
-    expect(
-      connectionIntents.filter(
-        (interaction) => interaction.status === "pending",
-      ),
-    ).toHaveLength(0);
-    expect(
-      connectionIntents.every((interaction) =>
-        ["accepted", "expired"].includes(interaction.status),
-      ),
-    ).toBe(true);
-    expect(holder.id).not.toBe(scout.id);
   } finally {
     await provider.close();
   }
+});
+
+test("a Human connection card resumes two actual managed Native Runs with the fixed Railway tool result", async ({ page }) => {
+  // One initial case envelope, shared by setup and both waits. This estimate
+  // replaces the obsolete process fixture's 45s polls; no live Run/lease/report
+  // is extended, and each actual managed Run retains its 180s policy.
+  test.setTimeout(360_000);
+  const deadlineAt = Date.now() + 360_000;
+  await withManagedConnectionIntent(page, deadlineAt);
 });

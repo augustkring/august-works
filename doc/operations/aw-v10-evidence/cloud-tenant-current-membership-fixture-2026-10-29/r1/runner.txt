@@ -1,0 +1,3 @@
+timeout_seconds=240
+test_file=src/middleware/cloud-tenant-actor.test.ts
+test_pattern=.

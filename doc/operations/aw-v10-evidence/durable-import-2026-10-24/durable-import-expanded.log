@@ -1,0 +1,91 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:24:11] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-0ea10c7c-a311-4f12-9408-891123811582"}[39m
+[20:24:11] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-9d5bd51c-2227-486e-a72c-5d291440006b"}[39m
+ ❯ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts (44 tests | 3 failed) 14051ms
+     × requires instance admin for new-company import apply 52ms
+     × fails a board async import job when the bundle import throws 283ms
+     × forwards pauseAutomations from CEO-safe import apply bodies to the portability service 29ms
+[20:24:20] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"02958564-6ed1-4fb0-bfdd-7b1bad8a0e82"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:847:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:24:20] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"15022e02-7925-4467-b53e-3b8c4733877a"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:898:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:24:20] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"8aa055a3-4a75-49c7-b478-25fdfe0830a0"}[39m
+[20:24:20] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"8aa055a3-4a75-49c7-b478-25fdfe0830a0"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > requires instance admin for new-company import apply
+AssertionError: expected 'The current import operator is unavai…' to contain 'Instance admin'
+
+Expected: "Instance admin"
+Received: "The current import operator is unavailable"
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1017:28
+    1015|
+    1016|     expect(res.status).toBe(403);
+    1017|     expect(res.body.error).toContain("Instance admin");
+       |                            ^
+    1018|     expect(mockCompanyPortabilityService.importBundle).not.toHaveBeenC…
+    1019|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > fails a board async import job when the bundle import throws
+Error: Timed out waiting for import job to reach needs_reconciliation
+ ❯ waitForImportJobStatusAs src/__tests__/company-portability-routes.test.ts:269:9
+    267|     await new Promise((resolve) => setTimeout(resolve, 10));
+    268|   }
+    269|   throw new Error(`Timed out waiting for import job to reach ${status}…
+       |         ^
+    270| }
+    271|
+ ❯ src/__tests__/company-portability-routes.test.ts:1313:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > forwards pauseAutomations from CEO-safe import apply bodies to the portability service
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1365:24
+    1363|       .send({ ...importRequest, pauseAutomations: true });
+    1364|
+    1365|     expect(res.status).toBe(200);
+       |                        ^
+    1366|     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalle…
+    1367|       { ...importRequest, pauseAutomations: true },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed | 5 passed (6)
+      Tests  3 failed | 103 passed (106)
+   Start at  20:23:54
+   Duration  53.37s (transform 11.19s, setup 324ms, import 14.28s, tests 38.09s, environment 1ms)
+

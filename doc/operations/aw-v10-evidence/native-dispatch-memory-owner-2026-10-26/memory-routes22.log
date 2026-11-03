@@ -1,0 +1,32 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+···x·
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/memory-routes.test.ts > Memory routes > rechecks the actual Human session row before sealing new Memory evidence
+AssertionError: expected 409 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 409
+
+ ❯ src/__tests__/memory-routes.test.ts:413:27
+    411|       }],
+    412|     });
+    413|     expect(denied.status).toBe(404);
+       |                           ^
+    414|     const retainedEvidence=await db.select().from(memoryEvidence).wher…
+    415|     expect(retainedEvidence).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  02:20:24
+   Duration  24.49s (transform 9.66s, setup 80ms, import 13.65s, tests 10.64s, environment 0ms)
+

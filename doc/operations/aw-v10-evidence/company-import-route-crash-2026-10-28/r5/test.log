@@ -1,0 +1,15 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ✓ |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > preserves one real imported Agent and the original unknown job after child death before receipt 7821ms
+ ✓ |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > returns the original succeeded receipt when the HTTP worker dies during settlement 36557ms
+ ✓ |@paperclipai/server| src/__tests__/company-import-process-recovery.integration.test.ts > company import process recovery > rechecks the current Human after an HTTP import effect and stops before the next target write 6918ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  11:12:11
+   Duration  72.36s (transform 10.84s, setup 78ms, import 15.57s, tests 56.58s, environment 0ms)
+

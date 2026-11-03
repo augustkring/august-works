@@ -1,0 +1,53 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-tool-task-privacy.integration.test.ts (2 tests | 2 failed) 17209ms
+     × filters private children before get_task_context truncation 2307ms
+     × searches only task rows Bob can canonically read 448ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-tool-task-privacy.integration.test.ts > native task tools respect canonical task privacy > filters private children before get_task_context truncation
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-tool-task-privacy.integration.test.ts:91:70
+     89|     };
+     90|     expect(result.childTasks.some(task => task.id === f.openChild.id))…
+     91|     expect(result.childTasks.some(task => task.id === olderOpen.id)).t…
+       |                                                                      ^
+     92|     expect(JSON.stringify(result)).not.toContain("PRIVATE_CHILD_");
+     93|     expect(JSON.stringify(result)).not.toContain("PRIVATE_PRELIMIT_CAN…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-tool-task-privacy.integration.test.ts > native task tools respect canonical task privacy > searches only task rows Bob can canonically read
+AssertionError: expected '{"tasks":[{"id":"b562dfd1-5c8e-4585-8…' not to contain 'PRIVATE_CHILD_'
+
+Expected: "PRIVATE_CHILD_"
+Received: "{"tasks":[{"id":"b562dfd1-5c8e-4585-8f18-9e1bc92edfc4","url":null,"companyId":"6d7ed532-4e27-4c15-9491-920005220e89","identifier":"NTP6D7ED-2","title":"shared-needle PRIVATE_CHILD_76ec8910-e582-40a8-81fb-781eba441692","description":"PRIVATE_BODY_CANARY","status":"backlog","statusVersion":0,"priority":"medium","workMode":"standard","assigneeAgentId":null,"executionRunId":null,"parentId":"e43e6739-6269-4dba-af1b-7d98bbda6afb","projectId":null,"goalId":null},{"id":"db15d2be-0fd3-4a64-9968-7b7470ed25e4","url":null,"companyId":"6d7ed532-4e27-4c15-9491-920005220e89","identifier":null,"title":"shared-needle OPEN_CHILD_ed63f37f-e0ed-4f98-bc94-8205577b28c8","description":"open child description","status":"backlog","statusVersion":0,"priority":"medium","workMode":"standard","assigneeAgentId":null,"executionRunId":null,"parentId":"e43e6739-6269-4dba-af1b-7d98bbda6afb","projectId":null,"goalId":null}]}"
+
+ ❯ src/services/native-runtime/native-tool-task-privacy.integration.test.ts:108:40
+    106|     };
+    107|     expect(result.tasks.some(task => task.id === f.openChild.id)).toBe…
+    108|     expect(JSON.stringify(result)).not.toContain("PRIVATE_CHILD_");
+       |                                        ^
+    109|     expect(JSON.stringify(result)).not.toContain("PRIVATE_BODY_CANARY"…
+    110|   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  13:32:46
+   Duration  57.25s (transform 28.09s, setup 257ms, import 39.24s, tests 17.21s, environment 0ms)
+

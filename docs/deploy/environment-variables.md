@@ -26,8 +26,21 @@ All environment variables that Paperclip uses for server configuration.
 | `PAPERCLIP_RUNNER_REMOTE_CODEX_PATH` | (unset) | Optional host-local path to a Codex executable built for the remote target OS and architecture. For remote Codex-backed runners, Paperclip stages and verifies this executable beside `paperclip-runnerd`. |
 | `PAPERCLIP_RUNNER_REMOTE_CODEX_NPM_SPEC` | (unset) | Optional pinned npm package spec (for example, `@openai/codex@0.156.0`) installed inside each fresh remote lease when its Codex harness is not baked into the sandbox image. Mutually exclusive with `PAPERCLIP_RUNNER_REMOTE_CODEX_PATH`; Paperclip verifies the installed executable before starting `runnerd`. |
 | `PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH` | (unset) | Host-local path to the immutable provider pack built by `pnpm --filter @paperclipai/paperclip-runner build:provider-pack`. The pack includes its target-built Node 24.11 runtime, locked production dependencies, OpenCode proxy/executable, and ACPX sidecar. Remote OpenCode and ACPX fail closed without it. A preinstalled pack is accepted only when its complete digested manifest matches this build-owned pack; otherwise Paperclip stages this pack into the sandbox. |
+| `PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT` | `/opt/paperclip-runner/provider-pack` | Server-process-only selection of one exact preinstalled provider-pack directory for ordinary managed OpenCode Sandbox preparation. Use a normalized absolute path outside tenant-writable policy roots. The sealed Run authority binds this path and the build-owned manifest; a fixed system checksum verifies Node before it executes the full pack verifier. This does not select the controller-local pack, authorize a provider, or qualify a runtime. Agent configuration and workload environment cannot select it. |
 | `PAPERCLIP_HIDDEN_SETTINGS` | (unset) | Comma-separated settings surfaces to hide from the UI and floor at the API, for operators hosting Paperclip for others (managed cloud, internal shared server). See [Hiding settings surfaces](#hiding-settings-surfaces). |
 | `PAPERCLIP_SETTING_DEFAULTS` | (unset) | JSON object replacing the schema default of selected instance settings, for hosting operators. See [Operator setting defaults](#operator-setting-defaults). |
+
+### Optional SaaS Support Assistant
+
+The grounded Support Assistant is unavailable unless the SaaS operator supplies all current profile, package, provider credential, funding, and Help-release requirements. It is optional and does not use customer AI connections. Configure it only with independently reviewed real provider and deployment evidence; see the [V6 support operations runbook](../../doc/operations/aw-v6-runtime.md#optional-grounded-support-assistant-default-unavailable). No default profile or production provider qualification is included.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_PATH` | (unset) | Absolute path to the private per-company first-party Support model profile JSON. The file must be owned by the server OS user, have no group/other permissions, and be at most 1 MiB. Configure together with the exact SHA-256 variable. |
+| `AW_FIRST_PARTY_SUPPORT_MODEL_PROFILES_SHA256` | (unset) | Lowercase SHA-256 of the exact profile file bytes. Must be configured together with the profile path. |
+| `AW_FIRST_PARTY_SUPPORT_ANTHROPIC_API_KEY` | (unset) | Platform-owned Anthropic API key. Store only in the deployment secret manager; the private profile stores its SHA-256 binding, never the key. |
+
+An absent, mismatched, stale, or unqualified profile keeps the feature unavailable. See the runbook for package publication, evidence, and profile setup.
 
 Daytona connectivity for `paperclip_runner` uses authenticated provider
 WebSocket ingress and follows the instance experimental setting

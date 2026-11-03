@@ -9,6 +9,7 @@ import {
   asc,
   desc,
   eq,
+  getTableColumns,
   inArray,
   isNotNull,
   isNull,
@@ -17,6 +18,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import type { AuthorizationActor } from "./authorization.js";
 import {
   agents,
   authUsers,
@@ -137,6 +139,8 @@ export { extractGitHubPullRequestReferences } from "./github-pull-request-merge.
 export type { GitHubPullRequestReference } from "./github-pull-request-merge.js";
 
 type InteractionActor = {
+  /** Original authenticated request identity, never request-body metadata. */
+  requestActor?: AuthorizationActor;
   identityContextId?: string | null;
   agentId?: string | null;
   runId?: string | null;
@@ -2256,6 +2260,8 @@ export function issueThreadInteractionService(
           {
             status: "done",
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2286,6 +2292,8 @@ export function issueThreadInteractionService(
             assigneeAgentId: lockedCurrent.createdByAgentId,
             assigneeUserId: null,
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2309,6 +2317,8 @@ export function issueThreadInteractionService(
           {
             workMode: "standard",
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2526,6 +2536,8 @@ export function issueThreadInteractionService(
             assigneeAgentId: issueContext.assigneeAgentId,
             assigneeUserId: null,
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2981,10 +2993,17 @@ export function issueThreadInteractionService(
         woken,
       };
     },
-    listForIssue: async (issueId: string) => {
+    listForIssue: async (issueId: string, options?: {
+      onSourceVersionSelected?: (interactionId: string, sourceVersion: string) => void;
+    }) => {
       const [rows, issueStatus] = await Promise.all([
         db
-          .select()
+          .select({
+            ...getTableColumns(issueThreadInteractions),
+            ...(options?.onSourceVersionSelected ? {
+              selectedSourceVersion: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text`,
+            } : {}),
+          })
           .from(issueThreadInteractions)
           .where(eq(issueThreadInteractions.issueId, issueId))
           .orderBy(
@@ -2998,8 +3017,11 @@ export function issueThreadInteractionService(
           .then((issueRows) => issueRows[0]?.status ?? null),
       ]);
 
-      return rows.map((row) =>
-        hydrateInteraction(
+      return rows.map(({ selectedSourceVersion, ...row }) => {
+        if (typeof selectedSourceVersion === "string") {
+          options?.onSourceVersionSelected?.(row.id, selectedSourceVersion);
+        }
+        return hydrateInteraction(
           issueStatus &&
             isTerminalIssueStatus(issueStatus) &&
             row.status === "pending"
@@ -3010,8 +3032,8 @@ export function issueThreadInteractionService(
                 resolvedAt: row.updatedAt,
               }
             : row,
-        ),
-      );
+        );
+      });
     },
 
     getById: async (interactionId: string) => {
@@ -3931,13 +3953,14 @@ export function issueThreadInteractionService(
             createdByUserId: actor.userId ?? null,
             originIdentityContextId: interaction.sourceIdentityContextId ?? null,
             originRunId: interaction.sourceRunId ?? null,
+            actorRunId: actor.runId ?? null,
             actorAgentId: actor.agentId ?? null,
             actorUserId: actor.userId ?? null,
           } as Parameters<ReturnType<typeof issueService>["createChild"]>[1];
           const owner = issueService(tx as unknown as Db);
           const createdIssue = task.placement === "company_backlog"
-            ? await owner.create(issue.companyId, { ...createInput, allowDuplicate: true, originKind: "manual", originId: `paperclip-suggested-task:${interaction.id}` })
-            : (await owner.createChild(parentIssueId, createInput)).issue;
+            ? await owner.create(issue.companyId, { ...createInput, allowDuplicate: true, originKind: "manual", originId: `paperclip-suggested-task:${interaction.id}` }, undefined, undefined, { privacyActor: actor.requestActor })
+            : (await owner.createChild(parentIssueId, createInput, { privacyActor: actor.requestActor })).issue;
           if (task.placement === "company_backlog") {
             if (createdIssue.id !== separateTaskIds.get(task.clientKey))
               throw conflict("The proposal's Original task identity changed");

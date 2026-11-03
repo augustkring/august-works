@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-23",
+  "scope": "ProductionLayout reuses existing ExperienceUtilities with Help/language available even when progressive shell is off; standalone duplicate composer removed.",
+  "baseline": {
+    "failed": 1,
+    "filtered": 32,
+    "seconds": 19.88,
+    "detail": "Actual original production shell lacks Help."
+  },
+  "earlierFinals": [
+    {
+      "passed": 45,
+      "failed": 1,
+      "seconds": 35.44,
+      "detail": "Old router mock lacked Link; one unhandled exception. Add standard anchor Link mock."
+    },
+    {
+      "passed": 45,
+      "failed": 1,
+      "seconds": 37.74,
+      "detail": "Existing settings mock overwrote enabled test cache. Configure actual mock consistently; assertions preserved."
+    }
+  ],
+  "final": {
+    "files": 3,
+    "passed": 46,
+    "seconds": 48.56,
+    "exit": 0
+  },
+  "checks": {
+    "final-fixed": 0,
+    "ui-types": 0,
+    "token-gates": 0
+  },
+  "files": {
+    "ui/src/components/Layout.production.tsx": "cb7b50bb0d23ca20fb2310bcb23a73cd638719332ea4eb86c5b90a4c878e3cc8",
+    "ui/src/components/Layout.test.tsx": "30f9e2991acc4bdb7aecc51b0007cb48c989b72e5c7e8271eab874dd37eaca33"
+  },
+  "sharedAtUiChecks": "6eb5bf4b2a1dda176146c54691e88cde0be4513380a63c95257d9e011c4da78c",
+  "scopeLimit": "Existing original utility exports used; new shared support projections present during checks are not qualified by this UI slice. No browser/manual, delivered support, full EN/DA inventory or V10/PR/release claim.",
+  "allSessionsClosed": true,
+  "assistance": "Bounded gpt-6-luna implementation and harness fixes; Root reviewed and ran checks."
+}

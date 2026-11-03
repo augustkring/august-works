@@ -1,0 +1,62 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > rejects a workspace-only file completion and invented delivery receipts without asking the user to approve completion 100ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > accepts a cited registered work product and respects the current request 91ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > prepares one verified same-run attachment and replays without duplicates 2099ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > fails closed for remote targets, symlinks, traversal, hash drift, and foreign bindings 2384ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > registers a verified remote output without reading a controller path 984ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > stages only exact wake-bound inbound bytes without exposing an API credential 356ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > captures the selected attachment snapshot before later asset changes and never invents delivered bytes 34ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > excludes an older same-issue attachment when the current wake selects a newer file 150ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > stages no historical attachment when the current wake contains only an omission 44ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > fails closed on a reminted work product and removes definite pre-commit storage failures 1185ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > returns authenticated file-delivery modes and upgrades receipt descriptions without repeating preparation 9516ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > rejects a previous run's attachment for new output and revalidates preserved bytes internally 965ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > rejects a previous run's work product for new output and revalidates preserved bytes internally 912ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > requires matching current publication proof after filename changes 396ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > requires matching current publication proof after size changes 393ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > requires matching current publication proof after hash changes 455ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > requires matching current publication proof after origin changes 399ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > requires matching current publication proof after missing receipt changes 412ms
+ ✓ src/services/native-runtime/native-runner-file-handoff.test.ts > native runner file handoff > requires matching current publication proof after wrong operation changes 420ms
+ ✓ src/services/native-runtime/chat-attachment-reuse.test.ts > native same-conversation chat attachment reuse > authorizes an external-chat response wait only from current durable policy 188ms
+ ✓ src/services/native-runtime/chat-attachment-reuse.test.ts > native same-conversation chat attachment reuse > lists metadata only and clones exact bytes once into current-run provenance 2424ms
+ ✓ src/services/native-runtime/chat-attachment-reuse.test.ts > native same-conversation chat attachment reuse > bounds a stalled storage write and removes the late object without creating rows 26ms
+ ✓ src/services/native-runtime/chat-attachment-reuse.test.ts > native same-conversation chat attachment reuse > pages a stable deduplicated attachment history with equal timestamps 763ms
+ ✓ src/services/native-runtime/chat-attachment-reuse.test.ts > native same-conversation chat attachment reuse > keeps an older confirmed lineage when a newer publication was deleted 1842ms
+[12:39:26] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"company_scope:read","resourceType":"company","companyId":"10000000-0000-4000-8000-000000000101","actorAgentId":"10000000-0000-4000-8000-000000000102","responsibleUserId":"chat-user-1"}[39m
+ × src/services/native-runtime/chat-attachment-reuse.test.ts > native same-conversation chat attachment reuse > rejects forged source pairs, stale reach, and deleted historical sources 475ms
+   → expected [Function] to throw error including 'paperclip_runner_chat_attachment_prin…' but got 'Responsible user chat-user-1 is unava…'
+ ✓ src/services/native-runtime/native-chat-workspace.test.ts > native external chat workspace boundary > uses distinct sibling task roots for one agent, stable across turns, outside the legacy agent home 8ms
+ ✓ src/services/native-runtime/native-chat-workspace.test.ts > native external chat workspace boundary > keeps ordinary Board tasks and legacy adapters out while resolving chat scope for sandbox execution 5ms
+ ✓ src/services/native-runtime/native-chat-workspace.test.ts > native external chat workspace boundary > selects a canonical projectless conversation only for its exact current Human, generation, and Run 4ms
+ ✓ src/services/native-runtime/native-chat-workspace.test.ts > native external chat workspace boundary > does not expose another active task's staged inbound files or register its generated file 653ms
+ ✓ src/services/native-runtime/native-chat-workspace.test.ts > native external chat workspace boundary > rejects shared or foreign project workspaces and honors only existing task-owned isolated worktrees 1ms
+ ✓ src/services/native-runtime/native-chat-workspace.test.ts > native external chat workspace boundary > rejects an admitted legacy or other-task root without changing the immutable execution input 0ms
+ ✓ src/services/native-runtime/native-chat-workspace.test.ts > native external chat workspace boundary > fails closed if an existing task directory is a symlink to another task 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/chat-attachment-reuse.test.ts > native same-conversation chat attachment reuse > rejects forged source pairs, stale reach, and deleted historical sources
+AssertionError: expected [Function] to throw error including 'paperclip_runner_chat_attachment_prin…' but got 'Responsible user chat-user-1 is unava…'
+
+Expected: "paperclip_runner_chat_attachment_principal_denied"
+Received: "Responsible user chat-user-1 is unavailable for company 10000000-0000-4000-8000-000000000101."
+
+ ❯ src/services/native-runtime/chat-attachment-reuse.test.ts:1082:6
+    1080|         },
+    1081|       }),
+    1082|     ).rejects.toThrow("paperclip_runner_chat_attachment_principal_deni…
+       |      ^
+    1083|     await db
+    1084|       .update(companyMemberships)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 31 passed (32)
+   Start at  12:38:30
+   Duration  66.84s (transform 11.13s, setup 204ms, import 23.91s, tests 42.33s, environment 0ms)
+

@@ -52,6 +52,8 @@ function nonNegativeInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+type ImportDbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 export function workProductDiffSummaryFromEventPayload(payload: unknown): WorkProductDiffSummary | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
   const outer = payload as Record<string, unknown>;
@@ -338,7 +340,7 @@ export function workProductService(
      * imported rows themselves. We reproduce "last primary wins" within each
      * (issue, type) group and insert the whole batch in chunked statements.
      */
-    createManyForImport: async (rows: ImportIssueWorkProductRow[]): Promise<void> => {
+    createManyForImport: async (rows: ImportIssueWorkProductRow[], dbOrTx: Db | ImportDbTransaction = db): Promise<void> => {
       if (rows.length === 0) return;
       const lastPrimaryIndexByGroup = new Map<string, number>();
       rows.forEach((row, index) => {
@@ -371,7 +373,7 @@ export function workProductService(
       // fails, the earlier chunks roll back rather than leaving a partial
       // prefix behind (which a retry would then duplicate). Mirrors the
       // per-writer transaction the batched issue/document writers use.
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         await insertRowsInChunks(tx, issueWorkProducts, values);
       });
     },

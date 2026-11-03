@@ -825,9 +825,9 @@ export async function reconcileNativeFinalizations(
         results.push({
           runId: row.runId,
           phase: "committed",
-          reconciliationAction: decision.reasonCode,
+          reconciliationAction: committed.effectiveDecision.reasonCode,
           decisionId: committed.decision.id,
-          reconciliationDecision: decision,
+          reconciliationDecision: committed.effectiveDecision,
         });
         continue;
       }

@@ -1,0 +1,5 @@
+f342b89a3ac9db4898aba86fa07414d6f02809797d0685b04676632366ef7c7a  server/src/services/memory/memory-privacy.ts
+594e9a2c27f05c8f899cdb857d2477712b353bacbac2908241f053e8b57fb34b  server/src/__tests__/native-payload-source-binding.integration.test.ts
+47c1964e04a503f17f6b004ad2df767f4af5cbb8e50344edba6632d7c3dcf883  server/src/__tests__/v9-native-task-source-erasure.integration.test.ts
+77f9a322b935145a425f750b8842e5d0ed6b9dfdd4ea09662de961c4c8c3939e  server/src/routes/project-control.ts
+06c2739560402f6270b9e2f502e89d0833290b5258d0e38b1e50e050452ec06b  server/src/__tests__/native-payload-public-response.integration.test.ts

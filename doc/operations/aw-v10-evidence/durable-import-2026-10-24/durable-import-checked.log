@@ -1,0 +1,34 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:01:46] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"47910feb-9cfa-40d0-8ce0-7bf4bfed1c9e"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:847:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:01:46] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"4503704a-a668-4154-ad8e-52b53667da68"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:898:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:01:46] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"52f5365b-7d48-490e-afd5-cf94ee4a5291"}[39m
+[20:01:46] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"52f5365b-7d48-490e-afd5-cf94ee4a5291"}[39m
+
+ Test Files  2 passed (2)
+      Tests  31 passed (31)
+   Start at  20:01:27
+   Duration  25.37s (transform 10.64s, setup 135ms, import 5.90s, tests 19.08s, environment 0ms)
+

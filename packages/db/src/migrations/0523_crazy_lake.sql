@@ -1,0 +1,2 @@
+ALTER TABLE "two_factor" ADD COLUMN "totp_replay_state" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "two_factor" ADD CONSTRAINT "two_factor_totp_replay_state_check" CHECK (jsonb_typeof("two_factor"."totp_replay_state")='array' and jsonb_array_length("two_factor"."totp_replay_state")<=16);

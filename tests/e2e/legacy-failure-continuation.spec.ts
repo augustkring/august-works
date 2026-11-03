@@ -1,3 +1,5 @@
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
+import { assertUnqualifiedRuntime } from "./fixtures/assert-unqualified-runtime.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -6,14 +8,19 @@ import { test, expect, type APIResponse } from "@playwright/test";
 import { and, eq } from "../../server/node_modules/drizzle-orm/index.js";
 import { createDb, closeRegisteredClients, heartbeatRuns, issueRecoveryActions, issues, issueComments, agentWakeupRequests, authUsers, companyMemberships } from "../../packages/db/src/index.ts";
 
+registerEnglishAccountLocaleIsolation(test);
+
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()} ${await response.text()}`).toBe(true);
   return response.json();
 }
 
 for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "queued_interrupt", "automatic_message"] as const) {
-  test(`legacy startup hold: ${action} reaches a new agent response`, async ({ page, request }) => {
+  test(`legacy startup hold: ${action} retains input and shows the unavailable Runtime`, async ({ page, request }) => {
     test.setTimeout(120_000);
+    const humanUserId = action === "automatic_message"
+      ? (await json(await request.get("/api/auth/get-session"))).user.id as string
+      : null;
     const root = await mkdtemp(path.join(os.tmpdir(), "legacy-recovery-browser-"));
     const config = JSON.parse(await readFile(process.env.PAPERCLIP_E2E_SERVER_CONFIG!, "utf8"));
     // Use the running test server's actual port, including fallback allocation.
@@ -34,6 +41,11 @@ for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "q
         title: "Continue after startup failure", description: "Answer the pending follow-up once.",
         status: "backlog", assigneeAgentId: agent.id,
       } }));
+      if (action === "automatic_message") {
+        await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user",
+          principalId: humanUserId!, membershipRole: "operator", status: "active" }).onConflictDoNothing();
+        await db.update(issues).set({ responsibleUserId: humanUserId! }).where(eq(issues.id, issue.id));
+      }
       const sourceRunId = randomUUID();
       // Seed the historical incident, then exercise all recovery through the UI.
       // No adapter.invoke or new dispatch identity exists on this pre-upgrade run.
@@ -60,7 +72,7 @@ for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "q
         // Reproduce a real user comment saved while the failed run was active,
         // including queues originally created by a system wake.
         await db.insert(issueComments).values({ id: commentId, companyId: company.id, issueId: issue.id,
-          authorType: "user", authorUserId: action === "queued_interrupt" ? "original-board" : "local-board", body: "Approved",
+          authorType: "user", authorUserId: action === "queued_interrupt" ? "original-board" : humanUserId!, body: "Approved",
           createdAt: new Date(Date.now() - 8_000),
         });
         await db.insert(agentWakeupRequests).values({ companyId: company.id, agentId: agent.id,
@@ -93,25 +105,48 @@ for (const action of ["task_retry", "thread_retry", "inbox_retry", "message", "q
       } else if (action === "message") {
         await page.getByRole("textbox", { name: "editable markdown" }).fill("Please continue the pending follow-up.");
         await page.getByRole("button", { name: "Send", exact: true }).click();
+      } else if (action === "inbox_retry") {
+        const retryAccepted = page.waitForResponse(response => {
+          const retryRequest = response.request();
+          const retryUrl = new URL(response.url());
+          if (retryRequest.method() !== "POST" ||
+              retryUrl.pathname !== `/api/agents/${agent.id}/wakeup` ||
+              retryUrl.searchParams.get("companyId") !== company.id) return false;
+          const body: unknown = retryRequest.postDataJSON();
+          return typeof body === "object" && body !== null &&
+            "reason" in body && body.reason === "retry_failed_run" &&
+            "failedRunId" in body && body.failedRunId === sourceRunId;
+        });
+        await page.getByRole("button", { name: "Retry", exact: true }).click();
+        const accepted = await retryAccepted;
+        expect(accepted.status()).toBe(202);
+        expect(await accepted.finished()).toBeNull();
+        // Keep the Task assertions, after the exact retry mutation is acknowledged.
+        await page.goto(taskUrl);
       } else {
         await page.getByRole("button", { name: action === "thread_retry" ? "Try again" : "Retry", exact: true }).click();
-        if (action === "inbox_retry") await page.goto(taskUrl);
       }
-      await expect(page.getByText("Answered the pending follow-up once.", { exact: false })).toBeVisible({ timeout: 45_000 });
-      await expect(page.getByRole("status", { name: "Task recovery" })).toHaveCount(0);
-      const completed = await json(await request.get(`/api/issues/${issue.id}`));
-      expect(completed).toMatchObject({ status: "done", executionBlocker: null });
+      await assertUnqualifiedRuntime({ request, page, companyId: company.id, agentId: agent.id,
+        excludedRunIds: [sourceRunId] });
       const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, company.id), eq(heartbeatRuns.agentId, agent.id)));
       expect(runs.filter(run => run.id !== sourceRunId)).toHaveLength(1);
-      expect(runs.find(run => run.id === sourceRunId)).toMatchObject({ status: "failed", resultJson: null });
-      const prompts = await readFile(path.join(root, "prompts"), "utf8");
-      if (action === "queued_interrupt" || action === "automatic_message") {
-        expect(prompts).toContain("Approved");
-        await expect(page.getByRole("button", { name: "Interrupt", exact: true })).toHaveCount(0);
+      expect(runs.find(run => run.id === sourceRunId)).toMatchObject({ status: "failed", resultJson: null,
+        errorCode: "process_lost", error: "Server restarted during startup" });
+      for (const filename of ["requests", "prompts", "writes", "completed"]) {
+        await expect(readFile(path.join(root, filename), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
       }
-      if (action === "message") expect(prompts).toContain("Please continue the pending follow-up.");
+      const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id));
+      if (action === "queued_interrupt" || action === "automatic_message") {
+        expect(comments.filter(comment => comment.body === "Approved")).toHaveLength(1);
+      }
+      if (action === "message") {
+        expect(comments.filter(comment => comment.body === "Please continue the pending follow-up.")).toHaveLength(1);
+      }
+      expect((await json(await request.get(`/api/issues/${issue.id}/live-runs`)))).toEqual([]);
+      expect((await json(await request.get(`/api/issues/${issue.id}`))).status).toBe("blocked");
       await page.reload();
-      await expect(page.getByText("Answered the pending follow-up once.", { exact: false })).toBeVisible();
+      await expect(page.getByTestId("task-chat-system-notice").filter({ hasText: "Task paused — runtime unavailable" })).toBeVisible();
+
     } finally {
       await request.patch(`/api/companies/${company.id}`, { data: { status: "archived" } });
       await closeRegisteredClients(url);

@@ -1,3 +1,4 @@
+import { ToolModelEffectAdmissionError } from "./native-runtime/paid-transport-admission.js";
 import { createHash } from "node:crypto";
 
 /** Reviewed Cognee Cloud contract from cognee-mcp 0.5.5. Executed by the bundled bridge below. */
@@ -55,6 +56,12 @@ export async function callCogneeCloud(input: {
   request: (url: URL, init: RequestInit) => Promise<unknown>;
   signal: AbortSignal;
 }) {
+  // These model-capable operations have no qualified company-purpose nested
+  // model reservation or whole-invocation liability contract. Reject before
+  // reading credentials, including calls without a task or Native session.
+  if (["remember", "recall"].includes(input.tool)) {
+    throw new ToolModelEffectAdmissionError("cognee_model_operation");
+  }
   const base = cogneeCloudUrl(input.baseUrl);
   if (!input.apiKey) throw new Error("Reconnect Cognee to restore its Cloud API key.");
   const tenant = /^tenant-([0-9a-f-]{36})\./i.exec(base.hostname)?.[1];

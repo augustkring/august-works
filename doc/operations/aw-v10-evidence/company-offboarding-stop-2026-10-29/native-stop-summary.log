@@ -1,0 +1,4 @@
+ ✓ src/__tests__/v7-model-reservations.integration.test.ts > native model reservation ledger and dispatch boundary > company deletion stops a live Native run before advancing past revoke 21731ms
+ Test Files  1 passed (1)
+      Tests  1 passed | 32 skipped (33)
+   Duration  42.56s (transform 11.31s, setup 80ms, import 16.19s, tests 26.16s, environment 0ms)

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
@@ -7,7 +8,9 @@ import {
   companyMemberships,
   createDb,
   invites,
+  issues,
   principalPermissionGrants,
+  projects,
 } from "@paperclipai/db";
 import { buildHostServices } from "../services/plugin-host-services.js";
 import {
@@ -55,6 +58,8 @@ describeEmbeddedPostgres("plugin access and authorization host services", () => 
     await db.delete(activityLog);
     await db.delete(principalPermissionGrants);
     await db.delete(invites);
+    await db.delete(issues);
+    await db.delete(projects);
     await db.delete(agents);
     await db.delete(companyMemberships);
     await db.delete(companies);
@@ -320,5 +325,38 @@ describeEmbeddedPostgres("plugin access and authorization host services", () => 
     expect(JSON.stringify(rows[0]!.details)).not.toContain("sk-test-secret");
     expect(JSON.stringify(rows[0]!.details)).not.toContain("should-not-persist");
     services.dispose();
+  });
+
+  it.each(["issue", "project"] as const)("invalidates changed %s policy captures while preserving an unchanged body", async resourceType => {
+    const company = await createCompany(db, "PAC");
+    const policy = { assignmentPolicy: { mode: "open" } };
+    const [resource] = resourceType === "issue"
+      ? await db.insert(issues).values({ companyId: company.id, title: "Captured policy task", payloadSourceProtocolVersion: 1,
+        executionPolicy: { authorizationPolicy: policy } }).returning({ id: issues.id })
+      : await db.insert(projects).values({ companyId: company.id, name: "Captured policy project", payloadSourceProtocolVersion: 1,
+        executionWorkspacePolicy: { enabled: false, authorizationPolicy: policy } }).returning({ id: projects.id });
+    const table = sql.identifier(resourceType === "issue" ? "issues" : "projects");
+    // Structural binding fixture only: no authenticated producer, complete
+    // source closure or permission qualification is implied by this snapshot.
+    const [bound] = await db.execute<{ snapshot: unknown }>(sql`update ${table} target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind',${resourceType}::text,
+          'companyId',target.company_id,'id',target.id,'contentHash',public.aw_native_payload_body_hash(${resourceType},to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) actual_body) where target.company_id=${company.id}::uuid and target.id=${resource!.id}::uuid
+      returning payload_source_snapshot as snapshot`);
+    const services = buildHostServices(db, pluginId, "permissions-extension", createEventBusStub());
+    const read = () => db.execute<{ snapshot: unknown; invalidated: boolean }>(sql`select payload_source_snapshot as snapshot,
+      payload_source_snapshot_invalidated as invalidated from ${table} where company_id=${company.id}::uuid and id=${resource!.id}::uuid`);
+    try {
+      const unchanged = await services.authorization.updatePolicy({ companyId: company.id, resourceType, resourceId: resource!.id, policy });
+      expect(unchanged.policy).toMatchObject(policy);
+      expect((await read())[0]).toEqual({ snapshot: bound!.snapshot, invalidated: false });
+      const changed = await services.authorization.updatePolicy({ companyId: company.id, resourceType, resourceId: resource!.id,
+        policy: { assignmentPolicy: { mode: "protected" } } });
+      expect(changed.policy).toMatchObject({ assignmentPolicy: { mode: "protected" } });
+      expect((await read())[0]).toEqual({ snapshot: null, invalidated: true });
+    } finally { services.dispose(); }
   });
 });

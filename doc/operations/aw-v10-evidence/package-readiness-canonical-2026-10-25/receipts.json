@@ -1,0 +1,64 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "60689b666de1cb2b2d40e3fb8fc3e646165cc87b",
+  "meaning": "Full original package integration115PASS after genuine Human/Agent readiness fixes and canonical Routine/Memory fixture creation. Original Context/policy4files32PASS. No provider or complete V10 qualification.",
+  "logs": [
+    {
+      "name": "package-source-fixture-repair-final",
+      "exitCode": 0,
+      "rawSha256": "f8956f4efd045006e304267e727e65715156e553cfbe277054c0c969bc763ad9",
+      "sanitizedSha256": "f8956f4efd045006e304267e727e65715156e553cfbe277054c0c969bc763ad9",
+      "archiveSha256": "370da198db13194a4197aa7c4518665460011609ca9bca61370e6e61d2fb907e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed | 112 skipped (115)",
+        "Duration  20.60s (transform 10.01s, setup 74ms, import 13.95s, tests 6.45s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-package-canonical-full",
+      "exitCode": 0,
+      "rawSha256": "66719b42b47dde2d92530d2d15ac0193ad919aa990a44bb027bf796b736b210d",
+      "sanitizedSha256": "66719b42b47dde2d92530d2d15ac0193ad919aa990a44bb027bf796b736b210d",
+      "archiveSha256": "faad92ad4eee975bc62761de6122978d89e409fe7dcf85ba67f11e4a43587f0c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  115 passed (115)",
+        "Duration  77.50s (transform 10.94s, setup 95ms, import 15.19s, tests 62.07s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "readiness-context-original-controls",
+      "exitCode": 0,
+      "rawSha256": "43dc0c82615d8f07b02d7085b6964fec35542304cfa5e50e306ec347ba2a46af",
+      "sanitizedSha256": "14a92db64214958315a7e20c179a9e951beb9db07bf6136d4669789d306d6605",
+      "archiveSha256": "5ebad51e06431a5f6c1f22511816287bf3244f3352bb2d36e988e3209209c742",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  4 passed (4)",
+        "Tests  32 passed (32)",
+        "Duration  34.73s (transform 9.51s, setup 249ms, import 21.26s, tests 12.73s, environment 0ms)"
+      ]
+    }
+  ]
+}

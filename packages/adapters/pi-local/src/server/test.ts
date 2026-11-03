@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import type {
   AdapterEnvironmentCheck,
   AdapterEnvironmentTestContext,
@@ -237,7 +238,7 @@ export async function testEnvironment(
     }
   }
 
-  if (canRunProbe && configuredModel) {
+  if (canRunProbe && configuredModel && admitPaidModelProbe(checks)) {
     // Parse model for probe
     const provider = configuredModel.includes("/") 
       ? configuredModel.slice(0, configuredModel.indexOf("/")) 

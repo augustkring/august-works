@@ -1,0 +1,43 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts (9 tests | 3 failed | 6 skipped) 14104ms
+     × ends the original socket when its actual session is deleted, even with the same cached Human 266ms
+     × ends the original socket when its actual session is expired, even with the same cached Human 83ms
+     × ends the original socket when its actual session is replaced, even with the same cached Human 72ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends the original socket when its actual session is deleted, even with the same cached Human
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends the original socket when its actual session is expired, even with the same cached Human
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends the original socket when its actual session is replaced, even with the same cached Human
+AssertionError: expected { kind: 'message' } to deeply equal { kind: 'closed', code: 1008 }
+
+- Expected
++ Received
+
+  {
+-   "code": 1008,
+-   "kind": "closed",
++   "kind": "message",
+  }
+
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:107:29
+    105|       ]);
+    106|       publishLiveEvent({companyId,type:"agent.status",payload:{marker:…
+    107|       expect(await outcome).toEqual({kind:"closed",code:1008});
+       |                             ^
+    108|     }finally{
+    109|       if(socket.readyState!==WebSocket.CLOSED){const closed=once(socke…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 6 skipped (9)
+   Start at  22:07:33
+   Duration  34.84s (transform 11.37s, setup 348ms, import 19.62s, tests 14.10s, environment 0ms)
+

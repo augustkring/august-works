@@ -66,6 +66,7 @@ export type CompanyImportTransferRunStatus =
   | "pending"
   | "running"
   | "applying"
+  | "needs_reconciliation"
   | "completed"
   | "failed"
   | "cancelled";

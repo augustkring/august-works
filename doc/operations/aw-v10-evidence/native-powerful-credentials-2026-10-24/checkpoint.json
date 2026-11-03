@@ -1,0 +1,56 @@
+{
+  "parentCommit": "27e726effdffa18ec8b9f179381ef1e06b6c8676",
+  "requirements": [
+    "UP-02",
+    "CE-03"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeBackend": {
+      "exit": 0,
+      "suites": 4,
+      "passed": 84
+    },
+    "clients": {
+      "exit": 0,
+      "suites": 6,
+      "passed": 84
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "uiCompiler": {
+      "exit": 0
+    },
+    "cliCompiler": {
+      "exit": 0
+    },
+    "tokenGates": {
+      "exit": 0
+    },
+    "generatedMigration": {
+      "exit": 0,
+      "migration": "0524_mute_doctor_octopus.sql"
+    },
+    "builtChromium": {
+      "exit": 0,
+      "passed": 1
+    }
+  },
+  "observations": [
+    "Board/CLI issuance receives actual Actor and repeats current recent native proof inside its original transaction, including success/replay. Configured operators need verified email and passkey proof. Explicit local implicit authority is not MFA and cannot satisfy configured operator proof.",
+    "Native password confirmation returns the actual replacement SID. The original settings component validates canonical account/SID and binds confirmation acknowledgement to that exact verified SID, including the reused confirmation-only CLI view.",
+    "Confirmation never approves CLI access. The original challenge is re-read and a separate explicit approval sends narrowing expected-user/session headers checked by the server.",
+    "Three controlled original failures reproduce lost recent-auth guidance across a same-session read, unmounted native confirmation across its own session refresh, and cross-account HTTP request coalescing. Final tests pass all three, with late source changes withheld and no automatic approval.",
+    "CLI connect uses the exact approved key. Named CLI issuance creates a new human consent challenge rather than reminting from a bearer. Requested name/expiry are retained and shown before approval; absent/mismatched echoes or actual key metadata are rejected before local credential storage.",
+    "Generated original challenge field retains explicit expiry/null, defaults to 30 days, and approval checks database-clock expiry before success. Existing serialization, domain authority, atomic audit, revocation/cancellation and token protection are preserved.",
+    "Cold route import exceeded its original first-test timeout and contaminated the following shared mock; bounded beforeAll setup now isolates the cold import. UI fixture receipt/status expectations and void cancellation mocks were corrected; raw failures remain archived.",
+    "Real built browser uses actual native cookies, migrated PostgreSQL, stale password proof, replacement session receipt, pending/approved token authentication and explicit second approval, then existing maintained TOTP/recovery/UV passkey lifecycles and rollback/non-replay controls. Virtual keys and fixture-owned injected failures are distinguished from physical authenticators."
+  ],
+  "limits": [
+    "Complete password/email/destructive-action fences, operator bootstrap/break-glass and enterprise SSO/recovery remain open. No weaker fallback is added.",
+    "Complete source-aware read/effect lifetimes, native input receipts, original private-Memory/temporal/typed-origin failures, portability and remaining V10 requirements remain open.",
+    "Mixed-version server deployment, real provider/host/enterprise/manual accessibility qualification and latest full workspace release gates are not qualified.",
+    "This checkpoint is not complete V10, PR-ready, beta or production acceptance. No PR, merge or deployment was performed."
+  ]
+}

@@ -1,4 +1,5 @@
 import express from "express";
+import { issues as issueRowsTable } from "@paperclipai/db";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { errorHandler } from "../middleware/index.js";
@@ -6,6 +7,28 @@ import { issueRoutes } from "../routes/issues.js";
 import { HttpError } from "../errors.js";
 
 const mockAnalyticalPayloadAccess = vi.hoisted(() => vi.fn());
+const mockCurrentIssuePrivacy = vi.hoisted(() => vi.fn());
+const mockCurrentProjectPrivacy = vi.hoisted(() => vi.fn());
+const mockCurrentRunPrivacy = vi.hoisted(() => vi.fn());
+const mockCurrentDocumentSource = vi.hoisted(() => vi.fn());
+vi.mock("../services/native-direct-input.js", async () => ({
+  ...await vi.importActual<typeof import("../services/native-direct-input.js")>("../services/native-direct-input.js"),
+  assertNativeDocumentRevisionCurrentSourceAccess: mockCurrentDocumentSource,
+}));
+// This is a DTO/embedding route fixture without a PostgreSQL source graph.
+// Keep source admission explicit while exercising the real presentation owner.
+vi.mock("../services/authorization.js", async () => ({
+  ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+  canActorReadIssuePrivacy: mockCurrentIssuePrivacy,
+  canActorReadProjectPrivacy: mockCurrentProjectPrivacy,
+  canActorReadHeartbeatRunPrivacy: mockCurrentRunPrivacy,
+}));
+vi.mock("../services/task-source-read-scope.js", () => ({
+  withCurrentTaskSourceRead: async (
+    db: unknown, _companyId: string, _actor: unknown,
+    read: (queryDb: unknown, hasReferences: boolean) => Promise<unknown>,
+  ) => read(db, false),
+}));
 vi.mock("../services/analytical-context-authority.js", () => ({
   assertAnalyticalContextPayloadAccess: mockAnalyticalPayloadAccess,
 }));
@@ -101,6 +124,7 @@ const mockWorkProductService = vi.hoisted(() => ({
 const mockEnvironmentService = vi.hoisted(() => ({}));
 
 const mockDb = vi.hoisted(() => ({
+  transaction: vi.fn(),
   select: vi.fn(),
   execute: vi.fn(),
 }));
@@ -199,6 +223,16 @@ const projectGoal = {
 describe.sequential("issue goal context routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDb.transaction.mockImplementation(async (work: (tx: typeof mockDb) => unknown) => work(mockDb));
+    mockCurrentIssuePrivacy.mockReset().mockResolvedValue(true);
+    mockCurrentProjectPrivacy.mockReset().mockResolvedValue(true);
+    mockCurrentRunPrivacy.mockReset().mockResolvedValue(true);
+    mockCurrentDocumentSource.mockReset().mockResolvedValue(undefined);
+    mockIssueService.getById.mockReset();
+    mockProjectService.getById.mockReset();
+    mockExecutionWorkspaceService.getById.mockReset();
+    mockGoalService.getById.mockReset();
+    mockDb.select.mockReset();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockAccessService.decide.mockResolvedValue({
       allowed: true,
@@ -275,6 +309,15 @@ describe.sequential("issue goal context routes", () => {
     mockGoalService.getDefaultCompanyGoal.mockResolvedValue(null);
   });
 
+  it.each(["", "/heartbeat-context"])("withholds a restricted Project and its inherited goal: %s", async (suffix) => {
+    mockCurrentProjectPrivacy.mockResolvedValue(false);
+    const response = await request(createApp()).get(`/api/issues/${legacyProjectLinkedIssue.id}${suffix}`);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.project).toBeNull();
+    expect(response.body.goal).toBeNull();
+    expect(JSON.stringify(response.body)).not.toContain(projectGoal.title);
+  });
+
   it.each(["", "/heartbeat-context"])("withholds goal and workspace context when current Source access is denied: %s", async (suffix) => {
     mockAnalyticalPayloadAccess.mockRejectedValue(new HttpError(403, "Analytical Source unavailable"));
     const res = await request(createApp()).get(`/api/issues/${legacyProjectLinkedIssue.id}${suffix}`);
@@ -292,7 +335,7 @@ describe.sequential("issue goal context routes", () => {
       originId: "historical-source",
     });
     const res = await request(createApp()).get(`/api/issues/${legacyProjectLinkedIssue.id}${suffix}`);
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     const issue = suffix ? res.body.issue : res.body;
     expect(issue).toMatchObject({
       originKind: "issue_productivity_review",
@@ -306,7 +349,7 @@ describe.sequential("issue goal context routes", () => {
   it("surfaces the project goal from GET /issues/:id when the issue has no direct goal", async () => {
     const res = await request(createApp()).get("/api/issues/11111111-1111-4111-8111-111111111111");
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.goalId).toBe(projectGoal.id);
     expect(res.body.goal).toEqual(
       expect.objectContaining({
@@ -447,7 +490,7 @@ describe.sequential("issue goal context routes", () => {
 
     const res = await request(createApp()).get("/api/issues/11111111-1111-4111-8111-111111111111");
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.project.env).toBeNull();
     expect(res.body.project.workspaces[0]).not.toHaveProperty("metadata");
     expect(res.body.project.workspaces[0]).not.toHaveProperty("runtimeServices");
@@ -468,7 +511,7 @@ describe.sequential("issue goal context routes", () => {
       "/api/issues/11111111-1111-4111-8111-111111111111/heartbeat-context",
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.issue.goalId).toBe(projectGoal.id);
     expect(res.body.issue.workMode).toBe("planning");
     expect(res.body.goal).toEqual(
@@ -495,15 +538,26 @@ describe.sequential("issue goal context routes", () => {
       "/api/issues/11111111-1111-4111-8111-111111111111/heartbeat-context",
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(mockDocumentsService.getIssueDocumentByKey).toHaveBeenCalledWith(
       "11111111-1111-4111-8111-111111111111",
       "continuation-summary",
+      expect.objectContaining({ onSourceCapture: expect.any(Function) }),
     );
     expect(res.body.continuationSummary).toEqual(expect.objectContaining({
       key: "continuation-summary",
       body: "# Handoff",
     }));
+  });
+
+  it("withholds a continuation summary after its current document Source is denied", async () => {
+    mockDocumentsService.getIssueDocumentByKey.mockResolvedValue({
+      key: "continuation-summary", body: "PRIVATE-HANDOFF-MARKER", latestRevisionId: "revision-1",
+    });
+    mockCurrentDocumentSource.mockRejectedValue(new HttpError(403, "Document Source unavailable"));
+    const response = await request(createApp()).get(`/api/issues/${legacyProjectLinkedIssue.id}/heartbeat-context`);
+    expect(response.status).toBe(403);
+    expect(JSON.stringify(response.body)).not.toContain("PRIVATE-HANDOFF-MARKER");
   });
 
   it("surfaces blocker summaries on GET /issues/:id/heartbeat-context", async () => {
@@ -522,11 +576,31 @@ describe.sequential("issue goal context routes", () => {
       blocks: [],
     });
 
+    // The real route enumerates candidate rows before applying its access
+    // decisions. Supply the visible fixture row instead of an empty DB result.
+    const rows = [legacyProjectLinkedIssue, {
+      ...legacyProjectLinkedIssue, id: "55555555-5555-4555-8555-555555555555",
+      identifier: "PAP-580", title: "Finish wakeup plumbing", status: "done",
+    }];
+    mockDb.select.mockImplementation(() => {
+      let selectedRows: unknown[] = [];
+      const query: any = {};
+      query.from = vi.fn((table: unknown) => {
+        selectedRows = table === issueRowsTable ? rows : [];
+        return query;
+      });
+      for (const method of ["innerJoin", "leftJoin", "where", "orderBy"]) query[method] = vi.fn(() => query);
+      query.limit = vi.fn(async () => selectedRows);
+      query.then = (resolve: (value: unknown[]) => unknown, reject?: (error: unknown) => unknown) =>
+        Promise.resolve(selectedRows).then(resolve, reject);
+      return query;
+    });
+
     const res = await request(createApp()).get(
       "/api/issues/11111111-1111-4111-8111-111111111111/heartbeat-context",
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(res.body.issue.blockedBy).toEqual([
       expect.objectContaining({
         id: "55555555-5555-4555-8555-555555555555",
@@ -561,7 +635,7 @@ describe.sequential("issue goal context routes", () => {
       "/api/issues/11111111-1111-4111-8111-111111111111/heartbeat-context",
     );
 
-    expect(res.status).toBe(200);
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
     expect(mockExecutionWorkspaceService.getById).toHaveBeenCalledWith("55555555-5555-4555-8555-555555555555");
     expect(res.body.currentExecutionWorkspace).toEqual(expect.objectContaining({
       id: "55555555-5555-4555-8555-555555555555",

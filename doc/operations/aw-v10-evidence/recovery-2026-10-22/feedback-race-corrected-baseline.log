@@ -1,0 +1,36 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ❯ src/__tests__/v9-customer-feedback.integration.test.ts (19 tests | 1 failed | 18 skipped) 9596ms
+     × preserves the feedback privacy latch when a general settings write overlaps flag enablement 235ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-customer-feedback.integration.test.ts > V9 native customer feedback on migrated PostgreSQL > preserves the feedback privacy latch when a general settings write overlaps flag enablement
+AssertionError: expected undefined to be 'aw-v9-local-v1' // Object.is equality
+
+- Expected:
+"aw-v9-local-v1"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/v9-customer-feedback.integration.test.ts:732:75
+    730|         await holder;
+    731|         await Promise.all([enableFeedback, updateGeneral]);
+    732|         expect((await settings.getGeneral()).outputFeedbackPolicyVersi…
+       |                                                                           ^
+    733|         expect((await settings.getGeneral()).censorUsernameInLogs).toB…
+    734|       } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 18 skipped (19)
+   Start at  10:00:06
+   Duration  58.07s (transform 30.51s, setup 283ms, import 47.51s, tests 9.60s, environment 0ms)
+
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/__tests__/v9-customer-feedback.integration.test.ts -t preserves the feedback privacy latch when a general settings write overlaps flag enablement --maxWorkers=1

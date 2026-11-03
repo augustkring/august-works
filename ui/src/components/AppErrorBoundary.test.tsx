@@ -75,7 +75,7 @@ describe("AppErrorBoundary", () => {
       );
     });
 
-    expect(container.textContent).toContain("August Works hit an error");
+    expect(container.textContent).toContain("Blentera hit an error");
     expect(container.textContent).not.toContain("Maximum update depth exceeded");
     expect(container.querySelectorAll("main")).toHaveLength(1);
     expect(document.activeElement).toBe(container.querySelector("main h1"));
@@ -100,7 +100,7 @@ describe("AppErrorBoundary", () => {
       );
     });
 
-    expect(container.textContent).toContain("August Works hit an error");
+    expect(container.textContent).toContain("Blentera hit an error");
     expect(container.textContent).not.toContain("effect exploded");
 
     act(() => {
@@ -154,7 +154,7 @@ describe("AppErrorBoundary", () => {
       expect.objectContaining({ name: "NotFoundError" }),
       { boundary: "app", componentStack: expect.stringContaining("BrokenDomInsertion") },
     );
-    expect(container.textContent).toContain("August Works hit an error");
+    expect(container.textContent).toContain("Blentera hit an error");
     act(() => root.unmount());
   });
 

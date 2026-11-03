@@ -1,4 +1,4 @@
-import { lockActivationSnapshot as lockSnapshot, assertActivationAccess as access, readActivationOwner as read } from "./activation-owner.js";
+import { lockActivationSnapshot as lockSnapshot, isActivationSnapshotBusy, assertActivationAccess as access, readActivationOwner as read } from "./activation-owner.js";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
   activityLog,
@@ -187,21 +187,30 @@ export function activationService(db: Db) {
     });
   }
   return {
-    get: async (actor: AuthorizationActor, companyId: string) =>
-      db.transaction(async (tx) => {
-        const txDb = tx as unknown as Db;
-        await access(txDb, actor, companyId);
-        await lockSnapshot(txDb, companyId);
-        await access(txDb, actor, companyId, true);
-        const [company] = await tx
-          .select()
-          .from(companies)
-          .where(eq(companies.id, companyId))
-          .for("share");
-        if (!company || company.status !== "active")
-          throw forbidden("Company setup is unavailable");
-        return view(txDb, actor, companyId);
-      }),
+    get: async (actor: AuthorizationActor, companyId: string) => {
+      try {
+        return await db.transaction(async (tx) => {
+          const txDb = tx as unknown as Db;
+          await access(txDb, actor, companyId);
+          await lockSnapshot(txDb, companyId, "read");
+          await access(txDb, actor, companyId, true);
+          const [company] = await tx
+            .select()
+            .from(companies)
+            .where(eq(companies.id, companyId))
+            .for("share");
+          if (!company || company.status !== "active")
+            throw forbidden("Company setup is unavailable");
+          return view(txDb, actor, companyId);
+        });
+      } catch (error) {
+        if (isActivationSnapshotBusy(error))
+          throw conflict("Activation is being updated; retry the same request.", {
+            code: "activation_state_busy", retryable: true,
+          });
+        throw error;
+      }
+    },
     async command(actor: AuthorizationActor, companyId: string, raw: unknown) {
       const input = activationCommandSchema.parse(raw);
       const runtimeAction = await withV7ActivityTransaction(db, async (tx, publications) => {

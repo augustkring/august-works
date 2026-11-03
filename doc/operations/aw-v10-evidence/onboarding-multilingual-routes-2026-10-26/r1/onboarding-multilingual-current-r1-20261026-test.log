@@ -1,0 +1,207 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts (15 tests | 10 failed) 6522ms
+     × applies the mission, the first agent and the first task before it answers 413ms
+     × keeps server-seeded onboarding on a legacy adapter when native runner is requested 172ms
+     × is idempotent per revision — a replay creates no second agent or task 146ms
+     × updates in place when the customer edits their answers and the revision changes 124ms
+     × logs the application once, and not again on a replay 206ms
+     × rolls the whole seed back when the audit entry cannot be written 126ms
+     × never reads the seed from a trusted Cloud header 29ms
+     × reuses an existing Onboarding project instead of creating a second one 103ms
+     × does not duplicate entities when two identical pushes race 254ms
+     × refreshes a first task's assignee and goal when a later revision adds them 185ms
+[18:30:44] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"2fbf6e1c-39d8-4e2b-adab-9ba228e61a29","actorType":"board","actorIdentityHash":"zLmK6qNszEjKfEgA","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"zVqCOw3TanqRmh1U","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","q"],"requestCount":1,"durationMs":1009,"statusCode":200,"responseBytes":2647,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > applies the mission, the first agent and the first task before it answers
+AssertionError: {"error":"Private tasks require a responsible user"}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:75:60
+     73|     const response = await post(app, companyId, SEED);
+     74|
+     75|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+     76|     expect(response.body.applied).toBe(true);
+     77|     expect(response.body.changed).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > keeps server-seeded onboarding on a legacy adapter when native runner is requested
+AssertionError: {"error":"Private tasks require a responsible user"}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:137:62
+    135|       const response = await post(app, companyId, SEED);
+    136|
+    137|       expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                              ^
+    138|       const companyAgents = await ctx.db.select().from(agents).where(e…
+    139|       expect(companyAgents).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > is idempotent per revision — a replay creates no second agent or task
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:154:26
+    152|
+    153|     const first = await post(app, companyId, SEED);
+    154|     expect(first.status).toBe(200);
+       |                          ^
+    155|     expect(first.body.changed).toBe(true);
+    156|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > updates in place when the customer edits their answers and the revision changes
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:175:26
+    173|
+    174|     const first = await post(app, companyId, SEED);
+    175|     expect(first.status).toBe(200);
+       |                          ^
+    176|
+    177|     const revised = await post(app, companyId, {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > logs the application once, and not again on a replay
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:249:21
+    247|         eq(activityLog.action, "company.onboarding_seed_applied"),
+    248|       ));
+    249|     expect(entries).toHaveLength(1);
+       |                     ^
+    250|   });
+    251|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > rolls the whole seed back when the audit entry cannot be written
+AssertionError: expected 422 to be greater than or equal to 500
+ ❯ src/__tests__/onboarding-seed-route.test.ts:266:27
+    264|
+    265|     const failed = await post(app, companyId, SEED);
+    266|     expect(failed.status).toBeGreaterThanOrEqual(500);
+       |                           ^
+    267|
+    268|     // Nothing committed: no seed record, so Cloud has no acknowledged…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > never reads the seed from a trusted Cloud header
+AssertionError: {"error":"Internal server error"}: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:355:60
+    353|       .send({ revision: "f".repeat(32), mission: "Body-supplied missio…
+    354|
+    355|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    356|     const companyGoals = await ctx.db.select().from(goals).where(eq(go…
+    357|     expect(companyGoals[0]?.title).toBe("Body-supplied mission");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > reuses an existing Onboarding project instead of creating a second one
+AssertionError: {"error":"Private tasks require a responsible user"}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:370:60
+    368|     const response = await post(app, companyId, SEED);
+    369|
+    370|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    371|     const companyProjects = await ctx.db.select().from(projects).where…
+    372|     expect(companyProjects).toHaveLength(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > does not duplicate entities when two identical pushes race
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:390:26
+    388|     ]);
+    389|
+    390|     expect(first.status).toBe(200);
+       |                          ^
+    391|     expect(second.status).toBe(200);
+    392|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  src/__tests__/onboarding-seed-route.test.ts > POST /api/companies/:companyId/onboarding-seed > refreshes a first task's assignee and goal when a later revision adds them
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/__tests__/onboarding-seed-route.test.ts:409:29
+    407|       firstTask: { title: "Draft the strategy" },
+    408|     });
+    409|     expect(taskOnly.status).toBe(200);
+       |                             ^
+    410|
+    411|     const beforeIssue = (await ctx.db.select().from(issues).where(eq(i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  10 failed | 13 passed (23)
+   Start at  18:30:08
+   Duration  40.79s (transform 12.94s, setup 164ms, import 22.31s, tests 18.02s, environment 0ms)
+

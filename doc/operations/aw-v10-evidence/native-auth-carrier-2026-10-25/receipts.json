@@ -1,0 +1,128 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "b87b1b7c9050e1486b93fd5046d10c3b2c4afcf6",
+  "meaning": "Original verified session deadlines propagated through native security/TOTP/password/passkey callers. Actual native two-factor21PASS and production UI/cookie/virtual WebAuthn+TOTP browser1PASS. Initial browser timeout preserved; only diagnostic/readiness assertions and cleanup changed, no production UI/auth weakening.",
+  "logs": [
+    {
+      "name": "native-auth-caller-expiry-two-factor",
+      "exitCode": 0,
+      "rawSha256": "f0f87085a9951f5e9ef816064db016b37984571db9bd0d5cf73fd93244faa34d",
+      "sanitizedSha256": "8aa39ace521231372c72f2cb5fbbd89e43535a384b1eba2f359f9d29380adcee",
+      "archiveSha256": "b4aca46b53ce2d3a4fb579ec7e8695891c05f1073e8f6be8b50a9c3d6fcbccc9",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  21 passed (21)",
+        "Duration  45.00s (transform 9.02s, setup 69ms, import 12.88s, tests 31.94s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-auth-caller-expiry-final",
+      "exitCode": 0,
+      "rawSha256": "8e9793a960b7e568399110f6f2827da057e0e972b07ef7bc316767ad368604c9",
+      "sanitizedSha256": "3a165e5870e7390dea3d1b6721a440c9657b610f9c02e87ea2cf68e3871fb408",
+      "archiveSha256": "f5a4aa50167f22bbca60c27c695469d51ea1f5012966e4741969e8468a914ebf",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  21 passed (21)",
+        "Duration  44.02s (transform 8.43s, setup 72ms, import 12.05s, tests 31.78s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-auth-caller-expiry-second-final",
+      "exitCode": 0,
+      "rawSha256": "900734bf6d53d1dc30dba204c84abcd2ac0115d33fc1f94ca3a4cfbe2e471434",
+      "sanitizedSha256": "d976132cfb680523c9ab7282275808000ad27b314543e6b8c30c99e6a3cf112c",
+      "archiveSha256": "a743c7caba199873eb3fc78cd20362f630c3631d439be08030c50875d2bebb3f",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  21 passed (21)",
+        "Duration  45.32s (transform 9.07s, setup 71ms, import 13.05s, tests 32.09s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-auth-caller-expiry-final-review",
+      "exitCode": 0,
+      "rawSha256": "5d207b0291b50bf1aef6b55f6665e5e4c1a75d1f93e6faf5d2120444cc607c2e",
+      "sanitizedSha256": "c88dbcee38c94cad7b9243b16e8980e859cbff1f74a3826b7cf6ca72a0a44c15",
+      "archiveSha256": "ede909ccb25a0c4e8a2c47a7ee50a3ceeccee1478a800362e94180a79837681e",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  21 passed (21)",
+        "Duration  45.01s (transform 8.78s, setup 76ms, import 12.65s, tests 32.17s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-auth-carrier-browser",
+      "exitCode": 1,
+      "rawSha256": "80ae54689f32aa4aba24cb8733236651d6c2144369c449c8c088f5ae10cf7f19",
+      "sanitizedSha256": "80ae54689f32aa4aba24cb8733236651d6c2144369c449c8c088f5ae10cf7f19",
+      "archiveSha256": "59aa3ab2e1848b0139253ab3599ed313a63566d20aed7b326d2d67282471a423",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 1,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "native-auth-carrier-browser-diagnostic",
+      "exitCode": 0,
+      "rawSha256": "e3170892145ceb9035db100f743ef2a862f140514265bf97506f6a6209128a5a",
+      "sanitizedSha256": "e3170892145ceb9035db100f743ef2a862f140514265bf97506f6a6209128a5a",
+      "archiveSha256": "e229975531ad305cbae26d7c43813e068333eb6a9dfed4caea2ce6fad93899ad",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 1,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "native-auth-operator-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

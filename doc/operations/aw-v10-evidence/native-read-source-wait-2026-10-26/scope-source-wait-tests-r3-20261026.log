@@ -1,0 +1,26 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts (15 tests | 1 failed | 14 skipped) 5650ms
+     × does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting 1693ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/v9-agent-procedure-pins.integration.test.ts > Canonical text-only Role Pack procedure pins > does not deliver or record a Playbook read after the authenticated Native Run is withdrawn while waiting
+TypeError: Cannot convert undefined or null to object
+ ❯ src/__tests__/v9-agent-procedure-pins.integration.test.ts:219:46
+    217|     const [withdrawn] = await db.select().from(heartbeatRuns).where(eq…
+    218|     expect(withdrawn!.responsibleUserId).toBeNull();
+    219|     expect(withdrawn!.runnerProfileJson).not.toHaveProperty("nativeRun…
+       |                                              ^
+    220|   });
+    221|   it("captures exact authored sources and retained Memory roots for th…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 1 passed | 34 skipped (36)
+   Start at  06:24:53
+   Duration  28.29s (transform 10.24s, setup 134ms, import 18.03s, tests 9.87s, environment 0ms)
+

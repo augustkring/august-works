@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
   activityLog,
@@ -295,6 +295,7 @@ describe("P6-19 native interaction bridge", () => {
     [governedId, "native_interaction_governed_request_unresolved"],
     [selfApprovedId, "native_interaction_self_approval"],
   ])("fails closed for governed or self-approved interaction %s", async (interactionId, code) => {
+    const onSourceCapture = vi.fn();
     const error = await materializeNativeInteractionResponses({
       db,
       companyId,
@@ -302,9 +303,11 @@ describe("P6-19 native interaction bridge", () => {
       runId,
       agentId,
       interactionIds: [interactionId],
+      onSourceCapture,
     }).catch((caught) => caught);
     expect(error).toBeInstanceOf(NativeInteractionBridgeError);
     expect(error).toMatchObject({ code });
+    expect(onSourceCapture).not.toHaveBeenCalled();
   });
 
   it("routes accepted package-result attention through live issue and interaction owners", async () => {

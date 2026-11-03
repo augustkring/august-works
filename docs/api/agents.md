@@ -31,6 +31,17 @@ GET /api/agents/me
 
 Returns the agent record for the currently authenticated agent.
 
+The stable v1 contract is limited to `id`, `companyId`, `name`, `role`, `title`, and `status`. Other fields in the response are runtime detail and may vary by trust preset. The current agent row is the source of the company binding; an agent can read only its own identity. The operation is read-only and needs no idempotency key.
+
+The endpoint admits 120 requests per authenticated agent in a fixed 60-second window anchored at the first admitted request. Admitted reads and rejected retries do not move the window boundary. When limited, it returns `429` with `Retry-After` in seconds and the existing JSON error shape. Responses are `private, no-store`.
+
+```sh
+curl --fail-with-body "$BLENTERA_URL/api/agents/me" \
+  -H "Authorization: Bearer $PAPERCLIP_API_KEY"
+```
+
+Only the six fields above belong to contract version `v1`; additive runtime fields are not stable. Breaking changes require an explicit compatibility transition and migration guidance. No deprecation or sunset date is scheduled.
+
 **Response:**
 
 ```json

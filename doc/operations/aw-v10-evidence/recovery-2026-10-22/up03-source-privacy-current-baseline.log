@@ -1,0 +1,274 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts (1 test | 1 failed) 23321ms
+     × withholds copied private Memory content from another Human before list, count, search and extraction 4571ms
+ ❯ |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts (2 tests | 2 failed) 22489ms
+     × keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory 2921ms
+     × keeps an earlier derived Task readable while a new Task retains a later private input 1994ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected [ …(2) ] to not include 'efae633c-0e88-453c-b939-3d15b9a93307'
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:92:48
+     90|     const extracted = await companySearchExtractService(db).extract(co…
+     91|       companySearchExtractQuerySchema.parse({ contains: canary }), { i…
+     92|     expect.soft(listed.map(row => row.id)).not.toContain(child.id);
+       |                                                ^
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+     94|     expect.soft(count).toBe(1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected '[{"payloadSourceProtocolVersion":0,"p…' not to contain 'privatememorycopy2f4c80d5d54941f9aa4c…'
+
+Expected: "privatememorycopy2f4c80d5d54941f9aa4c863827d040bb"
+Received: "[{"payloadSourceProtocolVersion":0,"payloadSourceSnapshot":null,"payloadSourceSnapshotInvalidated":false,"visibility":"open","privacyRootIssueId":null,"privacyParentIssueId":"94fec672-1a45-4da3-8900-ae78e42f0666","externalConversationState":null,"conversationAgentId":null,"conversationUserId":null,"conversationState":null,"conversationRetiredAt":null,"conversationSessionGeneration":0,"conversationBoundaryCommentId":null,"id":"efae633c-0e88-453c-b939-3d15b9a93307","companyId":"f939e7db-253d-4336-bc69-e19260702351","projectId":null,"projectWorkspaceId":null,"goalId":null,"parentId":null,"title":"Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","description":"Copied retained source: privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","descriptionTruncated":false,"status":"todo","statusVersion":0,"lastStatusDecisionId":null,"workMode":"standard","harnessKind":null,"priority":"medium","reviewPolicy":null,"assigneeAgentId":null,"assigneeUserId":null,"checkoutRunId":null,"executionRunId":null,"executionAgentNameKey":null,"executionLockedAt":null,"createdByAgentId":"66a6bfdc-5e6c-4f6f-b1b6-78a115cae9c6","createdByUserId":null,"responsibleUserId":"b676b598-0494-4e3e-a14d-e6f5486cc80e","issueNumber":1,"identifier":"PMf939e7-1","originKind":"manual","originId":null,"originRunId":"2985550f-aabe-4436-8b3b-a952c8350643","originIdentityContextId":null,"continuationIdentityContextId":null,"originFingerprint":"default","requestDepth":0,"billingCode":null,"assigneeAdapterOverrides":null,"executionPolicy":null,"executionState":null,"monitorNextCheckAt":null,"monitorWakeRequestedAt":null,"monitorLastTriggeredAt":null,"monitorAttemptCount":0,"monitorNotes":null,"monitorScheduledBy":null,"executionWorkspaceId":null,"executionWorkspacePreference":null,"executionWorkspaceSettings":null,"sourceTrust":null,"unblockDescriptor":null,"blockedTransitionAt":null,"blockedOwnerNotifiedAt":null,"plannedStartAt":null,"plannedEndAt":null,"forecastStartAt":null,"forecastEndAt":null,"forecastConfidence":null,"forecastReason":null,"milestoneId":null,"estimatedEffortMinutes":null,"startedAt":null,"completedAt":null,"cancelledAt":null,"hiddenAt":null,"createdAt":"2026-10-23T15:01:47.887Z","updatedAt":"2026-10-23T15:01:47.887Z","labels":[],"labelIds":[],"watchdog":null,"activeRun":null,"lastActivityAt":"2026-10-23T15:01:47.887Z","blockerAttention":{"state":"none","reason":null,"unresolvedBlockerCount":0,"coveredBlockerCount":0,"stalledBlockerCount":0,"attentionBlockerCount":0,"pendingFinalizeBlockerIssueIds":[],"sampleBlockerIdentifier":null,"sampleStalledBlockerIdentifier":null,"blockingTreeLive":false,"directBlockerIssueId":null,"terminalBlockerIssueId":null,"terminalBlocker":null},"reviewAttention":{"state":"none","paths":[],"reason":null}},{"payloadSourceProtocolVersion":0,"payloadSourceSnapshot":null,"payloadSourceSnapshotInvalidated":false,"visibility":"open","privacyRootIssueId":null,"privacyParentIssueId":null,"externalConversationState":null,"conversationAgentId":null,"conversationUserId":null,"conversationState":null,"conversationRetiredAt":null,"conversationSessionGeneration":0,"conversationBoundaryCommentId":null,"id":"94fec672-1a45-4da3-8900-ae78e42f0666","companyId":"f939e7db-253d-4336-bc69-e19260702351","projectId":null,"projectWorkspaceId":null,"goalId":null,"parentId":null,"title":"Public native source task","description":null,"descriptionTruncated":false,"status":"backlog","statusVersion":0,"lastStatusDecisionId":null,"workMode":"standard","harnessKind":null,"priority":"medium","reviewPolicy":null,"assigneeAgentId":"66a6bfdc-5e6c-4f6f-b1b6-78a115cae9c6","assigneeUserId":null,"checkoutRunId":null,"executionRunId":null,"executionAgentNameKey":null,"executionLockedAt":null,"createdByAgentId":null,"createdByUserId":"b676b598-0494-4e3e-a14d-e6f5486cc80e","responsibleUserId":"b676b598-0494-4e3e-a14d-e6f5486cc80e","issueNumber":null,"identifier":null,"originKind":"manual","originId":null,"originRunId":null,"originIdentityContextId":null,"continuationIdentityContextId":"7036f5ae-5e28-4ab5-b6ed-9923675054a3","originFingerprint":"default","requestDepth":0,"billingCode":null,"assigneeAdapterOverrides":null,"executionPolicy":null,"executionState":null,"monitorNextCheckAt":null,"monitorWakeRequestedAt":null,"monitorLastTriggeredAt":null,"monitorAttemptCount":0,"monitorNotes":null,"monitorScheduledBy":null,"executionWorkspaceId":null,"executionWorkspacePreference":null,"executionWorkspaceSettings":null,"sourceTrust":null,"unblockDescriptor":null,"blockedTransitionAt":null,"blockedOwnerNotifiedAt":null,"plannedStartAt":null,"plannedEndAt":null,"forecastStartAt":null,"forecastEndAt":null,"forecastConfidence":null,"forecastReason":null,"milestoneId":null,"estimatedEffortMinutes":null,"startedAt":null,"completedAt":null,"cancelledAt":null,"hiddenAt":null,"createdAt":"2026-10-23T15:01:45.536Z","updatedAt":"2026-10-23T15:01:45.536Z","labels":[],"labelIds":[],"watchdog":null,"activeRun":null,"lastActivityAt":"2026-10-23T15:01:45.536Z","blockerAttention":{"state":"none","reason":null,"unresolvedBlockerCount":0,"coveredBlockerCount":0,"stalledBlockerCount":0,"attentionBlockerCount":0,"pendingFinalizeBlockerIssueIds":[],"sampleBlockerIdentifier":null,"sampleStalledBlockerIdentifier":null,"blockingTreeLive":false,"directBlockerIssueId":null,"terminalBlockerIssueId":null,"terminalBlocker":null},"reviewAttention":{"state":"none","paths":[],"reason":null}}]"
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:93:45
+     91|       companySearchExtractQuerySchema.parse({ contains: canary }), { i…
+     92|     expect.soft(listed.map(row => row.id)).not.toContain(child.id);
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+       |                                             ^
+     94|     expect.soft(count).toBe(1);
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected 2 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:94:24
+     92|     expect.soft(listed.map(row => row.id)).not.toContain(child.id);
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+     94|     expect.soft(count).toBe(1);
+       |                        ^
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+     96|     expect.soft(search.results).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:95:44
+     93|     expect.soft(JSON.stringify(listed)).not.toContain(canary);
+     94|     expect.soft(count).toBe(1);
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+       |                                            ^
+     96|     expect.soft(search.results).toEqual([]);
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected [ { …(12) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "href": "/PMf939e7/issues/PMf939e7-1",
++     "id": "efae633c-0e88-453c-b939-3d15b9a93307",
++     "issue": {
++       "assigneeAgentId": null,
++       "assigneeUserId": null,
++       "externalConversationState": null,
++       "id": "efae633c-0e88-453c-b939-3d15b9a93307",
++       "identifier": "PMf939e7-1",
++       "priority": "medium",
++       "projectId": null,
++       "status": "todo",
++       "title": "Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++       "updatedAt": "2026-10-23T15:01:47.887Z",
++     },
++     "matchedFields": [
++       "title",
++       "description",
++     ],
++     "previewImageUrl": null,
++     "score": 5020,
++     "snippet": "Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++     "snippets": [
++       {
++         "field": "title",
++         "highlights": [
++           {
++             "end": 57,
++             "start": 8,
++           },
++         ],
++         "label": "Title",
++         "text": "Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++       },
++       {
++         "field": "description",
++         "highlights": [
++           {
++             "end": 73,
++             "start": 24,
++           },
++         ],
++         "label": "Description",
++         "text": "Copied retained source: privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++       },
++     ],
++     "sourceLabel": "Title",
++     "title": "PMf939e7-1 Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++     "type": "issue",
++     "updatedAt": "2026-10-23T15:01:47.887Z",
++   },
++ ]
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:96:33
+     94|     expect.soft(count).toBe(1);
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+     96|     expect.soft(search.results).toEqual([]);
+       |                                 ^
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+     98|     expect.soft(extracted.results).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected '{"query":"privatememorycopy2f4c80d5d5…' not to contain 'privatememorycopy2f4c80d5d54941f9aa4c…'
+
+Expected: "privatememorycopy2f4c80d5d54941f9aa4c863827d040bb"
+Received: "{"query":"privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","normalizedQuery":"privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","scope":"issues","sort":"relevance","limit":20,"offset":0,"results":[{"id":"efae633c-0e88-453c-b939-3d15b9a93307","type":"issue","score":5020,"title":"PMf939e7-1 Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","href":"/PMf939e7/issues/PMf939e7-1","matchedFields":["title","description"],"sourceLabel":"Title","snippet":"Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","snippets":[{"field":"title","label":"Title","text":"Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","highlights":[{"start":8,"end":57}]},{"field":"description","label":"Description","text":"Copied retained source: privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","highlights":[{"start":24,"end":73}]}],"issue":{"id":"efae633c-0e88-453c-b939-3d15b9a93307","identifier":"PMf939e7-1","title":"Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb","status":"todo","priority":"medium","assigneeAgentId":null,"assigneeUserId":null,"projectId":null,"updatedAt":"2026-10-23T15:01:47.887Z","externalConversationState":null},"updatedAt":"2026-10-23T15:01:47.887Z","previewImageUrl":null}],"countsByType":{"issue":1,"comment":0,"document":0,"artifact":0,"agent":0,"project":0},"filterOptionCounts":{"status":{"todo":1},"priority":{"medium":1},"assigneeAgentId":{},"assigneeUserId":{},"projectId":{},"labelId":{},"updatedWithin":{"24h":1,"7d":1,"30d":1,"90d":1}},"zeroResults":null,"hasMore":false}"
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:97:45
+     95|     expect.soft(search.countsByType.issue).toBe(0);
+     96|     expect.soft(search.results).toEqual([]);
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+       |                                             ^
+     98|     expect.soft(extracted.results).toEqual([]);
+     99|     expect.soft(extracted.hasMore).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: expected [ { …(8) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "assigneeAgentId": null,
++     "identifier": "PMf939e7-1",
++     "issueId": "efae633c-0e88-453c-b939-3d15b9a93307",
++     "matches": [
++       {
++         "excerpt": "Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++         "excerptTruncated": false,
++         "field": "title",
++         "label": "Issue title",
++         "source": {
++           "issueId": "efae633c-0e88-453c-b939-3d15b9a93307",
++           "type": "issue",
++         },
++         "value": "privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++       },
++     ],
++     "matchesTruncated": false,
++     "status": "todo",
++     "title": "Derived privatememorycopy2f4c80d5d54941f9aa4c863827d040bb",
++     "updatedAt": "2026-10-23T15:01:47.887Z",
++   },
++ ]
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:98:36
+     96|     expect.soft(search.results).toEqual([]);
+     97|     expect.soft(JSON.stringify(search)).not.toContain(canary);
+     98|     expect.soft(extracted.results).toEqual([]);
+       |                                    ^
+     99|     expect.soft(extracted.hasMore).toBe(false);
+    100|     const detailAllowed = (await authorizationService(db).decide({ act…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-native-memory-source-privacy.integration.test.ts > Native Task derivatives retain their producer's selected private Memory restriction > withholds copied private Memory content from another Human before list, count, search and extraction
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/issue-native-memory-source-privacy.integration.test.ts:104:100
+    102|     if (detailAllowed) {
+    103|       // This is the original detail payload owner, not an HTTP status…
+    104|       await expect(assertAnalyticalContextPayloadAccess(db, companyId,…
+       |                                                                                                    ^
+    105|         .rejects.toMatchObject({ status: 403 });
+    106|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory
+AssertionError: expected undefined to be '0c0152ae-0efd-463d-a5e7-ea7a39eaa55f' // Object.is equality
+
+- Expected:
+"0c0152ae-0efd-463d-a5e7-ea7a39eaa55f"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:74:85
+     72|     // Current private policy still narrows later copies. A future inp…
+     73|     // become an input to an already committed earlier Memory body.
+     74|     expect((await memory.get(s.companyId, earlier.record.id, bobActor)…
+       |                                                                                     ^
+     75|   });
+     76|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps an earlier derived Task readable while a new Task retains a later private input
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:86:64
+     84|     expect(await canActorReadIssuePrivacy(db, s.alice, later)).toBe(tr…
+     85|     expect(await canActorReadIssuePrivacy(db, s.bob, later)).toBe(fals…
+     86|     expect(await canActorReadIssuePrivacy(db, s.bob, earlier)).toBe(tr…
+       |                                                                ^
+     87|   });
+     88| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed (3)
+   Start at  15:00:00
+   Duration  178.36s (transform 60.77s, setup 1.09s, import 128.93s, tests 45.81s, environment 1ms)
+

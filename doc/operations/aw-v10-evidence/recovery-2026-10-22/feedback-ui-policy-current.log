@@ -1,0 +1,180 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > does not restore a pending output-feedback prompt after the local policy latches
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > does not restore a pending output-feedback prompt after the local policy latches
+react-i18next:: useTranslation: You will need to pass in an i18next instance by using initReactI18next or by passing it via props or context. In monorepo setups, make sure there is only one instance of react-i18next. { code: 'NO_I18NEXT_INSTANCE' }
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > does not restore a pending output-feedback prompt after the local policy latches
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > does not restore a pending output-feedback prompt after the local policy latches
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ❯ |@paperclipai/ui| src/components/OutputFeedbackButtons.test.tsx (3 tests | 2 failed) 991ms
+     × converts a pending compact prompt to local on latch and preserves legacy consent 215ms
+     × does not restore a pending output-feedback prompt after the local policy latches 70ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > converts a pending compact prompt to local on latch and preserves legacy consent
+AssertionError: expected '' to contain 'Save your feedback sharing preference'
+
+- Expected
++ Received
+
+- Save your feedback sharing preference
+
+ ❯ src/components/OutputFeedbackButtons.test.tsx:128:39
+    126|     await rerender(component);
+    127|     await clickButton("Helpful");
+    128|     expect(document.body.textContent).toContain("Save your feedback sh…
+       |                                       ^
+    129|     await clickButton("Always allow");
+    130|     expect(onVote).toHaveBeenLastCalledWith("up", { allowSharing: true…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/ui| src/components/OutputFeedbackButtons.test.tsx > feedback sharing policy > does not restore a pending output-feedback prompt after the local policy latches
+AssertionError: expected last "vi.fn()" call to have been called with [ 'up', { allowSharing: false } ]
+
+- Expected:
+[
+  "up",
+  {
+    "allowSharing": false,
+  },
+]
+
++ Received:
+undefined
+
+ ❯ src/components/OutputFeedbackButtons.test.tsx:153:20
+    151|       });
+    152|     });
+    153|     expect(onVote).toHaveBeenLastCalledWith("up", { allowSharing: fals…
+       |                    ^
+    154|     expect(document.body.textContent).not.toContain("Save your feedbac…
+    155|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 10 passed (12)
+   Start at  09:14:11
+   Duration  24.03s (transform 7.15s, setup 122ms, import 16.31s, tests 2.32s, environment 4.28s)
+

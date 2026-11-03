@@ -38,10 +38,52 @@ export async function recordNativeLocalProcessStop(db: Db, run: typeof heartbeat
     eventType: LOCAL_PROCESS_STOPPED,
     stream: "system",
     level: "info",
-    message: "Recovery verified the local process stopped before clearing its identity.",
+    message: "Native verified the local process stopped before clearing its identity.",
     payload: { processPid: run.processPid, processGroupId: run.processGroupId },
   });
   return true;
+}
+
+/** Record the ordinary execution owner's observed local child exit before its
+ * lease is released. A request to stop is not sufficient: the persisted
+ * identity must still match, the run must be terminal, all extant leases must
+ * be local, and both PID and process group must be absent. */
+export async function recordNativeLocalProcessStopAfterExit(db: Db, companyId: string, runId: string) {
+  const stopNotConfirmed = Symbol("native-local-process-stop-not-confirmed");
+  try {
+    return await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId),
+      )).for("update");
+      if (!run || run.runtimeMode !== "native" || !["succeeded", "failed", "cancelled", "interrupted", "timed_out"].includes(run.status) ||
+        !run.processPid || !run.processGroupId) return false;
+      const [identity] = await tx.select({ eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents).where(and(
+        eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.runId, runId), isNull(heartbeatRunEvents.sourceEventId),
+        inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, PROCESS_IDENTITY_RECORDED, LOCAL_PROCESS_STOPPED]),
+      )).orderBy(desc(heartbeatRunEvents.seq)).limit(1);
+      if (identity?.eventType !== PROCESS_IDENTITY_RECORDED || identity.payload?.processPid !== run.processPid ||
+        identity.payload?.processGroupId !== run.processGroupId ||
+        identity.payload?.processStartedAt !== run.processStartedAt?.toISOString()) return false;
+      const leases = await tx.select({ provider: environmentLeases.provider }).from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, runId),
+      ));
+      if (!leases.length || leases.some(lease => lease.provider !== "local")) return false;
+      const cleared = await tx.update(heartbeatRuns).set({ processPid: null, processGroupId: null,
+        processStartedAt: null, updatedAt: new Date() }).where(and(
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId), eq(heartbeatRuns.runtimeMode, "native"),
+        inArray(heartbeatRuns.status, ["succeeded", "failed", "cancelled", "interrupted", "timed_out"]),
+        eq(heartbeatRuns.processPid, run.processPid), eq(heartbeatRuns.processGroupId, run.processGroupId),
+        run.processStartedAt === null ? isNull(heartbeatRuns.processStartedAt) : eq(heartbeatRuns.processStartedAt, run.processStartedAt),
+      )).returning({ id: heartbeatRuns.id });
+      if (!cleared.length) return false;
+      if (!await recordNativeLocalProcessStop(tx, run)) throw stopNotConfirmed;
+      return true;
+    });
+  } catch (error) {
+    if (error === stopNotConfirmed) return false;
+    throw error;
+  }
 }
 
 /** Only server-authored evidence counts. A later launch invalidates the receipt. */

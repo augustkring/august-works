@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { v7FeatureEnabled, v9FeatureEnabled } from "@paperclipai/shared";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useAgentChatEnabled } from "../hooks/useAgentChatEnabled";
@@ -73,8 +74,8 @@ interface EnvironmentDescriptor {
 
 const localEnvironmentDescriptor: EnvironmentDescriptor = {
   label: "Local",
-  detail: "Paperclip host",
-  title: "Local - Paperclip host",
+  detail: `${PRODUCT_IDENTITY.productName} host`,
+  title: `Local - ${PRODUCT_IDENTITY.productName} host`,
 };
 
 const loadingEnvironmentDescriptor: EnvironmentDescriptor = {
@@ -135,11 +136,11 @@ function describeEnvironment(
   capabilities?: EnvironmentCapabilities | null,
 ): EnvironmentDescriptor {
   const detail = isPlatformManagedEnvironment(environment)
-    ? "Managed by Paperclip"
+    ? `Managed by ${PRODUCT_IDENTITY.productName}`
     : environment.driver === "sandbox"
       ? `${getSandboxProviderLabel(environment, capabilities)} sandbox provider`
       : environment.driver === "local"
-        ? "Paperclip host"
+        ? `${PRODUCT_IDENTITY.productName} host`
         : formatEnvironmentDriver(environment.driver);
 
   return {

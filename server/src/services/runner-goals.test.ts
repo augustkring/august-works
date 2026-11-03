@@ -345,17 +345,21 @@ describeEmbeddedPostgres("runner goal service", () => {
       },
     };
     const eventBinding = { ...binding, adapterType: "paperclip_runner" };
-    // Merely changing the source namespace is not proof of succession.
-    for (const invalidOwner of [
+    // Persist each wrong owner at its original Run insert. Native issue
+    // identity is immutable after insertion, so these negatives exercise the
+    // actual source-binding trigger and reader instead of editing history.
+    const invalidOwners: Partial<typeof heartbeatRuns.$inferInsert>[] = [
       { nativeSessionId: randomUUID() },
       { nativeIssueId: randomUUID() },
       { runnerInstanceId: randomUUID() },
       { status: "succeeded" },
-    ]) {
-      await db.update(heartbeatRuns).set(invalidOwner).where(eq(heartbeatRuns.id, nextRunId));
-      await expect(applyRunnerGoalPrpEvent(db, eventBinding, successorEvent)).resolves.toBeNull();
-      await db.update(heartbeatRuns).set({ nativeSessionId, nativeIssueId: binding.issueId, runnerInstanceId: runnerId, status: "running" })
-        .where(eq(heartbeatRuns.id, nextRunId));
+    ];
+    for (const invalidOwner of invalidOwners) {
+      const invalidRunId = randomUUID();
+      await db.insert(heartbeatRuns).values({ id: invalidRunId, companyId: binding.companyId, agentId: binding.agentId,
+        nativeIssueId: binding.issueId, status: "running", invocationSource: "on_demand", runnerInstanceId: runnerId,
+        nativeSessionId, ...invalidOwner });
+      await expect(applyRunnerGoalPrpEvent(db, eventBinding, { ...successorEvent, sourceRunId: invalidRunId })).resolves.toBeNull();
     }
     await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, priorRunId));
     await expect(applyRunnerGoalPrpEvent(db, eventBinding, successorEvent)).resolves.toBeNull();

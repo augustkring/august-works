@@ -10,6 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authApi } from "../api/auth";
 import { activationApi } from "../api/activation";
+import { ApiError } from "../api/client";
 import { i18n } from "../i18n";
 import { queryKeys } from "../lib/queryKeys";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
@@ -71,7 +72,7 @@ function view(
     blockers: ["no_qualified_capability"],
   };
 }
-async function mount(data: ActivationView, route = "/saas/activation/3") {
+async function mount(data: ActivationView, route = "/saas/activation/3", read = vi.fn().mockResolvedValue(data)) {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -92,7 +93,7 @@ async function mount(data: ActivationView, route = "/saas/activation/3") {
     session: { id: "session", userId: "activation-owner" },
     sentryDsn: null,
   });
-  vi.spyOn(activationApi, "get").mockResolvedValue(data);
+  vi.spyOn(activationApi, "get").mockImplementation(read);
   await act(async () =>
     root.render(
       <QueryClientProvider client={client}>
@@ -146,6 +147,16 @@ async function enter(text: string) {
   });
 }
 describe("Native V9 onboarding UI", () => {
+  it("retries only a retryable activation snapshot busy response", async () => {
+    const read = vi.fn()
+      .mockRejectedValueOnce(new ApiError("Activation is being updated", 409, {
+        details: { code: "activation_state_busy", retryable: true },
+      }))
+      .mockResolvedValue(view());
+    await mount(view(), "/saas/activation/3", read);
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    expect(document.body.textContent).not.toContain("Setup could not be loaded");
+  });
   it("allows current capability choice after the previous publication became unavailable without claiming connections are unnecessary", async () => {
     const data = view("access"); data.state.packageVersionId = "10000000-0000-4000-8000-000000000003";
     data.requiredAccess = [];

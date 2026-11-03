@@ -7,6 +7,7 @@ import {
   v6FeatureEnabled,
   v7FeatureEnabled,
   v9FeatureEnabled,
+  v5FeatureEnabled,
   type CompanyExperience,
 } from "@paperclipai/shared";
 import {
@@ -52,6 +53,12 @@ export async function companyExperience(
           permission: "users:invite",
         },
         {
+          section: "general",
+          id: "company_defaults",
+          href: "/company/settings/general",
+          permission: "users:manage_permissions",
+        },
+        {
           section: "people_access",
           id: "members",
           href: "/company/settings/members",
@@ -75,6 +82,19 @@ export async function companyExperience(
           id: "agents",
           href: "/agents",
           permission: "agents:configure",
+        },
+        {
+          section: "agents_ai",
+          id: "agent_defaults",
+          href: "/company/settings/general",
+          permission: "users:manage_permissions",
+        },
+        {
+          section: "agents_ai",
+          id: "agent_runtime_identity",
+          href: "/runtime",
+          permission: "company_scope:read",
+          enabled: v5FeatureEnabled(flags, "agent_identities_v5"),
         },
         {
           section: "apps_data",
@@ -102,6 +122,13 @@ export async function companyExperience(
           href: "/workflows",
           permission: "workflows:publish",
           enabled: flags.enableWorkflowsV1,
+        },
+        {
+          section: "governance_compliance",
+          id: "readiness",
+          href: "/readiness",
+          permission: "company_scope:read",
+          enabled: v7FeatureEnabled(flags, "readiness_engine_v7"),
         },
         {
           section: "security",
@@ -149,6 +176,13 @@ export async function companyExperience(
           enabled: v7FeatureEnabled(flags, "security_event_export_v7"),
         },
         {
+          section: "audit_evidence",
+          id: "readiness_evidence",
+          href: "/readiness",
+          permission: "company_scope:read",
+          enabled: v7FeatureEnabled(flags, "readiness_engine_v7"),
+        },
+        {
           section: "billing_capacity",
           id: "billing",
           href: "/company/settings/billing",
@@ -166,6 +200,19 @@ export async function companyExperience(
           section: "advanced_developer",
           id: "advanced",
           href: "/advanced",
+          permission: "tools:admin",
+        },
+        {
+          section: "advanced_developer",
+          id: "runtime",
+          href: "/company/settings/runtime",
+          permission: "runtime:manage",
+          enabled: v6FeatureEnabled(flags, "hosted_openclaw_v6"),
+        },
+        {
+          section: "advanced_developer",
+          id: "tool_gateway",
+          href: "/apps/gateways",
           permission: "tools:admin",
         },
       ];

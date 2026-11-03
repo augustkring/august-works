@@ -116,7 +116,7 @@ describe("cursor environment diagnostics", () => {
     await fs.rm(path.dirname(cwd), { recursive: true, force: true });
   });
 
-  it("adds --yolo to hello probe args by default", async () => {
+  it("keeps default CLI testing to non-paid version discovery", async () => {
     const root = path.join(
       os.tmpdir(),
       `paperclip-cursor-local-probe-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -141,13 +141,14 @@ describe("cursor environment diagnostics", () => {
       },
     });
 
-    expect(result.status).toBe("pass");
+    expect(result.status).toBe("fail");
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified" }));
     const args = JSON.parse(await fs.readFile(argsCapturePath, "utf8")) as string[];
-    expect(args).toContain("--yolo");
+    expect(args).toEqual(["--version"]);
     await fs.rm(root, { recursive: true, force: true });
   });
 
-  it("does not auto-add --yolo when extraArgs already bypass trust", async () => {
+  it("cannot enable paid probing using caller trust-bypass arguments", async () => {
     const root = path.join(
       os.tmpdir(),
       `paperclip-cursor-local-probe-extra-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -173,10 +174,11 @@ describe("cursor environment diagnostics", () => {
       },
     });
 
-    expect(result.status).toBe("pass");
+    expect(result.status).toBe("fail");
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified" }));
     const args = JSON.parse(await fs.readFile(argsCapturePath, "utf8")) as string[];
-    expect(args).toContain("--yolo");
-    expect(args).not.toContain("--trust");
+    expect(args).toEqual(["--version"]);
+    expect(args).not.toContain("--print");
     await fs.rm(root, { recursive: true, force: true });
   });
 
@@ -216,13 +218,15 @@ describe("cursor environment diagnostics", () => {
         },
       });
 
-      expect(result.status).toBe("pass");
+      expect(result.status).toBe("fail");
+    expect(result.checks).toContainEqual(expect.objectContaining({ code: "paid_transport_unqualified" }));
       const capture = JSON.parse(await fs.readFile(argsCapturePath, "utf8")) as {
         command: string;
         argv: string[];
         path: string;
       };
       expect(capture.command).toBe(cursorAgentPath);
+      expect(capture.argv).toEqual(["--version"]);
       expect(capture.path.split(":")[0]).toBe(path.join(homeDir, ".local", "bin"));
     } finally {
       if (previousHome === undefined) delete process.env.HOME;

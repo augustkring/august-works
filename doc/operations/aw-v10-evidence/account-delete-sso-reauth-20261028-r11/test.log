@@ -1,0 +1,10 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[20:39:28] [31mERROR[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  20:39:09
+   Duration  20.73s (transform 9.73s, setup 71ms, import 14.47s, tests 6.07s, environment 0ms)
+

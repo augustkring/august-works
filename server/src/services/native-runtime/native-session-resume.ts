@@ -7,6 +7,9 @@ import type {
   PersistedNativeSession,
 } from "../../vendor/paperclip-runner/index.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { nativePayloadSourceInputSchema, nativeRunInputSourceReceiptSchema,
+  type NativePayloadSourceInput } from "@paperclipai/shared";
+import { nativeSha256 } from "./canonical.js";
 
 export type NativeToolExecutionTargetKind = "local" | "remote";
 
@@ -217,12 +220,14 @@ export async function findNativeSessionResumeRun(
       nativeIssueId: heartbeatRuns.nativeIssueId,
       runtimeMode: heartbeatRuns.runtimeMode,
       status: heartbeatRuns.status,
+      nativeInputSourceProtocolVersion: heartbeatRuns.nativeInputSourceProtocolVersion,
       createdAt: heartbeatRuns.createdAt,
       processPid: heartbeatRuns.processPid,
       processGroupId: heartbeatRuns.processGroupId,
       processStartedAt: heartbeatRuns.processStartedAt,
       runnerProfileJson: heartbeatRuns.runnerProfileJson,
       contextSnapshot: heartbeatRuns.contextSnapshot,
+      responsibleUserId: heartbeatRuns.responsibleUserId,
     })
     .from(heartbeatRuns)
     .where(
@@ -244,6 +249,107 @@ export async function findNativeSessionResumeRun(
       runs.map((run) => run.id),
     ),
   });
+}
+
+/** A retained provider thread is source-qualified only when its exact prior
+ * checkpoint and every acknowledged input component remain bound to the same
+ * Human, conversation generation, provider session, and workspace. This is a
+ * structural witness; callers still revalidate the receipt's owners and ACLs
+ * under the Native source privacy lock before dispatch. */
+export function nativeRetainedRunResumeWitness(input: {
+  previousRun: {
+    id: string; companyId: string; agentId: string; nativeIssueId: string | null;
+    nativeSessionId: string | null; runtimeMode: string | null; status: string;
+    responsibleUserId: string | null; nativeInputSourceProtocolVersion: number | null;
+    contextSnapshot: unknown; runnerProfileJson: unknown;
+  };
+  currentExecution: NativeExecutionInput;
+  currentResponsibleUserId: string | null;
+  currentConversationSessionGeneration: number | null;
+  requireConversationGeneration?: boolean;
+  executionTargetKind?: NativeToolExecutionTargetKind;
+}): { source: Extract<NativePayloadSourceInput, { kind: "retained_run" }>; components: import("./native-execution-input.js").NativeConsumedSourceComponent[];
+  sets: Array<{ policy: import("@paperclipai/shared").NativePayloadSourcePolicy; inputs: NativePayloadSourceInput[] }> } | null {
+  const previous = input.previousRun;
+  const profile = record(previous.runnerProfileJson);
+  const generation = record(previous.contextSnapshot).conversationSessionGeneration;
+  const previousGeneration = Number.isSafeInteger(generation) && (generation as number) >= 0 ? generation as number : null;
+  if (previous.runtimeMode !== "native" || !LEGACY_RETRY_SOURCE_TERMINAL_STATUSES.has(previous.status) ||
+    previous.companyId !== input.currentExecution.binding.companyId || previous.agentId !== input.currentExecution.binding.agentId ||
+    previous.nativeIssueId !== input.currentExecution.binding.issueId || previous.nativeSessionId !== input.currentExecution.session.normalizedSessionId ||
+    !previous.responsibleUserId || previous.responsibleUserId !== input.currentResponsibleUserId ||
+    previousGeneration !== input.currentConversationSessionGeneration ||
+    input.requireConversationGeneration === true && previousGeneration === null) return null;
+  const targetKind = input.executionTargetKind ?? "local";
+  const expectedFingerprint = nativeToolContractFingerprintForTarget(targetKind);
+  if (profile.nativeToolContractFingerprint !== expectedFingerprint) return null;
+  const checkpoint = record(profile.sessionCheckpoint);
+  const checkpointIdentity = record(checkpoint.identity);
+  if (!Object.keys(checkpoint).length || typeof checkpoint.sessionId !== "string" || !checkpoint.sessionId.trim() ||
+    checkpointIdentity.runId !== previous.id || checkpointIdentity.companyId !== previous.companyId ||
+    checkpointIdentity.issueId !== previous.nativeIssueId || checkpointIdentity.agentId !== previous.agentId ||
+    checkpointIdentity.sessionId !== previous.nativeSessionId) return null;
+  let previousExecution: NativeExecutionInput;
+  try { previousExecution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { return null; }
+  if (previousExecution.binding.runId !== previous.id || previousExecution.binding.companyId !== previous.companyId ||
+    previousExecution.binding.issueId !== previous.nativeIssueId || previousExecution.binding.agentId !== previous.agentId ||
+    previousExecution.session.normalizedSessionId !== previous.nativeSessionId ||
+    !sameProvider(previousExecution.provider, input.currentExecution.provider) ||
+    previousExecution.session.driverKind !== input.currentExecution.session.driverKind ||
+    !sameWorkspaceScope({ previousExecution, previousRunId: previous.id, currentExecution: input.currentExecution }) ||
+    previousExecution.task.workMode !== input.currentExecution.task.workMode ||
+    ("executionMode" in previousExecution ? previousExecution.executionMode : "default") !==
+      ("executionMode" in input.currentExecution ? input.currentExecution.executionMode : "default") ||
+    rebindNativeSessionCheckpoint({ previousRun: previous as Parameters<typeof rebindNativeSessionCheckpoint>[0]["previousRun"],
+      currentExecution: input.currentExecution, executionTargetKind: targetKind }) === null) return null;
+  const parsedReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  const rawIntents = profile.nativeModelInputDispatchIntents;
+  if (!parsedReceipt.success || previous.nativeInputSourceProtocolVersion !== 1 || !Array.isArray(rawIntents) ||
+    rawIntents.length < 1 || rawIntents.length > 64 || parsedReceipt.data.binding.companyId !== previous.companyId ||
+    parsedReceipt.data.binding.runId !== previous.id || parsedReceipt.data.binding.agentId !== previous.agentId ||
+    parsedReceipt.data.binding.issueId !== previous.nativeIssueId || parsedReceipt.data.binding.responsibleUserId !== previous.responsibleUserId)
+    return null;
+  const intents = rawIntents.map(record);
+  const dispatches = parsedReceipt.data.dispatches;
+  if (dispatches.length !== intents.length || intents.some(intent => typeof intent.turnId !== "string" ||
+    !/^[\x21-\x7e]{1,240}$/.test(intent.turnId) || intent.responsibleUserId !== previous.responsibleUserId ||
+    typeof intent.turnInputDigest !== "string" || !/^[0-9a-f]{64}$/.test(intent.turnInputDigest)) ||
+    new Set(intents.map(intent => intent.turnInputDigest)).size !== intents.length ||
+    dispatches.some(dispatch => !intents.some(intent => intent.turnInputDigest === dispatch.executionInputDigest &&
+      intent.responsibleUserId === dispatch.responsibleUserId))) return null;
+  const retainedArray = (key: string, max: number): unknown[] | null => {
+    const value = profile[key];
+    return value === undefined ? [] : Array.isArray(value) && value.length <= max ? value : null;
+  };
+  const toolAssociations = retainedArray("nativeToolCallDispatchAssociations", 512);
+  const toolResultCaptures = retainedArray("nativeToolResultSourceCaptures", 256);
+  const wireIntents = retainedArray("nativeAwModelWireIntents", 256);
+  if (!toolAssociations || !toolResultCaptures || !wireIntents ||
+    Buffer.byteLength(JSON.stringify({ intents, toolAssociations, toolResultCaptures, wireIntents })) > 2 * 1024 * 1024) return null;
+  const components: import("./native-execution-input.js").NativeConsumedSourceComponent[] = [
+    { kind: "bootstrap" },
+    ...dispatches.map(dispatch => ({ kind: "dispatch" as const, executionInputDigest: dispatch.executionInputDigest,
+      policy: dispatch.policy, inputs: dispatch.inputs })),
+    ...parsedReceipt.data.additionalInputs.map(entry => ({ kind: "additional_input" as const,
+      responsibleUserId: entry.responsibleUserId, policy: entry.policy, inputs: entry.inputs })),
+  ];
+  if (components.length > 64 || components.some((component, index) => components.slice(0, index).some(prior =>
+    JSON.stringify(prior) === JSON.stringify(component)))) return null;
+  const sets = [{ policy: parsedReceipt.data.bootstrap.policy, inputs: parsedReceipt.data.bootstrap.inputs },
+    ...dispatches.map(dispatch => ({ policy: dispatch.policy, inputs: dispatch.inputs })),
+    ...parsedReceipt.data.additionalInputs.map(entry => ({ policy: entry.policy, inputs: entry.inputs }))];
+  if (sets.reduce((count, set) => count + set.inputs.length, 0) > 512) return null;
+  const source = nativePayloadSourceInputSchema.parse({ kind: "retained_run", runId: previous.id,
+    inputDigest: nativeSha256({ schema: "paperclip.native-retained-run-input.v1", companyId: previous.companyId,
+      runId: previous.id, agentId: previous.agentId, issueId: previous.nativeIssueId,
+      responsibleUserId: previous.responsibleUserId, conversationSessionGeneration: previousGeneration,
+      nativeSessionId: previous.nativeSessionId, checkpointDigest: nativeSha256(checkpoint),
+      executionDigest: nativeSha256(previousExecution), workspaceScope: nativeCheckpointWorkspaceScope(previousExecution, previous.id),
+      provider: previousExecution.provider, toolContractFingerprint: expectedFingerprint }),
+    dispatchDigest: nativeSha256({ schema: "paperclip.native-retained-run-dispatch.v1", receiptDigest: parsedReceipt.data.digest,
+      receipt: parsedReceipt.data, acknowledgedDispatches: intents,
+      toolAssociations, toolResultCaptures, wireIntents }) });
+  return source.kind === "retained_run" ? { source, components, sets } : null;
 }
 
 /** A preassigned session id may rotate only before immutable native admission. */

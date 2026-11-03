@@ -70,6 +70,19 @@ vi.mock("../routes/workspace-runtime-service-authz.js", () => ({
 }));
 
 function registerWorkspaceRouteMocks() {
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: vi.fn(async () => true),
+    canActorReadProjectPrivacy: vi.fn(async () => true),
+  }));
+  vi.doMock("../services/project-tool-context.js", () => ({
+    projectToolContext: vi.fn(async (_db: unknown, actor: Record<string, unknown>) => {
+      if (actor.type !== "agent" || actor.source !== "agent_jwt" || !actor.runId)
+        throw new Error("Expected an authenticated task-bound agent fixture");
+      return { issue: { id: "issue-1", companyId: actor.companyId, workMode: "standard" }, userId: "user-1" };
+    }),
+  }));
+
   vi.doMock("../telemetry.js", () => ({
     getTelemetryClient: mockGetTelemetryClient,
   }));
@@ -467,7 +480,7 @@ describe.sequential("workspace runtime service route authorization", () => {
       type: "agent",
       agentId: "agent-1",
       companyId: "company-1",
-      source: "agent_key",
+      source: "agent_jwt",
       runId: "run-1",
     });
 
@@ -496,7 +509,7 @@ describe.sequential("workspace runtime service route authorization", () => {
       type: "agent",
       agentId: "agent-1",
       companyId: "company-1",
-      source: "agent_key",
+      source: "agent_jwt",
       runId: "run-1",
     });
 
@@ -535,7 +548,7 @@ describe.sequential("workspace runtime service route authorization", () => {
       type: "agent",
       agentId: "agent-1",
       companyId: "company-1",
-      source: "agent_key",
+      source: "agent_jwt",
       runId: "run-1",
     });
 

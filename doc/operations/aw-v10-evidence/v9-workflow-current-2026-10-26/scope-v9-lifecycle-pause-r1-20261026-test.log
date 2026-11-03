@@ -1,0 +1,46 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > serializes identical stop requests, retaining one original admission after cancellation and Pause
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > fails closed when retained native stop evidence no longer binds to this run
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > refuses stale review, wrong revision and expanded commands without changing native work
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > cancels a real native wait and retains completed step history and the published revision
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > uses native child cancellation and retains both historical run identities
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > rechecks current run grants and membership before original stop reconciliation
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > rechecks actual native admin role evidence instead of a retained admin snapshot
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > denies changed accounts, foreign runs, agents and disabled rollout before admission
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > drains durable native cancellation after rollback without advancing queued work
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > inspects the real executor's selected branch using the exact historical revision after a newer publication
+ ✓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > admits one immutable native run and reconciles its original receipt after Pause 658ms
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > refuses changed and stale commands without admitting additional work
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > requires bounded execution settings and explicit internal acknowledgement
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > rechecks current native run authority, account and rollout before admitting a run
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > denies original run reconciliation after effective run-grant revocation
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > requires effective review for transform nodes that can invoke Optimizer replacements
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > reads bounded native run status and blockers without exposing copied payloads or errors
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > shows the earliest configured native schedule and stops new triggers after Pause
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > does not present an unpublished workflow as live or invent execution receipts from a read
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > binds operation reads to the current account, company and enabled native rollout
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > refuses a foreign historical revision instead of returning a partial healthy overview
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > rejects an operation read after current membership is revoked despite a stale actor snapshot
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > confirms pause/resume without changing immutable revisions, and replays the original receipt after later changes
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > permits exactly one concurrent original change and rejects stale versions and silent resume
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > fences a prepared manual admission after native pause
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > fences a prepared routine admission after native pause
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > fences a prepared pipeline admission after native pause
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > fences a prepared api admission after native pause
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > fences a prepared task admission after native pause
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > keeps admitted work intact and refuses retirement until it finishes; then retains history and discards the draft
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > requires explicit removal of a linked routine before retirement
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > requires explicit removal of a linked pipeline before retirement
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > does not mistake a terminal workflow status for a reconciled external tool
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > preserves an already admitted native enqueue receipt after pause without adding work
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > requires deliberate removal of parent workflow draft references before retirement
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > rejects account/company/agent mismatches and feature rollback without applying a change
+ ↓ src/__tests__/v9-workflow-lifecycle-routes.test.ts > V9 native workflow lifecycle > rechecks current native publication grants on mutation and on replay
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 36 skipped (37)
+   Start at  22:33:04
+   Duration  17.90s (transform 9.18s, setup 74ms, import 13.00s, tests 4.71s, environment 0ms)
+

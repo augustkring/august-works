@@ -1,0 +1,588 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+[10:28:35] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[10:28:35] [33mWARN[39m: [36mprovider trace expiry cleanup failed[39m 
+    error: {
+      "type": "TypeError",
+      "location": {
+        "line": 285,
+        "column": 25
+      }
+    }
+
+ Test Files  5 passed (5)
+      Tests  117 passed (117)
+   Start at  10:27:53
+   Duration  42.70s (transform 13.57s, setup 345ms, import 27.44s, tests 13.71s, environment 533ms)
+

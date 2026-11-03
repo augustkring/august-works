@@ -1,0 +1,43 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > executes Foundation and Memory query nodes with approved and accepted sources only
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > assembles authorized approved Foundation and task context into a durable manifest
+ × src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority 4299ms
+   → The authenticated Task mutation credential is unavailable
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > retrieves only issue-authorized synced GitHub evidence into the governed Context packet
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps Memory hydration disabled until Memory flags are enabled
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > hydrates only eligible relevant shared and owner-private Memory into Context
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > keeps unsupported, expired, erased, and foreign Human Task evidence out of Memory payload snapshots
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > omits Foundation without foundation:read but still admits authorized task context
+ ↓ src/services/context/context-engine-integration.test.ts > Context Engine integration > enforces the represented human's source permission for V5 even in shadow mode
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/context/context-engine-integration.test.ts > Context Engine integration > binds actual approved Foundation and private Task Context to one native bootstrap witness and rechecks current Human authority
+Error: The authenticated Task mutation credential is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ runUpdate src/services/issues.ts:11797:19
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.update src/services/issues.ts:12200:22
+ ❯ src/services/context/context-engine-integration.test.ts:733:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: undefined }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 skipped (9)
+   Start at  09:54:10
+   Duration  22.10s (transform 9.47s, setup 71ms, import 13.50s, tests 8.36s, environment 0ms)
+

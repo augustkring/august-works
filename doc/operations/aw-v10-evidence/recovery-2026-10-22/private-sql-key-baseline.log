@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts (23 tests | 2 failed | 21 skipped) 44530ms
+     × rechecks an authenticated agent credential for ordinary private Task SQL after a real Task row wait 937ms
+     × rechecks an authenticated board credential for ordinary private Task SQL after a real Task row wait 707ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > rechecks an authenticated agent credential for ordinary private Task SQL after a real Task row wait
+ FAIL  |@paperclipai/server| src/__tests__/foundation-read-source-authority.integration.test.ts > Foundation native Source authority lifetime > rechecks an authenticated board credential for ordinary private Task SQL after a real Task row wait
+AssertionError: expected 200 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 200
+
+ ❯ src/__tests__/foundation-read-source-authority.integration.test.ts:375:29
+    373|     } finally { release.resolve(); await holder; }
+    374|     const response = await pending;
+    375|     expect(response.status).toBe(403);
+       |                             ^
+    376|     expect(response.body.allowed).toBe(false);
+    377|     expect((await probe(replacementToken)).status).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 21 skipped (23)
+   Start at  15:28:06
+   Duration  211.24s (transform 106.90s, setup 774ms, import 165.32s, tests 44.53s, environment 0ms)
+

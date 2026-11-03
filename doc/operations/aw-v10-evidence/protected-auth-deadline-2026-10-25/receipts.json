@@ -1,0 +1,46 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "3d3fb473623cebf2b819d3fb9baabe6e75a9835f",
+  "meaning": "Actual native protected write reproduced committing after original verified request expiry when storedsession extended; shared proof nowcaps original deadline, rollback and newlyverifiedrequest controls14PASS. Native factor fixtures, not cryptographic ceremony qualification.",
+  "logs": [
+    {
+      "name": "protected-auth-original-deadline-red",
+      "exitCode": 1,
+      "rawSha256": "694dcabc2441fecd0d9afc25d7eede295220759a983cb77f6cb011df6cbdf3b0",
+      "sanitizedSha256": "694dcabc2441fecd0d9afc25d7eede295220759a983cb77f6cb011df6cbdf3b0",
+      "archiveSha256": "d4f62c9034aaa942003441d54fe35b1256be5c8c825f9d78374405df7e32fe9d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 13 skipped (14)",
+        "Duration  9.54s (transform 2.06s, setup 72ms, import 3.76s, tests 5.55s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "protected-auth-original-deadline-final",
+      "exitCode": 0,
+      "rawSha256": "8dd954bf4c7468f4e91d58c6bd8b68e36375e7be9e481f6da8d590d654c5d298",
+      "sanitizedSha256": "8dd954bf4c7468f4e91d58c6bd8b68e36375e7be9e481f6da8d590d654c5d298",
+      "archiveSha256": "6023a183a9a688d19ba7b6553d50b8861ad36d005286a40f2f66089fe778f80f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  14 passed (14)",
+        "Duration  9.85s (transform 2.12s, setup 68ms, import 3.90s, tests 5.76s, environment 0ms)"
+      ]
+    }
+  ]
+}

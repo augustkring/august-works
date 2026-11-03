@@ -1,0 +1,69 @@
+{
+  "baseCommit": "7bcedd133773bfe6d984c9841424666253553190",
+  "sources": {
+    "server/src/services/issues.ts": "cbae0b48d55c9c71bba5499dbfd1f3e7dcda23ef572e90d8b66341d57f8440dd",
+    "server/src/services/memory/memory-service.ts": "3357a91ea5c8dce86799da6e3c00fa39b53d555d6d5263ad5dec8dd704bdaa9e",
+    "server/src/services/budgets.ts": "34574e4024d270f10c584339fd28e2156af7cf23f576975b99b512a8877e6153",
+    "server/src/modules/wake-queue/adapters/queued-comment-postgres.ts": "e6b1791c9e7689151fc046e08425dac58fd81600101857153d121673f4845ec8",
+    "packages/db/src/migrations/0517_native_payload_erasure.sql": "55c290c98005493730607d6857ec5a7938ee0bfa91917064f95aa20457f49d41",
+    "packages/db/src/migrations/meta/_journal.json": "1b7f254699c8c2c1ab395329d3ad9f547a466daaa97c33b40c8308bda4480295",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "d3bd59079937eabc45ad567a54276a2899f945460f38ea9b2e87464dfd9ea865",
+    "server/src/__tests__/memory-revocation-source-binding.integration.test.ts": "5b07a592855b06e1116ecb1590007115c750e14244e1a37e2604f2403513a5b8",
+    "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts": "60ef184146c6ca40d1de0f05d5446e6c9daaa54ec902fbc6cda98c03cebf9302",
+    "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts": "c955f1e2bd01301c913156a74ba1cf49d73920c4ccbae1e2a61d97657d0602ae"
+  },
+  "checks": {
+    "baseline": {
+      "exit": 1,
+      "tests": "5 failed | 24 skipped (29)",
+      "duration": "53.12s (transform 21.09s, setup 248ms, import 37.06s, tests 15.24s, environment 0ms)"
+    },
+    "corrected-memory-baseline": {
+      "exit": 1,
+      "tests": "3 failed (3)",
+      "duration": "45.56s (transform 26.11s, setup 151ms, import 36.55s, tests 8.57s, environment 0ms)"
+    },
+    "corrected-memory-delete-baseline": {
+      "exit": 1,
+      "tests": "3 failed | 1 passed | 26 skipped (30)",
+      "duration": "62.23s (transform 23.63s, setup 397ms, import 41.69s, tests 19.18s, environment 0ms)"
+    },
+    "final-stage-budget-baseline": {
+      "exit": 1,
+      "tests": "4 failed | 35 passed (39)",
+      "duration": "110.30s (transform 27.96s, setup 753ms, import 60.37s, tests 46.28s, environment 1ms)"
+    },
+    "final-stage-learning-baseline": {
+      "exit": 1,
+      "tests": "1 failed | 39 passed | 41 skipped (81)",
+      "duration": "122.42s (transform 27.10s, setup 891ms, import 68.13s, tests 51.79s, environment 2ms)"
+    },
+    "server-types": {
+      "exit": 0,
+      "tests": null,
+      "duration": null
+    },
+    "migration-generate": {
+      "exit": 0,
+      "tests": null,
+      "duration": null
+    },
+    "migration-check-final": {
+      "exit": 0,
+      "tests": null,
+      "duration": null
+    }
+  },
+  "interpretation": [
+    "Final-stage-learning-baseline is an actual5-file exit1 run: all4 relevant native files pass39 tests (binding27,Memory mutation3,original private-lineage6,budget/queue3). The fifth new Learning policy test fails before its writer on an old unqualified common fixture; no full5-file pass is claimed. That separate owner/test remains pending.",
+    "Memory duplicate source union clears only when actual retained sources change; first revocation clears the changed mandatory reason, and already-revoked/no-source-change calls preserve exact snapshots.",
+    "Original Attachment binding clears capture in the same company-scoped UPDATE. Native generated custom0517 clears the affected attachment capture before original Comment DELETE SET NULL across deletion owners; another retained attachment stays exactly bound.",
+    "Learning erasure first exposed stale binding, then the existing immutable-revision guard rejected changing the capture. The original DB erasure guard now clears only the actually erased revision capture; its fixed body marker and both original immutable/verified-output checks retain all other fields. The negative revision-number mutation remains23514. No production erasure-owner duplicate code is needed.",
+    "Original budget pause compares actual pauseReason, resume clears on its budget-only predicate; both carry company scope. Original queued edit compares current stored body; unchanged-body/no-op controls preserve snapshots.",
+    "Original initial fixture failures (invalid unrevoked reason then string passed to DB timestamp) are preserved. Corrected baselines reach actual23514 for both Memory mutations and Comment deletion. Native generation and final migration guards0. Server compiler0 covers these committed product owners; test files are excluded. Sessions closed."
+  ],
+  "limits": [
+    "INSERT-only structural fixtures, original service/worker/queue/database execution only; no authenticated producer/input-completeness, real provider transport, source-free admission, historical upgrade, constructor activation or snapshot rebinding.",
+    "Pending Learning policy/Telegram writer work and fixture migration are outside this checkpoint. Original3 privacy/temporal regressions,31 portability failures and full workspace/V10/PR gates remain open."
+  ]
+}

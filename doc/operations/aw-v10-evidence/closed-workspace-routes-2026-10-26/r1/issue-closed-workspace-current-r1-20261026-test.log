@@ -1,0 +1,29 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > reopens the closed isolated workspace and accepts a new comment 50ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > reopens the closed isolated workspace and accepts a comment update 12ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > reopens the closed isolated workspace and accepts a checkout 13ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > returns 409 and blocks the comment when the workspace cannot be reopened 6ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > returns 503 and blocks the checkout when the rebuild fails 5ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > does not reopen the workspace when a checkout fails the run-id gate 7ms
+[21:09:37] [33mWARN[39m: [36mretry the clear of the reopen-pending flag after an unconsumed reopen[39m [90m{"issueId":"11111111-1111-4111-8111-111111111111","executionWorkspaceId":"33333333-3333-4333-8333-333333333333","attempt":1}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 494,
+        "column": 30
+      }
+    }
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > clears the reopen-pending flag when the comment update returns null after a reopen 10ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > clears the reopen-pending flag when the checkout throws after a reopen 16ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > does not clear the reopen-pending flag when the checkout resumes the issue 10ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > does not clear the reopen-pending flag when a concurrent request already reopened the workspace 7ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > retries the reopen-pending clear when the first attempt fails transiently 260ms
+ ✓ src/__tests__/issue-closed-workspace-routes.test.ts > closed isolated workspace issue routes > still allows non-comment board updates so the issue can be moved to a new workspace 7ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  21:09:24
+   Duration  12.58s (transform 10.19s, setup 78ms, import 11.96s, tests 405ms, environment 0ms)
+

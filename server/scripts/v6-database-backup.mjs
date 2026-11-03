@@ -255,6 +255,8 @@ if (mode === "backup") {
             await tx`select company_id,source_ref,suppressed_at from business_event_suppressions limit 100001`,
           feedback:
             await tx`select subject_id,company_id,feedback_id,target_kind,erased_at from customer_feedback_deletion_markers limit 100001`,
+          supportCases:
+            await tx`select subject_id,company_id,case_id,target_kind,erased_at,retain_until from support_case_deletion_markers limit 100001`,
           identityHomes:
             await tx`select id,home_company_id from agent_identities limit 100001`,
           users:
@@ -268,6 +270,7 @@ if (mode === "backup") {
         payload.businessEvents.length +
         payload.analyticalSources.length +
         payload.feedback.length +
+        payload.supportCases.length +
         payload.identityHomes.length +
         payload.users.length >
       100000

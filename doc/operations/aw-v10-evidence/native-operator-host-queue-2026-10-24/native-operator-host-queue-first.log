@@ -1,0 +1,13 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[05:50:21] [33mWARN[39m: [36mSandbox remains quarantined; native Stop requires reconciliation[39m [90m{"companyId":"3f48c157-e579-4c11-af15-cbedc5a886cc","bindingId":"16533b86-44b4-4636-835e-aaaa197d27cb"}[39m
+
+ Test Files  3 passed (3)
+      Tests  32 passed (32)
+   Start at  05:49:12
+   Duration  81.76s (transform 24.97s, setup 498ms, import 51.13s, tests 29.11s, environment 0ms)
+

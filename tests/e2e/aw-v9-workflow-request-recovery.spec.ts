@@ -1,6 +1,8 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+import { registerEnglishAccountLocaleIsolation } from "./account-locale-isolation";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+registerEnglishAccountLocaleIsolation(test);
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
 // Native C0 admission, executor, journal and exact receipt GET are actual.
@@ -18,7 +20,7 @@ test("a lost workflow Test response recovers the exact Native request after relo
     await json(await request.patch(`${base}/${draft.id}/draft`, { data: { expectedRevisionId: draft.draftRevisionId,
       graph: { version: 1, variables: [], settings: { totalDeadlineSeconds: 60 },
         nodes: [{ id: "start", type: "core.manual_trigger", name: "Start an internal test", config: {}, position: { x: 0, y: 0 } }], edges: [] } } }));
-    const view = await json(await request.get(`${base}/${draft.id}/experience?expectedUserId=local-board`));
+    const view = await json(await request.get(`${base}/${draft.id}/experience?expectedUserId=${encodeURIComponent(session.user.id)}`));
     await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } }));
     // Hold the reviewed fixture frame while the acknowledgement is lost, so
     // the fresh-page flow exercises exact recovery rather than latest-receipt

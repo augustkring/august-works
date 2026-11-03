@@ -157,9 +157,17 @@ describe.skipIf(!support.supported)("Native Routine fresh management review cade
     await f.service.tickScheduledTriggers(new Date());
     expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.companyId, companyId))).toHaveLength(1);
     await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)));
-    await expect(f.service.runRoutine(f.routine.id, { source: "api", idempotencyKey: "withdrawn-delegation" })).rejects.toMatchObject({ status: 403 });
+    await expect(f.service.runRoutine(f.routine.id, { source: "api", idempotencyKey: "withdrawn-delegation" })).resolves.toMatchObject({
+      status: "skipped", failureReason: "responsible_user_inactive", responsibleUserId: userId,
+      linkedIssueId: null, linkedWorkflowRunId: null, linkedManagementReviewId: null,
+    });
     await db.update(routineTriggers).set({ nextRunAt: new Date(Date.now() - 1000) }).where(eq(routineTriggers.id, trigger.id));
-    await expect(f.service.tickScheduledTriggers(new Date())).rejects.toMatchObject({status:403});
+    await expect(f.service.tickScheduledTriggers(new Date())).resolves.toEqual({triggered:1});
+    const suppressed = (await db.select().from(routineRuns).where(eq(routineRuns.companyId, companyId))).filter(run => run.status === "skipped");
+    expect(suppressed).toHaveLength(2);
+    for (const run of suppressed) expect(run).toMatchObject({ failureReason: "responsible_user_inactive", responsibleUserId: userId,
+      linkedIssueId: null, linkedWorkflowRunId: null, linkedManagementReviewId: null });
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, companyId))).toHaveLength(1);
     expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.companyId, companyId))).toHaveLength(1);
   });
   it("rolls back fresh observation and native run when a later declared selector is unavailable", async () => {

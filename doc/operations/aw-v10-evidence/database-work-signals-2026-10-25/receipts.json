@@ -1,0 +1,79 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "afac59a31ec2cce74459df868bbd9efee4e8cc9e",
+  "meaning": "UP13 transaction-lifecycle dependency adapted from pinned upstream. Final native14PASS includes real lost-after-commit/rollback/savepoint/expiredcallback and non-replay controls; final DBbuild0. WholeDB run ongoing, deadlineworker/producers/idle/Stop qualification remains open.",
+  "logs": [
+    {
+      "name": "database-work-signals-native",
+      "exitCode": 0,
+      "rawSha256": "37c120d8f580d7519ec8e79369d55689e1db1f605921126dbbc2a83772bf2154",
+      "sanitizedSha256": "37c120d8f580d7519ec8e79369d55689e1db1f605921126dbbc2a83772bf2154",
+      "archiveSha256": "1efcd0ebdec013ff73679a25db3d1a3325c5580b2f75812f9d137564bd0930fb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  12 passed (12)",
+        "Duration  9.80s (transform 2.78s, setup 0ms, import 4.74s, tests 4.94s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "database-work-signals-lifetime-final",
+      "exitCode": 0,
+      "rawSha256": "06c300c4e328dc5aaeb59cef69cd0a13fdc6fe1bdfbf1fd09b98fd04975efac0",
+      "sanitizedSha256": "06c300c4e328dc5aaeb59cef69cd0a13fdc6fe1bdfbf1fd09b98fd04975efac0",
+      "archiveSha256": "465aa550874ea5877f022c2ed122163c7c463c2dbadcd26ffdcd0fcee0dbd615",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  13 passed (13)",
+        "Duration  10.85s (transform 3.36s, setup 0ms, import 5.58s, tests 5.14s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "database-work-signals-commit-final",
+      "exitCode": 0,
+      "rawSha256": "407cb1b0d1418d96ac1a41646d747bfae1f697ddd999800e3ea2317f3f723f33",
+      "sanitizedSha256": "407cb1b0d1418d96ac1a41646d747bfae1f697ddd999800e3ea2317f3f723f33",
+      "archiveSha256": "27e24d6aca2c718b9a4009749846c1f2d553ca7959ba9de5b0428492fb2e8520",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  14 passed (14)",
+        "Duration  12.42s (transform 4.23s, setup 0ms, import 6.71s, tests 5.59s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "database-work-signals-lifetime-build-final",
+      "exitCode": 0,
+      "rawSha256": "735b13b321a0d844c61cc5735733c499e312a21d01d97261d985adaa507abe05",
+      "sanitizedSha256": "735b13b321a0d844c61cc5735733c499e312a21d01d97261d985adaa507abe05",
+      "archiveSha256": "e569e70f9707d13d935b9baaa08a884af39ce861656893768e9406139f34544b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}

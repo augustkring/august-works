@@ -1,4 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { captureNativeBlockedHumanInteraction } from "../native-direct-input.js";
+import { isDeepStrictEqual } from "node:util";
+import { and, eq, sql } from "drizzle-orm";
 import {
   heartbeatRuns,
   issues,
@@ -7,17 +9,20 @@ import {
   orchestrationWorkerAttempts,
   type Db,
 } from "@paperclipai/db";
-import { orchestrationCompletionSchema } from "@paperclipai/shared";
+import { orchestrationCompletionSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import type {
   NativeExecutionInput,
   NativeSessionBackend,
 } from "../../vendor/paperclip-runner/index.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 import { conflict, forbidden } from "../../errors.js";
 import { assertV7Authorization } from "../v7-authorization.js";
 import type { workerModelGateway } from "./worker-model-gateway.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
+import { minimumNativeDraftToolActions, nativeDraftToolActionBudgetFits } from "./native-draft-output-capability.js";
 import { readNativeRuntimeAssetText } from "../native-runtime/runtime-context.js";
 import { createAwTextDraftBackend } from "../native-runtime/aw-text-draft-backend.js";
+import type { NativeBootstrapSourceClosure } from "../native-runtime/native-execution-input.js";
 
 type Gateway = ReturnType<typeof workerModelGateway>;
 type Plan = typeof orchestrationPlans.$inferSelect;
@@ -29,12 +34,13 @@ const installed = new WeakMap<Db, Gateway>();
 export async function selectNativeHeartbeatBackend(
   db: Db,
   execution: NativeExecutionInput,
+  sourceClosure?: NativeBootstrapSourceClosure | null,
   otherProviderFactory?: (
     input: NativeExecutionInput,
   ) => NativeSessionBackend | undefined,
 ) {
   return execution.provider.kind === "aw_text_only"
-    ? prepareNativeDraftBackend(db, execution)
+    ? prepareNativeDraftBackend(db, execution, sourceClosure)
     : otherProviderFactory?.(execution);
 }
 
@@ -71,6 +77,7 @@ export async function qualifyNativeDraftWorker(
   plan: Plan,
   worker: Worker,
   responsibleUserId: string,
+  runId?: string,
 ) {
   const gateway = installed.get(rootDb);
   if (
@@ -97,11 +104,14 @@ export async function qualifyNativeDraftWorker(
     .where(
       and(eq(issues.companyId, plan.companyId), eq(issues.id, plan.issueId)),
     );
+  const blockedInteraction = task?.status === "blocked" && runId
+    ? await captureNativeBlockedHumanInteraction(tx, { companyId: plan.companyId, issueId: task.id,
+        runId, agentId: worker.agentId! }) : null;
   if (
     !task ||
     task.hiddenAt ||
     task.workMode !== "standard" ||
-    !["backlog", "todo", "in_progress"].includes(task.status) ||
+    (! ["backlog", "todo", "in_progress"].includes(task.status) && !blockedInteraction) ||
     task.assigneeAgentId !== worker.agentId ||
     !root ||
     root.hiddenAt ||
@@ -141,19 +151,21 @@ export async function qualifyNativeDraftWorker(
     plan.companyId,
     task.id,
   );
-  if (
-    !contract ||
-    orchestrationCompletionSchema.parse(contract.row.contractJson.v7)
-      .requiredOutputs.length !== 1
-  )
-    throw forbidden(
-      "The one-call draft requires one declared canonical output",
-    );
-  return gateway.qualifyDraft(tx, {
+  if (!contract)
+    throw forbidden("The cost-capped native draft requires its current completion contract");
+  const completion = orchestrationCompletionSchema.parse(contract.row.contractJson.v7);
+  const qualified = await gateway.qualifyManagedWorker(tx, {
     companyId: plan.companyId,
     agentId: worker.agentId,
     responsibleUserId,
   });
+  if (blockedInteraction && qualified.providerKind !== "opencode")
+    throw forbidden("The dependency interaction requires its managed read-only SDK tools");
+  const minimumToolActions = minimumNativeDraftToolActions(
+    qualified.providerKind,
+    completion.requiredOutputs,
+  );
+  return { ...qualified, minimumToolActions };
 }
 
 /** Called under the original plan lock before start, without spending or
@@ -183,20 +195,22 @@ export async function qualifyNativeDraftPlan(
   if (!pending.length || workers.length > plan.budgets.maxWorkerCount)
     throw forbidden("No bounded draft workers remain");
   let maximum = 0;
-  for (const worker of pending)
-    maximum += (
-      await qualifyNativeDraftWorker(
-        rootDb,
-        tx,
-        plan,
-        worker,
-        responsibleUserId,
-      )
-    ).maximumMinor;
+  let minimumToolActions = 0;
+  for (const worker of pending) {
+    const qualified = await qualifyNativeDraftWorker(
+      rootDb,
+      tx,
+      plan,
+      worker,
+      responsibleUserId,
+    );
+    maximum += qualified.maximumMinor;
+    minimumToolActions += qualified.minimumToolActions;
+  }
   if (
     plan.budgets.maxModelCostMinor === null ||
     plan.modelCostReserved + maximum > plan.budgets.maxModelCostMinor ||
-    plan.toolActionsUsed + pending.length * 2 > plan.budgets.maxToolActions
+    !nativeDraftToolActionBudgetFits(plan.toolActionsUsed, plan.budgets.maxToolActions, minimumToolActions)
   )
     throw conflict(
       "The remaining model/tool budget cannot produce each declared draft",
@@ -209,6 +223,7 @@ export async function qualifyNativeDraftPlan(
 export async function prepareNativeDraftBackend(
   db: Db,
   execution: NativeExecutionInput,
+  sourceClosure?: NativeBootstrapSourceClosure | null,
 ) {
   const gateway = installed.get(db);
   if (
@@ -216,6 +231,7 @@ export async function prepareNativeDraftBackend(
     execution.provider.kind !== "aw_text_only" ||
     !("runtimeContext" in execution) ||
     execution.session.lifecyclePolicy.mode !== "per_turn" ||
+    !sourceClosure ||
     ("continuationPrompt" in execution && execution.continuationPrompt) ||
     execution.runtimeContext.mcp.bindingId !== null
   )
@@ -282,6 +298,7 @@ export async function prepareNativeDraftBackend(
     bound.plan,
     bound.worker,
     bound.run.responsibleUserId!,
+    bound.run.id,
   );
   if (
     execution.provider.profileId !== qualified.profileId ||
@@ -304,6 +321,59 @@ export async function prepareNativeDraftBackend(
     bound.run.completionContractSha256 !== contract.row.canonicalSha256
   )
     throw forbidden("The persisted native draft completion contract changed");
+  const taskSource = sourceClosure?.sourceSet.inputs.find((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+    source.kind === "task" && source.issueId === execution.binding.issueId);
+  const completionSource = sourceClosure?.sourceSet.inputs.find((source) =>
+    source.kind === "completion_contract" && source.issueId === execution.binding.issueId &&
+    source.contractId === contract.row.id && source.revision === String(contract.row.revision) &&
+    source.contentHash === contract.row.canonicalSha256);
+  const instructionSource = sourceClosure?.sourceSet.inputs.find((source) =>
+    source.kind === "runtime_instructions" && source.agentId === execution.binding.agentId &&
+    source.bundleDigest === execution.runtimeContext.instructions.bundle.digest &&
+    source.manifestDigest === execution.runtimeContext.instructions.bundle.manifestDigest);
+  const skillSources = sourceClosure?.sourceSet.inputs.filter((source) => source.kind === "runtime_skill") ?? [];
+  const [currentTask] = await db.select({
+    id: issues.id,
+    identifier: issues.identifier,
+    title: issues.title,
+    description: issues.description,
+    workMode: issues.workMode,
+    ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+  }).from(issues).where(and(
+    eq(issues.companyId, execution.binding.companyId),
+    eq(issues.id, execution.binding.issueId),
+  )).for("share");
+  const currentTaskProjection = currentTask && {
+    identifier: currentTask.identifier,
+    title: currentTask.title,
+    description: currentTask.description,
+    workMode: currentTask.workMode,
+  };
+  const renderedTaskProjection = {
+    identifier: execution.task.identifier,
+    title: execution.task.title,
+    description: execution.task.description,
+    workMode: execution.task.workMode,
+  };
+  const legacyRenderedTaskHash = currentTask && nativeSha256({
+    id: currentTask.id,
+    ...currentTaskProjection,
+  });
+  const taskSourceMatchesCurrentOwner = Boolean(taskSource && currentTask && (
+    taskSource.contentHash === currentTask.ownerBodyHash ||
+    taskSource.contentHash === legacyRenderedTaskHash
+  ) && isDeepStrictEqual(renderedTaskProjection, currentTaskProjection));
+  const taskEnvelopeMatches = Boolean(sourceClosure &&
+    sourceClosure.taskEnvelopeDigest === nativeSha256(execution.task));
+  const completionContractMatches = Boolean(completionSource);
+  const runtimeInstructionsMatch = Boolean(instructionSource);
+  const runtimeSkillsMatch = execution.runtimeContext.skills.every((skill) => skillSources.some((source) =>
+    source.kind === "runtime_skill" && source.key === skill.key && source.versionId === skill.versionId &&
+    source.bundleDigest === skill.bundle.digest && source.manifestDigest === skill.bundle.manifestDigest));
+  const sourceClosureComplete = Boolean(sourceClosure && taskSourceMatchesCurrentOwner && taskEnvelopeMatches && completionContractMatches &&
+    runtimeInstructionsMatch && skillSources.length === execution.runtimeContext.skills.length && runtimeSkillsMatch);
+  if (!sourceClosureComplete)
+    throw forbidden("The native draft source closure does not cover its exact Task, contract, instructions and Skills");
   const completion = orchestrationCompletionSchema.parse(
     contract.row.contractJson.v7,
   );
@@ -335,10 +405,12 @@ export async function prepareNativeDraftBackend(
     },
     outputKey: completion.requiredOutputs[0]!.key,
     maxOutputTokens: qualified.maxOutputTokens,
+    expectedTask: execution.task,
     runtimeContextText: {
       aggregateDigest: execution.runtimeContext.aggregateDigest,
       instructionFiles,
       skills,
     },
+    sourceClosure,
   });
 }

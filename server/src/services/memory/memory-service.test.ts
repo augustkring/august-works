@@ -1,12 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  authUsers,
+  authSessions,
   companies,
   companyMemberships,
   createDb,
+  heartbeatRuns,
+  issues,
+  memoryJobs,
+  principalPermissionGrants,
   memoryBindings,
   memoryBindingTargets,
   memoryEvidence,
@@ -18,7 +24,12 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
-import { memoryService } from "./memory-service.js";
+import { memoryService, type MemoryMutationActor } from "./memory-service.js";
+import { retrieveEligibleMemory } from "./memory-retrieval.js";
+import { issueService } from "../issues.js";
+import { initializeRunIdentity } from "../run-identity.js";
+import { grantsForHumanRole } from "../company-member-roles.js";
+import { canActorReadIssuePrivacy } from "../authorization.js";
 import { reapplyMemoryDeletionMarkers, expireMemoryPayloads } from "./memory-privacy.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -55,8 +66,15 @@ describePg("Memory Core service", () => {
     await db.delete(memoryRecords);
     await db.delete(memoryBindingTargets);
     await db.delete(memoryBindings);
+    await db.delete(heartbeatRuns);
+    await db.delete(memoryJobs);
+    await db.delete(issues);
     await db.delete(projects);
+    nativeActors.clear();
+    await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authSessions);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
   });
@@ -67,13 +85,21 @@ describePg("Memory Core service", () => {
 
   async function seed(name = "Memory Co") {
     const companyId = randomUUID();
-    const userId = `user-${companyId}`;
+    const userId = randomUUID();
     await db.insert(companies).values({
       id: companyId,
       name,
       issuePrefix: `M${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: userId,
+    });
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Memory Core Human",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
     await db.insert(companyMemberships).values({
       companyId,
@@ -157,13 +183,62 @@ describePg("Memory Core service", () => {
   const userActor = (userId: string) => ({
     principal: { type: "user" as const, userId },
   });
-  const agentActor = (agentId: string, responsibleUserId?: string) => ({
-    principal: {
-      type: "agent" as const,
-      agentId,
-      responsibleUserId: responsibleUserId ?? null,
-    },
-  });
+  async function verifiedUserActor(userId: string): Promise<MemoryMutationActor> {
+    const now = new Date(), expiresAt = new Date(now.getTime() + 60 * 60_000), sessionId = randomUUID();
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(),
+      createdAt: now, updatedAt: now, expiresAt, authenticationMethod: "password", authenticatedAt: now, authenticatorVersion: 0 });
+    return { principal: { type: "user", userId }, authorizationActor: {
+      type: "board", source: "session", userId, sessionId, authenticatedCredentialExpiresAt: expiresAt.getTime(),
+    } };
+  }
+  async function humanTaskSource(seeded: Awaited<ReturnType<typeof seed>>, content: string,
+    visibility: "open" | "private" = "open") {
+    const actor = await verifiedUserActor(seeded.userId);
+    const task = await issueService(db).create(seeded.companyId, {
+      title: "Memory source deletion fixture",
+      description: content,
+      visibility,
+      createdByUserId: seeded.userId,
+      responsibleUserId: seeded.userId,
+    }, db, undefined, { manualInputActor: actor.authorizationActor });
+    const [source] = await db.select({ identifier: issues.identifier, title: issues.title, updatedAt: issues.updatedAt })
+      .from(issues).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    if (!source) throw new Error("The current Human Task source fixture was not persisted");
+    return {
+      actor,
+      task,
+      evidence: [{ ...evidence(content)[0]!, sourceRef: `issue://${task.id}`,
+        sourceVersion: source.updatedAt.toISOString(), sourceUpdatedAt: source.updatedAt.toISOString(),
+        citation: { label: source.identifier ? `${source.identifier}: ${source.title}` : source.title } }],
+    };
+  }
+  const nativeActors = new Map<string, Promise<MemoryMutationActor>>();
+  function agentActor(agentId: string, responsibleUserId?: string): Promise<MemoryMutationActor> {
+    const key = `${agentId}:${responsibleUserId ?? "default"}`;
+    let current = nativeActors.get(key);
+    if (!current) {
+      current = (async () => {
+        const [agent] = await db.select().from(agents).where(eq(agents.id, agentId));
+        if (!agent) throw new Error("Memory producer fixture Agent is missing");
+        const [company] = await db.select().from(companies).where(eq(companies.id, agent.companyId));
+        const userId = responsibleUserId ?? company?.defaultResponsibleUserId;
+        if (!userId) throw new Error("Memory producer fixture Human is missing");
+        await db.insert(principalPermissionGrants).values({ companyId: agent.companyId, principalType: "agent",
+          principalId: agentId, permissionKey: "company_scope:read" }).onConflictDoNothing();
+        const [task] = await db.insert(issues).values({ companyId: agent.companyId,
+          title: "Actual native Memory producer fixture", status: "in_progress",
+          assigneeAgentId: agentId, responsibleUserId: userId, createdByUserId: userId }).returning();
+        const [run] = await db.insert(heartbeatRuns).values({ companyId: agent.companyId, agentId,
+          responsibleUserId: userId, nativeIssueId: task!.id, contextSnapshot: { issueId: task!.id },
+          runtimeMode: "native", status: "running" }).returning();
+        await initializeRunIdentity(db, { companyId: agent.companyId, runId: run!.id,
+          issueId: task!.id, responsibleUserId: userId, cause: "dispatch" });
+        return { principal: { type: "agent", agentId, responsibleUserId: userId }, runId: run!.id };
+      })();
+      nativeActors.set(key, current);
+    }
+    return current;
+  }
   const systemActor = {
     principal: { type: "system" as const, service: "memory-test" },
   };
@@ -205,6 +280,16 @@ describePg("Memory Core service", () => {
     return input;
   }
 
+  it("refuses an Agent candidate without its actual native producer Run", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const actor = await agentActor(seeded.agent.id, seeded.userId);
+    const { runId: _runId, ...withoutRun } = actor;
+    await expect(memoryService(db).createCandidate(seeded.companyId, candidate(b.id), withoutRun))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(memoryRecords).where(eq(memoryRecords.companyId, seeded.companyId))).toHaveLength(0);
+  });
+
   it("creates an evidence-backed pending candidate and keeps it company-scoped", async () => {
     const seeded = await seed();
     const other = await seed("Other Co");
@@ -214,7 +299,7 @@ describePg("Memory Core service", () => {
     const created = await svc.createCandidate(
       seeded.companyId,
       candidate(b.id),
-      { principal: { type: "agent", agentId: seeded.agent.id, responsibleUserId: seeded.userId } },
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(created.record).toMatchObject({
@@ -248,12 +333,12 @@ describePg("Memory Core service", () => {
     const first = await svc.createCandidate(
       seeded.companyId,
       input,
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     const duplicate = await svc.createCandidate(
       seeded.companyId,
       input,
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(first.resolution.kind).toBe("new");
@@ -285,7 +370,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: [{ ...evidence(text)[0]!, sourceRef: "issue://first" }],
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     const corroborated = await svc.createCandidate(
@@ -297,7 +382,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: [{ ...evidence(text)[0]!, sourceRef: "issue://second" }],
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(corroborated.resolution).toMatchObject({
@@ -320,7 +405,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: [{ ...evidence(text)[0]!, sourceRef: "issue://second" }],
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(replay.resolution.kind).toBe("duplicate");
     expect(replay.evidence).toHaveLength(2);
@@ -345,7 +430,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: [supporting],
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     const contradicting = {
@@ -362,7 +447,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: [supporting, contradicting],
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(contradiction.resolution).toMatchObject({
@@ -393,7 +478,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: [supporting, contradicting],
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(replay.resolution).toMatchObject({
       kind: "contradiction",
@@ -418,7 +503,7 @@ describePg("Memory Core service", () => {
         observedAt: "2026-01-01T00:00:00.000Z",
         evidence: evidence("Acme procurement owner is Anna."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     const original = await svc.reviewCandidate(
       seeded.companyId,
@@ -438,7 +523,7 @@ describePg("Memory Core service", () => {
         observedAt: "2026-09-01T00:00:00.000Z",
         evidence: evidence("Acme procurement owner is Peter."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(update.resolution).toMatchObject({
@@ -492,7 +577,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: evidence("Acme procurement owner is Anna."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     const original = await svc.reviewCandidate(
       seeded.companyId,
@@ -510,7 +595,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: evidence("Acme procurement owner is Peter."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(contradiction.resolution).toMatchObject({
@@ -544,7 +629,7 @@ describePg("Memory Core service", () => {
         content: "Security review reduces procurement delays.",
         evidence: evidence("Security review reduces procurement delays."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     const second = await svc.createCandidate(
       seeded.companyId,
@@ -553,7 +638,7 @@ describePg("Memory Core service", () => {
         content: "Legal review should start after security review.",
         evidence: evidence("Legal review should start after security review."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(first.resolution.kind).toBe("new");
@@ -583,12 +668,12 @@ describePg("Memory Core service", () => {
       svc.createCandidate(
         seeded.companyId,
         input,
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
       svc.createCandidate(
         seeded.companyId,
         input,
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ]);
 
@@ -617,7 +702,7 @@ describePg("Memory Core service", () => {
           scope: { type: "agent", id: seeded.agent.id },
           ownerAgentId: null,
         }),
-        { principal: { type: "agent", agentId: seeded.agent.id } },
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({ status: 422 });
 
@@ -638,7 +723,7 @@ describePg("Memory Core service", () => {
           scope: { type: "agent", id: otherAgent!.id },
           ownerAgentId: otherAgent!.id,
         }),
-        { principal: { type: "agent", agentId: seeded.agent.id } },
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({ status: 403 });
   });
@@ -650,7 +735,7 @@ describePg("Memory Core service", () => {
     const created = await svc.createCandidate(
       seeded.companyId,
       candidate(b.id),
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     await expect(
@@ -658,7 +743,7 @@ describePg("Memory Core service", () => {
         seeded.companyId,
         created.record.id,
         { decision: "accept" },
-        { principal: { type: "agent", agentId: seeded.agent.id } },
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({ status: 403 });
 
@@ -684,6 +769,7 @@ describePg("Memory Core service", () => {
     expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([
       expect.objectContaining({ id: created.record.id }),
     ]);
+    expect(await svc.listEligible(seeded.companyId, { sensitivityCeiling: "public" }, userActor(seeded.userId))).toEqual([]);
   });
 
   it("does not supersede accepted memory until its correction candidate is accepted", async () => {
@@ -693,7 +779,7 @@ describePg("Memory Core service", () => {
     const originalCandidate = await svc.createCandidate(
       seeded.companyId,
       candidate(b.id),
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     const original = await svc.reviewCandidate(
       seeded.companyId,
@@ -724,7 +810,7 @@ describePg("Memory Core service", () => {
         evidence: evidence("Acme now requires legal and security review before procurement."),
         reason: "Customer process changed",
       },
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(correction.record).toMatchObject({
@@ -759,19 +845,11 @@ describePg("Memory Core service", () => {
     );
     const svc = memoryService(db);
 
-    const privateCandidate = await svc.createCandidate(
+    const privateCandidate = await svc.createPrivateMemory(
       seeded.companyId,
-      candidate(b.id, {
-        scope: { type: "agent", id: seeded.agent.id },
-        ownerAgentId: seeded.agent.id,
-      }),
-      { principal: { type: "agent", agentId: seeded.agent.id } },
-    );
-    await svc.reviewCandidate(
-      seeded.companyId,
-      privateCandidate.record.id,
-      { decision: "accept" },
-      { principal: { type: "user", userId: seeded.userId } },
+      seeded.agent.id,
+      privateInput(b.id),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(await svc.listEligible(seeded.companyId, {}, userActor(seeded.userId))).toEqual([]);
@@ -782,7 +860,7 @@ describePg("Memory Core service", () => {
           scopeType: "agent",
           scopeId: seeded.agent.id,
         },
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).toEqual([expect.objectContaining({ id: privateCandidate.record.id })]);
 
@@ -790,16 +868,128 @@ describePg("Memory Core service", () => {
       svc.listEligible(
         seeded.companyId,
         { scopeType: "agent" },
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({ status: 422 });
     await expect(
       svc.listEligible(
         seeded.companyId,
         { scopeId: seeded.agent.id },
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("rechecks Task reader authority after eligible detail evidence waits", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const content = "The Acme procurement review needs a current authorized Task reader.";
+    const source = await humanTaskSource(seeded, content);
+    const created = await svc.createCandidate(seeded.companyId,
+      candidate(b.id, { title: "Authorized Task reader", content, summary: null, evidence: source.evidence }),
+      await agentActor(seeded.agent.id, seeded.userId));
+    await svc.reviewCandidate(seeded.companyId, created.record.id, { decision: "accept" }, userActor(seeded.userId));
+
+    let releaseEvidenceLock!: () => void;
+    let evidenceLockReady!: () => void;
+    const evidenceLockAcquired = new Promise<void>(resolve => { evidenceLockReady = resolve; });
+    const evidenceLockRelease = new Promise<void>(resolve => { releaseEvidenceLock = resolve; });
+    const lockTransaction = db.transaction(async tx => {
+      await tx.execute(sql`LOCK TABLE memory_evidence IN ACCESS EXCLUSIVE MODE`);
+      evidenceLockReady();
+      await evidenceLockRelease;
+    });
+    await evidenceLockAcquired;
+
+    try {
+      const detailRead = svc.listEligibleDetails(seeded.companyId, {
+        scopeType: "company", scopeId: null, limit: 100, sensitivityCeiling: "internal",
+        asOf: new Date(), candidateFilter: record => record.id === created.record.id,
+      }, await agentActor(seeded.agent.id, seeded.userId), {
+        limit: 1, score: () => 1,
+        isCurrent: record => record.reviewState === "accepted" && record.retentionState === "active" &&
+          record.revokedAt === null && record.deletedAt === null && record.supersededByRecordId === null,
+      });
+
+      const blockedEvidenceQueryDeadline = Date.now() + 5_000;
+      let evidenceQueryBlocked = false;
+      while (Date.now() < blockedEvidenceQueryDeadline) {
+        const [activity] = await db.execute<{ blocked: boolean }>(sql`select exists (
+          select 1 from pg_stat_activity
+          where wait_event_type='Lock' and query ilike '%memory_evidence%' and pid<>pg_backend_pid()
+        ) as blocked`);
+        if (activity?.blocked) { evidenceQueryBlocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(evidenceQueryBlocked).toBe(true);
+
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+        eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, seeded.userId)));
+      releaseEvidenceLock();
+      await expect(detailRead).resolves.toEqual([]);
+    } finally {
+      releaseEvidenceLock();
+      await lockTransaction;
+      await db.update(companyMemberships).set({ status: "active" }).where(and(
+        eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, seeded.userId)));
+    }
+  });
+
+  it("does not let an unauthorized high-ranked Task memory hide an authorized top-K fallback", async () => {
+    const seeded = await seed();
+    const b = await binding(seeded.companyId, seeded.userId);
+    const svc = memoryService(db);
+    const privateContent = "Acme quarterly risk forecast is confidential to its owner.";
+    const publicContent = "The quarterly risk forecast is available to the company team.";
+    const privateSource = await humanTaskSource(seeded, privateContent, "private");
+    const publicSource = await humanTaskSource(seeded, publicContent, "open");
+    const privateCandidate = await svc.createCandidate(seeded.companyId, candidate(b.id, {
+      title: "Quarterly risk forecast", content: privateContent, summary: null, evidence: privateSource.evidence,
+    }), privateSource.actor);
+    const publicCandidate = await svc.createCandidate(seeded.companyId, candidate(b.id, {
+      title: "Team notes", content: publicContent, summary: null, evidence: publicSource.evidence,
+    }), publicSource.actor);
+    await svc.reviewCandidate(seeded.companyId, privateCandidate.record.id, { decision: "accept" }, userActor(seeded.userId));
+    await svc.reviewCandidate(seeded.companyId, publicCandidate.record.id, { decision: "accept" }, userActor(seeded.userId));
+    expect(privateCandidate.record.id).not.toBe(publicCandidate.record.id);
+
+    const bobId = randomUUID();
+    await db.insert(authUsers).values({ id: bobId, name: "Memory Core Bob", email: `${bobId}@example.test`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId: seeded.companyId, principalType: "user", principalId: bobId,
+      status: "active", membershipRole: "operator" });
+    await db.insert(principalPermissionGrants).values([
+      ...grantsForHumanRole("operator"), { permissionKey: "company_scope:read", scope: null },
+    ].map(grant => ({ companyId: seeded.companyId, principalType: "user" as const, principalId: bobId, ...grant })));
+    const bob = await verifiedUserActor(bobId);
+    const [persistedPrivateTask, persistedPublicTask] = await Promise.all([
+      db.select({ visibility: issues.visibility }).from(issues).where(eq(issues.id, privateSource.task.id)).then(rows => rows[0]),
+      db.select({ visibility: issues.visibility }).from(issues).where(eq(issues.id, publicSource.task.id)).then(rows => rows[0]),
+    ]);
+    expect(persistedPrivateTask?.visibility).toBe("private");
+    expect(persistedPublicTask?.visibility).toBe("open");
+    expect(await canActorReadIssuePrivacy(db, bob.authorizationActor!, { companyId: seeded.companyId, id: privateSource.task.id })).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, bob.authorizationActor!, { companyId: seeded.companyId, id: publicSource.task.id })).toBe(true);
+    const [storedPrivateRecord] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, privateCandidate.record.id));
+    expect(storedPrivateRecord?.sourceIssueIds).toContain(privateSource.task.id);
+    expect(storedPrivateRecord?.payloadSourceProtocolVersion).toBe(1);
+    expect(storedPrivateRecord?.sourceProvenanceQualified).toBe(true);
+    const snapshot = storedPrivateRecord?.payloadSourceSnapshot as { policy?: { issueIds?: string[] } } | null;
+    expect(snapshot?.policy?.issueIds).toContain(privateSource.task.id);
+    const legacyVisible = await svc.listEligible(seeded.companyId, { scopeType: "company", scopeId: null, limit: 100,
+      sensitivityCeiling: "internal" }, bob);
+    expect(legacyVisible.some(record => record.id === privateCandidate.record.id)).toBe(false);
+    expect(await svc.get(seeded.companyId, privateCandidate.record.id, bob)).toBeNull();
+    const result = await retrieveEligibleMemory(db, {
+      companyId: seeded.companyId, agentId: null, actor: bob, allowShared: true, allowPrivate: false,
+      query: "quarterly risk forecast", topK: 1, sensitivityCeiling: "internal",
+    });
+
+    expect(result.map(row => row.detail.record.title)).toEqual(["Team notes"]);
+    expect(result.some(row => row.detail.record.id === privateCandidate.record.id)).toBe(false);
   });
 
   it("denies private memory detail and recall to same-company non-owner principals", async () => {
@@ -810,19 +1000,11 @@ describePg("Memory Core service", () => {
       seeded.agent.id,
     );
     const svc = memoryService(db);
-    const privateCandidate = await svc.createCandidate(
+    const privateCandidate = await svc.createPrivateMemory(
       seeded.companyId,
-      candidate(b.id, {
-        scope: { type: "agent", id: seeded.agent.id },
-        ownerAgentId: seeded.agent.id,
-      }),
-      agentActor(seeded.agent.id, seeded.userId),
-    );
-    await svc.reviewCandidate(
-      seeded.companyId,
-      privateCandidate.record.id,
-      { decision: "accept" },
-      userActor(seeded.userId),
+      seeded.agent.id,
+      privateInput(b.id),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     const [otherAgent] = await db.insert(agents).values({
@@ -846,7 +1028,7 @@ describePg("Memory Core service", () => {
       svc.get(
         seeded.companyId,
         privateCandidate.record.id,
-        agentActor(otherAgent!.id, seeded.userId),
+        await agentActor(otherAgent!.id, seeded.userId),
       ),
     ).rejects.toMatchObject({
       status: 403,
@@ -866,7 +1048,7 @@ describePg("Memory Core service", () => {
       svc.listEligible(
         seeded.companyId,
         { scopeType: "agent", scopeId: seeded.agent.id },
-        agentActor(otherAgent!.id, seeded.userId),
+        await agentActor(otherAgent!.id, seeded.userId),
       ),
     ).rejects.toMatchObject({
       status: 403,
@@ -877,23 +1059,21 @@ describePg("Memory Core service", () => {
       svc.get(
         seeded.companyId,
         privateCandidate.record.id,
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).resolves.toMatchObject({
       record: expect.objectContaining({ id: privateCandidate.record.id }),
     });
-    await expect(
-      svc.get(seeded.companyId, privateCandidate.record.id, systemActor),
-    ).resolves.toMatchObject({
-      record: expect.objectContaining({ id: privateCandidate.record.id }),
-    });
+    // An arbitrary service name supplies no current Human/Agent source authority.
+    // The actual owning Agent positive above remains required.
+    expect(await svc.get(seeded.companyId, privateCandidate.record.id, systemActor)).toBeNull();
   });
 
   it("erases private content, its evidence and operation replay, and reapplies deletions after restore", async () => {
     const seeded = await seed();
     const ownBinding = await privateBinding(seeded.companyId, seeded.userId, seeded.agent.id);
     const svc = memoryService(db);
-    const actor = agentActor(seeded.agent.id, seeded.userId);
+    const actor = await agentActor(seeded.agent.id, seeded.userId);
     const input = privateInput(ownBinding.id, { createdByOperationId: "forgotten-private-operation" });
     const created = await svc.createPrivateMemory(seeded.companyId, seeded.agent.id, input, actor);
     await expect(svc.forget(seeded.companyId, created.record.id, userActor(seeded.userId))).rejects.toMatchObject({ status: 403 });
@@ -926,7 +1106,7 @@ describePg("Memory Core service", () => {
     const seeded = await seed();
     const ownBinding = await privateBinding(seeded.companyId, seeded.userId, seeded.agent.id);
     const svc = memoryService(db);
-    const privateActor = agentActor(seeded.agent.id, seeded.userId);
+    const privateActor = await agentActor(seeded.agent.id, seeded.userId);
     const created = await svc.createPrivateMemory(seeded.companyId, seeded.agent.id,
       privateInput(ownBinding.id, { createdByOperationId: "retention-private-operation",
         observedAt: "2026-09-29T12:00:00.000Z", expiresAt: null }), privateActor);
@@ -942,13 +1122,14 @@ describePg("Memory Core service", () => {
     const seeded = await seed();
     const companyBinding = await binding(seeded.companyId, seeded.userId);
     const svc = memoryService(db);
-    const actor = userActor(seeded.userId);
-    const created = await svc.createCandidate(seeded.companyId, candidate(companyBinding.id), actor);
+    const taskSource = await humanTaskSource(seeded, "The source should be forgotten with its derived Memory.");
+    const sourceCandidate = candidate(companyBinding.id, { evidence: taskSource.evidence });
+    const created = await svc.createCandidate(seeded.companyId, sourceCandidate, taskSource.actor);
     const deleted = await svc.forgetSource(seeded.companyId,
-      { sourceProvider: "august_works_tasks", sourceRef: "issue://test" }, actor);
+      { sourceProvider: "august_works_tasks", sourceRef: `issue://${taskSource.task.id}` }, userActor(seeded.userId));
     expect(deleted.deletedRecordCount).toBe(1);
-    expect(await svc.getShared(seeded.companyId, created.record.id, actor)).toBeNull();
-    await expect(svc.createCandidate(seeded.companyId, candidate(companyBinding.id), actor)).rejects.toMatchObject({
+    expect(await svc.getShared(seeded.companyId, created.record.id, userActor(seeded.userId))).toBeNull();
+    await expect(svc.createCandidate(seeded.companyId, sourceCandidate, taskSource.actor)).rejects.toMatchObject({
       status: 409, details: { code: "memory_source_deleted" },
     });
   });
@@ -971,7 +1152,7 @@ describePg("Memory Core service", () => {
         createdByOperationId: "private-special-key-op",
         metadata: firstMetadata,
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(first.record.id).toEqual(expect.any(String));
 
@@ -983,7 +1164,7 @@ describePg("Memory Core service", () => {
           createdByOperationId: "private-special-key-op",
           metadata: secondMetadata,
         }),
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({
       status: 409,
@@ -1003,12 +1184,12 @@ describePg("Memory Core service", () => {
       svc.createCandidate(
         seeded.companyId,
         input,
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
       svc.createCandidate(
         seeded.companyId,
         input,
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ]);
 
@@ -1043,7 +1224,7 @@ describePg("Memory Core service", () => {
         seeded.companyId,
         seeded.agent.id,
         privateInput(sharedBinding.id),
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({ status: 403 });
 
@@ -1062,7 +1243,7 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: evidence("Prefer concise status updates."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(created.record).toMatchObject({
@@ -1082,14 +1263,14 @@ describePg("Memory Core service", () => {
         summary: null,
         evidence: evidence("Prefer concise status updates."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(retriedPrivate.record.id).toBe(created.record.id);
     await expect(
       svc.listEligible(
         seeded.companyId,
         { scopeType: "agent", scopeId: seeded.agent.id },
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).resolves.toEqual([expect.objectContaining({ id: created.record.id })]);
     await expect(
@@ -1124,7 +1305,7 @@ describePg("Memory Core service", () => {
         evidence: evidence("Prefer concise status updates."),
         createdByOperationId: "private-correction-source",
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     const correctionInput = {
@@ -1151,7 +1332,7 @@ describePg("Memory Core service", () => {
       seeded.companyId,
       original.record.id,
       correctionInput,
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(corrected.record).toMatchObject({
       scopeType: "agent",
@@ -1165,7 +1346,7 @@ describePg("Memory Core service", () => {
     const prior = await svc.get(
       seeded.companyId,
       original.record.id,
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(prior?.record).toMatchObject({
       supersededByRecordId: corrected.record.id,
@@ -1175,7 +1356,7 @@ describePg("Memory Core service", () => {
       await svc.listEligible(
         seeded.companyId,
         { scopeType: "agent", scopeId: seeded.agent.id },
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).toEqual([expect.objectContaining({ id: corrected.record.id })]);
 
@@ -1183,7 +1364,7 @@ describePg("Memory Core service", () => {
       seeded.companyId,
       original.record.id,
       correctionInput,
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(replay.record.id).toBe(corrected.record.id);
 
@@ -1192,7 +1373,7 @@ describePg("Memory Core service", () => {
         seeded.companyId,
         original.record.id,
         { ...correctionInput, content: "Different correction" },
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({
       status: 409,
@@ -1220,7 +1401,7 @@ describePg("Memory Core service", () => {
         summary: "Review security first.",
         evidence: evidence("Security review should happen before procurement."),
       }),
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     const [otherAgent] = await db.insert(agents).values({
@@ -1250,7 +1431,7 @@ describePg("Memory Core service", () => {
           reason: "Useful across the company",
           createdByOperationId: "share-operation-other-agent",
         },
-        agentActor(otherAgent!.id, seeded.userId),
+        await agentActor(otherAgent!.id, seeded.userId),
       ),
     ).rejects.toMatchObject({
       status: 403,
@@ -1266,7 +1447,7 @@ describePg("Memory Core service", () => {
         reason: "Useful across the company",
         createdByOperationId: "share-operation-1",
       },
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
 
     expect(sharedCandidate.record).toMatchObject({
@@ -1302,7 +1483,7 @@ describePg("Memory Core service", () => {
         reason: "Useful across the company",
         createdByOperationId: "share-operation-1",
       },
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(retriedShare.record.id).toBe(sharedCandidate.record.id);
 
@@ -1316,7 +1497,7 @@ describePg("Memory Core service", () => {
           reason: "Changed target",
           createdByOperationId: "share-operation-1",
         },
-        agentActor(seeded.agent.id, seeded.userId),
+        await agentActor(seeded.agent.id, seeded.userId),
       ),
     ).rejects.toMatchObject({
       status: 409,
@@ -1326,7 +1507,7 @@ describePg("Memory Core service", () => {
     const sourceAfterShare = await svc.get(
       seeded.companyId,
       privateRecord.record.id,
-      agentActor(seeded.agent.id, seeded.userId),
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     expect(sourceAfterShare?.record).toMatchObject({
       scopeType: "agent",
@@ -1340,15 +1521,15 @@ describePg("Memory Core service", () => {
       await svc.listEligible(
         seeded.companyId,
         {},
-        agentActor(otherAgent!.id, seeded.userId),
+        await agentActor(otherAgent!.id, seeded.userId),
       ),
     ).toEqual([]);
 
     const accepted = await svc.reviewCandidate(
       seeded.companyId,
       sharedCandidate.record.id,
-      { decision: "accept" },
-      userActor(seeded.userId),
+      { decision: "accept", publishPrivateShare: true },
+      await verifiedUserActor(seeded.userId),
     );
     expect(accepted.record.reviewState).toBe("accepted");
 
@@ -1356,14 +1537,14 @@ describePg("Memory Core service", () => {
       await svc.listEligible(
         seeded.companyId,
         {},
-        agentActor(otherAgent!.id, seeded.userId),
+        await agentActor(otherAgent!.id, seeded.userId),
       ),
     ).toEqual([expect.objectContaining({ id: accepted.record.id })]);
     await expect(
       svc.get(
         seeded.companyId,
         privateRecord.record.id,
-        agentActor(otherAgent!.id, seeded.userId),
+        await agentActor(otherAgent!.id, seeded.userId),
       ),
     ).rejects.toMatchObject({
       status: 403,
@@ -1375,10 +1556,11 @@ describePg("Memory Core service", () => {
     const seeded = await seed();
     const b = await binding(seeded.companyId, seeded.userId);
     const svc = memoryService(db);
+    const taskSource = await humanTaskSource(seeded, "Company cascade evidence belongs to a current Human Task.");
     const created = await svc.createCandidate(
       seeded.companyId,
-      candidate(b.id),
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      candidate(b.id, { evidence: taskSource.evidence }),
+      taskSource.actor,
     );
 
     expect(created.evidence).toHaveLength(1);
@@ -1389,6 +1571,9 @@ describePg("Memory Core service", () => {
     await db.delete(projects).where(eq(projects.companyId, seeded.companyId));
     await db.delete(companyMemberships).where(eq(companyMemberships.companyId, seeded.companyId));
     await db.delete(agents).where(eq(agents.companyId, seeded.companyId));
+    // Canonical source Tasks are owned by the issue service, not by Memory.
+    // Remove them through their owner before testing the Memory cascade.
+    await db.delete(issues).where(eq(issues.companyId, seeded.companyId));
     await db.delete(companies).where(eq(companies.id, seeded.companyId));
 
     expect(
@@ -1409,7 +1594,7 @@ describePg("Memory Core service", () => {
     const created = await svc.createCandidate(
       seeded.companyId,
       candidate(b.id),
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      await agentActor(seeded.agent.id, seeded.userId),
     );
     const accepted = await svc.reviewCandidate(
       seeded.companyId,

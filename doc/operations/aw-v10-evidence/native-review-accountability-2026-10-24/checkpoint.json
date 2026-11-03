@@ -1,0 +1,98 @@
+{
+  "parentCommit": "372cf3785",
+  "requirements": [
+    "UP-03",
+    "CE-04"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "initial": {
+      "exit": 1,
+      "passed": 4,
+      "failed": 1,
+      "suites": null,
+      "log": "native-review-accountability-initial.log"
+    },
+    "owned": {
+      "exit": 0,
+      "passed": 74,
+      "failed": 0,
+      "suites": 2,
+      "log": "native-review-accountability-owned.log"
+    },
+    "revocation-units": {
+      "exit": 0,
+      "passed": 30,
+      "failed": 0,
+      "suites": 3,
+      "log": "native-review-accountability-revocation-units.log"
+    },
+    "actor-red": {
+      "exit": 1,
+      "passed": 0,
+      "failed": 1,
+      "suites": 1,
+      "log": "native-review-accountability-actor-red.log"
+    },
+    "actor-owned": {
+      "exit": 1,
+      "passed": 17,
+      "failed": 80,
+      "suites": 2,
+      "log": "native-review-accountability-actor-owned.log"
+    },
+    "route-parent": {
+      "exit": 1,
+      "passed": 0,
+      "failed": 2,
+      "suites": 1,
+      "log": "native-review-accountability-route-parent.log"
+    },
+    "route-diagnostics": {
+      "exit": 1,
+      "passed": 2,
+      "failed": 1,
+      "suites": 1,
+      "log": "native-review-accountability-route-diagnostics.log"
+    },
+    "routes-final": {
+      "exit": 1,
+      "passed": 72,
+      "failed": 10,
+      "suites": 1,
+      "log": "native-review-accountability-routes-final.log"
+    },
+    "routes-checked": {
+      "exit": 1,
+      "passed": 80,
+      "failed": 2,
+      "suites": 1,
+      "log": "native-review-accountability-routes-checked.log"
+    },
+    "routes-green": {
+      "exit": 0,
+      "passed": 82,
+      "failed": 0,
+      "suites": 1,
+      "log": "native-review-accountability-routes-green.log"
+    },
+    "serverTypes": {
+      "exit": 0,
+      "log": "native-review-accountability-types.log"
+    }
+  },
+  "observations": [
+    "The four original accept/reject Task mutations preserve actual actorRunId and the private original authenticated AuthorizationActor supplied by the HTTP routes. This field is never taken from request-body metadata or returned/persisted as an interaction field.",
+    "The actual PostgreSQL principal-swap counterexample removes the authenticated Human membership and changes the run to another active Human. With only the four privacyActor forwards removed, the interaction incorrectly accepts and completes the Task. With the forwards present, it denies403 and both interaction and Task remain unchanged.",
+    "The native ControlPlanePort fixtures now own actual reviewer Users/memberships and accountable runs. The immutable nativeIssueId edit is asserted as a database rejection with unchanged binding instead of pretending that the forbidden mutation succeeds. Safe-replacement blocking fixtures own actual operator User/membership rather than using an absent string identity.",
+    "All74 native ControlPlanePort and safe-replacement cases pass after those identity/binding repairs. The later full original-actor regression passes all15 ControlPlanePort cases. Separate interaction/resolver units pass30 cases across three selected suites.",
+    "Legacy route mocks initially lack the existing canonical open-Task query limit. Parent production reproduces this same failure. The mock now supports that query and keeps each custom Task stable across independent admission/resolution reloads; denial/status/creator restrictions are preserved. Later checked run passes80 with only two stale restriction expectations; these are restored to the existing anyone policy, not null.",
+    "A bounded gpt-6-luna read-only audit found no serialization/logging/persistence of the private original requestActor. Root implemented the principal-swap regression and complete actor forwarding.",
+    "Initial selected native cases also exposed an absent reviewer-25 account and teardown membership FK ordering. Both fixture ownership and cleanup order were corrected before the74-case native green stage; the original failed log is retained.",
+    "Final complete route suite passes all82 cases with the existing anyone restriction restored for the two review Agent calls, all creator/human-only denials intact, and private original-actor forwarding asserted at Board accept and Agent accept/reject."
+  ],
+  "limits": [
+    "Native database/transaction regressions and mock route forwarding do not qualify provider execution, complete input receipts, cryptographic authentication minting, physical hardware or release.",
+    "Generic Task credential expiry/revocation during row waits remains separate next work. The six typed/private-Memory/temporal regressions, broader V10 implementation and full PR gates remain open. No merge, deployment or V10 completion is claimed."
+  ]
+}

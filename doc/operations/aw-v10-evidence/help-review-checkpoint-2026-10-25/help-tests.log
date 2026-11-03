@@ -1,0 +1,22 @@
+✔ a changed linked source cannot claim an article update when the article bytes did not change (1.229006ms)
+✔ a linked source and its updated article pass with hashes for the exact current bytes (1.145941ms)
+✔ a linked source can retain an explicit per-article no-change determination (3.928173ms)
+✔ unrelated changes do not block or create Help review evidence (0.261676ms)
+✔ additional Help articles join coverage through their own linked source review (0.240544ms)
+✔ invalid review collections keep the normal result shape for CI evidence (0.169546ms)
+✔ a no-change determination cannot be reused after linked source bytes change (0.312713ms)
+✔ checks Help articles under native English and Danish language navigation (6.71411ms)
+✔ rejects a Danish navigation article whose metadata declares another locale (1.297339ms)
+✔ accepts restricted metadata and existing local Help Center links (0.966981ms)
+✔ rejects incomplete or invalid Help article metadata (0.752266ms)
+✔ rejects broken local Markdown link targets (2.124389ms)
+✔ rejects duplicate Help article IDs in the Help Center navigation (0.826979ms)
+✔ rejects YAML constructs outside the documented scalar subset (0.589029ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 129.953648

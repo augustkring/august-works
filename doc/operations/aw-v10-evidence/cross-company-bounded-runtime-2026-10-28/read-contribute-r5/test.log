@@ -1,0 +1,41 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > negative triggers veto selection and empty trigger sets do not match every task
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > does not discard required Role Pack Skills when their resolver is disabled
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > allows explicitly authorized guest act forecasts, denies read/contribute mutations and rechecks revoked humans
+ × src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked 7346ms
+   → Missing permission: foundation:read.
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > pins immutable provenance, rechecks resumed runs and rejects revoked human membership
+ ↓ src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > routes guest connected tools through current local authority and denies writes/revoked result disclosure
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/agent-runtime-fabric-v5.test.ts > V5 execution authority > preserves current-Human guest read and contribution within bounded plans while keeping guest act blocked
+Error: Missing permission: foundation:read.
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ assertV5Authorization src/services/v5-authorization.ts:15:32
+ ❯ authorize src/services/playbooks.ts:20:48
+ ❯ get src/services/playbooks.ts:24:5
+ ❯ src/services/playbooks.ts:184:21
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../../v10-dep-qualification/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: { code: 'permission_denied', reason: 'deny_missing_grant' } }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  15:21:58
+   Duration  28.75s (transform 11.49s, setup 93ms, import 16.60s, tests 11.92s, environment 0ms)
+

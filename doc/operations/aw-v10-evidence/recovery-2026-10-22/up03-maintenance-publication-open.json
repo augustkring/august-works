@@ -1,0 +1,23 @@
+{
+  "recordedAt": "2026-10-22T23:20:22.810042+00:00",
+  "sourcePins": {
+    "recordedBeforeCapture": "2026-10-22T23:15:32.652866+00:00",
+    "files": {
+      "server/src/__tests__/memory-maintenance-publication.integration.test.ts": "6dc3c49c813965ed06a5720ddbaacb3d64c9dc726d587563ea121a42cf851d63",
+      "server/src/services/memory/memory-maintenance.ts": "1992f09ea0998bd28f347ba3ac0bb303ba018cddcc748f6e2bf937ebb8202511",
+      "server/src/services/memory/memory-jobs.ts": "3007279f864f2ce2f5db248bf19126f6260e455a2a8a75b4889be890dd2f9faa",
+      "server/src/services/memory/memory-service.ts": "94c0a50d3068747641d18fd2a561ef5c9fe59a3f26930dfa03df9df1a0a75938",
+      "server/src/services/memory/memory-privacy.ts": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470",
+      "packages/db/src/migrations/0507_lethal_star_brand.sql": "73e67a785c0f4c82e600e082ebbf4747cbf6c3e2cceb12d1b2051985f958cd47"
+    }
+  },
+  "sessionId": 22917,
+  "exitCode": 1,
+  "failedTests": 1,
+  "failedAssertions": 1,
+  "durationSeconds": 190.01,
+  "log": "up03-maintenance-publication-red.log.txt",
+  "finding": "Actual native compaction job inserts a candidate; trigger sequence proves INSERT reached and delays until original lease expires. Job fails and native candidate/evidence/audit roll back, but company event subscription receives candidate_created with rolled-back UUID and actual related source UUIDs.",
+  "scope": "Migrated PostgreSQL and actual company event emitter; no socket/provider/host acceptance.",
+  "disposition": "Open reproduced precommit-publication bug."
+}

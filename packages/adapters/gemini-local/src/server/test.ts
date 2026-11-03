@@ -1,3 +1,4 @@
+import { admitPaidModelProbe } from "@paperclipai/adapter-utils/paid-model-probe";
 import path from "node:path";
 import type {
   AdapterEnvironmentCheck,
@@ -181,7 +182,7 @@ export async function testEnvironment(
 
   const canRunProbe =
     checks.every((check) => check.code !== "gemini_cwd_invalid" && check.code !== "gemini_command_unresolvable");
-  if (canRunProbe) {
+  if (canRunProbe && admitPaidModelProbe(checks)) {
     if (!commandLooksLike(command, "gemini")) {
       checks.push({
         code: "gemini_hello_probe_skipped_custom_command",

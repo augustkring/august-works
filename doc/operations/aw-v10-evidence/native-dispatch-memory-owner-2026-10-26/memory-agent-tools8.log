@@ -1,0 +1,48 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ❯ src/services/memory/memory-agent-tools.test.ts (8 tests | 8 failed) 5088ms
+     × recalls only company, current-project and owner-private memory 314ms
+     × creates shared remember requests as pending low-trust task-backed candidates 131ms
+     × makes private remember retry-safe and returns duplicate on semantic replay 125ms
+     × corrects owner-private memory atomically and shares it only through pending review 136ms
+     × denies sharing restricted owner-private memory 123ms
+     × requires a task-bound run before sharing private memory 136ms
+     × rejects correction idempotency replay from a different agent run 109ms
+     × rejects share idempotency replay from a different agent run 105ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > recalls only company, current-project and owner-private memory
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > creates shared remember requests as pending low-trust task-backed candidates
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > makes private remember retry-safe and returns duplicate on semantic replay
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > corrects owner-private memory atomically and shares it only through pending review
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > denies sharing restricted owner-private memory
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > requires a task-bound run before sharing private memory
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > rejects correction idempotency replay from a different agent run
+ FAIL  src/services/memory/memory-agent-tools.test.ts > Memory agent tools > rejects share idempotency replay from a different agent run
+Error: Task privacy source is unavailable
+ ❯ notFound src/errors.ts:25:10
+     23|
+     24| export function notFound(message = "Not found", details?: unknown) {
+     25|   return new HttpError(404, message, details);
+       |          ^
+     26| }
+     27|
+ ❯ assertIssuePrivacySourcesReadable src/services/issues.ts:2175:26
+ ❯ persist src/services/issues.ts:10717:9
+ ❯ ../packages/db/src/work-signals.ts:38:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ PostgresJsDatabase.connection.transaction ../packages/db/src/work-signals.ts:35:22
+ ❯ Object.create src/services/issues.ts:10858:25
+ ❯ seed src/services/memory/memory-agent-tools.test.ts:132:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed (8)
+   Start at  01:56:01
+   Duration  18.10s (transform 8.97s, setup 73ms, import 12.81s, tests 5.09s, environment 0ms)
+

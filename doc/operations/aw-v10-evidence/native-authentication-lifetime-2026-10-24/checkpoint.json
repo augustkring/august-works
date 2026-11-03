@@ -1,0 +1,130 @@
+{
+  "status": "Bounded password authentication and authenticator lifetime checkpoint; V10 and PR readiness remain open",
+  "parentCommit": "ca4437d6625e51e7dfd698de5f804c4e1d522162",
+  "sourcePins": {
+    "packages/db/src/migrations/0518_safe_hiroim.sql": "8b2775e134f0bdcbfead0873556f8f535b849c49a2ee32f80374c9142b5e7bce",
+    "packages/db/src/migrations/0519_native_authenticator_lifetime.sql": "915c1956ecd54fcc6e1d229ee22ec38eafe48f185fc2c8feaab0d40aae073f10",
+    "packages/db/src/migrations/meta/0518_snapshot.json": "c9a3d81047edc0438ee940409a0ae57dc5b36ab998d4c8c1835bfff4c07ba51d",
+    "packages/db/src/migrations/meta/0519_snapshot.json": "e9e5818b9032167a6ff99d8fe6c4107a8dec702c238ac18c9487c5d01ffeef22",
+    "packages/db/src/migrations/meta/_journal.json": "33e8250beaec4a2ca08e6c19ad2b385ebd946986f5282180338ef9ba9136a114",
+    "packages/db/src/schema/auth.ts": "2f005ee91141304bd9d425c13d667f61f07abe62eaa5fb306e7072676507ee98",
+    "packages/db/src/schema/index.ts": "adbf0a50008216b858622567c273faa6512431c9e6c7711fc90d15488759cbe6",
+    "packages/shared/src/saas-contracts.ts": "3dfb580fb9da2a2ac8cebaa07826769e982342cca738e9f7dbe6ba337e02ffd8",
+    "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9",
+    "server/package.json": "267818122e63b934529e0b96f2df7a4af9efaa6c7e71f3626f353e3a436d1ee3",
+    "server/src/__tests__/authenticator-lifetime.integration.test.ts": "c3934ec2c0dec28e68590a6a2487f0cf125d9b22205f045974bf72d7ec004d87",
+    "server/src/__tests__/better-auth-credential-signup.integration.test.ts": "55b12f598b5769df182f8da53f1d34aeb75c0e9418bf2b3feb4002629a57799f",
+    "server/src/__tests__/v6-account-deletion.integration.test.ts": "d0cea7ec03d4c9ac9bcce2b9ecfa0936fa0321725e401079e6bbda7092bc9f87",
+    "server/src/__tests__/v6-saas-auth.integration.test.ts": "39f95c1f26a275a95b014cd558eb21fe75e9b9d599892b251c380bfde0efc1fe",
+    "server/src/auth/authenticator-assurance.ts": "21bf373d264160405020a9b105b788289986dfda3b392eb5227b28ea58ffe2ef",
+    "server/src/auth/better-auth.ts": "b15c0fa99d6ecfd8ae4fd7ce54c07a33c397727d3fc0b445fe796cf3bd671b98",
+    "server/src/auth/native-authentication-assurance.ts": "ce3ccaf97678bd9d29b4b8ad76fc6c8ee4a9d6395e81abd06f0cf0f455148974",
+    "server/src/services/saas/account-deletion.ts": "77cc0c78fcd38244905c1ac1013db22226128ac5075d3af7fa745d8006b7f0fd",
+    "ui/package.json": "851ed491db31e7a2182bf027761b4c39fca6bac5ec4b8e98e8afbebf47dcab2d",
+    "ui/src/api/auth.test.ts": "1d3fdeac854636f0140af6f76e87317d62427b9456ffabdc7d5220da8bb75f81",
+    "ui/src/api/auth.ts": "6fcadafafda0e6c296de080929662cac85467ab2eb0a63d95c894c9847737473",
+    "ui/src/i18n/experience/da.json": "a754e567f81611a1654a63573f38bf1cc992acd115ec2941b0ec4a6a0b80b5c4",
+    "ui/src/i18n/experience/en.json": "e65c2d80a1eddb94ec99930ba0ba5f07ba5f4ef38a7d0473ba79440931b299f1",
+    "ui/src/pages/Auth.test.tsx": "65ce31b4bab8f553ed1e67d8c4a80b96bc8f6c9874c626100fda0e1c2163f0a0",
+    "ui/src/pages/Auth.tsx": "a652210d2ba82cab57fa418d491c83c96e4684ebb1526fac7bb7a5b3f9888c8e",
+    "ui/src/pages/InviteLanding.test.tsx": "964de3c68d7da4f28b954b60a115b8245ae5751efd3f8f8b177046465a8d2f01",
+    "ui/src/pages/InviteLanding.tsx": "4499156a46a83c1263758a38286002f934113e8f6f5159ed9f484abb6d8520fb",
+    "ui/src/pages/SaasAccount.tsx": "adc9149e45ca6db1771daa0244eb08229f9fef97fdc7e1f59fd7677fd54bdd34"
+  },
+  "checks": {
+    "verified-mail-recovery-regression": {
+      "exit": 0,
+      "logSha256": "dd3ed7d9677e2f7ef2b71ab08f1ae21662b6187b04439895824beaff2d091bde"
+    },
+    "client-challenge-tests": {
+      "exit": 0,
+      "logSha256": "4dc8462af7dbd2417732378e25e8cfea28a5e9de4899c7fc84555da528736539"
+    },
+    "lifetime-tests": {
+      "exit": 1,
+      "logSha256": "71a4c1cef31745dd0bc504bd6a5631149289714efb41ace65e332227ab017189"
+    },
+    "lifetime-tests-final": {
+      "exit": 0,
+      "logSha256": "dcd49c12d0a8581d1426470f0a6033701afbe07e489d6d3160d8e70fb96545b2"
+    },
+    "password-proof-http": {
+      "exit": 0,
+      "logSha256": "2197f6a1cf4f46d441c31b369ff4d94dc9c9de1ffc7fb2f48142192b67d912ca"
+    },
+    "credential-regression": {
+      "exit": 1,
+      "logSha256": "96da5bd404d5e90f9eb5b205b2713beaa3736a2f557ce3c042d9d239efa325b6"
+    },
+    "account-factor-erasure-baseline": {
+      "exit": 1,
+      "logSha256": "e195460a66ca6bb538da1d34a8050864696f01313f2db320c6b4f66b13b2fb7a"
+    },
+    "native-account-regression": {
+      "exit": 0,
+      "logSha256": "b0bb798598730617d8e743f17667947d73f2b826e2216c959dc72fe51440ecad"
+    },
+    "account-unicode-final": {
+      "exit": 0,
+      "logSha256": "46b19286ca107d7a930f19bc67f92e23c80c93e6296d65c4636e1f9be1ad4535"
+    },
+    "migration-check-final": {
+      "exit": 0,
+      "logSha256": "142d22a4401bbc5f65ffe90cd630da9032e3baf2bebe7b288d9c6eba1b5d1532"
+    },
+    "server-types-unicode-final": {
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "ui-regression-final": {
+      "exit": 0,
+      "logSha256": "385bbbb86415faa2774af48efccaef613eae49ef3bced88a73e3cf835c49dea8"
+    },
+    "ui-types-unicode-final": {
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "ui-tokens-final": {
+      "exit": 0,
+      "logSha256": "8a0e7e5dea82ee84952378e72ed2821626a7332a8b72d8bf9a7fd53dd32eec29"
+    },
+    "schema-generate-final": {
+      "exit": 0,
+      "logSha256": "be6772892764774e5de358cbed97423a6564d22479efbe17f8f0e6bc2dced812"
+    },
+    "lifetime-generate-final": {
+      "exit": 0,
+      "logSha256": "e4f958f02fb41fcc8d07d9abfa0b6ebc1ef2f828ca0feed3eee4a5e42315b507"
+    },
+    "install-server": {
+      "exit": 0,
+      "logSha256": "a88755ab49a94fab3c45627f4e03bdc69d7d26e6732cf7b2b51703b64e247a8f"
+    },
+    "install-ui": {
+      "exit": 0,
+      "logSha256": "883b12697363e258563ccdc84fb09c3746a336f48babfcd2c7a0ea673e921a6f"
+    },
+    "install-ui-peer": {
+      "exit": 0,
+      "logSha256": "94da9bd4cee3d5d2b395a870d3ed481055347c916a6669009891d68556525157"
+    }
+  },
+  "observations": [
+    "Initial lifetime run: 6 pass / 2 fail. One real user-deletion challenge cleanup defect and one incorrect test expectation requiring a TOTP row for an independently valid passkey. Initial test source was not archived; do not infer an exact baseline source pin.",
+    "Lifetime follow-up: 8 pass. Password HTTP and lifetime stage: 9 pass / 7 filtered tests. These precede the final account-factor cleanup.",
+    "Credential regression: 7 pass / 1 fail; old pathless setPassword fixture incorrectly retained a session after deleting its credential. Corrected fixture asserts old session denial, then creates a passwordless session with native provider functions; it does not qualify SSO or MFA.",
+    "Exact archived account erasure baseline: 1 fail / 9 filtered; actual factor ciphertext remains with a scrubbed user. No test or deletion assertion was removed.",
+    "Three complete native PostgreSQL suites: 26 pass, zero skipped. This predates the matching shared Unicode confirmation bound and added Unicode case; erasure-baseline/test.ts is also the exact account test source for that stage, and erasure-baseline/saas-contracts.ts is its shared confirmation contract.",
+    "Final complete account offboarding suite: 11 pass, including the full 128-astral-codepoint password and retained-row authenticator erasure. Credential and lifetime suite source/product owners are unchanged after their passing stage apart from that shared confirmation bound.",
+    "Final UI suites: 74 pass across Auth API, Auth page, InviteLanding and SaasAccount. UI source is unchanged after this run; the matching shared confirmation bound was then verified through native account offboarding.",
+    "Verified-mail and native recovery regression: 4 pass through real HTTP/cookies and PostgreSQL; test outbox delivery is controlled, with no external mail or DNS qualification.",
+    "Final server and UI compilers, token gates and migration safety return zero. Server tsconfig excludes test files: no test type qualification is claimed.",
+    "0518 and 0519 are generated new, unapplied migrations. Earlier uncommitted drafts were regenerated before native DB tests. Native snapshot pruning retains five snapshots; no committed migration SQL was rewritten.",
+    "Dependency package keys were compared with parent lockfile: 23 added official passkey/transitive packages, no removed or upgraded pre-existing package keys. Peer projection spelling changes are retained from native pnpm."
+  ],
+  "limits": [
+    "TOTP/passkey records and helper tests are structural SQL fixtures, not cryptographic MFA or WebAuthn ceremonies.",
+    "Official two-factor/passkey plugins are not activated. Only the native completed email/password proof plugin is connected. Enrollment, factor completion, recent-action admission and operator phishing resistance remain unfinished.",
+    "No complete restored-backup MFA qualification, physical authenticator proof, provider/host qualification, full workspace checks, complete V10 implementation or PR-ready claim."
+  ]
+}

@@ -1,0 +1,43 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts (7 tests | 1 failed) 26754ms
+     × binds event and follow-up references to the same company 124ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/support-case-storage.integration.test.ts > native support case storage and erasure boundaries > binds event and follow-up references to the same company
+AssertionError: expected Error: Failed query: update "support_case… { …(2) } to match object { cause: { code: '23503' } }
+(9 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "cause": {
+-     "code": "23503",
++ DrizzleQueryError {
++   "cause": PostgresError {
++     "code": "23514",
+    },
+  }
+
+ ❯ src/__tests__/support-case-storage.integration.test.ts:50:111
+     48|     await expect(db.insert(supportCaseEvents).values({ ...event(a), ca…
+     49|       .rejects.toMatchObject({ cause: { code: "23503" } });
+     50|     await expect(db.update(supportCases).set({ followUpOfId: b.row.id …
+       |                                                                                                               ^
+     51|       .rejects.toMatchObject({ cause: { code: "23503" } });
+     52|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  16:12:59
+   Duration  94.74s (transform 49.08s, setup 835ms, import 65.71s, tests 26.75s, environment 0ms)
+

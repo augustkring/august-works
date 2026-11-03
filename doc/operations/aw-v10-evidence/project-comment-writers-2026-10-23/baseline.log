@@ -1,0 +1,114 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (19 tests | 4 failed | 15 skipped) 9694ms
+     × invalidates a changed Project text body through the native updater and preserves unchanged bodies 93ms
+     × invalidates a changed Project json body through the native updater and preserves unchanged bodies 42ms
+     × invalidates a Project capture when its selected environment is removed 17ms
+     × invalidates a captured Comment through the native tombstone owner 190ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates a changed Project text body through the native updater and preserves unchanged bodies
+Error: Failed query: update "projects" set "description" = $1, "updated_at" = $2 where "projects"."id" = $3 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "goal_id", "name", "description", "visibility", "privacy_owner_user_id", "personal_owner_user_id", "source_issue_ids", "source_project_ids", "source_provenance_qualified", "status", "lead_agent_id", "target_date", "roadmap_policy", "color", "icon", "env", "pause_reason", "paused_at", "execution_workspace_policy", "archived_at", "created_at", "updated_at"
+params: Changed project body,2026-10-23T22:11:07.919Z,0d72fc48-5bca-4f62-840b-26a98194c567
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ Object.update src/services/projects.ts:994:19
+    992|         if (!decision.allowed || !(await canActorReadProjectPrivacy(ex…
+    993|       }
+    994|       const row = await executor
+       |                   ^
+    995|         .update(projects)
+    996|         .set(updates)
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:291:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "description" = $1, "updated_at" = $2 where "projects"."id" = $3 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "goal_id", "name", "description", "visibility", "privacy_owner_user_id", "personal_owner_user_id", "source_issue_ids", "source_project_ids", "source_provenance_qualified", "status", "lead_agent_id", "target_date", "roadmap_policy", "color", "icon", "env", "pause_reason", "paused_at", "execution_workspace_policy", "archived_at", "created_at", "updated_at"', parameters: [ 'Changed project body', '2026-10-23T22:11:07.919Z', '0d72fc48-5bca-4f62-840b-26a98194c567' ], args: [ 'Changed project body', '2026-10-23T22:11:07.919Z', '0d72fc48-5bca-4f62-840b-26a98194c567' ], types: [ 25, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates a changed Project json body through the native updater and preserves unchanged bodies
+Error: Failed query: update "projects" set "env" = $1, "updated_at" = $2 where "projects"."id" = $3 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "goal_id", "name", "description", "visibility", "privacy_owner_user_id", "personal_owner_user_id", "source_issue_ids", "source_project_ids", "source_provenance_qualified", "status", "lead_agent_id", "target_date", "roadmap_policy", "color", "icon", "env", "pause_reason", "paused_at", "execution_workspace_policy", "archived_at", "created_at", "updated_at"
+params: {"FIRST":"changed","SECOND":"two"},2026-10-23T22:11:07.979Z,4c35b2e1-0afc-4645-997f-49ffc2a96e73
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ Object.update src/services/projects.ts:994:19
+    992|         if (!decision.allowed || !(await canActorReadProjectPrivacy(ex…
+    993|       }
+    994|       const row = await executor
+       |                   ^
+    995|         .update(projects)
+    996|         .set(updates)
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:291:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "env" = $1, "updated_at" = $2 where "projects"."id" = $3 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "goal_id", "name", "description", "visibility", "privacy_owner_user_id", "personal_owner_user_id", "source_issue_ids", "source_project_ids", "source_provenance_qualified", "status", "lead_agent_id", "target_date", "roadmap_policy", "color", "icon", "env", "pause_reason", "paused_at", "execution_workspace_policy", "archived_at", "created_at", "updated_at"', parameters: [ '{"FIRST":"changed","SECOND":"two"}', '2026-10-23T22:11:07.979Z', '4c35b2e1-0afc-4645-997f-49ffc2a96e73' ], args: [ '{"FIRST":"changed","SECOND":"two"}', '2026-10-23T22:11:07.979Z', '4c35b2e1-0afc-4645-997f-49ffc2a96e73' ], types: [ 3802, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates a Project capture when its selected environment is removed
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:304:108
+    302|     for (const row of rows) await bindOwner("projects", "project", row…
+    303|     const [other] = await db.select().from(projects).where(eq(projects…
+    304|     expect(await projectService(db).clearExecutionWorkspaceEnvironment…
+       |                                                                                                            ^
+    305|     const [cleared] = await db.select().from(projects).where(eq(projec…
+    306|     expect(cleared!.executionWorkspacePolicy).toMatchObject({ environm…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates a captured Comment through the native tombstone owner
+Error: Failed query: update "issue_comments" set "body" = $1, "presentation" = $2, "metadata" = $3, "deleted_at" = $4, "deleted_by_type" = $5, "deleted_by_agent_id" = $6, "deleted_by_user_id" = $7, "deleted_by_run_id" = $8, "updated_at" = $9 where ("issue_comments"."id" = $10 and "issue_comments"."deleted_at" is null) returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "issue_id", "author_agent_id", "author_user_id", "on_behalf_of_user_id", "author_type", "created_by_run_id", "derived_author_agent_id", "derived_created_by_run_id", "derived_author_source", "client_request_id", "conversation_session_generation", "body", "presentation", "metadata", "deleted_at", "deleted_by_type", "deleted_by_agent_id", "deleted_by_user_id", "deleted_by_run_id", "source_trust", "created_at", "updated_at"
+params: ,,,2026-10-23T22:11:08.107Z,user,,structural-fixture,,2026-10-23T22:11:08.107Z,09bb25fa-10b1-4460-9610-c60f3db9b98c
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ src/services/issues.ts:12587:27
+    12585|       return db.transaction(async (tx) => {
+    12586|         const now = new Date();
+    12587|         const [comment] = await tx
+       |                           ^
+    12588|           .update(issueComments)
+    12589|           .set({
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:317:5
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issue_comments" set "body" = $1, "presentation" = $2, "metadata" = $3, "deleted_at" = $4, "deleted_by_type" = $5, "deleted_by_agent_id" = $6, "deleted_by_user_id" = $7, "deleted_by_run_id" = $8, "updated_at" = $9 where ("issue_comments"."id" = $10 and "issue_comments"."deleted_at" is null) returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "issue_id", "author_agent_id", "author_user_id", "on_behalf_of_user_id", "author_type", "created_by_run_id", "derived_author_agent_id", "derived_created_by_run_id", "derived_author_source", "client_request_id", "conversation_session_generation", "body", "presentation", "metadata", "deleted_at", "deleted_by_type", "deleted_by_agent_id", "deleted_by_user_id", "deleted_by_run_id", "source_trust", "created_at", "updated_at"', parameters: [ '', null, null, '2026-10-23T22:11:08.107Z', 'user', null, 'structural-fixture', null, '2026-10-23T22:11:08.107Z', '09bb25fa-10b1-4460-9610-c60f3db9b98c' ], args: [ '', null, null, '2026-10-23T22:11:08.107Z', 'user', null, 'structural-fixture', null, '2026-10-23T22:11:08.107Z', '09bb25fa-10b1-4460-9610-c60f3db9b98c' ], types: [ 25, 3802, 3802, 1184, 25, 2950, 25, 2950, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 15 skipped (19)
+   Start at  22:10:19
+   Duration  48.76s (transform 26.75s, setup 220ms, import 38.38s, tests 9.69s, environment 0ms)
+

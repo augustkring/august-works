@@ -1,0 +1,55 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/manual-task-payload-source.integration.test.ts (12 tests | 2 failed) 9934ms
+     × captures only the actual stored body for a current Human root-task request 421ms
+     × rolls back Task insertion when the source-capture audit cannot be stored 63ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-task-payload-source.integration.test.ts > manual Human Task payload source capture > captures only the actual stored body for a current Human root-task request
+Error: expected 201 "Created", got 403 "Forbidden"
+ ❯ src/__tests__/manual-task-payload-source.integration.test.ts:103:8
+    101|       .post(`/api/companies/${f.companyId}/issues`)
+    102|       .send({ title: "Human root request", description: "A direct requ…
+    103|       .expect(201);
+       |        ^
+    104|     const { row, proof } = await readOwner(response.body.id);
+    105|     expect(row.payloadSourceProtocolVersion).toBe(1);
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-task-payload-source.integration.test.ts > manual Human Task payload source capture > rolls back Task insertion when the source-capture audit cannot be stored
+AssertionError: expected 403 to be 500 // Object.is equality
+
+- Expected
++ Received
+
+- 500
++ 403
+
+ ❯ src/__tests__/manual-task-payload-source.integration.test.ts:229:44
+    227|         .post(`/api/companies/${f.companyId}/issues`)
+    228|         .send({ title, description: "must roll back" })
+    229|         .then(response => response.status)).resolves.toBe(500);
+       |                                            ^
+    230|       expect(await db.select().from(issues).where(and(eq(issues.compan…
+    231|       expect(await db.select().from(activityLog).where(and(eq(activity…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 10 passed (12)
+   Start at  07:58:29
+   Duration  44.81s (transform 23.58s, setup 193ms, import 34.14s, tests 9.93s, environment 0ms)
+

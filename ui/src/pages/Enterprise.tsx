@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { enterpriseIdentityPolicySchema } from "@paperclipai/shared";
+import { enterpriseIdentityPolicySchema, enterpriseOperatingEnvelopeSchema, type EnterpriseOperatingEnvelope } from "@paperclipai/shared";
 import { enterpriseApi } from "@/api/enterprise";
 import { secretsApi } from "@/api/secrets";
 import { useAccountIdentity } from "@/api/companies-query";
@@ -9,8 +9,15 @@ import { ApiError } from "@/api/client";
 import { accessApi } from "@/api/access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Link } from "@/lib/router";
+import { useTranslation } from "@/i18n";
+const supportedAwProcessingRegions = ["dk-cph1", "europe-1"] as const;
+function lines(value: string) {
+  return value.split("\n").map((item) => item.trim()).filter(Boolean);
+}
 export function Enterprise() {
+  const { t } = useTranslation("experience");
   const { selectedCompanyId: companyId } = useCompany(),
     { userId } = useAccountIdentity();
   const scope = useRef({ companyId, userId });
@@ -24,7 +31,16 @@ export function Enterprise() {
     [entryPoint, setEntryPoint] = useState(""),
     [certificate, setCertificate] = useState(""),
     [scim, setScim] = useState(false),
-    [reason, setReason] = useState("");
+    [reason, setReason] = useState(""),
+    [processingRegions, setProcessingRegions] = useState<string[]>([]),
+    [providersJson, setProvidersJson] = useState(""),
+    [dedicatedPlacement, setDedicatedPlacement] = useState<"" | "none" | "dedicated_gateway" | "dedicated_vm">(""),
+    [retentionPolicyDescription, setRetentionPolicyDescription] = useState(""),
+    [contractUri, setContractUri] = useState(""),
+    [contractSha256, setContractSha256] = useState(""),
+    [limitations, setLimitations] = useState(""),
+    [operatingFactsReviewed, setOperatingFactsReviewed] = useState(false),
+    [operatingValidation, setOperatingValidation] = useState("");
   const [subject, setSubject] = useState(""),
     [memberId, setMemberId] = useState(""),
     [manageLifecycle, setManageLifecycle] = useState(false),
@@ -81,6 +97,15 @@ export function Enterprise() {
     setEntryPoint("");
     setCertificate("");
     setReason("");
+    setProcessingRegions([]);
+    setProvidersJson("");
+    setDedicatedPlacement("");
+    setRetentionPolicyDescription("");
+    setContractUri("");
+    setContractSha256("");
+    setLimitations("");
+    setOperatingFactsReviewed(false);
+    setOperatingValidation("");
     setSubject("");
     setMemberId("");
     setManageLifecycle(false);
@@ -89,8 +114,9 @@ export function Enterprise() {
     mutation.reset();
   }, [companyId, userId]);
   useEffect(() => {
-    const c = policy.data?.configuration;
-    if (!c) return;
+    const data = policy.data;
+    if (!data) return;
+    const c = data.configuration;
     setProtocol(c.protocol);
     setIssuer(c.issuer);
     setDomain(c.domain);
@@ -102,17 +128,56 @@ export function Enterprise() {
       setEntryPoint(c.entryPoint);
       setCertificate(c.certificate);
     }
-    setScim(policy.data!.scimRequired);
+    setScim(data.scimRequired);
+    const envelope = data.operatingEnvelope;
+    setProcessingRegions(envelope.awProcessingRegions);
+    setProvidersJson(JSON.stringify(envelope.providers, null, 2));
+    setDedicatedPlacement(envelope.dedicatedPlacement);
+    setRetentionPolicyDescription(envelope.retentionPolicyDescription);
+    setContractUri(envelope.contractEvidence?.uri ?? "");
+    setContractSha256(envelope.contractEvidence?.sha256 ?? "");
+    setLimitations(envelope.limitations.join("\n"));
+    setOperatingFactsReviewed(false);
+    setOperatingValidation("");
   }, [policy.data]);
+  function readOperatingEnvelope(): { success: true; data: EnterpriseOperatingEnvelope } | { success: false; message: string } {
+    if (!operatingFactsReviewed) return { success: false, message: t("enterprise.operating.reviewRequired") };
+    if (!processingRegions.length) return { success: false, message: t("enterprise.operating.regionRequired") };
+    if (!providersJson.trim()) return { success: false, message: t("enterprise.operating.providersRequired") };
+    let providers: unknown;
+    try { providers = JSON.parse(providersJson); }
+    catch { return { success: false, message: t("enterprise.operating.providersJsonInvalid") }; }
+    const providerKeys = ["provider", "purpose", "responsibility", "regions", "dataCategories", "retentionDescription", "dpaStatus", "criticality", "status", "assuranceEvidence", "exitDescription"];
+    if (!Array.isArray(providers) || providers.some((provider) => !provider || typeof provider !== "object" || Array.isArray(provider) || providerKeys.some((key) => !Object.hasOwn(provider, key))))
+      return { success: false, message: t("enterprise.operating.providersFieldsRequired") };
+    if (!dedicatedPlacement) return { success: false, message: t("enterprise.operating.placementRequired") };
+    const evidence = contractUri.trim() || contractSha256.trim()
+      ? { uri: contractUri.trim(), sha256: contractSha256.trim() }
+      : null;
+    const parsed = enterpriseOperatingEnvelopeSchema.safeParse({
+      awProcessingRegions: processingRegions,
+      providers,
+      dedicatedPlacement,
+      retentionPolicyDescription,
+      contractEvidence: evidence,
+      supportAccess: "native_scoped_owner_approval",
+      limitations: lines(limitations),
+    });
+    return parsed.success
+      ? { success: true, data: parsed.data }
+      : { success: false, message: t("enterprise.operating.factsInvalid") };
+  }
   const mutation = useMutation({
     mutationFn: async (
-      action: "configure" | "suspend" | "bind" | "rotate" | "decommission",
+      action: "suspend" | "bind" | "rotate" | "decommission" | { kind: "configure"; operatingEnvelope: EnterpriseOperatingEnvelope },
     ) => {
       const captured = { companyId: companyId!, userId: userId! },
         row = policy.data;
+      const kind = typeof action === "string" ? action : action.kind;
+      const operatingEnvelope = typeof action === "string" ? null : action.operatingEnvelope;
       if (action !== "rotate") setCredential(null);
       const result =
-        action === "configure"
+        kind === "configure"
           ? await enterpriseApi.configure(
               captured.companyId,
               captured.userId,
@@ -134,35 +199,23 @@ export function Enterprise() {
                     : { protocol, issuer, domain, entryPoint, certificate },
                 scimRequired: scim,
                 reason,
-                operatingEnvelope: row?.operatingEnvelope ?? {
-                  awProcessingRegions: ["dk-cph1", "europe-1"],
-                  providers: [],
-                  dedicatedPlacement: "none",
-                  retentionPolicyDescription:
-                    "Uses the existing product retention policies; contractual changes require operating qualification",
-                  contractEvidence: null,
-                  supportAccess: "native_scoped_owner_approval",
-                  limitations: [
-                    "Live IdP, security-event delivery, contracted residency/retention and procurement qualification remain required before enterprise GA",
-                    "SSO binds existing verified native members; SCIM manages explicitly approved existing non-owner memberships",
-                  ],
-                },
+                operatingEnvelope: operatingEnvelope!,
               }),
             )
-          : action === "suspend"
+          : kind === "suspend"
             ? await enterpriseApi.suspend(
                 captured.companyId,
                 captured.userId,
                 row!.version,
               )
-            : action === "bind"
+            : kind === "bind"
               ? await enterpriseApi.bind(captured.companyId, captured.userId, {
                   userId: memberId,
                   subject,
                   manageMembershipLifecycle: manageLifecycle,
                   reason,
                 })
-              : action === "decommission"
+              : kind === "decommission"
                 ? await enterpriseApi.decommissionScim(
                     captured.companyId,
                     captured.userId,
@@ -175,7 +228,7 @@ export function Enterprise() {
                     row!.scimCredentialId,
                   );
       if (
-        action === "rotate" &&
+        kind === "rotate" &&
         "token" in result &&
         captured.companyId === scope.current.companyId &&
         captured.userId === scope.current.userId
@@ -183,7 +236,7 @@ export function Enterprise() {
         setCredential({ token: result.token, expiresAt: result.expiresAt });
       return {
         captured,
-        action,
+        action: kind,
         result:
           "token" in result
             ? { credentialId: result.credentialId, expiresAt: result.expiresAt }
@@ -206,42 +259,44 @@ export function Enterprise() {
       ? null
       : policy.error;
   if (!enabled)
-    return <p>Select a company and sign in to manage enterprise identity.</p>;
+    return <p>{t("enterprise.selectCompanyAndSignIn")}</p>;
   return (
     <div className="space-y-6">
       <div className="space-y-2">
         <h1 className="text-xl font-semibold">
-          Enterprise identity and operating envelope
+          {t("enterprise.title")}
         </h1>
         <p className="text-muted-foreground">
-          Save a company identity policy, approve exact member mappings and
-          qualify the provider before enabling sign-in.
+          {t("enterprise.intro")}
         </p>
       </div>
       {failure ? (
         <p role="alert">
           {failure instanceof Error
             ? failure.message
-            : "Enterprise policy could not be loaded"}
+            : t("enterprise.policyLoadFailed")}
         </p>
       ) : null}
       {policy.data ? (
-        <section className="space-y-2" aria-label="Current enterprise policy">
-          <p>Status: {policy.data.status.replaceAll("_", " ")}</p>
+        <section className="space-y-2" aria-label={t("enterprise.currentPolicy")}>
+          <p>{t("enterprise.status")}: {t(`enterprise.statuses.${policy.data.status}`, { defaultValue: policy.data.status.replaceAll("_", " ") })}</p>
           <p>
-            Recorded AW processing regions:{" "}
+            {t("enterprise.recordedRegions")}:{" "}
             {policy.data.operatingEnvelope.awProcessingRegions.join(", ")}
           </p>
           <p>
-            Customer-selected providers have their own processing regions and
-            responsibilities.
+            {t("enterprise.providerResponsibilityNote")}
           </p>
+          <p>{t("enterprise.operating.placement")}: {t(`enterprise.operating.placementValues.${policy.data.operatingEnvelope.dedicatedPlacement}`)}</p>
+          <p>{t("enterprise.operating.retention")}: {policy.data.operatingEnvelope.retentionPolicyDescription}</p>
+          <p>{t("enterprise.operating.contractEvidence")}: {policy.data.operatingEnvelope.contractEvidence
+            ? `${policy.data.operatingEnvelope.contractEvidence.uri} · ${policy.data.operatingEnvelope.contractEvidence.sha256}`
+            : t("enterprise.operating.noContractEvidence")}</p>
+          <p>{t("enterprise.operating.supportAccess")}</p>
           {policy.data.operatingEnvelope.providers.map((p) => (
             <p key={p.provider}>
-              {p.provider}: {p.regions.join(", ") || "Region requires review"} ·{" "}
-              {p.responsibility.replaceAll("_", " ")} · DPA:{" "}
-              {p.dpaStatus ?? "unknown"} · {p.criticality ?? "material"}{" "}
-              criticality · {p.status ?? "unknown"}
+              {p.provider}: {p.regions.join(", ") || t("enterprise.regionRequiresReview")} ·{" "}
+              {t(`enterprise.responsibilities.${p.responsibility}`, { defaultValue: p.responsibility.replaceAll("_", " ") })} · {t("enterprise.dpaStatus")}: {t(`enterprise.dpaStatuses.${p.dpaStatus ?? "unknown"}`)} · {t(`enterprise.criticalities.${p.criticality ?? "material"}`)} · {t(`enterprise.providerStatuses.${p.status ?? "unknown"}`)}
             </p>
           ))}
           {policy.data.operatingEnvelope.limitations.map((l) => (
@@ -251,22 +306,21 @@ export function Enterprise() {
           ))}
           {policy.data.qualification ? (
             <p>
-              Identity evidence expires{" "}
+              {t("enterprise.identityEvidenceExpires")}{" "}
               {new Date(policy.data.qualification.expiresAt).toLocaleString()}.
             </p>
           ) : (
-            <p>Platform qualification is required for activation.</p>
+            <p>{t("enterprise.platformQualificationRequired")}</p>
           )}
           {policy.data.status === "qualified" ? (
             <label className="block">
-              Company sign-in link
+              {t("enterprise.companySignInLink")}
               <Input
                 readOnly
                 value={`${window.location.origin}/auth?ssoProvider=${encodeURIComponent(policy.data.providerId)}`}
               />
               <span className="text-muted-foreground">
-                This link selects the approved company provider, including when
-                several companies share an email domain.
+                {t("enterprise.signInLinkHelp")}
               </span>
             </label>
           ) : null}
@@ -275,7 +329,7 @@ export function Enterprise() {
             disabled={mutation.isPending}
             onClick={() => mutation.mutate("suspend")}
           >
-            Suspend enterprise identity
+            {t("enterprise.suspendIdentity")}
           </Button>
         </section>
       ) : null}
@@ -284,11 +338,17 @@ export function Enterprise() {
         onSubmit={(e) => {
           e.preventDefault();
           setCredential(null);
-          mutation.mutate("configure");
+          const envelope = readOperatingEnvelope();
+          if (!envelope.success) {
+            setOperatingValidation(envelope.message);
+            return;
+          }
+          setOperatingValidation("");
+          mutation.mutate({ kind: "configure", operatingEnvelope: envelope.data });
         }}
       >
         <label className="block">
-          Sign-in protocol
+          {t("enterprise.fields.signInProtocol")}
           <select
             className="saas-input"
             value={protocol}
@@ -299,7 +359,7 @@ export function Enterprise() {
           </select>
         </label>
         <label className="block">
-          Identity provider issuer
+          {t("enterprise.fields.issuer")}
           <Input
             value={issuer}
             onChange={(e) => setIssuer(e.target.value)}
@@ -308,7 +368,7 @@ export function Enterprise() {
           />
         </label>
         <label className="block">
-          Company domain
+          {t("enterprise.fields.companyDomain")}
           <Input
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
@@ -318,7 +378,7 @@ export function Enterprise() {
         {protocol === "oidc" ? (
           <>
             <label className="block">
-              Client ID
+              {t("enterprise.fields.clientId")}
               <Input
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
@@ -326,7 +386,7 @@ export function Enterprise() {
               />
             </label>
             <label className="block">
-              Provider discovery URL
+              {t("enterprise.fields.discoveryUrl")}
               <Input
                 value={discovery}
                 onChange={(e) => setDiscovery(e.target.value)}
@@ -335,14 +395,14 @@ export function Enterprise() {
               />
             </label>
             <label className="block">
-              Existing encrypted signing key
+              {t("enterprise.fields.signingKey")}
               <select
                 className="saas-input"
                 value={signingKey}
                 onChange={(e) => setSigningKey(e.target.value)}
                 required
               >
-                <option value="">Choose a company signing secret</option>
+                <option value="">{t("enterprise.chooseSigningSecret")}</option>
                 {secrets.data
                   ?.filter(
                     (s) => s.scope === "company" && s.status === "active",
@@ -355,13 +415,13 @@ export function Enterprise() {
               </select>
             </label>
             {secrets.isError ? (
-              <p role="alert">Signing key choices could not be loaded.</p>
+              <p role="alert">{t("enterprise.signingKeyLoadFailed")}</p>
             ) : null}
           </>
         ) : (
           <>
             <label className="block">
-              Provider sign-in URL
+              {t("enterprise.fields.entryPoint")}
               <Input
                 value={entryPoint}
                 onChange={(e) => setEntryPoint(e.target.value)}
@@ -370,7 +430,7 @@ export function Enterprise() {
               />
             </label>
             <label className="block">
-              IdP public signing certificate
+              {t("enterprise.fields.certificate")}
               <textarea
                 className="saas-input"
                 value={certificate}
@@ -386,10 +446,62 @@ export function Enterprise() {
             checked={scim}
             onChange={(e) => setScim(e.target.checked)}
           />
-          This company requires SCIM lifecycle management
+          {t("enterprise.fields.scimRequired")}
         </label>
+        <fieldset className="space-y-3 rounded-md border p-4">
+          <legend className="font-medium">{t("enterprise.operating.heading")}</legend>
+          <p className="text-muted-foreground">{t("enterprise.operating.disclosure")}</p>
+          <fieldset className="space-y-2">
+            <legend>{t("enterprise.operating.regions")}</legend>
+            <p className="text-muted-foreground">{t("enterprise.operating.regionsHelp")}</p>
+            {supportedAwProcessingRegions.map((region) => (
+              <label key={region} className="flex items-center gap-2">
+                <input type="checkbox" aria-label={t("enterprise.operating.selectRegion", { region })} checked={processingRegions.includes(region)} onChange={() => {
+                  setProcessingRegions((current) => current.includes(region) ? current.filter((value) => value !== region) : [...current, region]);
+                  setOperatingValidation("");
+                }} />
+                {region}
+              </label>
+            ))}
+          </fieldset>
+          <label className="block space-y-2">
+            <span>{t("enterprise.operating.providers")}</span>
+            <Textarea value={providersJson} onChange={(event) => { setProvidersJson(event.target.value); setOperatingValidation(""); }} />
+            <span className="text-muted-foreground">{t("enterprise.operating.providersHelp")}</span>
+          </label>
+          <label className="block space-y-2">
+            <span>{t("enterprise.operating.placement")}</span>
+            <select className="saas-input" value={dedicatedPlacement} onChange={(event) => { setDedicatedPlacement(event.target.value as typeof dedicatedPlacement); setOperatingValidation(""); }}>
+              <option value="">{t("enterprise.operating.choosePlacement")}</option>
+              <option value="none">{t("enterprise.operating.placementNone")}</option>
+              <option value="dedicated_gateway">{t("enterprise.operating.placementGateway")}</option>
+              <option value="dedicated_vm">{t("enterprise.operating.placementVm")}</option>
+            </select>
+          </label>
+          <label className="block space-y-2">
+            <span>{t("enterprise.operating.retention")}</span>
+            <Textarea value={retentionPolicyDescription} onChange={(event) => { setRetentionPolicyDescription(event.target.value); setOperatingValidation(""); }} />
+          </label>
+          <fieldset className="space-y-2">
+            <legend>{t("enterprise.operating.contractEvidence")}</legend>
+            <p className="text-muted-foreground">{t("enterprise.operating.contractEvidenceHelp")}</p>
+            <Input aria-label={t("enterprise.operating.contractUri")} value={contractUri} onChange={(event) => { setContractUri(event.target.value); setOperatingValidation(""); }} />
+            <Input aria-label={t("enterprise.operating.contractSha256")} value={contractSha256} onChange={(event) => { setContractSha256(event.target.value); setOperatingValidation(""); }} />
+          </fieldset>
+          <label className="block space-y-2">
+            <span>{t("enterprise.operating.limitations")}</span>
+            <Textarea value={limitations} onChange={(event) => { setLimitations(event.target.value); setOperatingValidation(""); }} />
+            <span className="text-muted-foreground">{t("enterprise.operating.limitationsHelp")}</span>
+          </label>
+          <p>{t("enterprise.operating.supportAccess")}</p>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={operatingFactsReviewed} onChange={(event) => { setOperatingFactsReviewed(event.target.checked); setOperatingValidation(""); }} />
+            {t("enterprise.operating.confirmCurrent")}
+          </label>
+          {operatingValidation ? <p role="alert">{operatingValidation}</p> : null}
+        </fieldset>
         <label className="block">
-          Reason for this policy or mapping
+          {t("enterprise.fields.reason")}
           <Input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -399,22 +511,20 @@ export function Enterprise() {
           />
         </label>
         <div className="flex items-center justify-between">
-          <Link to="/company/settings">Back to settings</Link>
+          <Link to="/company/settings">{t("enterprise.backToSettings")}</Link>
           <Button
             type="submit"
-            disabled={mutation.isPending || Boolean(failure)}
+            disabled={mutation.isPending || Boolean(failure) || policy.isPending}
           >
-            Save policy draft
+            {t("enterprise.savePolicyDraft")}
           </Button>
         </div>
       </form>
       {policy.data ? (
-        <section className="space-y-4" aria-label="Member identity mappings">
-          <h2 className="font-medium">Approve an existing member identity</h2>
+        <section className="space-y-4" aria-label={t("enterprise.memberMappings")}>
+          <h2 className="font-medium">{t("enterprise.approveMemberIdentity")}</h2>
           <p className="text-muted-foreground">
-            Map the signed stable subject to an existing verified company
-            member. Provider groups grant no access. Company owner lifecycle
-            requires native ownership management.
+            {t("enterprise.memberMappingHelp")}
           </p>
           {bindings.data?.map((binding) => (
             <div key={binding.id} className="flex items-center justify-between">
@@ -422,7 +532,7 @@ export function Enterprise() {
                 {members.data?.members.find(
                   (m) => m.principalId === binding.userId,
                 )?.user?.name ?? binding.userId}{" "}
-                · {binding.issuer} · {binding.subject} · {binding.status}
+                · {binding.issuer} · {binding.subject} · {t(`enterprise.bindingStatuses.${binding.status}`, { defaultValue: binding.status })}
               </p>
               {binding.status === "active" ? (
                 <Button
@@ -430,7 +540,7 @@ export function Enterprise() {
                   disabled={withdrawal.isPending}
                   onClick={() => withdrawal.mutate(binding.id)}
                 >
-                  Withdraw mapping
+                  {t("enterprise.withdrawMapping")}
                 </Button>
               ) : null}
             </div>
@@ -441,7 +551,7 @@ export function Enterprise() {
             </p>
           ) : null}
           <label className="block">
-            Existing company member
+            {t("enterprise.fields.existingMember")}
             <select
               className="saas-input"
               value={memberId}
@@ -450,7 +560,7 @@ export function Enterprise() {
                 setManageLifecycle(false);
               }}
             >
-              <option value="">Select a member</option>
+              <option value="">{t("enterprise.selectMember")}</option>
               {members.data?.members
                 .filter((m) => m.status === "active")
                 .map((m) => (
@@ -462,7 +572,7 @@ export function Enterprise() {
             </select>
           </label>
           <label className="block">
-            Signed IdP subject
+            {t("enterprise.fields.signedSubject")}
             <Input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
@@ -479,7 +589,7 @@ export function Enterprise() {
               checked={manageLifecycle}
               onChange={(e) => setManageLifecycle(e.target.checked)}
             />
-            Allow SCIM to manage this membership lifecycle
+            {t("enterprise.allowScimLifecycle")}
           </label>
           <Button
             disabled={
@@ -490,22 +600,19 @@ export function Enterprise() {
             }
             onClick={() => mutation.mutate("bind")}
           >
-            Approve exact mapping
+            {t("enterprise.approveMapping")}
           </Button>
           {policy.data.scimRequired ? (
             <div className="space-y-2">
               <p className="text-muted-foreground">
-                Removing provisioning suspends its managed non-owner
-                memberships, withdraws lifecycle mappings and requires fresh
-                identity qualification. Other companies and global accounts are
-                retained.
+                {t("enterprise.scimRemovalDisclosure")}
               </p>
               <Button
                 variant="outline"
                 disabled={mutation.isPending}
                 onClick={() => mutation.mutate("decommission")}
               >
-                Decommission SCIM
+                {t("enterprise.decommissionScim")}
               </Button>
             </div>
           ) : null}
@@ -518,22 +625,21 @@ export function Enterprise() {
                 mutation.mutate("rotate");
               }}
             >
-              Rotate SCIM credential
+              {t("enterprise.rotateScim")}
             </Button>
           ) : null}
         </section>
       ) : null}
       {credential ? (
-        <section className="space-y-2" aria-label="New SCIM credential">
+        <section className="space-y-2" aria-label={t("enterprise.newScimCredential")}>
           <p>
-            Copy this credential into the approved IdP provisioning connection.
-            It expires {new Date(credential.expiresAt).toLocaleString()}.
+            {t("enterprise.copyScimCredential")} {new Date(credential.expiresAt).toLocaleString()}.
           </p>
           <Input
             readOnly
             type="password"
             value={credential.token}
-            aria-label="New SCIM credential"
+            aria-label={t("enterprise.newScimCredential")}
           />
           <Button
             variant="outline"
@@ -542,7 +648,7 @@ export function Enterprise() {
               mutation.reset();
             }}
           >
-            Dismiss credential
+            {t("enterprise.dismissCredential")}
           </Button>
         </section>
       ) : null}
@@ -550,7 +656,7 @@ export function Enterprise() {
         <p role="alert">
           {mutation.error instanceof Error
             ? mutation.error.message
-            : "The enterprise action failed"}
+            : t("enterprise.actionFailed")}
         </p>
       ) : null}
     </div>

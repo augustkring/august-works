@@ -1,0 +1,33 @@
+✔ the serialized shards form a complete, non-overlapping partition (919.064257ms)
+✔ the general-server shards form a complete, non-overlapping partition (1259.61958ms)
+✔ only the shard selecting the built-server restart suite prepares the runtime bundle (2563.877073ms)
+✔ a route/authz suite never leaks into the general-server shards (90.056191ms)
+✔ shard flags are rejected for the workspaces-b group (91.374267ms)
+✔ workspaces-a shards map to Vitest native --shard slices over a stable project list (268.626679ms)
+✔ duration-aware partition balances skewed weights better than round-robin (6.455431ms)
+✔ the partition is deterministic for identical inputs (0.491322ms)
+✔ suites missing from the manifest get the median weight (0.180612ms)
+✔ a missing or malformed manifest degrades to uniform weights (0.47018ms)
+✔ the checked-in manifest loads and covers most of the current suite set (114.668381ms)
+✔ the chat integration suite keeps a measured duration for duration-aware fallbacks (1.241275ms)
+✔ the checked-in serialized manifest loads and covers most of the current suite set (92.610488ms)
+✔ the real serialized shard partition is duration-balanced (987.699219ms)
+✔ the real shard partition is duration-balanced (1225.267154ms)
+✔ 12 PR without-chat shards plus the dedicated chat and native-runner lanes cover the original server group exactly (1327.605352ms)
+✔ 10 without-chat shards under Release keep the native-runner suite and cover the server group with chat alone (1022.005501ms)
+✔ 10 without-chat shards under no ambient workflow keep the native-runner suite and cover the server group with chat alone (977.121028ms)
+✔ the native-runner lane runs exactly the cargo-dependent vertical-slice suite (122.397082ms)
+✔ shard flags are rejected for the native-runner group (152.189306ms)
+✔ the PR workflow wiring for the native-runner lane holds (1.376708ms)
+✔ the PR vitest lane wrapper runs the native-runner group exactly on the final PR shard (254.65787ms)
+✔ test-line shards cover nested and parameterized cases exactly once without splitting a source line (0.517301ms)
+✔ line-shard collection rejects empty, foreign, or unlocated tests and invalid shard counts (2.529899ms)
+✔ filtered collection must match the exact assigned case identities, including duplicates (1.746817ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11568.497425

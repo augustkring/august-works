@@ -17,11 +17,261 @@ import {
   selectInitialCommunicationGuidance,
   joinPromptSections,
   stringifyPaperclipWakePayload,
+  readPaperclipRuntimeSkillEntries,
+  readRequiredPlatformSkillFiles,
+  type PlatformSkillFile,
 } from "@paperclipai/adapter-utils/server-utils";
 import crypto, { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocket } from "ws";
 
 type SessionKeyStrategy = "fixed" | "issue" | "run";
+const __moduleDir = path.dirname(fileURLToPath(import.meta.url));
+
+const REQUIRED_SKILL_GATEWAY_METHODS = [
+  "skills.upload.begin",
+  "skills.upload.chunk",
+  "skills.upload.commit",
+  "skills.install",
+  "skills.status",
+  "skills.files.get",
+] as const;
+const REQUIRED_GOVERNED_BRIDGE_METHODS = [
+  "blentera.platform.bind.v1",
+  "blentera.platform.status.v1",
+  "blentera.platform.unbind.v1",
+] as const;
+
+type OpenClawGovernedBridgeBinding = {
+  agentId: string;
+  sessionKey: string;
+  providerRunId: string;
+};
+
+async function bindRequiredPlatformTools(params: {
+  client: GatewayWsClient;
+  methods: Set<string>;
+  ctx: AdapterExecutionContext;
+  openClawAgentId: string;
+  sessionKey: string;
+  providerRunId: string;
+}): Promise<OpenClawGovernedBridgeBinding> {
+  const { ctx } = params;
+  for (const method of REQUIRED_GOVERNED_BRIDGE_METHODS) {
+    if (!params.methods.has(method)) throw new Error(`OpenClaw Gateway lacks the required versioned Blentera tool bridge method: ${method}`);
+  }
+  const pin = ctx.platformSkillAdmission;
+  const contracts = ctx.platformSkillContracts;
+  const runtimeCapabilitySnapshotHash = ctx.providerRuntime?.capabilitySnapshotHash ?? null;
+  if (!pin || !contracts) {
+    throw new Error("The OpenClaw governed tool bridge requires the server-owned Skill and contract admission");
+  }
+  const servers = ctx.runtimeMcp?.getServers() ?? [];
+  const matches = servers.filter((server) => server.name === "paperclip-assigned");
+  if (matches.length !== 1 || !matches[0]?.token || !matches[0]?.url) {
+    throw new Error("The OpenClaw governed tool bridge requires exactly one server-owned run-scoped Paperclip MCP Gateway");
+  }
+  const server = matches[0];
+  const assignmentDigest = server.connectionId.match(/^assignment:([a-f0-9]{64})$/)?.[1];
+  if (!assignmentDigest) throw new Error("The Paperclip MCP Gateway has no immutable assignment snapshot identity");
+  const request = {
+    agentId: params.openClawAgentId,
+    sessionKey: params.sessionKey,
+    providerRunId: params.providerRunId,
+    paperclipRunId: ctx.runId,
+    endpoint: server.url,
+    token: server.token,
+    admission: {
+      protocolVersion: 1,
+      companyId: ctx.agent.companyId,
+      agentId: ctx.agent.id,
+      paperclipRunId: ctx.runId,
+      runtimeAdapter: ctx.agent.adapterType ?? "openclaw_gateway",
+      runtimeCapabilitySnapshotHash,
+      operationManifestHash: contracts.operationManifestHash,
+      toolCatalogContractHash: contracts.toolCatalogContractHash,
+      assignmentDigest,
+      platformSkill: pin,
+    },
+  };
+  const bound = asRecord(await params.client.request("blentera.platform.bind.v1", request, { timeoutMs: 20_000 }));
+  const binding = { agentId: params.openClawAgentId, sessionKey: params.sessionKey, providerRunId: params.providerRunId };
+  if (bound?.protocolVersion !== 1 || bound.pluginVersion !== "1.0.0" ||
+      typeof bound.toolCount !== "number" || !Number.isSafeInteger(bound.toolCount) || bound.toolCount < 0 ||
+      typeof bound.toolsHash !== "string" || !/^[a-f0-9]{64}$/.test(bound.toolsHash)) {
+    try { await unbindRequiredPlatformTools(params.client, binding); } catch { /* run token expires even if cleanup RPC is unavailable */ }
+    throw new Error("OpenClaw's Blentera bridge could not prove the exact run-scoped governed tool catalog");
+  }
+  try {
+    const status = asRecord(await params.client.request("blentera.platform.status.v1", binding, { timeoutMs: 10_000 }));
+    if (status?.protocolVersion !== 1 || status.ready !== true || status.paperclipRunId !== ctx.runId ||
+        status.toolCount !== bound.toolCount || status.toolsHash !== bound.toolsHash ||
+        typeof status.expiresAt !== "string" || Date.parse(status.expiresAt) <= Date.now()) {
+      throw new Error("OpenClaw's Blentera bridge did not activate for the accepted provider run");
+    }
+  } catch (error) {
+    try { await unbindRequiredPlatformTools(params.client, binding); } catch { /* run token expires even if cleanup RPC is unavailable */ }
+    throw error;
+  }
+  return binding;
+}
+
+async function unbindRequiredPlatformTools(client: GatewayWsClient, binding: OpenClawGovernedBridgeBinding): Promise<void> {
+  await client.request("blentera.platform.unbind.v1", binding, { timeoutMs: 5_000 });
+}
+
+async function createSkillArchive(files: PlatformSkillFile[]): Promise<{ directory: string; archive: string; cleanup: () => Promise<void> }> {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-openclaw-skill-"));
+  const archive = path.join(directory, "skill.tar");
+  try {
+    await fs.writeFile(archive, buildDeterministicSkillArchive(files), { mode: 0o400, flag: "wx" });
+    return { directory, archive, cleanup: () => fs.rm(directory, { recursive: true, force: true }) };
+  } catch (error) {
+    await fs.rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+/** USTAR with fixed ownership, permissions and timestamps gives retries the
+ * same bytes even when upload.begin lost its response and a new temp dir is used. */
+export function buildDeterministicSkillArchive(files: PlatformSkillFile[]): Buffer {
+  const sorted = [...files].sort((a, b) => Buffer.compare(Buffer.from(a.path, "utf8"), Buffer.from(b.path, "utf8")));
+  const blocks: Buffer[] = [];
+  const octal = (header: Buffer, offset: number, length: number, value: number) => {
+    const encoded = Math.floor(value).toString(8);
+    if (encoded.length > length - 1) throw new Error("required_skill_tar_field_overflow");
+    header.write(encoded.padStart(length - 1, "0") + "\0", offset, length, "ascii");
+  };
+  for (const file of sorted) {
+    if (!/^(?:SKILL\.md|references\/[a-z0-9-]+\.md)$/.test(file.path) || file.bytes.byteLength > 128 * 1024) {
+      throw new Error("required_skill_tar_entry_invalid");
+    }
+    const header = Buffer.alloc(512);
+    const encodedPath = Buffer.from(file.path, "utf8");
+    let name = encodedPath;
+    let prefix = Buffer.alloc(0);
+    if (encodedPath.byteLength > 100) {
+      const slash = file.path.lastIndexOf("/");
+      const base = Buffer.from(file.path.slice(slash + 1), "utf8");
+      const parent = Buffer.from(file.path.slice(0, slash), "utf8");
+      if (base.byteLength > 100 || parent.byteLength > 155) throw new Error("required_skill_tar_path_overflow");
+      name = base;
+      prefix = parent;
+    }
+    name.copy(header, 0);
+    octal(header, 100, 8, 0o444);
+    octal(header, 108, 8, 0);
+    octal(header, 116, 8, 0);
+    octal(header, 124, 12, file.bytes.byteLength);
+    octal(header, 136, 12, 0);
+    header.fill(0x20, 148, 156);
+    header[156] = 0x30;
+    header.write("ustar\0", 257, 6, "ascii");
+    header.write("00", 263, 2, "ascii");
+    prefix.copy(header, 345);
+    const checksum = header.reduce((sum, byte) => sum + byte, 0);
+    header.write(checksum.toString(8).padStart(6, "0") + "\0 ", 148, 8, "ascii");
+    blocks.push(header, file.bytes);
+    const padding = (512 - (file.bytes.byteLength % 512)) % 512;
+    if (padding) blocks.push(Buffer.alloc(padding));
+  }
+  blocks.push(Buffer.alloc(1024));
+  return Buffer.concat(blocks);
+}
+
+async function deliverRequiredPlatformSkill(params: {
+  client: GatewayWsClient;
+  methods: Set<string>;
+  ctx: AdapterExecutionContext;
+  agentId: string | null;
+}): Promise<void> {
+  const pin = params.ctx.platformSkillAdmission;
+  if (!pin) return;
+  for (const method of REQUIRED_SKILL_GATEWAY_METHODS) {
+    if (!params.methods.has(method)) throw new Error("OpenClaw Gateway cannot deliver the required Blentera Skill: advertised method " + method + " is unavailable");
+  }
+  if (pin.key !== "blentera-platform" || !/^sha256:[a-f0-9]{64}$/.test(pin.digest) || !pin.version || !/^[a-f0-9]{40}$/.test(pin.sourceSha)) {
+    throw new Error("OpenClaw Gateway cannot deliver the required Blentera Skill: current immutable release pin is invalid");
+  }
+  const entries = await readPaperclipRuntimeSkillEntries(params.ctx.config, __moduleDir);
+  const matchingEntries = entries.filter((entry) => entry.key === pin.key);
+  if (matchingEntries.length !== 1 || matchingEntries[0]?.sourceStatus === "missing" || !matchingEntries[0]?.versionId) {
+    throw new Error("OpenClaw Gateway cannot deliver the required Blentera Skill: its exact run-pinned source is unavailable");
+  }
+  const files = await readRequiredPlatformSkillFiles(matchingEntries[0].source, pin);
+  const packed = await createSkillArchive(files);
+  try {
+    const archiveBytes = await fs.readFile(packed.archive);
+    if (!archiveBytes.byteLength || archiveBytes.byteLength > 4 * 1024 * 1024) throw new Error("Required Paperclip Skill archive exceeds the Gateway 4 MiB upload limit");
+    const archiveSha256 = crypto.createHash("sha256").update(archiveBytes).digest("hex");
+    const slug = "blentera-platform";
+    const statusBefore = await params.client.request<Record<string, unknown>>("skills.status", {
+      ...(params.agentId ? { agentId: params.agentId } : {}),
+    }, { timeoutMs: 15_000 });
+    const statusSkills = asRecord(statusBefore)?.skills;
+    const currentMatches = Array.isArray(statusSkills) ? statusSkills.filter((item) => asRecord(item)?.skillKey === slug) : [];
+    const managedSkillsDir = nonEmpty(asRecord(statusBefore)?.managedSkillsDir);
+    if (!managedSkillsDir || currentMatches.length > 1) throw new Error("OpenClaw Gateway cannot prove the required Skill's effective workspace source");
+    const current = asRecord(currentMatches[0]);
+    if (current) {
+      const currentPath = nonEmpty(current.filePath);
+      const expectedTarget = path.resolve(managedSkillsDir, slug, "SKILL.md");
+      if (!currentPath || path.resolve(currentPath) !== expectedTarget) throw new Error("OpenClaw Gateway has a shadowing Skill that cannot be safely replaced");
+      const currentFile = await params.client.request<Record<string, unknown>>("skills.files.get", {
+        ...(params.agentId ? { agentId: params.agentId } : {}), path: currentPath,
+      }, { timeoutMs: 15_000 });
+      if (asRecord(currentFile)?.content !== files[0]?.bytes.toString("utf8")) throw new Error("OpenClaw Gateway has an unverified Skill at the managed target; refusing to overwrite it");
+    }
+
+    const begin = asRecord(await params.client.request("skills.upload.begin", {
+      kind: "skill-archive", slug, sizeBytes: archiveBytes.byteLength, sha256: archiveSha256,
+      force: current !== null, idempotencyKey: "paperclip:" + params.ctx.runId + ":" + pin.version + ":" + archiveSha256,
+    }, { timeoutMs: 15_000 }));
+    const uploadId = nonEmpty(begin?.uploadId);
+    if (!uploadId || typeof begin?.receivedBytes !== "number" || !Number.isSafeInteger(begin.receivedBytes) ||
+        begin.receivedBytes < 0 || begin.receivedBytes > archiveBytes.byteLength) {
+      throw new Error("OpenClaw Gateway did not start or resume the exact required Skill upload");
+    }
+    const maxChunkBytes = 1024 * 1024;
+    for (let offset = begin.receivedBytes; offset < archiveBytes.byteLength;) {
+      const chunk = archiveBytes.subarray(offset, Math.min(offset + maxChunkBytes, archiveBytes.byteLength));
+      const uploaded = asRecord(await params.client.request("skills.upload.chunk", {
+        uploadId, offset, dataBase64: chunk.toString("base64"),
+      }, { timeoutMs: 30_000 }));
+      const nextOffset = uploaded?.receivedBytes;
+      if (typeof nextOffset !== "number" || nextOffset !== offset + chunk.byteLength) throw new Error("OpenClaw Gateway did not acknowledge the exact Skill upload offset");
+      offset = nextOffset;
+    }
+    const committed = asRecord(await params.client.request("skills.upload.commit", { uploadId, sha256: archiveSha256 }, { timeoutMs: 30_000 }));
+    if (committed?.sha256 !== archiveSha256) throw new Error("OpenClaw Gateway committed a different Skill archive digest");
+    const installed = asRecord(await params.client.request("skills.install", {
+      source: "upload", ...(params.agentId ? { agentId: params.agentId } : {}), uploadId, slug,
+      force: current !== null, sha256: archiveSha256,
+    }, { timeoutMs: 60_000 }));
+    if (installed?.ok !== true || installed.sha256 !== archiveSha256) throw new Error("OpenClaw Gateway did not verify installation of the exact required Skill archive");
+
+    const statusAfter = asRecord(await params.client.request<Record<string, unknown>>("skills.status", {
+      ...(params.agentId ? { agentId: params.agentId } : {}), refresh: true,
+    }, { timeoutMs: 20_000 }));
+    const afterMatches = Array.isArray(statusAfter?.skills) ? statusAfter.skills.filter((item) => asRecord(item)?.skillKey === slug) : [];
+    const after = asRecord(afterMatches[0]);
+    const afterPath = nonEmpty(after?.filePath);
+    const afterManagedDir = nonEmpty(statusAfter?.managedSkillsDir);
+    const expectedTarget = afterManagedDir ? path.resolve(afterManagedDir, slug, "SKILL.md") : "";
+    if (afterMatches.length !== 1 || !afterPath || path.resolve(afterPath) !== expectedTarget || after?.eligible !== true || after?.blockedByAgentFilter === true) {
+      throw new Error("OpenClaw Gateway did not expose the delivered Blentera Skill as the unique effective workspace version");
+    }
+    const verifiedFile = await params.client.request<Record<string, unknown>>("skills.files.get", {
+      ...(params.agentId ? { agentId: params.agentId } : {}), path: afterPath,
+    }, { timeoutMs: 15_000 });
+    if (asRecord(verifiedFile)?.content !== files[0]?.bytes.toString("utf8")) throw new Error("OpenClaw Gateway effective Blentera Skill content failed readback verification");
+  } finally {
+    await packed.cleanup();
+  }
+}
 
 type WakePayload = {
   runId: string;
@@ -862,12 +1112,14 @@ export const discoverCapabilities: NonNullable<ServerAdapterModule["discoverCapa
     const advertised = asRecord(hello?.features)?.methods;
     if (!Array.isArray(advertised) || advertised.length > 500 || advertised.some((method) => typeof method !== "string")) throw new Error("Gateway method discovery is unavailable");
     const methods = new Set(advertised), skillDiscovery = methods.has("skills.status"), toolDiscovery = methods.has("tools.catalog");
+    const skillsSync = REQUIRED_SKILL_GATEWAY_METHODS.every((method) => methods.has(method));
+    const governedToolBridgeProtocol = REQUIRED_GOVERNED_BRIDGE_METHODS.every((method) => methods.has(method));
     const agentId = nonEmpty(ctx.config.agentId);
     const skills = skillDiscovery ? inventory(asRecord(await client.request("skills.status", agentId ? { agentId } : {}, { timeoutMs: 10_000 }))?.skills) : [];
     const tools = toolDiscovery ? inventory(asRecord(await client.request("tools.catalog", agentId ? { agentId } : {}, { timeoutMs: 10_000 }))?.tools) : [];
     const version = nonEmpty(asRecord(hello?.server)?.version);
     if (version && version.length > 200) throw new Error("Invalid gateway version");
-    return { provider: "openclaw", version, features: { sessions: methods.has("agent") && methods.has("agent.wait"), cancellation: methods.has("chat.abort"), steering: false, structuredOutput: false, skillsDiscovery: skillDiscovery, skillsSync: false, toolDiscovery, memoryScoping: false }, skills, tools, discoveredAt: new Date().toISOString() };
+    return { provider: "openclaw", version, features: { sessions: methods.has("agent") && methods.has("agent.wait"), cancellation: methods.has("chat.abort"), steering: false, structuredOutput: false, skillsDiscovery: skillDiscovery, skillsSync, governedToolBridgeProtocol, toolDiscovery, memoryScoping: false }, skills, tools, discoveredAt: new Date().toISOString() };
   } finally { client.close(); }
 };
 
@@ -1298,6 +1550,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       onLog: ctx.onLog,
     });
     let onAbort: (() => void) | null = null;
+    let governedBridgeBinding: OpenClawGovernedBridgeBinding | null = null;
 
     try {
       deviceIdentity = disableDeviceAuth ? null : resolveDeviceIdentity(parseObject(ctx.config));
@@ -1366,13 +1619,35 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       );
 
       // Keep any server-side continuation lock through retryable websocket
-      // setup and backoff. The first agent request is the remote-work boundary:
-      // once it is sent, retrying would be unsafe because the gateway may have
-      // accepted work even if the response is lost.
+      // setup and backoff. Required Skill delivery is performed and verified
+      // before the task request; once agent is sent, retrying is unsafe because
+      // the Gateway may have accepted work even if the response is lost.
       if (ctx.signal?.aborted) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancelled", errorMessage: "Execution cancelled before provider dispatch" };
       const gatewayMethods = asRecord(hello?.features)?.methods;
-      const supportsCancellation = Array.isArray(gatewayMethods) && gatewayMethods.includes("chat.abort");
-      if (supportsCancellation) await ctx.onCancellationReady?.();
+      const methodSet = new Set(Array.isArray(gatewayMethods) ? gatewayMethods.filter((method): method is string => typeof method === "string") : []);
+      const supportsCancellation = methodSet.has("chat.abort");
+      if (ctx.platformSkillAdmission) {
+        if (!configuredAgentId || !ctx.platformSkillContracts) {
+          throw new Error("The required OpenClaw governed tool bridge needs a pinned provider agent and server-owned contract admission");
+        }
+        for (const method of REQUIRED_GOVERNED_BRIDGE_METHODS) {
+          if (!methodSet.has(method)) throw new Error(`OpenClaw Gateway lacks the required versioned Blentera tool bridge method: ${method}`);
+        }
+        const paperclipServers = (ctx.runtimeMcp?.getServers() ?? []).filter((server) => server.name === "paperclip-assigned");
+        if (paperclipServers.length !== 1 || !paperclipServers[0]?.token || !paperclipServers[0]?.url) {
+          throw new Error("The required OpenClaw governed tool bridge needs exactly one server-owned run-scoped Paperclip MCP Gateway");
+        }
+        await ctx.onCancellationReady?.();
+        if (ctx.signal?.aborted) return { exitCode: null, signal: null, timedOut: false, errorCode: "cancelled", errorMessage: "Execution cancelled before required Skill delivery" };
+        await deliverRequiredPlatformSkill({
+          client,
+          methods: methodSet,
+          ctx,
+          agentId: configuredAgentId,
+        });
+      } else if (supportsCancellation) {
+        await ctx.onCancellationReady?.();
+      }
       reportDispatch();
       const acceptedPayload = await client.request<Record<string, unknown>>("agent", agentParams, {
         timeoutMs: connectTimeoutMs,
@@ -1383,6 +1658,17 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       const acceptedStatus = nonEmpty(acceptedPayload?.status)?.toLowerCase() ?? "";
       const acceptedRunId = nonEmpty(acceptedPayload?.runId) ?? ctx.runId;
       trackedRunIds.add(acceptedRunId);
+
+      if (ctx.platformSkillAdmission) {
+        governedBridgeBinding = await bindRequiredPlatformTools({
+          client,
+          methods: methodSet,
+          ctx,
+          openClawAgentId: configuredAgentId!,
+          sessionKey,
+          providerRunId: acceptedRunId,
+        });
+      }
 
       await ctx.onLog(
         "stdout",
@@ -1608,6 +1894,10 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       };
     } finally {
       if (onAbort) ctx.signal?.removeEventListener("abort", onAbort);
+      if (governedBridgeBinding) {
+        try { await unbindRequiredPlatformTools(client, governedBridgeBinding); }
+        catch { /* The bearer is still run-scoped and expires; never log binding credentials. */ }
+      }
       client.close();
     }
   }

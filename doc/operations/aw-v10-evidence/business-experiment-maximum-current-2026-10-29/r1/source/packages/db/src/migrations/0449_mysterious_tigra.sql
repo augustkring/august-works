@@ -1,0 +1,3 @@
+CREATE INDEX "business_experiment_assignments_lineage_idx" ON "business_experiment_assignments" USING btree ("company_id","lineage_manifest_id");--> statement-breakpoint
+CREATE INDEX "business_experiment_outcomes_lineage_idx" ON "business_experiment_outcomes" USING btree ("company_id","lineage_manifest_id");--> statement-breakpoint
+CREATE INDEX "business_experiment_outcomes_assignment_idx" ON "business_experiment_outcomes" USING btree ("company_id","assignment_id");

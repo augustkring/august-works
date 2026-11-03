@@ -1,0 +1,49 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[22:05:44] [33mWARN[39m: [36mFailed to withdraw obsolete native policy review; will retry on the next pass[39m [90m{"interactionId":"0302e8e0-8281-4646-a64a-793cdd2c33e9","issueId":"72e708c0-b145-4a25-bbfa-891c58484802"}[39m
+    err: {
+      "type": "Error",
+      "message": "injected cleanup failure",
+      "stack":
+          Error: injected cleanup failure
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2275:75
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[22:05:44] [33mWARN[39m: [36mObsolete native policy review cleanup committed; live activity publication failed, history is preserved[39m [90m{"interactionId":"14cccbc3-bae0-4476-b728-1cda0b62af46","issueId":"0ad8622b-31e5-4228-9ad7-50103e96cfee"}[39m
+    err: {
+      "type": "Error",
+      "message": "injected live publication failure",
+      "stack":
+          Error: injected live publication failure
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2297:13
+              at publishActivity (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at dismissObsoleteNativePolicyReviews (/workspace/blentera-v10/server/src/services/native-runtime/obsolete-policy-reviews.ts:143:9)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2300:7
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[22:05:44] [33mWARN[39m: [36mObsolete native policy review lookup failed; continuing native reconciliation[39m 
+    err: {
+      "type": "Error",
+      "message": "injected cleanup lookup failure",
+      "stack":
+          Error: injected cleanup lookup failure
+              at PostgresJsDatabase.<anonymous> (/workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2316:13)
+              at PostgresJsDatabase.select (file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+spy@4.1.11/node_modules/@vitest/spy/dist/index.js:332:34)
+              at dismissObsoleteNativePolicyReviews (/workspace/blentera-v10/server/src/services/native-runtime/obsolete-policy-reviews.ts:17:31)
+              at reconcileNativeFinalizations (/workspace/blentera-v10/server/src/services/native-runtime/native-finalization-reconciler.ts:549:9)
+              at /workspace/blentera-v10/server/src/__tests__/native-status-arbiter-corpus.test.ts:2319:32
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+
+ Test Files  1 passed (1)
+      Tests  31 passed (31)
+   Start at  22:04:48
+   Duration  56.98s (transform 22.75s, setup 232ms, import 31.07s, tests 25.17s, environment 0ms)
+

@@ -1,0 +1,45 @@
+@paperclipai/adapter-claude-local	/workspace/v10-dep-qualification/packages/adapters/claude-local	tsc --noEmit	tsc
+@paperclipai/adapter-codex-local	/workspace/v10-dep-qualification/packages/adapters/codex-local	tsc --noEmit	tsc && cp src/server/codex-auth-merge-decision.cjs src/server/codex-auth-merge-extract.sh dist/server/
+@paperclipai/adapter-cursor-cloud	/workspace/v10-dep-qualification/packages/adapters/cursor-cloud	tsc --noEmit	tsc
+@paperclipai/adapter-cursor-local	/workspace/v10-dep-qualification/packages/adapters/cursor-local	tsc --noEmit	tsc
+@paperclipai/adapter-gemini-local	/workspace/v10-dep-qualification/packages/adapters/gemini-local	tsc --noEmit	tsc
+@paperclipai/adapter-grok-local	/workspace/v10-dep-qualification/packages/adapters/grok-local	tsc --noEmit	tsc && cp src/server/grok-auth-merge-decision.cjs dist/server/
+@paperclipai/adapter-hermes-gateway	/workspace/v10-dep-qualification/packages/adapters/hermes-gateway	tsc --noEmit	tsc
+@paperclipai/adapter-kimi-local	/workspace/v10-dep-qualification/packages/adapters/kimi-local	tsc --noEmit	tsc
+@paperclipai/adapter-openclaw-gateway	/workspace/v10-dep-qualification/packages/adapters/openclaw-gateway	tsc --noEmit	tsc
+@paperclipai/adapter-opencode-local	/workspace/v10-dep-qualification/packages/adapters/opencode-local	tsc --noEmit	tsc
+@paperclipai/adapter-pi-local	/workspace/v10-dep-qualification/packages/adapters/pi-local	tsc --noEmit	tsc
+@paperclipai/adapter-utils	/workspace/v10-dep-qualification/packages/adapter-utils	tsc --noEmit	tsc
+@paperclipai/create-paperclip-plugin	/workspace/v10-dep-qualification/packages/plugins/create-paperclip-plugin	tsc --noEmit	tsc
+@paperclipai/db	/workspace/v10-dep-qualification/packages/db	pnpm run check:migrations && tsc --noEmit	pnpm run check:migrations && tsc && rm -rf dist/migrations && mkdir -p dist/migrations/meta && cp src/migrations/*.sql dist/migrations/ && cp src/migrations/meta/_journal.json dist/migrations/meta/
+@paperclipai/google-sheets-mcp-server	/workspace/v10-dep-qualification/packages/google-sheets-mcp-server	tsc --noEmit	tsc
+@paperclipai/hermes-paperclip-adapter	/workspace/v10-dep-qualification/packages/adapters/hermes	tsc --noEmit	tsc
+@paperclipai/kv-demo-mcp-server	/workspace/v10-dep-qualification/packages/kv-demo-mcp-server	tsc --noEmit	tsc
+@paperclipai/mcp-server	/workspace/v10-dep-qualification/packages/mcp-server	tsc --noEmit	tsc
+@paperclipai/paperclip-eval-kernel	/workspace/v10-dep-qualification/packages/paperclip-eval-kernel	tsc -p tsconfig.json --noEmit	tsc -p tsconfig.json
+@paperclipai/paperclip-runner	/workspace/v10-dep-qualification/packages/paperclip-runner	pnpm run typecheck:typescript && pnpm run typecheck:rust	pnpm run check:protocol-manifest && pnpm run build:typescript && pnpm run check:capability-contract && pnpm run check:capability-inventory && pnpm run check:protocol-coverage && pnpm run check:semantic-contracts && pnpm run check:runner-workflow-traceability && pnpm run build:binary && node scripts/generate-replay-goldens.mjs --check && node scripts/generate-semantic-action-catalog.mjs --check
+@paperclipai/plugin-authoring-smoke-example	/workspace/v10-dep-qualification/packages/plugins/examples/plugin-authoring-smoke-example	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	node ./esbuild.config.mjs
+@paperclipai/plugin-cloudflare-sandbox	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/cloudflare	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-createos	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/createos	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-daytona	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/daytona	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-e2b	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/e2b	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-exe-dev	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/exe-dev	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-fake-sandbox	/workspace/v10-dep-qualification/packages/plugins/paperclip-plugin-fake-sandbox	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	tsc
+@paperclipai/plugin-file-browser-example	/workspace/v10-dep-qualification/packages/plugins/examples/plugin-file-browser-example	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	tsc && node ./scripts/build-ui.mjs
+@paperclipai/plugin-hello-world-example	/workspace/v10-dep-qualification/packages/plugins/examples/plugin-hello-world-example	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	tsc
+@paperclipai/plugin-kitchen-sink-example	/workspace/v10-dep-qualification/packages/plugins/examples/plugin-kitchen-sink-example	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	tsc && node ./scripts/build-ui.mjs
+@paperclipai/plugin-kubernetes	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/kubernetes	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-llm-wiki	/workspace/v10-dep-qualification/packages/plugins/plugin-llm-wiki	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	node ./esbuild.config.mjs
+@paperclipai/plugin-modal	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/modal	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-novita-sandbox	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/novita	pnpm -C ../../../.. --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	rm -rf dist && tsc
+@paperclipai/plugin-orchestration-smoke-example	/workspace/v10-dep-qualification/packages/plugins/examples/plugin-orchestration-smoke-example	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit	node ./esbuild.config.mjs
+@paperclipai/plugin-sdk	/workspace/v10-dep-qualification/packages/plugins/sdk	pnpm --filter @paperclipai/shared build && tsc --noEmit	pnpm --filter @paperclipai/shared build && tsc
+@paperclipai/plugin-workspace-diff	/workspace/v10-dep-qualification/packages/plugins/plugin-workspace-diff	pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit && tsc --noEmit -p tsconfig.test.json	tsc && node ./scripts/build-ui.mjs
+@paperclipai/server	/workspace/v10-dep-qualification/server	pnpm run prepare:runner-vendor && pnpm --filter @paperclipai/plugin-sdk ensure-build-deps && tsc --noEmit --singleThreaded	pnpm run generate:company-search-help && pnpm run prepare:runner-vendor && node scripts/verify-runner-vendor-dependencies.mjs && tsc --singleThreaded && mkdir -p dist/onboarding-assets dist/built-ins dist/services/scripts dist/vendor/paperclip-runner && cp -R src/onboarding-assets/. dist/onboarding-assets/ && cp -R src/built-ins/. dist/built-ins/ && cp -R src/services/scripts/. dist/services/scripts/ && cp -R ../packages/paperclip-runner/dist/. dist/vendor/paperclip-runner/ && node scripts/write-build-stamp.mjs
+@paperclipai/shared	/workspace/v10-dep-qualification/packages/shared	tsc --noEmit	tsc && mkdir -p dist/cliplab && cp src/cliplab/LICENSE src/cliplab/PROVENANCE.md dist/cliplab/
+@paperclipai/skills-catalog	/workspace/v10-dep-qualification/packages/skills-catalog	tsc -p tsconfig.json --noEmit	pnpm run build:manifest && tsc -p tsconfig.json
+@paperclipai/tailscale-https-broker	/workspace/v10-dep-qualification/packages/tailscale-https-broker	tsc --noEmit	tsc && node scripts/build-native.mjs
+@paperclipai/teams-catalog	/workspace/v10-dep-qualification/packages/teams-catalog	tsc -p tsconfig.json --noEmit	pnpm run build:manifest && tsc -p tsconfig.json
+@paperclipai/ui	/workspace/v10-dep-qualification/ui	tsc -b	vite build
+paperclip-cloudflare-sandbox-bridge-template	/workspace/v10-dep-qualification/packages/plugins/sandbox-providers/cloudflare/bridge-template	tsc --noEmit	tsc --noEmit
+paperclipai	/workspace/v10-dep-qualification/cli	tsc --noEmit --singleThreaded	node --input-type=module -e "import esbuild from 'esbuild'; import config from './esbuild.config.mjs'; await esbuild.build(config);" && chmod +x dist/index.js

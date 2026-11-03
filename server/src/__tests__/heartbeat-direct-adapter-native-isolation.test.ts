@@ -27,6 +27,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
+import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import {
   registerServerAdapter,
   unregisterServerAdapter,
@@ -70,8 +71,10 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
     ReturnType<typeof startEmbeddedPostgresTestDatabase>
   > | null = null;
   const execute = vi.fn<ServerAdapterModule["execute"]>();
+  let restoreApiUrl: (() => void) | null = null;
 
   beforeAll(async () => {
+    restoreApiUrl = installHeartbeatApiUrlFixture();
     tempDb = await startEmbeddedPostgresTestDatabase(
       "heartbeat-direct-adapter-isolation-",
     );
@@ -131,10 +134,11 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
       unregisterServerAdapter(adapterType);
     }
     await tempDb?.cleanup();
+    restoreApiUrl?.();
   });
 
   it.each(DIRECT_ADAPTERS)(
-    "executes flag-off %s once without creating native records",
+    "denies unqualified flag-off %s before execution without creating native records",
     async (adapterType, provider) => {
       const companyId = randomUUID();
       const agentId = randomUUID();
@@ -157,6 +161,7 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
         requireBoardApprovalForNewAgents: false,
         defaultResponsibleUserId: "responsible-user",
       });
+      await seedHeartbeatResponsibleHuman(db, companyId, "responsible-user", "owner");
       await db.insert(agents).values({
         id: agentId,
         companyId,
@@ -173,19 +178,22 @@ describeEmbeddedPostgres("direct adapter native-runner isolation", () => {
       expect(queued).not.toBeNull();
       const finished = await waitForRunToFinish(heartbeat, queued!.id);
 
-      expect(execute).toHaveBeenCalledOnce();
+      expect(execute).not.toHaveBeenCalled();
       expect(finished).toMatchObject({
-        status: "succeeded",
-        exitCode: 0,
-        signal: null,
-        runtimeMode: "legacy",
+        status: "failed",
+        errorCode: "configuration_incomplete",
         nativePhase: null,
       });
       const persistedResult = finished?.resultJson as Record<
         string,
         unknown
       > | null;
-      expect(persistedResult?.directProofJson).toBe(directProofJson);
+      expect(persistedResult?.configurationIncomplete).toMatchObject({
+        reason: "paid_transport_unqualified",
+        owner: "Managed model gateway owner",
+        actionUrl: `/agents/${agentId}/runtime`,
+      });
+      expect(persistedResult?.directProofJson).toBeUndefined();
 
       const nativeRows = await Promise.all([
         db.select().from(completionContracts),

@@ -1,0 +1,58 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/__tests__/issues-service.test.ts > issueService retained private source authority > denies a private update when membership is withdrawn during the actual issue-row wait
+Promise returned by `expect(actual).rejects.toThrow(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in the next Vitest major. Please remember to await the assertion.
+    at /workspace/blentera-v10/server/src/__tests__/issues-service.test.ts:7297:42
+
+ ❯ |@paperclipai/server| src/__tests__/issues-service.test.ts (130 tests | 1 failed | 127 skipped) 15647ms
+     × denies a private update when membership is withdrawn during the actual issue-row wait 2762ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issues-service.test.ts > issueService retained private source authority > denies a private update when membership is withdrawn during the actual issue-row wait
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/issues-service.test.ts:7307:23
+    7305|         await new Promise(resolve => setTimeout(resolve, 10));
+    7306|       }
+    7307|       expect(blocked).toBe(true);
+       |                       ^
+    7308|       await db.update(companyMemberships).set({ status: "suspended" })…
+    7309|     } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+AssertionError: promise resolved "{ …(77) }" instead of rejecting
+ ❯ _Assertion.__VITEST_REJECTS__ node_modules/.pnpm/@vitest+expect@4.1.11/node_modules/@vitest/expect/dist/index.js:1747:17
+ ❯ _Assertion.propertyGetter node_modules/.pnpm/chai@6.2.2/node_modules/chai/index.js:1570:27
+ ❯ Object.proxyGetter [as get] node_modules/.pnpm/chai@6.2.2/node_modules/chai/index.js:1659:22
+ ❯ server/src/__tests__/issues-service.test.ts:7297:42
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+This error originated in "server/src/__tests__/issues-service.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 127 skipped (130)
+     Errors  1 error
+   Start at  21:01:39
+   Duration  62.38s (transform 30.96s, setup 234ms, import 46.02s, tests 15.65s, environment 0ms)
+

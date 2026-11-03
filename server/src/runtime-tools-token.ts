@@ -1,14 +1,16 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { resolvePaperclipInstanceId } from "./home-paths.js";
-import { workerModelBindingSchema, type WorkerModelBinding } from "@paperclipai/shared";
+import { conversationModelBindingSchema, workerModelBindingSchema,
+  type ConversationModelBinding, type WorkerModelBinding } from "@paperclipai/shared";
 
 export interface RuntimeToolsTokenClaims {
   sub: string;
   company_id: string;
   run_id: string;
   responsible_user_id: string;
-  scope: "connection_intents" | "github_credentials" | "worker_model";
+  scope: "connection_intents" | "github_credentials" | "worker_model" | "conversation_model";
   worker_model?: WorkerModelBinding;
+  conversation_model?: ConversationModelBinding;
   iat: number;
   exp: number;
   instance_id: string;
@@ -48,10 +50,13 @@ export function createRuntimeToolsToken(input: {
   responsibleUserId: string;
   scope?: RuntimeToolsTokenClaims["scope"];
   workerModelBinding?: WorkerModelBinding;
+  conversationModelBinding?: ConversationModelBinding;
 }) {
   if (!secret()) return null;
   const binding = workerModelBindingSchema.safeParse(input.workerModelBinding);
+  const conversationBinding = conversationModelBindingSchema.safeParse(input.conversationModelBinding);
   if (input.scope === "worker_model" && !binding.success) return null;
+  if (input.scope === "conversation_model" && !conversationBinding.success) return null;
   const now = Math.floor(Date.now() / 1000);
   const instanceId = resolvePaperclipInstanceId();
   const claims: RuntimeToolsTokenClaims = {
@@ -61,9 +66,12 @@ export function createRuntimeToolsToken(input: {
     responsible_user_id: input.responsibleUserId,
     scope: input.scope ?? "connection_intents",
     ...(input.scope === "worker_model" && binding.success ? { worker_model: binding.data } : {}),
+    ...(input.scope === "conversation_model" && conversationBinding.success
+      ? { conversation_model: conversationBinding.data } : {}),
     iat: now,
     // Broker tokens remain scoped to a live run, which is rechecked on every use.
-    exp: now + (input.scope === "worker_model" ? 300 : input.scope === "github_credentials" ? 30 * 24 * 60 * 60 : TOKEN_TTL_SECONDS),
+    exp: now + (input.scope === "worker_model" || input.scope === "conversation_model" ? 300 :
+      input.scope === "github_credentials" ? 30 * 24 * 60 * 60 : TOKEN_TTL_SECONDS),
     instance_id: instanceId,
   };
   const signingInput = `${encode({ alg: "HS256", typ: "JWT" })}.${encode(claims)}`;
@@ -101,6 +109,13 @@ export function verifyRuntimeToolsToken(token: string, scope: RuntimeToolsTokenC
   ) return null;
   if (scope === "worker_model" && (
     !workerModelBindingSchema.safeParse(claims.worker_model).success
+    || !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp)
+    || (claims.iat as number) > Math.floor(Date.now() / 1000)
+    || (claims.exp as number) <= (claims.iat as number)
+    || (claims.exp as number) - (claims.iat as number) > 300
+  )) return null;
+  if (scope === "conversation_model" && (
+    !conversationModelBindingSchema.safeParse(claims.conversation_model).success
     || !Number.isInteger(claims.iat) || !Number.isInteger(claims.exp)
     || (claims.iat as number) > Math.floor(Date.now() / 1000)
     || (claims.exp as number) <= (claims.iat as number)

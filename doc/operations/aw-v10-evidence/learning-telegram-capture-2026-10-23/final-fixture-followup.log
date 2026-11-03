@@ -1,0 +1,58 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[23:24:23] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"6cadde81-a79e-4fb3-b867-16ef3dfcd6a8","operationType":"retention"}[39m
+    err: {
+      "type": "Error",
+      "message": "Unsafe runtime skill cache directory",
+      "stack":
+          Error: Unsafe runtime skill cache directory
+              at assertDirectories (/workspace/blentera-v10/server/src/services/runtime-skill-cache.ts:69:61)
+              at removeRuntimeSkillVersionDirectory (/workspace/blentera-v10/server/src/services/runtime-skill-cache.ts:251:5)
+              at /workspace/blentera-v10/server/src/services/learning/skill-file-erasure.ts:40:5
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at eraseSkillVersionFiles (/workspace/blentera-v10/server/src/services/learning/skill-file-erasure.ts:30:3)
+              at executeRetention (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:657:7)
+              at executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:812:24)
+              at Object.tick (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:932:7)
+              at /workspace/blentera-v10/server/src/__tests__/v7-learning.integration.test.ts:951:7
+    }
+ ❯ |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts (42 tests | 2 failed | 38 skipped) 21043ms
+     × erases actual no-wait Workflow Tasks and native/preparation child copies: verified_memory 2683ms
+     × erases actual no-wait Workflow Tasks and native/preparation child copies: workflow_signal 3820ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: verified_memory
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: workflow_signal
+AssertionError: {"failureCode":"workflow_task_create_failed","failureMessage":"Task privacy source is unavailable"}: expected { …(27) } to match object { status: 'succeeded' }
+(28 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "status": "succeeded",
++   "status": "failed",
+  }
+
+ ❯ src/__tests__/v7-learning.integration.test.ts:555:115
+    553|     await service.publish(companyId,created.id,{expectedDraftRevisionI…
+    554|     const executor=workflowExecutorService(db),run=await executor.star…
+    555|     expect(run.run, JSON.stringify({ failureCode: run.run.failureCode,…
+       |                                                                                                                   ^
+    556|     expect(run.steps.every(step=>step.automationArtifactVersionId===nu…
+    557|     const [task]=await db.select().from(issues).where(and(eq(issues.co…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed | 38 skipped (42)
+   Start at  23:23:12
+   Duration  71.90s (transform 33.27s, setup 194ms, import 50.02s, tests 21.04s, environment 0ms)
+

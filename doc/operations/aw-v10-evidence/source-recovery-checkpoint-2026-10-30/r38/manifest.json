@@ -1,0 +1,669 @@
+{
+  "purpose": "recovery_only_not_qualification",
+  "savedAtUtc": "2026-10-30T02:14:47.078982+00:00",
+  "baseCommit": "7c50fce45073140d836315a1aedd27c658afcbb3",
+  "patchBytes": 1807890,
+  "patchSha256": "f2838ab530408714bb0ab68c6eb83f2d951154c42a942084d1526a405e4ece43",
+  "archiveSha256": "2aa2a6a11d187a4196f42098cd96652bd272a8915889e45be406fe9de2f8eff3",
+  "untrackedSourceFiles": [
+    {
+      "path": "packages/adapters/hermes/src/server/platform-skill-execute.test.ts",
+      "bytes": 9386,
+      "sha256": "83b8c808806f52733106d12bd0d66c753fa7478e21e30164b23699d64c9ddedb"
+    },
+    {
+      "path": "scripts/platform-skill-migration-register.mjs",
+      "bytes": 19811,
+      "sha256": "f77fe1fceca3defacc560e1fafcbc2537c2218801b5b50fa7fb83435e74f886d"
+    },
+    {
+      "path": "scripts/platform-skill-migration-register.test.mjs",
+      "bytes": 1915,
+      "sha256": "356ab34c7f926e4b34f9d8fa55bf5fafc0d21c0fec93dd9573777c828d1da1d7"
+    },
+    {
+      "path": "scripts/platform-skill-runtime-conformance.test.mjs",
+      "bytes": 4284,
+      "sha256": "b753cfd66a5284b2771c957a26e6349258d9f7b3ca0e209d86a844242d687fd2"
+    },
+    {
+      "path": "scripts/run-platform-skill-runtime-conformance.mjs",
+      "bytes": 13330,
+      "sha256": "33b2d0eddfbb621d0db912e3b10ef500711809244c008b8a12806d7907980b9d"
+    },
+    {
+      "path": "server/src/__tests__/company-responsibility-attention.integration.test.ts",
+      "bytes": 5637,
+      "sha256": "5828ee284b7c760044f0913b8cc7df7e5cdc90d791358cf3e44adbb02772a5bd"
+    },
+    {
+      "path": "server/src/services/context/context-engine-native-source-transaction.test.ts",
+      "bytes": 7539,
+      "sha256": "ae618b77ba22e0c1e6f09a0a29797cdaf309d8daa0feda65b6c84fbe45c7d2d3"
+    },
+    {
+      "path": "server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 15810,
+      "sha256": "4b1d17720e88948c60ed5d00c47998c412e55e4bb119c210607d1220ef2fc074"
+    }
+  ],
+  "privateRecoveryFiles": [
+    {
+      "path": "main-extra/doc/operations/platform-skill-migration-register.json",
+      "bytes": 248505,
+      "sha256": "d3259f841408bbd0196a664ad266069dbe7535a30efce2e96338404fcd361b7f"
+    },
+    {
+      "path": "main-extra/evals/platform-skill/runtime-conformance.json",
+      "bytes": 7818,
+      "sha256": "d71c6bc291e4bc999eac7b8c64c85c1d886e798048e91300b620c87e32d7035a"
+    },
+    {
+      "path": "main-extra/evals/platform-skill/runtime-conformance.md",
+      "bytes": 2532,
+      "sha256": "4da8c1214db78998b89cf33ac54df41989c8fc702317d20bc66e4c84bd654f87"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/0565_responsibility_scan.sql",
+      "bytes": 3314,
+      "sha256": "b638b2c3ea75eacf69959f26eaf9c1cf42c6750e16195182a5962161ada57763"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/README.md",
+      "bytes": 16114,
+      "sha256": "3684316553911552af2d27068fa6c63175fbfff1054bb30cd4e9c5f598dc28c4"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/db/src/schema/companies.ts",
+      "bytes": 2757,
+      "sha256": "579a4c7c797fdb0de9798cc736b27157c077ea67ddae3d907b88c2994ecd81be"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/db/src/schema/index.ts",
+      "bytes": 15166,
+      "sha256": "154b94885697eb69b182630ac34e7e57544c56dd4a6d5ba20a8a1e079ec25c0b"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/db/src/schema/responsibility_scan.ts",
+      "bytes": 3954,
+      "sha256": "f074721b3aa2d47d76e03b25d32d20c4bbacdf55fef961f460310aebba1c87e6"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/shared/src/index.ts",
+      "bytes": 106984,
+      "sha256": "afbc53c1f2bb07f7afda2303459092b6ab8600cf65dc937d658d5887f8546806"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/shared/src/types/company.ts",
+      "bytes": 1486,
+      "sha256": "10ebcb54d4c64f6a1261d4a80674f70c82ccdf8939bf50660d1ae38e47381431"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/shared/src/types/index.ts",
+      "bytes": 31526,
+      "sha256": "dfcb374cefa6230cce94ef073ab86c8df8f3f4bef5de7ce7a239644df2bf3760"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/shared/src/validators/company.ts",
+      "bytes": 3579,
+      "sha256": "41775e77c7235c5cbf734b030578eaf4dd39fb507b5215436126f8985ae67967"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/packages/shared/src/validators/index.ts",
+      "bytes": 31145,
+      "sha256": "8e1f50a414224b6cc4ee1194e61d9769eda376c8de439af666199811f223b9b5"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/app.ts",
+      "bytes": 70200,
+      "sha256": "850149356579b398bcb0bafa128d1bfc9e1fef0c08a5e38a820740f8d4e04a8b"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/routes/companies.ts",
+      "bytes": 77494,
+      "sha256": "de9fd53330b9c5fbcb06f8616e2e5de77b8f8c6e3a038d637937f8f69e5b2c18"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/routes/experience.ts",
+      "bytes": 6475,
+      "sha256": "9e72898c4ce12684b8cce79b37d9b1e50fd1430b255bc5df85552c91e82d061d"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/access.ts",
+      "bytes": 77351,
+      "sha256": "bfa85b69cbc8e3399df076b5f7359881e877e28f2aa0db8ffc4f85f116547946"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/companies.ts",
+      "bytes": 31221,
+      "sha256": "436c60bbb66587552ef9ee429fff60fae6337db28f66e7ec9eebb7077f8f00fe"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/company-responsibility-contacts.ts",
+      "bytes": 1205,
+      "sha256": "daf9905c58923dc32f115a3a2cdb79bd06dd037ec606e88671aca52b51b2d1f3"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/experience/company-responsibility-attention-baseline.ts",
+      "bytes": 15810,
+      "sha256": "4b1d17720e88948c60ed5d00c47998c412e55e4bb119c210607d1220ef2fc074"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/experience/company-responsibility-attention.ts",
+      "bytes": 105,
+      "sha256": "80c6666a104b558cc8a4c5e44dd9dd9ed1f057cf813e9c1c6ccb370b29ef477f"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/experience/service.ts",
+      "bytes": 37660,
+      "sha256": "1b694d00af556e94764349048ae26fd08556a9ed0bc0afcd8a2fff11c23a8fc6"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/saas/account-deletion.ts",
+      "bytes": 34199,
+      "sha256": "4c04bb8b7d5df9be9e9939a6db52d2b411482964579f944854cb15697050d183"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/server/src/services/saas/platform.ts",
+      "bytes": 16569,
+      "sha256": "32f2d6d0d883d012d9091c9b0f710fb00bdf1843dadb86d237ded90bc83d0e79"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/ui/src/api/companies.ts",
+      "bytes": 9353,
+      "sha256": "5d1864a416d957f6f762325a0635cf0cfbaebfca78ff0738c64583d0e146d643"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/ui/src/pages/CompanySettings.test.tsx",
+      "bytes": 12021,
+      "sha256": "0668813a7a2b9ef950650e2fbd2a138aa646a4d1dbe68b074ebaedfccbee642f"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/ui/src/pages/CompanySettings.tsx",
+      "bytes": 22282,
+      "sha256": "9a4b6d142148014043266f674dd731f4b7faefc0d9af1fcb2ef7437f02b6e834"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/ui/src/pages/CompanySettingsArchive.test.tsx",
+      "bytes": 7291,
+      "sha256": "19ea6a5c61fed9b4bb80b5df7614e8eb3bbf5697e9bed4ba4bdd726f63a61f94"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/integration/ui/src/pages/CompanySettingsRenameHint.test.tsx",
+      "bytes": 5424,
+      "sha256": "6aec4f0b3de429739f8658eed1a4b7ae613fd6ec97fae48e3113463c20b557f9"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 35616,
+      "sha256": "242d100227d326894403f6f1a2a170e7ae39abb11abc2057345a40615674c268"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/company-responsibility-contacts.ts",
+      "bytes": 1717,
+      "sha256": "6bdec82fba88dbcb856155013908d85af39f44206c08586798b292d3f2328a7f"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/README.md",
+      "bytes": 1811,
+      "sha256": "b25b8e92e075d1974017eafdb3b64d7549a9a9bbc7a4a7d13a886714fc6dbb0e"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/authorized-subset-reader.ts",
+      "bytes": 6424,
+      "sha256": "27e106257879013fad436d32c0379aac80d8f371aff1f73ae037ce3b8ba3a3b7"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/company-responsibility-attention.ts",
+      "bytes": 2511,
+      "sha256": "9a79e4be557c517dc9080b0de710e7e3676a21034915a93de1d1ba4b40bd75d6"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/maintenance-runner.ts",
+      "bytes": 1531,
+      "sha256": "37471163cfd763eae1ae1d22252c122c660f10c458fa3c308cc72ec3ac93f8ca"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/native-metadata-sources.ts",
+      "bytes": 9245,
+      "sha256": "d1928add5d73905f611418582eb588309155f9725b021e338a4efd6323e9d567"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/native-owner-coverage.ts",
+      "bytes": 1109,
+      "sha256": "e8472e5adaeb8283ce9d667a3dbd89e70c467e1b35ea275b43143215befd8517"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/native-reader-adapters.ts",
+      "bytes": 36073,
+      "sha256": "0df3a10a042e49f9d58f942b0eb0a5a3a06941156c6cca14e785e92cc2bebd7b"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/native-reader-ports.ts",
+      "bytes": 5389,
+      "sha256": "390ffe50a4b4c6c4fa2590adf1710ab8f4e67fb60a5bdac087cca983bb70bc99"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/native-subject-policy.ts",
+      "bytes": 1985,
+      "sha256": "b1882db744915df33101a2182cec770b6cc89d77211dad2b5b33cf13e66282a5"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/responsibility-scan-store.ts",
+      "bytes": 12384,
+      "sha256": "0e1e8ad85357da5553efa4182c6b9ff6d51f8c639f894e286f0f37815def797d"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate-contacts-r1/server/src/services/experience/private-0565/responsibility-scan.ts",
+      "bytes": 7365,
+      "sha256": "13bec1dcb96cb273776a47211d91ac652b9637fe65a322e56eadc29272015b24"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
+      "bytes": 15512,
+      "sha256": "f7796f34710e0eb48d4cfa16fa48d64548ef7cb734cb92e500fd2c8a36b233ce"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/README.md",
+      "bytes": 750,
+      "sha256": "6a6efc54d849f92261c4451fb0cd49df656affbd46289289b2fa2aa4f6b2aaad"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/authorized-subset-reader.ts",
+      "bytes": 5660,
+      "sha256": "c5eae865fbba8e16c1dda75dc0df30dcddd53f7eef0fce21eb9ae47418ad2185"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/maintenance-runner.ts",
+      "bytes": 1531,
+      "sha256": "37471163cfd763eae1ae1d22252c122c660f10c458fa3c308cc72ec3ac93f8ca"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-metadata-sources.ts",
+      "bytes": 8654,
+      "sha256": "5c99ee69a8f8eb1a772e0de85bc8253c9c3b2fa900ec885d54d228c62fcb956a"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-owner-coverage.ts",
+      "bytes": 1109,
+      "sha256": "e8472e5adaeb8283ce9d667a3dbd89e70c467e1b35ea275b43143215befd8517"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-adapters.ts",
+      "bytes": 33474,
+      "sha256": "2f061867c1935ef3f6d66d815d87d4fa13e7ae411d9404efdb2ec22df66a32e5"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-reader-ports.ts",
+      "bytes": 5389,
+      "sha256": "390ffe50a4b4c6c4fa2590adf1710ab8f4e67fb60a5bdac087cca983bb70bc99"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/native-subject-policy.ts",
+      "bytes": 1985,
+      "sha256": "b1882db744915df33101a2182cec770b6cc89d77211dad2b5b33cf13e66282a5"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan-store.ts",
+      "bytes": 12190,
+      "sha256": "4223b0ad723bedbd63ace03e62d23f6d2b0f547aeb6ea35c83c8154c3ae7a15b"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/main-candidate/server/src/services/experience/private-0565/responsibility-scan.ts",
+      "bytes": 7365,
+      "sha256": "13bec1dcb96cb273776a47211d91ac652b9637fe65a322e56eadc29272015b24"
+    },
+    {
+      "path": "preparation/b-resource-0565-responsibility-scan-proposal-20261030/schema-responsibility-scan.ts",
+      "bytes": 3954,
+      "sha256": "f074721b3aa2d47d76e03b25d32d20c4bbacdf55fef961f460310aebba1c87e6"
+    },
+    {
+      "path": "preparation/native-graph-ledger-handoff-20261030.md",
+      "bytes": 25395,
+      "sha256": "37ff9ae53b1a8f32db4a66032fe5805a1b64f6e4f2e09fe152ee71e00d013cb2"
+    },
+    {
+      "path": "preparation/native-local-context-transaction-candidate/candidate.diff",
+      "bytes": 19784,
+      "sha256": "02f03ae00c9d166b9b4408db20157715d144b108d1bf13a226b23e86f4a5fe1d"
+    },
+    {
+      "path": "preparation/native-local-context-transaction-candidate/manifest.json",
+      "bytes": 1186,
+      "sha256": "db52d1188164cc741106af692480e59f0b116c59a62ab3fa088a84664c4fde54"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/SHA256SUMS",
+      "bytes": 3580,
+      "sha256": "9fd498a9deed1797132afbe5fa8d5c938436ec4ed83785a808970214d390b7d0"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/final-source-hashes.json",
+      "bytes": 9986,
+      "sha256": "509be7cbeb603128dad75e9650214c03a22ce6803fac4db20e880ec1ef61d663"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/owned-source.patch",
+      "bytes": 14790,
+      "sha256": "966d3f9f95cce0e8665fe186e8d880aa9ccbde5abc82579b072ff3bfdf00ebfa"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/oxc.log",
+      "bytes": 61,
+      "sha256": "ceb967ae2e0a2e8315fe4d0c88e322b1ca11d5ed12bd612c1814b56543a4232e"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/reconstruction-manifest.json",
+      "bytes": 1528,
+      "sha256": "46cbd3df99c46bb5b89a19be72b26c0cf14de3904e508ee36ccc70c6bf5ce405"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/README.md",
+      "bytes": 2503,
+      "sha256": "77db8ed06901f23cc7cc3bf313a245da65a402aedf1ab36c9967dcd4a50f910c"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/SHA256SUMS",
+      "bytes": 1136,
+      "sha256": "673d8141c763f0d567f1a27d8aaa182ddd8cf94bdc7fcff9c1a4ac73f7aa9a00"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/blentera-managed-native+openclaw+hermes-local-report.json",
+      "bytes": 19648,
+      "sha256": "423495e6582432114fc632f29c0b2cbc7418461b806619218965b7ac2b9519a6"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/final-source-hashes.json",
+      "bytes": 9986,
+      "sha256": "509be7cbeb603128dad75e9650214c03a22ce6803fac4db20e880ec1ef61d663"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/mirror-orphan-cleanup-manifest.json",
+      "bytes": 761,
+      "sha256": "a6d29c6e183b06a57710751eba00205171ea14d88cf8642260091486f1c6f836"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/oxc.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/oxc.log",
+      "bytes": 61,
+      "sha256": "ceb967ae2e0a2e8315fe4d0c88e322b1ca11d5ed12bd612c1814b56543a4232e"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/package-script-check.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/package-script-check.log",
+      "bytes": 2191,
+      "sha256": "5758245344b960f68c8f8ada8d9ec535f9d1c5f540395104d7b12d9676d024a5"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/runner.txt",
+      "bytes": 192,
+      "sha256": "a6786fb7508504e513b413928fa6fab52a9fe4e646c10f2416690e298bff7cda"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/source-pins.json",
+      "bytes": 189401,
+      "sha256": "37e9dc272982f996b9d10fddb6cd968e5c84c2cab6ca4b6cb7534f84768ecb20"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/standalone-node-tests.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/standalone-node-tests.log",
+      "bytes": 607,
+      "sha256": "8f788bffa5257689c195e0487cb89be7a8dc26471967ec2453d5b84375c227ed"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/tests.exit",
+      "bytes": 2,
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/tests.log",
+      "bytes": 566,
+      "sha256": "227419d73264a695f8b9a04482e36f389006a5950fad4036cf895199ca63f5fd"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/repo-evidence/typebox-dependency-receipt.json",
+      "bytes": 859,
+      "sha256": "2c3e71686df89a66b99bca74280d5962db8a823a910ede3056fe9aa20e4b9318"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/runner.txt",
+      "bytes": 192,
+      "sha256": "a6786fb7508504e513b413928fa6fab52a9fe4e646c10f2416690e298bff7cda"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/runtime-report.json",
+      "bytes": 19648,
+      "sha256": "423495e6582432114fc632f29c0b2cbc7418461b806619218965b7ac2b9519a6"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/snapshot.log",
+      "bytes": 38,
+      "sha256": "6c452bd9324c3b2b58b9b53b61cdef9b3ece737407be5085dff21853050ba5af"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/source-head.txt",
+      "bytes": 41,
+      "sha256": "896a05a71b7271d070ddbfa4cc932c87da0249130f7d656b2cf67ccdb076f4c8"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/source-pins.json",
+      "bytes": 189401,
+      "sha256": "37e9dc272982f996b9d10fddb6cd968e5c84c2cab6ca4b6cb7534f84768ecb20"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/tests.log",
+      "bytes": 566,
+      "sha256": "227419d73264a695f8b9a04482e36f389006a5950fad4036cf895199ca63f5fd"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/typebox-dependency-receipt.json",
+      "bytes": 859,
+      "sha256": "2c3e71686df89a66b99bca74280d5962db8a823a910ede3056fe9aa20e4b9318"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/doc/operations/platform-skill-migration-register.json",
+      "bytes": 248505,
+      "sha256": "d3259f841408bbd0196a664ad266069dbe7535a30efce2e96338404fcd361b7f"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/evals/platform-skill/runtime-conformance.json",
+      "bytes": 7818,
+      "sha256": "d71c6bc291e4bc999eac7b8c64c85c1d886e798048e91300b620c87e32d7035a"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/evals/platform-skill/runtime-conformance.md",
+      "bytes": 2532,
+      "sha256": "4da8c1214db78998b89cf33ac54df41989c8fc702317d20bc66e4c84bd654f87"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/packages/adapters/hermes/src/server/platform-skill-execute.test.ts",
+      "bytes": 9386,
+      "sha256": "83b8c808806f52733106d12bd0d66c753fa7478e21e30164b23699d64c9ddedb"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/scripts/platform-skill-migration-register.mjs",
+      "bytes": 19811,
+      "sha256": "f77fe1fceca3defacc560e1fafcbc2537c2218801b5b50fa7fb83435e74f886d"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/scripts/platform-skill-migration-register.test.mjs",
+      "bytes": 1915,
+      "sha256": "356ab34c7f926e4b34f9d8fa55bf5fafc0d21c0fec93dd9573777c828d1da1d7"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/scripts/platform-skill-runtime-conformance.test.mjs",
+      "bytes": 2306,
+      "sha256": "45558fc7d32ded437c089b10ea1481ac561b68ca6fa443026a89479b3427e896"
+    },
+    {
+      "path": "preparation/platform-skill-runtime-conformance-final-20261030/untracked-source-files/scripts/run-platform-skill-runtime-conformance.mjs",
+      "bytes": 11226,
+      "sha256": "75585f795c3e7f102688d9767ed9c8347a924aaab44a9e4c7fa630aeba385b4a"
+    },
+    {
+      "path": "preparation/preserved-preparation-relocation-20261030-0132.json",
+      "bytes": 1445,
+      "sha256": "f992bec40deb19544b2e000c4b496f336ed5a87fab5e0f4368860a17b05f339c"
+    },
+    {
+      "path": "preparation/preserved-preparation-relocation-20261030-0158.json",
+      "bytes": 1681,
+      "sha256": "d3e64f5742032552186a4306a47dfcb18dc50f3df5175623cae0a640a81cfb85"
+    },
+    {
+      "path": "preparation/responsibility-contacts-0565-main.patch",
+      "bytes": 10832,
+      "sha256": "e568936557c93f6c7b89688aaaa803ec6ad4d1ba7a570d093876c7e39014004f"
+    },
+    {
+      "path": "preparation/responsibility-offboarding-0565-main.patch",
+      "bytes": 16476,
+      "sha256": "c0e08c14b53a61b43ab8ad0e1346acb4a6cae1fab80fe943fe83376eff474e35"
+    },
+    {
+      "path": "preparation/root-continuation-20261030-0206.md",
+      "bytes": 17836,
+      "sha256": "94d83eb660b05cb9af5f7212188811e39fda2d7dbf8f3285fde0ea6799951154"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/README.md",
+      "bytes": 2237,
+      "sha256": "fbe662f19e2449d1f821f6ab0a36184e4cfab7db2a351eb8685497aa27541a7f"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/customer_feedback_experience_measures.ts",
+      "bytes": 1376,
+      "sha256": "dbf45db715ae0221e9a734f54bf154b3026227fde1a5189252d3d32627e3b7b3"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/packages/db/src/schema/customer_feedback_experience_measures.ts",
+      "bytes": 1376,
+      "sha256": "dbf45db715ae0221e9a734f54bf154b3026227fde1a5189252d3d32627e3b7b3"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/packages/db/src/schema/index.ts",
+      "bytes": 15129,
+      "sha256": "2a9656057520c15a57535d48ed1a7195d3f862f58aeb299926e99014a58e6f1e"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/packages/shared/src/customer-feedback.test.ts",
+      "bytes": 7042,
+      "sha256": "2ff78e4ba2e71b965efd5edd7f585ec933983328e8b386a75eb0d641fb8006c5"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/packages/shared/src/customer-feedback.ts",
+      "bytes": 13956,
+      "sha256": "3f479c223d175d80ab61e4a93b715542ebf427b66bd1c27224ddedf33d6fc3b9"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/packages/shared/src/customer-problem-evidence.ts",
+      "bytes": 1242,
+      "sha256": "27d3545710377f56c9fb5b7915187d5e5589f740568307406ef567ed45590849"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/packages/shared/src/customer-success-quality.test.ts",
+      "bytes": 2484,
+      "sha256": "44bca5667519913ad246de291ae5c26130071b93cf1e652a8919ac5a013fce82"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/packages/shared/src/customer-success-quality.ts",
+      "bytes": 11046,
+      "sha256": "f870629cad3fc34e2dd1a87336790061d134d032fc6904b967e66ebe0d0f7ee6"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/server/src/__tests__/v9-customer-feedback.integration.test.ts",
+      "bytes": 50960,
+      "sha256": "cedd3dacaae067fc64a020654d5d8a2985fbe883789d7ee09997e4ce4bbb5479"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts",
+      "bytes": 39727,
+      "sha256": "c34e52c5769c60ed6c56eaf8bb6b095e8a33bfd2c14d755cee89df3415a01970"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/server/src/routes/customer-feedback.ts",
+      "bytes": 14108,
+      "sha256": "38777adbec5cab25bb9892f866b4c0e49452aec965ad6c2812ddd7c773c670d8"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/server/src/services/customer-feedback-retention-erasure.ts",
+      "bytes": 15099,
+      "sha256": "9eada3f382e30693ea934d5bee0b3e482177663c61bb0c3cd99619cee2a6bdfc"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/server/src/services/customer-feedback.ts",
+      "bytes": 44566,
+      "sha256": "7e39b9d211b7e32896e012e78f0ee48e568172698a05277b94a5803d226aab85"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/server/src/services/saas/account-deletion.ts",
+      "bytes": 33690,
+      "sha256": "441e1c65b988a363ad9a08c306ee85f56f3db268c4668d7e42fece4d93f19f6d"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/server/src/services/saas/company-purge.ts",
+      "bytes": 30560,
+      "sha256": "7029e53654164155404e2af113253022b43f4a221eaf13b34e230370d2dd13b1"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/api/customer-feedback.ts",
+      "bytes": 3983,
+      "sha256": "5b306038bb1ecd3688dca99b7af6f7d728b322280b0ed49de6a0bdd1a4b95c6d"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/components/CustomerFeedbackDialog.test.tsx",
+      "bytes": 28200,
+      "sha256": "9246829c5930f61059641f48bedc959ac073ba186a0de57273c908e4e7c90665"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/components/CustomerFeedbackDialog.tsx",
+      "bytes": 27334,
+      "sha256": "9d02a894749f3f6f195795c89727d69ed569fc3a6fcc1ba1cdbb93192ee3f142"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/i18n/experience/da.json",
+      "bytes": 269194,
+      "sha256": "b178648fee11a7ce799c667edfdb240b2e7a57a82def4495acd069f6463ee44b"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/i18n/experience/en.json",
+      "bytes": 251300,
+      "sha256": "ec9105b4259c126612562dab480aeb714920de21dbc6952e0216c477479cc8b3"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/pages/FeedbackHistory.test.tsx",
+      "bytes": 25625,
+      "sha256": "7fe2f0c36a9df267b731e83ae751a9795497d2ed5e8460e06665117eeabb7657"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/pages/FeedbackTriage.tsx",
+      "bytes": 23578,
+      "sha256": "822f9e8d26c87862bb54e741a9209aeb0b57e58508538f9048dbde7f0c186953"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/files/ui/src/pages/MyFeedback.tsx",
+      "bytes": 13744,
+      "sha256": "120a83f9c1b616e3162defcfc2065a60130b295d08917835c30764d1d9fda609"
+    },
+    {
+      "path": "preparation/v10-094-097-feedback-quality-candidate/owned-deltas.patch",
+      "bytes": 62301,
+      "sha256": "653b0fcecfd043c20dc6aa5659dae60bb9ee3788dde55c25c358a6823c74598a"
+    }
+  ],
+  "privateArchiveSha256": "070681b0b2742c5cbf682e176ca9bb08685bc04ae96053a9ec5e5eda7b3f26f5",
+  "note": "Recovery only, not acceptance. Resource0564 committed7c50 with20PG cases. Current Native coherent Context transaction candidate and tests still await all9. Private0565contacts+scanner and0566Feedbacksidecar remain unpublished. Runtime conformance initial24source tests passed, final fail-closed runner requalification pending. Archive preparation/ maps to /workspace/v10-preparation; main-extra/ maps to repository root."
+}

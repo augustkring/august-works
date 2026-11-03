@@ -1,0 +1,268 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[23:06:51] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"a784db37-a4ba-4f8e-9a3b-eb353eab04ba","issueId":"4eb90d2a-b6c4-4afa-a17a-2f9631f486f8","attachmentName":"request.txt"}[39m
+    error: "injected Telegram attachment outage"
+[23:06:51] [33mWARN[39m: [36mexternal chat attachment was rejected[39m [90m{"endpointId":"c2627c82-78d8-4960-addd-a8e314415aa8","issueId":"632c4b14-4cd5-4541-b1da-80717c523eda","attachmentName":"request.txt"}[39m
+    error: "injected Telegram attachment outage"
+[23:08:45] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"efb0949a-1825-4b9b-a888-6cb0c274fb9c","actorAgentId":"61da795d-5cc7-42e7-ab35-ceb86ae7eb60","responsibleUserId":"14e19c9c-24d3-4129-8458-777e035e2ed1"}[39m
+[23:08:46] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"efb0949a-1825-4b9b-a888-6cb0c274fb9c","actorAgentId":"61da795d-5cc7-42e7-ab35-ceb86ae7eb60","responsibleUserId":"14e19c9c-24d3-4129-8458-777e035e2ed1"}[39m
+ ❯ |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts (42 tests | 19 failed) 214302ms
+     × retains current Optimizer source authority and erases native compiler copies: artifact_signal 10679ms
+     × retains current Optimizer source authority and erases native compiler copies: workflow_signal 21576ms
+     × retains current Optimizer source authority and erases native compiler copies: promoted_artifact_signal 8308ms
+     × retains current Optimizer source authority and erases native compiler copies: expired_artifact_signal 10271ms
+     × erases actual no-wait Workflow Tasks and native/preparation child copies: verified_memory 814ms
+     × erases actual no-wait Workflow Tasks and native/preparation child copies: workflow_signal 1431ms
+     × retains Workflow challenger roots through publication, executions and later drafts 770ms
+     × requires the actual native approval receipt before completing a cycle and fences closure replays 1150ms
+     × propagates learned Foundation roots into actual Context consumers and erases late runtime writes with Learning off 963ms
+     × retains actual analytical Foundation Context for an ordinary assigned preparation run and preserves independent verified outcomes on C7 3784ms
+     × retains actual analytical Foundation Context for an ordinary assigned native run and preserves independent verified outcomes on C7 9424ms
+     × lets an owned live worker propose a hypothesis but cannot self-review or write after Stop 264ms
+     × erases native Skill snapshots with flags off, retries unsafe filesystem ancestors, and fences late publishers 1046ms
+     × retains complete actual Skill candidate Source before native body and snapshot consumption 30079ms
+     × retains complete actual Skill active Source before native body and snapshot consumption 30136ms
+     × keeps roadmap dates unchanged and policy proposals behind explicit human acknowledgement 386ms
+     × rechecks actual analytical signals at native project review and erases only derived prose after Human acceptance 396ms
+     × rechecks actual analytical signals at native policy review and erases only derived prose after Human acceptance 466ms
+     × erases accepted derived revisions and prevents restored proposal content from surviving 1071ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 19 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: artifact_signal
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: workflow_signal
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: promoted_artifact_signal
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains current Optimizer source authority and erases native compiler copies: expired_artifact_signal
+AssertionError: promise rejected "Error: Native task source access is unava… { …(2) }" instead of resolving
+ ❯ src/__tests__/v7-learning.integration.test.ts:267:107
+
+
+Caused by: Error: Native task source access is unavailable
+ ❯ assertDirectAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:150:10
+ ❯ assertAnalyticalContextPayloadAccess src/services/analytical-context-authority.ts:121:2
+ ❯ src/__tests__/v7-learning.integration.test.ts:267:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 403, details: { code: 'analytical_source_access_lost' } }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: verified_memory
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases actual no-wait Workflow Tasks and native/preparation child copies: workflow_signal
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:45:94
+ ❯ assertLearnedAssetAnalyticalSources src/services/learning/learning-analytical-sources.ts:75:80
+ ❯ src/services/workflows/workflow-service.ts:139:58
+ ❯ src/services/workflows/workflow-service.ts:697:23
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.publish src/services/workflows/workflow-service.ts:687:31
+ ❯ src/__tests__/v7-learning.integration.test.ts:550:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains Workflow challenger roots through publication, executions and later drafts
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:18:34
+ ❯ assertLearnedAssetAnalyticalSources src/services/learning/learning-analytical-sources.ts:75:86
+ ❯ src/services/workflows/workflow-service.ts:139:58
+ ❯ getDetail src/services/workflows/workflow-service.ts:146:30
+ ❯ src/__tests__/v7-learning.integration.test.ts:585:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > requires the actual native approval receipt before completing a cycle and fences closure replays
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:18:34
+ ❯ assertLearnedAssetAnalyticalSources src/services/learning/learning-analytical-sources.ts:75:86
+ ❯ sourceAccess src/services/foundation/foundation-service.ts:258:187
+ ❯ Object.get src/services/foundation/foundation-service.ts:265:58
+ ❯ src/__tests__/v7-learning.integration.test.ts:670:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > propagates learned Foundation roots into actual Context consumers and erases late runtime writes with Learning off
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:18:34
+ ❯ assertLearnedAssetAnalyticalSources src/services/learning/learning-analytical-sources.ts:75:86
+ ❯ sourceAccess src/services/foundation/foundation-service.ts:258:187
+ ❯ Object.get src/services/foundation/foundation-service.ts:265:58
+ ❯ src/__tests__/v7-learning.integration.test.ts:682:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains actual analytical Foundation Context for an ordinary assigned preparation run and preserves independent verified outcomes on C7
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/v7-learning.integration.test.ts:730:104
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains actual analytical Foundation Context for an ordinary assigned native run and preserves independent verified outcomes on C7
+AssertionError: expected Error: Context task does not match its ac… { …(2) } to match object { status: 409 }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "status": 409,
++ HttpError {
++   "status": 403,
+  }
+
+ ❯ src/__tests__/v7-learning.integration.test.ts:750:180
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > lets an owned live worker propose a hypothesis but cannot self-review or write after Stop
+Error: Derived source access is unavailable
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ derivedRoots src/services/memory/derived-memory.ts:51:75
+ ❯ Object.createInTransaction src/services/learning/learning-service.ts:111:19
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+ ❯ src/__tests__/v7-learning.integration.test.ts:890:19
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases native Skill snapshots with flags off, retries unsafe filesystem ancestors, and fences late publishers
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:18:34
+ ❯ assertLearningCandidateAnalyticalSources src/services/learning/learning-analytical-sources.ts:87:68
+ ❯ getVersion src/services/company-skills.ts:3462:13
+ ❯ Object.listRuntimeSkillEntries src/services/company-skills.ts:6092:26
+ ❯ src/__tests__/v7-learning.integration.test.ts:918:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill candidate Source before native body and snapshot consumption
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > retains complete actual Skill active Source before native body and snapshot consumption
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/v7-learning.integration.test.ts:979:34
+    977|     await expect(playbooks.get(owner,companyId,created.id)).rejects.to…
+    978|   });
+    979|   it.each(["candidate","active"])("retains complete actual Skill %s So…
+       |                                  ^
+    980|     const priorHome=process.env.PAPERCLIP_HOME,priorInstance=process.e…
+    981|     process.env.PAPERCLIP_HOME=home;process.env.PAPERCLIP_INSTANCE_ID=…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > keeps roadmap dates unchanged and policy proposals behind explicit human acknowledgement
+Error: Project source access is unavailable.
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ assertV5Authorization src/services/v5-authorization.ts:15:32
+ ❯ assertBaseline src/services/learning/learning-service.ts:74:5
+ ❯ src/services/learning/learning-service.ts:189:9
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+ ❯ domainProposal src/__tests__/v7-learning.integration.test.ts:109:24
+ ❯ src/__tests__/v7-learning.integration.test.ts:1127:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > rechecks actual analytical signals at native project review and erases only derived prose after Human acceptance
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > rechecks actual analytical signals at native policy review and erases only derived prose after Human acceptance
+Error: Metric population is outside the current authorization boundary
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/business-metrics/service.ts:115:132
+ ❯ src/services/business-metrics/service.ts:33:9
+ ❯ inspectSourcePopulation src/services/business-metrics/service.ts:31:23
+ ❯ src/services/business-metrics/service.ts:113:9
+ ❯ Object.withReadSources src/services/authorization.ts:844:22
+ ❯ inputs src/services/business-metrics/service.ts:111:5
+ ❯ observe src/services/business-metrics/service.ts:272:46
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-learning.integration.test.ts > V7 Organizational Learning domain promotion > erases accepted derived revisions and prevents restored proposal content from surviving
+Error: Learning source access is unavailable
+ ❯ lost src/services/learning/learning-analytical-sources.ts:9:16
+      7| import type {NativeReadScope} from "../analytical-reader.js";
+      8|
+      9| const lost=()=>new HttpError(403,"Learning source access is unavailabl…
+       |                ^
+     10| export function learningActorFromPrincipal(companyId:string,principal:…
+     11|  if(principal.type==="user")return {type:"board",source:"session",user…
+ ❯ assertLearningAnalyticalSources src/services/learning/learning-analytical-sources.ts:18:34
+ ❯ assertLearnedAssetAnalyticalSources src/services/learning/learning-analytical-sources.ts:75:86
+ ❯ sourceAccess src/services/foundation/foundation-service.ts:258:187
+ ❯ Object.get src/services/foundation/foundation-service.ts:265:58
+ ❯ src/__tests__/v7-learning.integration.test.ts:1278:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/19]⎯
+
+
+ Test Files  1 failed | 5 passed (6)
+      Tests  19 failed | 64 passed | 1047 skipped (1130)
+   Start at  23:04:52
+   Duration  470.21s (transform 61.91s, setup 1.51s, import 144.68s, tests 316.22s, environment 2ms)
+

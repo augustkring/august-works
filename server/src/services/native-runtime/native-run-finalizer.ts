@@ -1,3 +1,6 @@
+import { isDeepStrictEqual } from "node:util";
+import { captureNativeBlockedHumanInteraction } from "../native-direct-input.js";
+import { nativeStageTaskBodyResultProjection } from "../native-stage-task-body-source.js";
 import { settleSlackConversation } from "../slack-conversation-lifecycle.js";
 import { dismissAutomaticCompletionReviews } from "./automatic-completion-reviews.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -403,7 +406,7 @@ async function recordRetryableFailure(input: {
           : {}),
         nativePhase: phase,
         nativePhaseUpdatedAt: now,
-        resultJson: {
+        resultJson: nativeStageTaskBodyResultProjection({
           ...record(input.run.resultJson),
           finalizationPhase: phase,
           failureCode,
@@ -412,7 +415,7 @@ async function recordRetryableFailure(input: {
             supersededByNewerRun || exhausted
               ? null
               : nextAttemptAt.toISOString(),
-        },
+        }),
         updatedAt: now,
       })
       .where(eq(heartbeatRuns.id, input.run.id))
@@ -706,8 +709,8 @@ async function materializeCommittedReviewResponse(db: Db, runId: string) {
   }
 }
 
-async function acceptedResponseDigestMatches(
-  db: Db,
+export async function acceptedResponseDigestMatches(
+  db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect,
   accepted: typeof nativeRunResults.$inferSelect,
 ): Promise<boolean> {
@@ -1189,6 +1192,21 @@ export async function finalizeNativeRun(input: {
       companyId: run.companyId, issueId: authoritativeIssue.id, agentId: run.agentId,
       contextSnapshot: reviewContext, allowResolvedByRunId: run.id,
     }) : null;
+    let readonlyDependencyInteraction = false;
+    if (terminalState === "succeeded" && authoritativeIssue.status === "blocked" &&
+        result.reportedWorkDisposition === "blocked" && record(result.completionClaim).objectiveSatisfied === false) {
+      const source = await captureNativeBlockedHumanInteraction(input.db, { companyId: run.companyId,
+        issueId: authoritativeIssue.id, runId: run.id, agentId: run.agentId });
+      if (source) {
+        if (dependencyReadiness.unresolvedBlockerCount < 1 ||
+            !isDeepStrictEqual([...source.unresolvedBlockerIssueIds].sort(), [...dependencyReadiness.unresolvedBlockerIssueIds].sort()))
+          throw new Error("native_dependency_interaction_readiness_changed");
+        if (resultRow.schemaStatus !== "accepted" || resultRow.companyId !== run.companyId || resultRow.issueId !== authoritativeIssue.id ||
+            resultRow.runId !== run.id || !await acceptedResponseDigestMatches(input.db, run, resultRow))
+          throw new Error("native_dependency_interaction_result_invalid");
+        readonlyDependencyInteraction = true;
+      }
+    }
     const proposedDecision = resolveNativeFinalizerStatus({
       ...(reviewContext ? { nativeReviewOutcome: nativeReview
         ? nativeReview.interaction.status === "pending" ? "pending" as const : "resolved" as const
@@ -1203,6 +1221,7 @@ export async function finalizeNativeRun(input: {
         contractRow.completionAuthority === "agent_claim_policy",
       hasUnresolvedIssueBlockers:
         dependencyReadiness.unresolvedBlockerCount > 0,
+      readonlyDependencyInteraction,
       governanceResolvedForRun: resolvedInteraction !== null,
       externalChatResponseWaitAuthorization,
       boardResponseWaitAuthorized: boardResponseWait !== null,
@@ -1316,14 +1335,14 @@ export async function finalizeNativeRun(input: {
             : {}),
           nativePhase: finalizationPhase,
           nativePhaseUpdatedAt: now,
-          resultJson: {
+          resultJson: nativeStageTaskBodyResultProjection({
             ...record(run.resultJson),
             finalizationPhase,
             assessmentId: assessmentRow.id,
             decisionId: committed.decision.id,
-            authoritativeDecision: decision.toStatus,
-            finalizationPolicyVersion: decision.policyVersion,
-            finalizationReasonCode: decision.reasonCode,
+            authoritativeDecision: committed.effectiveDecision.toStatus,
+            finalizationPolicyVersion: committed.effectiveDecision.policyVersion,
+            finalizationReasonCode: committed.effectiveDecision.reasonCode,
             // Only the locked status transaction can mint this presentation
             // proof. Never carry a runner-provided marker forward.
             externalChatReviewPresentation: record(
@@ -1348,7 +1367,7 @@ export async function finalizeNativeRun(input: {
             statusVersionBefore: Number(authoritativeIssue.statusVersion),
             statusVersionAfter: Number(committed.issue.statusVersion),
             workspaceFinalizeStatus: input.workspaceFinalizeStatus,
-          },
+          }),
           updatedAt: now,
         })
         .where(eq(heartbeatRuns.id, run.id))

@@ -1,0 +1,91 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/announcement-feed.test.ts (25 tests | 6 failed | 18 skipped) 53ms
+     × requires both explicit enablement and an owned destination: {} 32ms
+     × requires both explicit enablement and an owned destination: {"enabled":true} 3ms
+     × requires both explicit enablement and an owned destination: {"feedUrl":"https://notices.example.test/current.json"} 2ms
+     × applies the same opt-in gate through loadConfig (undefined, undefined) 8ms
+     × applies the same opt-in gate through loadConfig (true, undefined) 2ms
+     × applies the same opt-in gate through loadConfig (undefined, https://notices.example.test/current.json) 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/announcement-feed.test.ts > announcement feed > requires both explicit enablement and an owned destination: {}
+ FAIL  |@paperclipai/server| src/__tests__/announcement-feed.test.ts > announcement feed > requires both explicit enablement and an owned destination: {"enabled":true}
+ FAIL  |@paperclipai/server| src/__tests__/announcement-feed.test.ts > announcement feed > requires both explicit enablement and an owned destination: {"feedUrl":"https://notices.example.test/current.json"}
+AssertionError: expected { id: 'new-projects', …(4) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "description": "Organize your work.",
+  "eyebrow": "New",
+  "id": "new-projects",
+  "primaryAction": {
+    "kind": "route",
+    "label": "Open",
+    "path": "/projects",
+  },
+  "title": "Projects",
+}
+
+ ❯ src/__tests__/announcement-feed.test.ts:18:37
+     16|     const fetch = vi.fn().mockImplementation(async () => json());
+     17|     const service = announcementFeedService({ version: "1.0.0", fetch,…
+     18|     expect(await service.current()).toBeNull();
+       |                                     ^
+     19|     expect(await service.image(item.id)).toBeNull();
+     20|     expect(await service.animation(item.id)).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/announcement-feed.test.ts > announcement feed > applies the same opt-in gate through loadConfig (undefined, undefined)
+ FAIL  |@paperclipai/server| src/__tests__/announcement-feed.test.ts > announcement feed > applies the same opt-in gate through loadConfig (undefined, https://notices.example.test/current.json)
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/announcement-feed.test.ts:39:41
+     37|     vi.stubEnv("PAPERCLIP_ANNOUNCEMENTS_FEED_URL", destination);
+     38|     const config = loadConfig();
+     39|     expect(config.announcementsEnabled).toBe(enabled === "true");
+       |                                         ^
+     40|     expect(config.announcementsFeedUrl).toBe(destination ?? "");
+     41|     const fetch = vi.fn().mockImplementation(async () => json());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/announcement-feed.test.ts > announcement feed > applies the same opt-in gate through loadConfig (true, undefined)
+AssertionError: expected 'https://pages.paperclip.ing/announcem…' to be '' // Object.is equality
+
+- Expected
++ Received
+
++ https://pages.paperclip.ing/announcements/v1/current.json
+
+ ❯ src/__tests__/announcement-feed.test.ts:40:41
+     38|     const config = loadConfig();
+     39|     expect(config.announcementsEnabled).toBe(enabled === "true");
+     40|     expect(config.announcementsFeedUrl).toBe(destination ?? "");
+       |                                         ^
+     41|     const fetch = vi.fn().mockImplementation(async () => json());
+     42|     const service = announcementFeedService({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed | 18 skipped (25)
+   Start at  19:29:02
+   Duration  14.68s (transform 6.95s, setup 171ms, import 13.26s, tests 53ms, environment 0ms)
+

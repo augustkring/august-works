@@ -1,0 +1,221 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+[04:04:35] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"5e53330a-be50-4d63-9eea-e61860d1d977"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[04:04:35] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"5e53330a-be50-4d63-9eea-e61860d1d977","failureCode":"adapter_failed","serviceFrames":["heartbeat.ts:4427:11","heartbeat.ts:4787:15","heartbeat.ts:24696:38"]}[39m
+[04:04:56] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"82fc52fe-d638-4e78-bf5b-e10b6e5e6a88"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[04:04:56] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"82fc52fe-d638-4e78-bf5b-e10b6e5e6a88","failureCode":"adapter_failed","serviceFrames":["heartbeat.ts:4427:11","heartbeat.ts:4787:15","heartbeat.ts:24696:38"]}[39m
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+[04:04:59] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"da0f9673-b927-40c6-9416-bfe1efa9793f"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[04:04:59] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"da0f9673-b927-40c6-9416-bfe1efa9793f","failureCode":"adapter_failed","serviceFrames":["heartbeat.ts:4427:11","heartbeat.ts:4787:15","heartbeat.ts:24696:38"]}[39m
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+[04:05:03] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"c07fdf0a-d67e-46cb-8147-5c6e5ee51003"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[04:05:03] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"c07fdf0a-d67e-46cb-8147-5c6e5ee51003","failureCode":"adapter_failed","serviceFrames":["heartbeat.ts:4427:11","heartbeat.ts:4787:15","heartbeat.ts:24696:38"]}[39m
+[04:05:06] [33mWARN[39m: [36mnative result could not be marked workspace_failed; the reconciliation loop will retry persisted results[39m [90m{"runId":"e45a0de9-3b76-4696-9ee5-be3b3dd48a9d"}[39m
+    err: {
+      "type": "Error",
+      "location": {
+        "line": 204,
+        "column": 39
+      }
+    }
+[04:05:06] [31mERROR[39m: [36mheartbeat execution failed[39m [90m{"runId":"e45a0de9-3b76-4696-9ee5-be3b3dd48a9d","failureCode":"adapter_failed","serviceFrames":["heartbeat.ts:4427:11","heartbeat.ts:4787:15","heartbeat.ts:24696:38"]}[39m
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+Native conversation workspace scope {"nativeAdapter":true,"supportedEnvironment":true,"issuePresent":true,"conversationChannelOrigin":false,"chatConversationRowPresent":false,"canonicalConversationAgentMatches":true,"canonicalConversationHumanMatches":true,"canonicalConversationStateActive":true,"canonicalConversationGenerationMatches":true,"canonicalConversationRunMatches":true,"selectedCanonicalConversationScope":true}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+conversation_task_setup_failure_ownership {"mainRunId":"e45a0de9-3b76-4696-9ee5-be3b3dd48a9d","mainRunStatus":"failed","mainRunErrorCode":"adapter_failed","createdTaskId":null,"failedRuns":[{"runId":"e45a0de9-3b76-4696-9ee5-be3b3dd48a9d","nativeIssueId":"eb608fd7-6b00-4a5b-97cc-8af26be7a45d","contextIssueId":"eb608fd7-6b00-4a5b-97cc-8af26be7a45d","nativeIssueMatchesCreatedTask":false,"contextIssueMatchesCreatedTask":false,"status":"failed","errorCode":"other"}]}
+
+stdout | src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+conversation_task_native_failure_phase {"runId":"e45a0de9-3b76-4696-9ee5-be3b3dd48a9d","runStatus":"failed","runErrorCode":"adapter_failed","finalizationPhase":"terminal_failure","finalizationAttempt":0,"finalizationFailureCode":"native_continuation_requires_reconciliation","safeFailureDetail":{},"events":[{"eventType":"lifecycle","stream":"system","level":"info","messageClass":"other","safePayload":{}},{"eventType":"error","stream":"system","level":"error","messageClass":"other","safePayload":{}},{"eventType":"lifecycle","stream":"system","level":"info","messageClass":"other","safePayload":{}}]}
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts (5 tests | 5 failed) 39464ms
+     × uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows 4656ms
+     × runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay 20541ms
+     × continues the real conversation after a metric tool result with its original immutable source receipt 3389ms
+     × creates one private Project from a current conversation dispatch and carries its exact result into the next request 3528ms
+     × creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request 3428ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > uses the authenticated chat route and actual heartbeat to dispatch a pinned OpenCode turn under a conversation issuer token, without worker-plan rows
+AssertionError: {"runStatus":"failed","runError":"PAPERCLIP_API_URL is required to deliver managed runtime MCP servers","errorCode":"adapter_failed","stdoutExcerpt":"","stderrExcerpt":"","providerCallCount":0,"providerHookInvoked":false,"providerHookFailure":null,"providerStubFailure":null,"providerToolNames":[],"issuerFacts":[],"liveBoundary":null,"brokerRequestFacts":[]}: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:87:104
+     85|       providerHookInvoked: result.providerHookInvoked, providerHookFai…
+     86|       providerStubFailure: result.providerStubFailure, providerToolNam…
+     87|       issuerFacts: result.issuerFacts, liveBoundary, brokerRequestFact…
+       |                                                                                                        ^
+     88|     expect(result.providerCallCount).toBeGreaterThan(0);
+     89|     expect(result.providerKeyMatched).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > runs the route-created conversation through RuntimeControl and its signed qualified sandbox relay
+AssertionError: {"runStatus":"failed","runError":"PAPERCLIP_API_URL is required to deliver managed runtime MCP servers","run":{"id":"82fc52fe-d638-4e78-bf5b-e10b6e5e6a88","status":"failed","startedAt":"2026-10-27T04:04:44.736Z","runtimeMode":"native","scopeKind":"issue","nativeIssueId":"aa69a91b-586e-40c3-b702-8de7264e860c","runtimeModeReason":"eligible_opt_in","runtimeModeResolvedAt":"2026-10-27T04:04:47.354Z","responsibleUserId":"user-fc5dc2e7-cefc-46e6-abec-d2927d5fd3bb","agentId":"30f81362-c670-4923-88f1-8c78d1d904fb"},"errorCode":"adapter_failed","providerCallCount":0,"providerHookInvoked":false,"providerHookFailure":null,"providerStubFailure":null,"brokerRequestFacts":[],"sandboxRuntimeFacts":{"mode":"controlled_signed_host_relay","hostId":"14d26584-b36a-45d4-8635-86145462cab1","cellId":"4807796c-c303-4aff-a622-1da96ac2f319","bindingId":"8ed9eb22-6169-4576-82b6-81656fdaa0d2","environmentId":"48c5b57c-7310-41b9-ab5e-df6080c9a84e","relayAuthenticated":true,"providerAttestedLeaseExpiresAt":"2026-10-27T04:14:47.027Z","preAdmissionObservation":{"state":"stopped","generationMatches":true,"imageDigestMatches":true,"controlsHealthy":true},"hostHeartbeatCount":11,"hostHeartbeatFailed":false,"sandboxExecutionChecks":[{"expectedRun":true,"commandKind":"shell","commandOwner":"managed_runtime_directory_prepare","stdinBytes":0,"cwdAbsolute":true,"argumentCount":2,"runnerLaunch":false,"nativePreparationPurpose":"native_workspace_prepare","managedGitContextProbe":false,"unstartedSessionClaimProbe":false,"credentialEnvNames":"","runtimeMode":"native","runStatus":"running","runStatusRunning":true,"startedAtPresent":true,"agentIdPresent":true,"nativeIssueIdPresent":true,"responsibleUserIdPresent":true,"cancellationRequested":false,"leaseActiveForRun":true,"leaseExpiryPresent":true,"leaseUnexpired":true,"contextIssuePresent":true,"contextWakeCommentPresent":true,"contextConversationOwnerMatches":true,"contextIssueGenerationPresent":true,"contextIssueExecutionRunMatches":true,"nativeIssueMatchesContext":true},{"expectedRun":true,"commandKind":"shell","commandOwner":"managed_runtime_file_transfer","stdinBytes":1368,"cwdAbsolute":true,"argumentCount":2,"runnerLaunch":false,"nativePreparationPurpose":"native_workspace_prepare","managedGitContextProbe":false,"unstartedSessionClaimProbe":false,"credentialEnvNames":"","runtimeMode":"native","runStatus":"running","runStatusRunning":true,"startedAtPresent":true,"agentIdPresent":true,"nativeIssueIdPresent":true,"responsibleUserIdPresent":true,"cancellationRequested":false,"leaseActiveForRun":true,"leaseExpiryPresent":true,"leaseUnexpired":true,"contextIssuePresent":true,"contextWakeCommentPresent":true,"contextConversationOwnerMatches":true,"contextIssueGenerationPresent":true,"contextIssueExecutionRunMatches":true,"nativeIssueMatchesContext":true},{"expectedRun":true,"commandKind":"shell","commandOwner":"other","stdinBytes":0,"cwdAbsolute":true,"argumentCount":2,"runnerLaunch":false,"nativePreparationPurpose":"native_workspace_prepare","managedGitContextProbe":false,"unstartedSessionClaimProbe":false,"credentialEnvNames":"","runtimeMode":"native","runStatus":"running","runStatusRunning":true,"startedAtPresent":true,"agentIdPresent":true,"nativeIssueIdPresent":true,"responsibleUserIdPresent":true,"cancellationRequested":false,"leaseActiveForRun":true,"leaseExpiryPresent":true,"leaseUnexpired":true,"contextIssuePresent":true,"contextWakeCommentPresent":true,"contextConversationOwnerMatches":true,"contextIssueGenerationPresent":true,"contextIssueExecutionRunMatches":true,"nativeIssueMatchesContext":true},{"expectedRun":true,"commandKind":"shell","commandOwner":"managed_runtime_remove","stdinBytes":0,"cwdAbsolute":true,"argumentCount":2,"runnerLaunch":false,"nativePreparationPurpose":"native_workspace_prepare","managedGitContextProbe":false,"unstartedSessionClaimProbe":false,"credentialEnvNames":"","runtimeMode":"native","runStatus":"running","runStatusRunning":true,"startedAtPresent":true,"agentIdPresent":true,"nativeIssueIdPresent":true,"responsibleUserIdPresent":true,"cancellationRequested":false,"leaseActiveForRun":true,"leaseExpiryPresent":true,"leaseUnexpired":true,"contextIssuePresent":true,"contextWakeCommentPresent":true,"contextConversationOwnerMatches":true,"contextIssueGenerationPresent":true,"contextIssueExecutionRunMatches":true,"nativeIssueMatchesContext":true},{"expectedRun":true,"commandKind":"shell","commandOwner":"managed_runtime_directory_prepare","stdinBytes":0,"cwdAbsolute":true,"argumentCount":2,"runnerLaunch":false,"nativePreparationPurpose":"native_workspace_prepare","managedGitContextProbe":false,"unstartedSessionClaimProbe":false,"credentialEnvNames":"","runtimeMode":"native","runStatus":"running","runStatusRunning":true,"startedAtPresent":true,"agentIdPresent":true,"nativeIssueIdPresent":true,"responsibleUserIdPresent":true,"cancellationRequested":false,"leaseActiveForRun":true,"leaseExpiryPresent":true,"leaseUnexpired":true,"contextIssuePresent":true,"contextWakeCommentPresent":true,"contextConversationOwnerMatches":true,"contextIssueGenerationPresent":true,"contextIssueExecutionRunMatches":true,"nativeIssueMatchesContext":true}],"execCount":5,"exactPrivateCwdCount":5,"managedModelCredentialCount":0,"execFacts":[{"executable":"sh","cwdExact":true,"modelCredentialPresent":false,"managedModelBrokerOriginPresent":false,"assignedMcpEnvironmentAbsent":true,"credentialEnvironmentAbsent":true,"nativePreparationPurpose":"native_workspace_prepare","providerPackImageProbe":false,"exitCode":0,"timedOut":false},{"executable":"sh","cwdExact":true,"modelCredentialPresent":false,"managedModelBrokerOriginPresent":false,"assignedMcpEnvironmentAbsent":true,"credentialEnvironmentAbsent":true,"nativePreparationPurpose":"native_workspace_prepare","providerPackImageProbe":false,"exitCode":0,"timedOut":false},{"executable":"sh","cwdExact":true,"modelCredentialPresent":false,"managedModelBrokerOriginPresent":false,"assignedMcpEnvironmentAbsent":true,"credentialEnvironmentAbsent":true,"nativePreparationPurpose":"native_workspace_prepare","providerPackImageProbe":false,"exitCode":0,"timedOut":false},{"executable":"sh","cwdExact":true,"modelCredentialPresent":false,"managedModelBrokerOriginPresent":false,"assignedMcpEnvironmentAbsent":true,"credentialEnvironmentAbsent":true,"nativePreparationPurpose":"native_workspace_prepare","providerPackImageProbe":false,"exitCode":0,"timedOut":false},{"executable":"sh","cwdExact":true,"modelCredentialPresent":false,"managedModelBrokerOriginPresent":false,"assignedMcpEnvironmentAbsent":true,"credentialEnvironmentAbsent":true,"nativePreparationPurpose":"native_workspace_prepare","providerPackImageProbe":false,"exitCode":0,"timedOut":false}],"assignedMcpEnvironmentAbsentCount":5,"negativeControls":{"wrongRunDenied":true,"wrongLeaseDenied":true,"wrongCwdDenied":true,"wrongPolicyDenied":true},"negativeNativeSessionStartControls":{"wrongCommandDenied":true,"wrongRootDenied":true,"noExecution":true},"nativeSessionStartCredentialNegativeControls":null,"executableNames":["sh"]}}: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:139:59
+    137|       providerHookInvoked: result.providerHookInvoked, providerHookFai…
+    138|       providerStubFailure: result.providerStubFailure, brokerRequestFa…
+    139|       sandboxRuntimeFacts: result.sandboxRuntimeFacts })).toBe(true);
+       |                                                           ^
+    140|     expect(result.providerHookInvoked).toBe(true);
+    141|     expect(result.providerKeyMatched).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > continues the real conversation after a metric tool result with its original immutable source receipt
+AssertionError: {"status":"failed","errorCode":"adapter_failed","calls":0,"broker":[],"stub":null,"startupFacts":{"finalization":{"phase":"terminal_failure","code":"native_continuation_requires_reconciliation"},"events":[{"type":"lifecycle"},{"type":"error"},{"type":"lifecycle","payload":{"removed":true}}],"results":[]},"issuerCount":0,"executionStage":"preparing","sourceProtocol":0,"nativeSessionPresent":true,"processPidPresent":false,"providerTools":[],"stderr":"","stdout":""}: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:258:106
+    256|       sourceProtocol:result.run?.nativeInputSourceProtocolVersion,nati…
+    257|       processPidPresent:Boolean(result.run?.processPid),providerTools:…
+    258|       stderr:result.run?.stderrExcerpt?.slice(0,1600),stdout:result.ru…
+       |                                                                                                          ^
+    259|     expect(result.providerCallCount).toBe(2);
+    260|     expect(receivedMetricResult).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates one private Project from a current conversation dispatch and carries its exact result into the next request
+AssertionError: {"status":"failed","errorCode":"adapter_failed","calls":0,"providerHookInvoked":false,"providerHookFailure":null,"providerStubFailure":null,"broker":[],"issuerFacts":[],"sourceProtocol":0,"runDiagnostics":{"status":"failed","errorCode":"adapter_failed","errorToken":null,"sourceProtocol":0,"manifestHash":"3c7336844b39b4b766c779a056bf1827283e9da57cfc0037f983c1bb80d1709d","sourceKinds":[],"reservationStatus":null,"eventTypes":["lifecycle","error","lifecycle"],"matchingProjectCount":0,"relayAuthenticated":null,"sandboxExecCount":null,"modelCredentialCount":null},"sandbox":null}: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:394:72
+    392|         execCount:result.sandboxRuntimeFacts.execCount,exactPrivateCwd…
+    393|         managedModelCredentialCount:result.sandboxRuntimeFacts.managed…
+    394|         executableNames:result.sandboxRuntimeFacts.executableNames}}))…
+       |                                                                        ^
+    395|     expect(result.providerCallCount).toBe(2);
+    396|     expect(result.workerPlan).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts > managed Native conversation OpenCode frame > creates a source-bound Task from an ordinary conversation model turn and carries the exact result into the next request
+AssertionError: {"status":"failed","errorCode":"adapter_failed","calls":0,"providerStubFailure":null,"broker":[],"sourceProtocol":0,"taskResultFacts":{"found":false,"isError":false,"contentPresent":false,"jsonParsed":false,"disposition":null,"taskPresent":false,"taskIdPresent":false,"taskIsRoot":false,"taskIsTodo":false},"stdout":"","stderr":""}: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts:563:58
+    561|       calls:result.providerCallCount,providerStubFailure:result.provid…
+    562|       sourceProtocol:result.run?.nativeInputSourceProtocolVersion,task…
+    563|       stderr:result.run?.stderrExcerpt?.slice(0,1000)})).toBe(true);
+       |                                                          ^
+    564|     expect(result.providerCallCount).toBe(2);
+    565|     expect(result.workerPlan).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  04:04:12
+   Duration  54.43s (transform 10.91s, setup 114ms, import 14.70s, tests 39.46s, environment 0ms)
+

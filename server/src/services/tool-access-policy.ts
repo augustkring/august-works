@@ -1333,6 +1333,27 @@ export function toolAccessPolicyService(db: Db) {
     return base;
   }
 
+  /**
+   * Evaluate persisted tool policies, profiles, package restrictions and
+   * governance restrictions while a managed runtime policy is being compiled.
+   * Compilation can precede the first healthy runtime generation, so only the
+   * commercial-capacity gate is deferred to the existing full `decide` call at
+   * operation dispatch. This result is metadata for route construction and is
+   * never a dispatch authorization.
+   */
+  async function decideForPolicyCompilation(input: ToolAccessDecisionInput): Promise<ToolAccessDecision> {
+    const base = await decideCore(input);
+    if (!base.allowed && base.decision !== "require_approval") return base;
+    const loaded = await loadContext(input);
+    if (!loaded.ok) return loaded.decision;
+    const packageRestriction = await packageToolRestriction(db, loaded.ctx);
+    if (packageRestriction.denyReason) return decision("deny", "deny_policy_block", packageRestriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
+    const restriction = await governanceToolRestriction(db, loaded.ctx);
+    if (restriction.denyReason) return decision("deny", "deny_policy_block", restriction.denyReason, base.effectiveProfileIds, base.matchedPolicyIds);
+    if ((restriction.requireHumanApproval || packageRestriction.requireHumanApproval) && base.allowed) return decision("require_approval", "requires_approval_policy", "The reviewed use case requires a human decision for this material action.", base.effectiveProfileIds, base.matchedPolicyIds);
+    return base;
+  }
+
   async function writeAudit(
     input: ToolAccessDecisionInput,
     accessDecision: ToolAccessDecision,
@@ -1426,10 +1447,13 @@ export function toolAccessPolicyService(db: Db) {
     }
   }
 
-  async function recordInvocation(input: ToolAccessDecisionInput, accessDecision: ToolAccessDecision) {
+  async function recordInvocation(input: ToolAccessDecisionInput, accessDecision: ToolAccessDecision,
+    options: { nativeMemoryDraft?: true } = {}) {
     const loaded = await loadContext(input);
     if (!loaded.ok) throw new Error("Cannot record invocation for invalid tool access context");
     const { ctx, redaction } = loaded;
+    if (options.nativeMemoryDraft && (ctx.toolName !== "paperclip-self:remember" || ctx.providerType !== "paperclip_self" ||
+      ctx.riskLevel !== "write")) throw new Error("Invalid Native Memory draft classification");
     const argumentsHash = redaction.summary.sha256 ?? sha256(input.request.arguments ?? {});
     const idempotencyRequestHash = sha256({ actorType: ctx.actorType, actorId: ctx.actorId,
       connectionId: ctx.connectionId, catalogEntryId: ctx.catalogEntryId, toolName: ctx.toolName,
@@ -1476,7 +1500,11 @@ export function toolAccessPolicyService(db: Db) {
       providerType: ctx.providerType,
       applicationKey: ctx.applicationKey,
       upstreamToolName: ctx.upstreamToolName,
-      riskLevel: ctx.riskLevel,
+      // A Native capture-bound Memory remember call creates owner-private
+      // Memory or a shared proposal held for Human review. Keep it within the
+      // existing bounded internal-draft action class; access policy still
+      // evaluates the descriptor's declared write risk before this row exists.
+      riskLevel: options.nativeMemoryDraft ? "low" : ctx.riskLevel,
       toolName: ctx.toolName,
       argumentsHash,
       argumentsSummary: redaction.summary,
@@ -1888,6 +1916,7 @@ export function toolAccessPolicyService(db: Db) {
 
   return {
     decide,
+    decideForPolicyCompilation,
     writeAudit,
     recordInvocation,
     summarizeAndRedact,

@@ -39,6 +39,12 @@ import {
   resolveExternalChatResponseWaitAuthorizationInTransaction,
 } from "./chat-attachment-reuse.js";
 import { issueService } from "../issues.js";
+import {
+  applyIssueExecutionPolicyTransition,
+  normalizeIssueExecutionPolicy,
+  parseIssueExecutionState,
+} from "../issue-execution-policy.js";
+import { buildExecutionStageWakeup } from "../issue-execution-stage-wakeup.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { issueRecoveryActionService } from "../issue-recovery-actions.js";
 import { buildIssueBlockersResolvedWakeIdempotencyKey } from "../issue-dependency-wakeups.js";
@@ -157,6 +163,22 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function effectiveDecisionFromRow(
+  original: NativeStatusDecision,
+  row: typeof statusDecisions.$inferSelect,
+): NativeStatusDecision {
+  const decision = record(row.decisionJson);
+  return {
+    ...original,
+    policyVersion: row.policyVersion as NativeStatusDecision["policyVersion"],
+    statusAction: (decision.statusAction ?? original.statusAction) as NativeStatusDecision["statusAction"],
+    toStatus: (decision.toStatus ?? row.toStatus) as NativeStatusDecision["toStatus"],
+    reasonCode: (decision.reasonCode ?? row.reasonCode) as string,
+    unblockDescriptor: (decision.unblockDescriptor ?? null) as NativeStatusDecision["unblockDescriptor"],
+    effects: (Array.isArray(decision.effects) ? decision.effects : original.effects) as NativeStatusEffect[],
+  };
 }
 
 function assertNeverEffect(effect: never): never {
@@ -406,6 +428,10 @@ async function enqueueWake(input: {
   idempotencyKey: string;
   payload: Record<string, unknown>;
   contextSnapshot?: Record<string, unknown>;
+  contextSource?: string;
+  source?: "automation" | "assignment";
+  requestedByActorType?: "system" | "user" | "agent";
+  requestedByActorId?: string;
 }) {
   const existing = await input.tx
     .select({ id: agentWakeupRequests.id })
@@ -430,7 +456,7 @@ async function enqueueWake(input: {
     .values({
       companyId: input.companyId,
       agentId: input.agentId,
-      source: "automation",
+      source: input.source ?? "automation",
       triggerDetail: "system",
       reason: input.reason,
       payload: {
@@ -442,12 +468,12 @@ async function enqueueWake(input: {
           taskId: input.issueId,
           ...(input.contextSnapshot ?? {}),
           wakeReason: input.reason,
-          source: "native_status_decision",
+          source: input.contextSource ?? "native_status_decision",
           statusDecisionSource: "native_status_decision",
         },
       },
-      requestedByActorType: "system",
-      requestedByActorId: "native-status-committer",
+      requestedByActorType: input.requestedByActorType ?? "system",
+      requestedByActorId: input.requestedByActorId ?? "native-status-committer",
       idempotencyKey: input.idempotencyKey,
     })
     .returning({ id: agentWakeupRequests.id })
@@ -749,10 +775,13 @@ async function materializeDecisionEffect(input: {
   }
   if (effect.kind === "bind_blocker") {
     failAt("blocker_materialization", input.failpoint);
+    const unblockDescriptor = { owner: effect.owner, action: effect.action };
     const [bound] = await input.tx
       .update(issues)
       .set({
-        unblockDescriptor: { owner: effect.owner, action: effect.action },
+        unblockDescriptor,
+        payloadSourceSnapshot: sql`case when ${issues.unblockDescriptor} is distinct from ${JSON.stringify(unblockDescriptor)}::jsonb
+          then null else ${issues.payloadSourceSnapshot} end`,
         updatedAt: new Date(),
       })
       .where(
@@ -1546,7 +1575,7 @@ export async function commitNativeStatusDecision(input: {
   if (input.decision.reasonCode === null) {
     throw new Error("native_status_reason_code_required");
   }
-  const reasonCode = input.decision.reasonCode;
+  let reasonCode = input.decision.reasonCode;
   const publications: ActivityPublication[] = [];
   const terminalRunsToEmit: (typeof heartbeatRuns.$inferSelect)[] = [];
   const committed = await input.db.transaction(async (tx) => {
@@ -1606,7 +1635,12 @@ export async function commitNativeStatusDecision(input: {
           .then((rows) => rows[0] ?? null);
         if (!existingDecision)
           throw new Error("native_committed_decision_missing");
-        return { decision: existingDecision, issue, replayed: true };
+        return {
+          decision: existingDecision,
+          effectiveDecision: effectiveDecisionFromRow(input.decision, existingDecision),
+          issue,
+          replayed: true,
+        };
       }
     }
     if (
@@ -1616,6 +1650,91 @@ export async function commitNativeStatusDecision(input: {
     ) {
       throw new NativeStatusRaceError();
     }
+
+    let executionPolicyPatch: Record<string, unknown> = {};
+    let executionStageWakeup: ReturnType<typeof buildExecutionStageWakeup> = null;
+    if (input.decision.statusAction === "done" && !issue.conversationAgentId) {
+      const previousExecutionState = parseIssueExecutionState(issue.executionState);
+      // A completion from an executor is stale if a stage became pending after
+      // arbitration. Re-read through the existing finalizer race path instead
+      // of allowing the executor's old result to bypass the reviewer.
+      if (previousExecutionState?.status === "pending")
+        throw new NativeStatusRaceError();
+      const nativeRun = await tx
+        .select({
+          agentId: heartbeatRuns.agentId,
+          nativeIssueId: heartbeatRuns.nativeIssueId,
+          runtimeMode: heartbeatRuns.runtimeMode,
+        })
+        .from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId)))
+        .limit(1)
+        .then((rows) => rows[0] ?? null);
+      if (
+        !nativeRun ||
+        nativeRun.runtimeMode !== "native" ||
+        nativeRun.nativeIssueId !== input.issueId
+      )
+        throw new NativeStatusRaceError();
+      if (issue.executionRunId && issue.executionRunId !== input.runId)
+        throw new NativeStatusRaceError();
+      const policy = normalizeIssueExecutionPolicy(issue.executionPolicy ?? null);
+      const transition = applyIssueExecutionPolicyTransition({
+        issue,
+        policy,
+        previousPolicy: policy,
+        requestedStatus: "done",
+        requestedAssigneePatch: {},
+        actor: { agentId: nativeRun.agentId, userId: null },
+        allowBoardOverride: false,
+      });
+      executionPolicyPatch = transition.patch;
+      const nextExecutionStateValue = Object.hasOwn(transition.patch, "executionState")
+        ? transition.patch.executionState
+        : issue.executionState;
+      const nextExecutionState = parseIssueExecutionState(nextExecutionStateValue);
+      executionStageWakeup = buildExecutionStageWakeup({
+        issueId: input.issueId,
+        previousState: previousExecutionState,
+        nextState: nextExecutionState,
+        interruptedRunId: null,
+        requestedByActorType: "agent",
+        requestedByActorId: nativeRun.agentId,
+      });
+      if (nextExecutionState?.status === "pending") {
+        input = {
+          ...input,
+          decision: {
+            ...input.decision,
+            statusAction: "in_review",
+            toStatus: "in_review",
+            reasonCode: "execution_policy_stage_pending",
+            unblockDescriptor: null,
+            effects: input.decision.effects.filter((effect) => effect.kind === "release_checkout"),
+          },
+        };
+      } else if (
+        typeof transition.patch.status === "string" &&
+        transition.patch.status !== input.decision.toStatus
+      ) {
+        input = {
+          ...input,
+          decision: {
+            ...input.decision,
+            statusAction: transition.patch.status as NativeStatusDecision["statusAction"],
+            toStatus: transition.patch.status as NativeStatusDecision["toStatus"],
+            reasonCode: "execution_policy_transition_applied",
+            unblockDescriptor:
+              (transition.patch.unblockDescriptor as NativeStatusDecision["unblockDescriptor"] | undefined) ??
+              input.decision.unblockDescriptor,
+            effects: input.decision.effects.filter((effect) => effect.kind === "release_checkout"),
+          },
+        };
+      }
+      if (input.decision.reasonCode === null) throw new Error("native_status_reason_code_required");
+      reasonCode = input.decision.reasonCode;
+    }
+
     if (input.requireExternalChatResponseWaitAuthorization) {
       let authorization;
       try {
@@ -1784,7 +1903,12 @@ export async function commitNativeStatusDecision(input: {
       decisionRow?.applicationState === "applied" ||
       decisionRow?.applicationState === "proposed"
     ) {
-      return { decision: decisionRow, issue, replayed: true };
+      return {
+        decision: decisionRow,
+        effectiveDecision: effectiveDecisionFromRow(input.decision, decisionRow),
+        issue,
+        replayed: true,
+      };
     }
     if (!decisionRow) {
       const latestDecisionVersion = await tx
@@ -1876,6 +2000,7 @@ export async function commitNativeStatusDecision(input: {
       const projected = await issueService(tx as unknown as Db).update(
         input.issueId,
         {
+          ...executionPolicyPatch,
           status: input.decision.toStatus,
           statusVersion: input.priorStatusVersion + 1,
           lastStatusDecisionId: decisionRow.id,
@@ -1885,6 +2010,10 @@ export async function commitNativeStatusDecision(input: {
         },
         tx,
         publications,
+        undefined,
+        executionStageWakeup ? {nativeStagePolicySourceTransform: {
+          kind: "native_status_decision", runId: input.runId, decisionId: decisionRow.id,
+        }} : {},
       );
       if (!projected) throw new NativeStatusRaceError();
       updated = projected;
@@ -1896,6 +2025,37 @@ export async function commitNativeStatusDecision(input: {
           fromStatus: issue.status,
           toStatus: input.decision.toStatus,
           reasonCode,
+        },
+      });
+    }
+
+    if (executionStageWakeup) {
+      const stageWake = executionStageWakeup.wakeup;
+      const wakeId = await enqueueWake({
+        tx: tx as unknown as Db,
+        companyId: input.companyId,
+        issueId: input.issueId,
+        agentId: executionStageWakeup.agentId,
+        reason: stageWake.reason,
+        idempotencyKey: `issue.execution_stage:${input.issueId}:${decisionRow.id}`,
+        payload: stageWake.payload,
+        contextSnapshot: stageWake.contextSnapshot,
+        contextSource: String(stageWake.contextSnapshot.source),
+        source: stageWake.source,
+        requestedByActorType: stageWake.requestedByActorType,
+        requestedByActorId: stageWake.requestedByActorId,
+      });
+      materialized.push({
+        effectKind: "execution_stage_wake",
+        targetType: "agent_wakeup_request",
+        targetId: wakeId,
+        payload: {
+          agentId: executionStageWakeup.agentId,
+          reason: stageWake.reason,
+          executionStage: stageWake.payload.executionStage,
+          source: stageWake.source,
+          requestedByActorType: stageWake.requestedByActorType,
+          requestedByActorId: stageWake.requestedByActorId,
         },
       });
     }
@@ -2067,6 +2227,10 @@ export async function commitNativeStatusDecision(input: {
         updatedAt: new Date(),
       })
       .where(eq(nativeRunFinalizations.runId, input.runId));
+    if (executionStageWakeup && updated.payloadSourceSnapshot !== null) {
+      const {assertNativeStageTaskBodyTransitionsCommitted}=await import("../native-stage-task-body-source.js");
+      await assertNativeStageTaskBodyTransitionsCommitted(tx,{companyId:input.companyId,issueId:input.issueId,runId:input.runId});
+    }
     if (externalChatReviewPresentation && input.reviewResponsePresentation) {
       await restoreNativeChatReviewPresentationInTransaction(
         tx as unknown as Db,
@@ -2105,6 +2269,10 @@ export async function commitNativeStatusDecision(input: {
     publications.push(publication);
     return {
       decision: { ...decisionRow, applicationState },
+      effectiveDecision: effectiveDecisionFromRow(input.decision, {
+        ...decisionRow,
+        applicationState,
+      }),
       issue: updated,
       replayed: false,
     };

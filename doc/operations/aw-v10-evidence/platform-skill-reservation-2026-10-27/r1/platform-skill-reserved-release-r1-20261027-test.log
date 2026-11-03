@@ -1,0 +1,84 @@
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/server
+
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > refreshes once, reuses pinned runtime contents across service instances, and ignores cosmetic changes
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > deduplicates runtime downloads for twenty concurrent service callers and isolates companies
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > keeps upstream changes dormant until explicit update and refreshes supporting-only changes
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > observes edits to a direct local source on the next preparation
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > serializes same-slug creates and preserves the winner's files
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > recovers an identical create after the outer transaction rolls back
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > reuses a deleted managed skill name with different instructions
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects a stale file save after the skill is replaced
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects a stale file delete after the skill is replaced
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects a stale file rename after the skill is replaced
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > restores managed source files when the deletion transaction fails
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > serializes duplicate deletes with recreation without removing new files
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > does not remove imported local source files when deleting a skill
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects a differing retry after rollback without changing durable bytes
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > does not adopt an unrelated preexisting managed directory
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > observes supporting-only local file saves across runtime preparations and service restarts
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > lists skills without exposing markdown content
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > optionally enriches list items with latest version editor identities
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects skill inventory refresh for a missing company
+ ✓ src/__tests__/company-skills-service.test.ts > companySkillService.list > reserves the platform operating Skill and preserves its shipped immutable release 1029ms
+ ✓ src/__tests__/company-skills-service.test.ts > companySkillService.list > does not retouch unchanged bundled skills during list refresh 328ms
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > makes the onboarding skill resolvable and available to agent runtimes
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > seeds bundled skill releases idempotently and materializes the frozen champion snapshot
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > repairs a squatted bundled root during bundled-skill list refresh
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > does not retouch bundled skills with stale missing-source metadata during list refresh
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > does not retouch unchanged local-path imports
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > refreshes local-path imports with legacy null metadata fields
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > does not persist audit failures for remote-source skills
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > filters store list results by category and creates version snapshots
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > tracks stars and skill comments with actor ownership
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > updates private/company sharing scope and rejects public link publishing
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > updates categories, allows spaces, and reflects them in list filters and counts
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > filters by folder subtree, keeps search global, and returns canonical folder paths
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > creates skills in same-company folders and rejects cross-company folder references
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > resolves detail by unique skill slug for Studio deep links
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > does not resolve ambiguous skill slugs
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > creates a fork from the creation flow with copied files and lineage
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > prechecks existing forks and reassigns selected agents when forking
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > forks external source types and deduplicates fork slugs
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > validates version-aware desired skill selections
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects unknown desired keys by default but preserves them when tolerating (PAP-13222)
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > preserves missing local-path skills that active agents still desire
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > continues pruning missing local-path skills that no active agent desires
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > refreshes stale local-path file inventory from disk
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > imports sibling reference files when the source is a direct SKILL.md path
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > bounds direct root SKILL.md imports to known support directories
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > defaults package conflicts to skip and reports skip, rename, and explicit replace outcomes
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects executable external package skills before persistence
+ ✓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects unbundled package imports that claim reserved Paperclip skill keys 233ms
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > clears the missing-source marker when a local-path skill source returns
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > marks source-missing company skills as unavailable during read-only runtime listing
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > materializes source-missing company skills from the stored markdown during runtime listing
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > surfaces a failed runtime materialization as a missing entry instead of dropping the skill
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > falls back to stored markdown when reading SKILL.md from a missing local source
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > reads root-level SKILL.md for github skills with a '.' repoSkillDir
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > falls back to slug paths for github skills only when repoSkillDir is absent
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > seeds an initial version on create and snapshots a version on each changed save
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > browses project folders and imports a selected non-standard skill
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > previews project workspace skill candidates without importing them
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > reports a project skill as already installed when the source path matches
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > reports project skills that duplicate built-in slugs as already available
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > imports a conflicting project skill under a selected replacement slug
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > imports only selections rediscovered inside project workspaces
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > treats out-of-scope workspace selections as unmatched without leaking workspace metadata
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > skips a selected project skill whose SKILL.md is a symlink outside the workspace
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > files new project imports without moving them back on re-import
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > renames a Paperclip-managed skill, moving the directory and rewriting SKILL.md frontmatter
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > quotes YAML-special names while keeping stored and on-disk markdown synchronized
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > supports a name-only rename that keeps the slug/key and directory
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > returns the unchanged skill for a normalized no-op rename
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects a rename whose slug conflicts with another skill
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects a rename whose derived key conflicts with another skill
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rejects renaming non Paperclip-managed skill sources with 422
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > rewrites agent desired-skill keys on rename while preserving version pins
+ ↓ src/__tests__/company-skills-service.test.ts > companySkillService.list > removes the old runtime materialization when the key/slug changes
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 72 skipped (75)
+   Start at  01:23:47
+   Duration  22.27s (transform 11.01s, setup 95ms, import 15.59s, tests 6.46s, environment 0ms)
+

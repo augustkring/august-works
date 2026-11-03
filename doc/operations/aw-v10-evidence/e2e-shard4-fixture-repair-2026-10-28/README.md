@@ -1,0 +1,9 @@
+# E2E shard 4 fixture repair (2026-10-28)
+
+The original CI log reports 15 failures. The first local reproduction selected the workflow decision, Board attachment, and planning mode specs (14 cases) and reproduced the stale `local-board` assignee, stale workflow mock identity, and onboarding 401. The signoff spec separately failed because it required `local_trusted` while the shared product-journey configuration correctly runs authenticated mode.
+
+The fixtures now derive their user ID from the bootstrap browser Human session. The onboarding agent-hire proxy uses Playwright `route.fetch` so the browser's session cookie and request headers reach the real route. Signoff setup uses the same real Human storage state and explicitly asserts authenticated mode and a non-implicit session; agent-specific actions still use issued agent keys.
+
+Attempt 1 of the post-fix suite did not reach tests: a stale disposable PostgreSQL socket from the prior run blocked port 54329. The recorded PID was a zombie and no listener remained. The guarded cleanup procedure removed only the stale socket and lock file, preserving database files. Attempt 2 then passed the two workflow locales, all 11 Board attachment cases, and all five signoff cases (18 passed); it found one stale onboarding seed-title expectation. The rendered issue title was `Blentera onboarding`, so the test now checks that current title. Attempt 3 passed the planning mode browser test (1 passed).
+
+All browser attempts use the repository `test:e2e` wrapper, pinned pnpm 9.15.4, `/usr/bin/chromium`, and the shared `/workspace/v10-preparation/v10-pg-tests.lock`. Attempts 2 and 3 ran with an authenticated browser Human session. The original CI log, raw attempt logs and exits, exact pre-run input hashes, and the final guarded socket cleanup receipt are kept here. These selected cases do not constitute a full shard rerun.

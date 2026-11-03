@@ -1,0 +1,9 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/packages/paperclip-runner
+
+
+ Test Files  1 skipped (1)
+      Tests  138 skipped (138)
+   Start at  00:48:42
+   Duration  4.27s (transform 3.15s, setup 0ms, import 3.75s, tests 0ms, environment 0ms)
+

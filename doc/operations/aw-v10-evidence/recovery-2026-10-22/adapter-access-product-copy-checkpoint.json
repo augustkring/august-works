@@ -1,0 +1,31 @@
+{
+  "scope": "Use shared software identity in six adapter configuration surfaces, onboarding preview, access denial, revision restore fallback and common configuration help",
+  "sources": {
+    "ui/src/adapters/claude-local/config-fields.tsx": "bdf55b7ff36db2ea7f28e55ebac5d0dc81cbad3792e174e9608e4f730e62d7a6",
+    "ui/src/adapters/codex-local/config-fields.test.tsx": "b9f16ff10483f4ccd2199cecc359c40b43be4a0ef4bd313667f9cbd9135b1eeb",
+    "ui/src/adapters/codex-local/config-fields.tsx": "8a328c301af225503bd12b4d0b1f8496190b2bc8802970babff65ef24f55ede5",
+    "ui/src/adapters/gemini-local/config-fields.tsx": "c5690bb44e6ab6b4e34876ff509d5374063306355a31666de00c9b7e1a4ef7d7",
+    "ui/src/adapters/grok-local/config-fields.tsx": "6bd0dd3e6442be403b04e30b06aea4a104646a0c53b686536cd3e0a9111dc515",
+    "ui/src/adapters/hermes-gateway/config-fields.test.tsx": "5765378f90e8326548e3b15f9f81d9852df83883fff5190b2235d74a9cb8e0c2",
+    "ui/src/adapters/hermes-gateway/config-fields.tsx": "32c2e2962ce72dfd1fa7ae43233d536795bc286f7a36c5825f16a1246e5001d1",
+    "ui/src/adapters/openclaw-gateway/config-fields.tsx": "c25fcb490cf00857fb3c592b6bd0dbbf4e09183ae005814513c70d6533ee61e1",
+    "ui/src/components/CloudAccessGate.tsx": "db03bb276cebad80409edbfe1e2a76028e05976ab1cbc2355eb26674b7214379",
+    "ui/src/components/PipelineStageHistoryPanel.tsx": "b4c29afe4e1a0acaade8def52d5e6831a5b762576c7c6a474b3263d21794f1c6",
+    "ui/src/components/agent-config-primitives.tsx": "236a1dd1acb6bc1850fdfee4a188995b8e16d07f2dcfad72f681f5156104802e",
+    "ui/src/components/onboarding/ConnectModelPreview.tsx": "777d3ce8f783b588e5fff75530f4871f80578a5aff22bba04f40fdc817e257ad"
+  },
+  "current": {
+    "focusedAdapterTests": {
+      "exit": 0,
+      "passed": 6,
+      "files": 2,
+      "durationSeconds": 28.91,
+      "log": "adapter-product-copy-focused.log"
+    },
+    "uiTypecheckExit": 0,
+    "uiTokenGatesExit": 0,
+    "allFinalPinsMatch": true
+  },
+  "review": "Existing PRODUCT_IDENTITY supplies visible name and canonical appOrigin placeholder; no hostname derived from product name. Existing provider names, compatibility identifiers, env variables, paths and actual upstream identity stay intact. Two directly matching display assertions updated, existing security/permission assertions retained. No new scalar-copy tests. Root reviewed exact copy and source pins, observed typecheck/token process closures; bounded gpt-6-luna assistance on seven UI owners.",
+  "remaining": "Canonical Runner provider/permission display owners remain a separate reviewed migration; this is not a whole-product brand inventory/gate or V10 release qualification. Source-only origin placeholder is not live domain/provider qualification."
+}

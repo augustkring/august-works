@@ -1,0 +1,39 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts (308 tests | 1 failed | 307 skipped) 17988ms
+     × retains an accepted recipient message while paused and delivers one successor after resume 14123ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/heartbeat-process-recovery.test.ts > heartbeat orphaned process recovery > retains an accepted recipient message while paused and delivers one successor after resume
+AssertionError: expected { …(75) } to match object { status: 'succeeded' }
+(91 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "status": "succeeded",
++   "status": "running",
+  }
+
+ ❯ src/__tests__/heartbeat-process-recovery.test.ts:9923:30
+    9921|     await restartedHeartbeat.drainActiveRunExecutions();
+    9922|     const settledSuccessor = await waitForRunToSettle(restartedHeartbe…
+    9923|     expect(settledSuccessor).toMatchObject({ status: "succeeded" });
+       |                              ^
+    9924|     expect(mockAdapterExecute).toHaveBeenCalledTimes(1);
+    9925|     const repeated = await runRecoveryWorkerProcess(databaseUrl);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 307 skipped (308)
+   Start at  23:06:13
+   Duration  36.73s (transform 13.68s, setup 90ms, import 18.49s, tests 17.99s, environment 0ms)
+

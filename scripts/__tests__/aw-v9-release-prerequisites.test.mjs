@@ -21,6 +21,15 @@ function fixture(t) {
     writeFileSync(file, typeof value === "string" ? value : JSON.stringify(value));
   };
   put("scripts/check-aw-v9-coverage.mjs", readFileSync(join(root, "scripts/check-aw-v9-coverage.mjs"), "utf8"));
+  // Isolate inherited release prerequisites from the separately tested V10
+  // operation portfolio, while retaining its failure propagation below.
+  put("scripts/check-aw-v10-operation-coverage.mjs", `
+    import { readFileSync } from "node:fs";
+    export async function checkOperationCoverage(root) {
+      return { failures: JSON.parse(readFileSync(root + "/operation-failures.json", "utf8")) };
+    }
+  `);
+  put("operation-failures.json", []);
   const helper = "scripts/aw-v9-release-prerequisites.mjs";
   if (existsSync(join(root, helper))) copyFileSync(join(root, helper), join(dir, helper));
   const brief = "Synthetic brief", witness = "Synthetic evidence", artifactSha = "b".repeat(64);
@@ -58,6 +67,14 @@ test("closed synthetic prerequisites allow coverage checking without claiming pr
   const result = fixture(t).run();
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Release coverage passed/);
+});
+
+test("closed inherited prerequisites still propagate V10 operation coverage failures", t => {
+  const f = fixture(t);
+  f.put("operation-failures.json", ["Unreviewed mounted operation"]);
+  const result = f.run();
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /Unreviewed mounted operation/);
 });
 
 test("open V8 hosting gates and incomplete predecessor source prevent release coverage", t => {

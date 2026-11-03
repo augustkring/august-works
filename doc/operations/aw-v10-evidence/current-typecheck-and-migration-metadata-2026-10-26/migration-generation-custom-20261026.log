@@ -1,0 +1,38 @@
+Reading config file '/tmp/blentera-drizzle-custom-20261026-s9mlp1g2/drizzle.config.cjs'
+Error: ENOENT: no such file or directory, open './/tmp/blentera-drizzle-custom-20261026-s9mlp1g2/migrations/meta/0531_snapshot.json'
+    at Object.openSync (node:fs:622:18)
+    at readFileSync (node:fs:488:35)
+    at snapshots.reduce.malformed (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:8159:62)
+    at Array.reduce (<anonymous>)
+    at validateWithReport (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:8157:32)
+    at prepareMigrationFolder (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:8199:22)
+    at prepareAndMigratePg (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:32165:40)
+    at Object.handler (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:91988:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async run (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:91472:7) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: './/tmp/blentera-drizzle-custom-20261026-s9mlp1g2/migrations/meta/0531_snapshot.json'
+}
+Reading config file '/tmp/blentera-drizzle-custom-20261026-s9mlp1g2/drizzle.config.cjs'
+Error: ENOENT: no such file or directory, open './/tmp/blentera-drizzle-custom-20261026-s9mlp1g2/migrations/meta/0531_snapshot.json'
+    at Object.openSync (node:fs:622:18)
+    at readFileSync (node:fs:488:35)
+    at snapshots.reduce.malformed (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:8159:62)
+    at Array.reduce (<anonymous>)
+    at validateWithReport (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:8157:32)
+    at prepareMigrationFolder (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:8199:22)
+    at prepareAndMigratePg (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:32165:40)
+    at Object.handler (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:91988:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async run (/workspace/v10-dep-qualification/node_modules/.pnpm/drizzle-kit@0.31.10/node_modules/drizzle-kit/bin.cjs:91472:7) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: './/tmp/blentera-drizzle-custom-20261026-s9mlp1g2/migrations/meta/0531_snapshot.json'
+}
+Traceback (most recent call last):
+  File "/workspace/v10-preparation/generate-forward-custom-metadata-20261026.py", line 36, in <module>
+    raise RuntimeError('Generator produced unexpected forward tags')
+RuntimeError: Generator produced unexpected forward tags

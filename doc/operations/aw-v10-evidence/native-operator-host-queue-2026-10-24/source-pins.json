@@ -1,0 +1,5 @@
+{
+  "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts": "20b4a4e8d0a8ae363d3489ee7472d8e89f290105903199d82610d5c4c181e50b",
+  "server/src/services/execution-sandbox/native-host-bridge.ts": "f737b2583b278f12a1f58cf1b537ce0ed0ab4f889257e9d578889c82cf0b6a75",
+  "server/src/services/saas/platform.ts": "f34d57a1340360ae7be868cdfe9525cd94a22ed5b3deff00906b1f8399cd9132"
+}

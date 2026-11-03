@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-22T21:22:40.407975+00:00",
+  "requirement": "UP03 bounded native Task/Project/Run Context and conversation source narrowing;0505",
+  "sourceHashesVerifiedUnchangedAtFinal88Capture": {
+    "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb",
+    "server/src/__tests__/authorization-service.test.ts": "7ecf07623106b48776b4c630e82fbc4a1716929aea61fb5d0c8c20033125daa1",
+    "packages/db/src/schema/projects.ts": "6090059ad8aade7f635f96a40943139927fb4461702d38e22910c53b80a2a202",
+    "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql": "34beeda1e394168ff37884c5e7504f65b8730bfbb68c4d0e1c89d2f33f3128d4"
+  },
+  "semanticRedSourceHashes": {
+    "server/src/services/authorization.ts": "26b105a8ed3b4f7a32c98d8547fb81c625ae9d3617e0a34559421aa450c45d12",
+    "server/src/__tests__/authorization-service.test.ts": "f67261a828ce5d25be576a552e5e2af733aab99cbce531d6f829711e24ea6496",
+    "packages/db/src/schema/projects.ts": "6090059ad8aade7f635f96a40943139927fb4461702d38e22910c53b80a2a202",
+    "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql": "34beeda1e394168ff37884c5e7504f65b8730bfbb68c4d0e1c89d2f33f3128d4"
+  },
+  "changes": [
+    "Native conversation identity narrows even open tasks: current Human and participant Agent match; retired identity tombstone denies; ordinary grants/admin/local claims cannot bypass.",
+    "Original projects sourceProjectIds UUID[] retains all copied Project roots withoutsourceFK; totalTask+Project IDs<=256 and noNULL elements; original UPDATE trigger unions allold/newroots.",
+    "Same native Task/Project graph now anchors actualpersisted Run too, follows every explicit runTask identity and actualContext nativeTask/project refs via immutable run/Task binding; malformed/missing/foreign roots and cycles deny.",
+    "Original copiedTask INSERT/UPDATE source owner plus0505backfill retain valid Context Task/project roots in issue_privacy_sources, so recordedTaskcopy roots survive Contextmanifest deletion.",
+    "Each node streams atmost257 actualedges and denies when count>256, independently of256unique-node budget. No truncatedgraph mayallow."
+  ],
+  "runs": [
+    {
+      "log": "up03-native-0505-db-generate.log.txt",
+      "sha256": "5f7e91d7ebf9f28608d6e982a2218c29c470def2c0e1ad4fce4914c8123ba0e7",
+      "exitCode": 0,
+      "result": "Normal sole generation: native DB compilation, Drizzle0505 and standard snapshot prune;42unrelated tracked snapshots restored exactHEAD."
+    },
+    {
+      "log": "up03-native-0505-migration-check.log.txt",
+      "sha256": "142d22a4401bbc5f65ffe90cd630da9032e3baf2bebe7b288d9c6eba1b5d1532",
+      "exitCode": 0,
+      "result": "Normal numbering/safety check;20historical baseline findings,1stale baseline ignored."
+    },
+    {
+      "log": "up03-native-graph-red.log.txt",
+      "sha256": "d3f9aac9a2aa42e5e0da8ed45b85b4ca94d06b5c74f3acf80363245ddb1858ff",
+      "exitCode": 1,
+      "result": "ActualPG4FAIL/83skip35.51s: conversation otherHuman, copiedProject, unboundRun ContextTask, boundTask run-only ContextTask each wronglyallowed."
+    },
+    {
+      "log": "up03-native-graph-green.log.txt",
+      "sha256": "046e55ad735d38d25b2013696be9f57f032ebe7e3f7168c084c5e3117b1c072a",
+      "exitCode": 0,
+      "result": "ActualPG87PASS36.51s after semantic graph fix."
+    },
+    {
+      "log": "up03-native-graph-work-red.log.txt",
+      "sha256": "7ae5f4fbd2856bd26c7a9ae44fa218b75c4a59b77fecefc21fdf33caebc6c0be",
+      "exitCode": 1,
+      "result": "ActualPG1FAIL/87skip33.20s:257duplicate rawContext edges admitted with only2unique nodes; work-budget policy failure, not unreadable payload exposure."
+    },
+    {
+      "log": "up03-native-graph-green-2.log.txt",
+      "sha256": "f1f03b5eb9db83848af80336348f522a87db47e02c64577deaa867874def3ec0",
+      "exitCode": 0,
+      "result": "ActualPG88PASS59.20s after separate node/edge budgets, including retained83 cases."
+    }
+  ],
+  "commands": {
+    "generation": "NODE_OPTIONS=--max-old-space-size=3072 pnpm db:generate",
+    "migrationCheck": "pnpm --filter @paperclipai/db check:migrations",
+    "semanticRed": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/authorization-service.test.ts --maxWorkers=1 -t 'native graph'",
+    "workRed": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/authorization-service.test.ts --maxWorkers=1 -t 'native graph rejects excess work'",
+    "green": "NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/authorization-service.test.ts --maxWorkers=1"
+  },
+  "fixtureNotes": [
+    "Canonical full PostgreSQL migrator and original authorization service. Persisted Context graph rows are softwarefixtures, not production Contextwriter or transport qualification.",
+    "After semanticRED, self/malformed Context subcases used separate nativeTask/run/manifests ratherthan updating previouslyprivate source refs; allfour initial failingprivacy assertions retained.",
+    "Only the four named owner sources were pinned upfront. Parent held shared Memory schema unchanged through final88 capture; no retroactive wholegraph pin claim. Coreowner does notquery Memory rows."
+  ],
+  "limits": [
+    "DirectRun Context-erasure completeness/unknownhistorical provenance remains pending0506; dynamicgraph alone is insufficient after Context removal.",
+    "Context Memory/Foundation derivatives, Learning, privateMemory intrinsicHuman snapshot, mixedwriter/rollback/startup admission and UI remain parentcoordinated incomplete work.",
+    "Enumeration caps do not certify physical PostgreSQL plan work, statement-time budgets, large-tenant migration performance or DoS resistance.",
+    "No native lock-order/concurrency qualification from these graph fixtures; BusinessEvent\u2192Memory\u2192rows ordering requires separate original-owner proof.",
+    "No wholeUP03/V10/portfolio/deployment completion claim."
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "candidate": "73",
+  "pinsSha256": "5fada5f5b15d154744777d7782bd013d505a73e4bfcaf0f7529f5e1813561a8f",
+  "runnerSha256": "57c1c2fdeae5b04b6b2952031fc235816ca32e0bdb5765fc766322389589362e",
+  "status": "Worker result acceptance succeeded and Run reached succeeded; local /proc process-stop assertion then failed for SandboxRelay; no synthetic stop claim",
+  "restore": "pinned sources restored to pre-snapshot source bytes and modes; compiled outputs and tsbuildinfo restored byte-for-byte"
+}

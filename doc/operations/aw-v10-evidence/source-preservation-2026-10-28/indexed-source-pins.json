@@ -1,0 +1,290 @@
+{
+  "baseCommit": "927ba0ccbe960a679aeb84d6c82b09e67b0247da",
+  "disposition": "in_progress_not_release_qualified",
+  "files": [
+    {
+      "path": "packages/adapter-utils/src/command-managed-runtime.ts",
+      "sha256": "56ffa6e83f2b704b1087e9d0edade52762713c6747215f6ee8633d5566ed0b6e"
+    },
+    {
+      "path": "packages/shared/src/index.ts",
+      "sha256": "eeb0372d38e6ed381a847c7524f563ca41431471727c3d371c639e7ff9ff0793"
+    },
+    {
+      "path": "packages/shared/src/saas-operations.ts",
+      "sha256": "19348cca35e461e5f4f13aa1d3e0f42adaa3265ca17f06092b6cfc52b135c561"
+    },
+    {
+      "path": "server/src/__tests__/adaptive-planning-project.integration.test.ts",
+      "sha256": "709af1e30a51f04e3907e328a9508f35b047fe18d0888fff3b68cd822151d3d4"
+    },
+    {
+      "path": "server/src/__tests__/agent-conversations.test.ts",
+      "sha256": "e4af0dfdd3865fc6eee68f2629219aeb2165e54b4f0c4f8c8c31e751ae55f2c3"
+    },
+    {
+      "path": "server/src/__tests__/agent-live-run-routes.test.ts",
+      "sha256": "0098134d0f5934c30ea779d69dc541fd5bf594c25d6414c83d0353d2f688d70e"
+    },
+    {
+      "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+      "sha256": "1742b61f835d22b37abdc26e562bba6b9d58105f0473d20537364cbd8f2ac0f4"
+    },
+    {
+      "path": "server/src/__tests__/environment-execution-target.test.ts",
+      "sha256": "21e9f7b090665ccbeba1d7c4395049d61ca0fcf60f1e198960fe8a9f49539669"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
+      "sha256": "26e26443e41555c6559a2b9560e186b96059d1000bf0e779415411f08ba65da6"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
+      "sha256": "a3965ba7c8ca47f3814e53f03a23716f95c206096b90ae7a966f3eaf3045faac"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-direct-adapter-native-isolation.test.ts",
+      "sha256": "31ad3412969f820ad148372032b80204852fe4a77b8b2e0d2203cdbb2dfdf49c"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-local-environment.test.ts",
+      "sha256": "b45618a9f532cbfd0b3b1c76b70fe5a6509b0136c7e0f113d42a00bbd7127112"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-plugin-environment.test.ts",
+      "sha256": "27ad069b39e767d92196ed810afeb619bab31addbd7f6f3220df0525f3f6ddfc"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+      "sha256": "41279f8ee5a2cbb00b8d7028731cfd235f9d02a94a9f2bc1513cd0725130b105"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-retry-scheduling.test.ts",
+      "sha256": "52eb7d8128851a39d435e979570630fd2a05f5c6a0b29c1eeeb5096bdb15e3cb"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-runtime-mcp-servers.test.ts",
+      "sha256": "be90ef6b4e359afa7767272c53bfbb40578fd8a459c31c6876825927b0f5bab0"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
+      "sha256": "386264915167d8755d806db355a7dea93c0047ecc0c0f5fb63526464cd0d2237"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
+      "sha256": "9539e04954850c410e595828e8cf95db05c4313d03311864fba490cb5b137e0b"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-workspace-branch-containment.test.ts",
+      "sha256": "e16afb25f19711904affd64e45993697d17890b6ba3b6851fa7a481a53d71688"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
+      "sha256": "2673d42e7616cfbb9b35ce0fa794f1ca4e0b5d34bd1288feb716aa08ed08dd01"
+    },
+    {
+      "path": "server/src/__tests__/heartbeat-worktree-suppression.test.ts",
+      "sha256": "4204e0ad09fe4749a4293ca38cfd56afb44d6a270d83e35ef484f59b2379a1be"
+    },
+    {
+      "path": "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
+      "sha256": "2cae94c91a5e31531c0dc6ca7c4040d57bcc54d32e7dd18a76e699613982e7f8"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+      "sha256": "4d5d5b9a1d468f24756d27bcc2e7d5a116b1d4e8b3fea95e5a6729cf7255f953"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "sha256": "0f2149586e598db8a40a69f91c5bcd2028db5b450b10371caf5721c506849ca1"
+    },
+    {
+      "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+      "sha256": "64ffa5ff46dc36bd021418c829a59dd852917c2f454440f6844a663d65438ca0"
+    },
+    {
+      "path": "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
+      "sha256": "8e557cfb621386e4c516a0a7f37ce4ec7fd0ce1a2ca001deba2df9409090e168"
+    },
+    {
+      "path": "server/src/__tests__/native-payload-temporal-sources.integration.test.ts",
+      "sha256": "4f4aead7cf3c6ec1a82c72f4e28e3c9318db4473ee93f7daee10e98911e38f99"
+    },
+    {
+      "path": "server/src/__tests__/pipelines-routes.test.ts",
+      "sha256": "caa1eb91c6401f50e307248d9e5fc45310b60b621d67317a296973d8a1d64cce"
+    },
+    {
+      "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
+      "sha256": "d26a3e03b2b5dbab859fdeb6adab692e6b219e84ca119859bb01645f508ec6c8"
+    },
+    {
+      "path": "server/src/__tests__/v6-operator-access.integration.test.ts",
+      "sha256": "75712369e027195ce6fc4e983e062e8166b7c3ca18a875156368b7766425abc9"
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "sha256": "d07a1f4a8bf8b9cae4b122343a6648c44e30de159467c8b40fca06d4d022e5cf"
+    },
+    {
+      "path": "server/src/routes/agents.ts",
+      "sha256": "271d75d7f9ddf294d9c170fb33946bc350a13c0df2be9b2482b25419531f25ab"
+    },
+    {
+      "path": "server/src/routes/issues.ts",
+      "sha256": "5894aef8323493c7b15903850f995886e1b1f6a5f057fa430f6dc9c98a8202ff"
+    },
+    {
+      "path": "server/src/routes/pipelines.ts",
+      "sha256": "82cf19320af41068c719615c6a080b52a2922e2b8d131a79dd2b919a601dd109"
+    },
+    {
+      "path": "server/src/routes/saas.ts",
+      "sha256": "9c100406618f3612cceb15b129aa5547fbb673cc17e182815bb641b76e2a39a5"
+    },
+    {
+      "path": "server/src/services/adaptive-planning/outcome.ts",
+      "sha256": "1cb70defe12a671024f993b76f0d1f5de542c72eeb954a8d567240d4eb46b28c"
+    },
+    {
+      "path": "server/src/services/analytical-context-authority.ts",
+      "sha256": "32115fe61e2bcf45e52295c11d59e5b1e32720c3260afdd6be70b805d716f0e8"
+    },
+    {
+      "path": "server/src/services/analytical-live-events.ts",
+      "sha256": "b74d0335a824083f2aa63622fca572bd3fb72a24589a22afe0ac56449caf3da6"
+    },
+    {
+      "path": "server/src/services/authorization.ts",
+      "sha256": "5f6910ad3ae3f0b137e6f0f84ee38f6e85b81411fc0d877026f58d8d23b3353c"
+    },
+    {
+      "path": "server/src/services/capability-resolver.ts",
+      "sha256": "1342a7901827466c80013610be1c44e731431802a3f56b310574684cd3e6080c"
+    },
+    {
+      "path": "server/src/services/context/context-engine.ts",
+      "sha256": "e9d3b53433ee14c1c1c0005e8b5a38a3c7f9486f8ef5830ed319a33ac8bf3050"
+    },
+    {
+      "path": "server/src/services/context/context-manifest.ts",
+      "sha256": "58665a086c1a1e3e7cf75cdfd7272e5979cae947e6c6d11dca80a9b17cd60d7b"
+    },
+    {
+      "path": "server/src/services/environment-execution-target.ts",
+      "sha256": "c8d1e1554bda1f9c65cd0b978d5c7ebc35fe7fb04981a5368802fa1ff9883823"
+    },
+    {
+      "path": "server/src/services/environment-runtime.ts",
+      "sha256": "26d026de21aebde6f1faa1da04f4031fa8fb522ba094431b8b0cdb748ff744f4"
+    },
+    {
+      "path": "server/src/services/execution-sandbox/sandbox-service.ts",
+      "sha256": "e22b67262d705d3274e2bce039a0c7b762ff5d676e55b462734ab8a4277dd276"
+    },
+    {
+      "path": "server/src/services/experience/model-dependency-inventory.test.ts",
+      "sha256": "03ecfbf7a84fbafe6880e33d8ec3c3e6e03fe7cfc2b69e6bf6627f9cbdac8a99"
+    },
+    {
+      "path": "server/src/services/experience/model-dependency-inventory.ts",
+      "sha256": "99cc31ff998c6f051f7afe62a8199f820045a2f541ccfd74872480295ca9a1e0"
+    },
+    {
+      "path": "server/src/services/memory/memory-privacy.ts",
+      "sha256": "082e271a3eb24832e7a8e7e7f0cbde3f9e6966b4a2554d914eb1a44e7a937220"
+    },
+    {
+      "path": "server/src/services/native-direct-input.ts",
+      "sha256": "b952466846a5ed8b0d1efd8ab3aa847abf8ce65c7da5b2cbfccd8d3d3817f96f"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+      "sha256": "df44c582d2b835aa1569eedd79072de4e480f8d0c2acfbd14aefdf4dc6613aa5"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.test.ts",
+      "sha256": "bc8bea3a43ea4e26fac7906c43f359b5c198d82cd4eb887f41515063f23e4060"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-session-executor.ts",
+      "sha256": "654ced20f2d5245070af8b76a03b3a7e50dbc349d870f0a4e6ff57f61c9d295f"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
+      "sha256": "5e85d05fed32718f6fd57babcea6a67c645064848f98855edc7127d736d8f622"
+    },
+    {
+      "path": "server/src/services/native-runtime/native-workspace-sync.ts",
+      "sha256": "55a77ab0afaae05c71823f6ef3d22728bac4a594312debc1527248c8a1b87e3a"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-control-plane-port.ts",
+      "sha256": "7c11e716c757c65c781b57b02e67f413cf48da877b26630b5c59eb88b928f0cd"
+    },
+    {
+      "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+      "sha256": "35dd314a6821b6c039a87f12a673dfd4ca7c3e91c475d67a956c8369c0dea218"
+    },
+    {
+      "path": "server/src/services/native-runtime/remote-runner-identity.ts",
+      "sha256": "681903d3acbf878feb49634018ad7925783413a3d96ab5b8031d04317fe19354"
+    },
+    {
+      "path": "server/src/services/pipelines-aggregation.ts",
+      "sha256": "5268496a1e8e5f32d32a9753c3ffb0e220457956423dc6343a958f92999416bd"
+    },
+    {
+      "path": "server/src/services/runtime/control.ts",
+      "sha256": "d4b404f4130157ba88917606cc398ebf85bf995964f580a2b8bd7c1f81f1f1fa"
+    },
+    {
+      "path": "server/src/services/runtime/native-harness-state-owner.test.ts",
+      "sha256": "4a9cb86e0f7ef48d6face78b1f7e39740eb533bb0d9898421fe613ac4c981a40"
+    },
+    {
+      "path": "server/src/services/runtime/native-runtime-context-preparation.test.ts",
+      "sha256": "e3e515de6a07bc812d6916b1ea35d0b677cee537298391461aa8eee9f036a324"
+    },
+    {
+      "path": "server/src/services/strategy-execution/references.ts",
+      "sha256": "a49d46ec274fb5aeb4b0aa40c5d741becf0d9779452ea228af541f2764400a47"
+    },
+    {
+      "path": "tests/e2e/aw-v9-workflow-draft-step.spec.ts",
+      "sha256": "0721015ab1fc400ea2b7adf9e7ca57964ae8c5c556e90b5a8ef85a0b9314dd86"
+    },
+    {
+      "path": "tests/e2e/chat-adapters-ui-providers.spec.ts",
+      "sha256": "d87d1483bbcc1a925e73943a0a8d46ce110d75aaa8143ab5d775cf421212e3a1"
+    },
+    {
+      "path": "tests/e2e/chat-adapters-ui.shared.ts",
+      "sha256": "52a3e6745b3e70ff1d8c0e1255ed4422d9afb6b0c5a76f531c0aa7307838f5e1"
+    },
+    {
+      "path": "tests/e2e/conference-room-typing-intro.spec.ts",
+      "sha256": "8e611b36c21de336dbc77c571055c9787b003484909e7da6f2de534ec70e5509"
+    },
+    {
+      "path": "tests/e2e/decision-review-learning.spec.ts",
+      "sha256": "b42fab838593b5568aca2ce79e409b7481b88fea32e3d411c5002332948ceb4d"
+    },
+    {
+      "path": "tests/e2e/legacy-failure-continuation.spec.ts",
+      "sha256": "76b07cc3e3658cd4bf4f5f11b5a9e6d0e7630c7548939f54695676dc6bff485a"
+    },
+    {
+      "path": "tests/e2e/pipelines-tutorial-flow.spec.ts",
+      "sha256": "da99e35351fdb210da4d911fb1ebdfabbf29d1dbafe620ec9f90a1d5c448c839"
+    },
+    {
+      "path": "tests/e2e/sidebar-takeover.spec.ts",
+      "sha256": "ad087d2afc9bbf2211c3bef910c9f88aa214bcec1c24241d88f0354b068da508"
+    },
+    {
+      "path": "ui/src/pages/SaasOperations.tsx",
+      "sha256": "d7d76cbd10766cbaa34e7bb345cff9903bb38f3a8c4fd116e3677ff429740b16"
+    }
+  ]
+}

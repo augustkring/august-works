@@ -7259,7 +7259,7 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
         }),
       }),
     });
-    expect(released[0]?.lease.status).toBe("released");
+    expect(released[0]?.lease).toMatchObject({ status: "released", cleanupStatus: "success" });
   });
 
   async function seedPluginDriverEnvironment(pluginId: string) {
@@ -7508,7 +7508,7 @@ describeEmbeddedPostgres("environmentRuntimeService", () => {
       timedOut: false,
       stdout: "ok\n",
     });
-    expect(destroyed?.status).toBe("failed");
+    expect(destroyed).toMatchObject({ status: "failed", cleanupStatus: "success" });
     expect(workerManager.call).toHaveBeenCalledWith(pluginId, "environmentResumeLease", {
       driverKey: "fake-plugin",
       companyId,

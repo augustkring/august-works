@@ -1,0 +1,342 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/v10-dep-qualification/ui
+
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > hides a late coverage response after the Human session changes and labels each party correctly
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > renders a compact member table without redundant explanatory copy 290ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > hides a late coverage response after the Human session changes and labels each party correctly 76ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > saves member role and status without touching grants 122ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > security-suspends the last owner through the reasoned endpoint and reports owner recovery 109ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > does not dispatch security suspension after the Human session is renewed 114ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > does not show a committed security result after the initiating Human session changes 122ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > keeps the owner-recovery acknowledgement when the original session is temporarily unresolved 71ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > clears stale access rows but keeps owner-recovery acknowledgement when refresh is forbidden 65ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: account
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > removes a member with an issue reassignment target 105ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: renewed session
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: account 122ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: renewed session 127ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: withdraw and restore 134ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: company 77ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: unmount 56ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: unchanged 55ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > fences a removal count after held access refresh: local trusted unchanged 46ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal success before refresh begins
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > denies dispatch when the same Human's session changes after clicking 47ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal success before refresh begins 70ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal error before refresh begins
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Approve human acknowledgement after a held refresh and session renewal
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses a late removal error before refresh begins 116ms
+stderr | src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Reject human acknowledgement after a held refresh and session renewal
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to CompanyAccess inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Approve human acknowledgement after a held refresh and session renewal 54ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > suppresses Reject human acknowledgement after a held refresh and session renewal 111ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > shows protected member removal reasons from the API 44ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > redirects legacy access deep links to the permissions extension route when installed 12ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess > shows a read-only unavailable fallback for legacy access deep links 8ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > shows Members and Invites tabs with Members active by default 33ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > opens the Invites tab from a ?tab=invites deep link 43ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > hides the Invites tab when the operator hides company.invites 28ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > offers Cloud invitations to the current stack's owner even with local invites hidden 34ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > offers Cloud invitations to the current stack's admin even with local invites hidden 32ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > does not expose Cloud invitations to a member who owns another stack 31ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > does not expose Cloud invitations to a support who owns another stack 29ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > does not expose Cloud invitations to a unknown who owns another stack 28ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > waits for the Cloud role before showing the invitation action 44ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > hides a cached invitation action when the Cloud role refresh fails 50ms
+ ✓ src/pages/CompanyAccess.test.tsx > CompanyAccess invites tab > requires an identified current stack and a configured Cloud destination 49ms
+ ✓ src/api/access.test.ts > company member security suspension > sends the selected reason bound to the captured Human session 28ms
+
+ Test Files  2 passed (2)
+      Tests  36 passed (36)
+   Start at  17:29:09
+   Duration  7.15s (transform 1.91s, setup 28ms, import 3.46s, tests 2.58s, environment 816ms)
+
