@@ -437,13 +437,7 @@ describe("dependency scheduling through the installed Native text draft controll
   it("keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment", async () => {
     const fixture = await seedInstalledDraft();
     const { f, human, model } = fixture;
-    const entry = await createDraftPlan(fixture, "Human comment interaction under a pause hold");
-    const [hold] = await db.insert(issueTreeHolds).values({
-      companyId: f.home, rootIssueId: entry.task.id, mode: "pause", status: "active",
-      reason: "Preserve the Human pause while allowing a genuine comment interaction.",
-      releasePolicy: { strategy: "manual" },
-    }).returning();
-    expect(hold).toBeDefined();
+    let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
     let calls = 0;
     const output = "The held Task has a bounded internal draft for Human review.";
     const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
@@ -456,6 +450,7 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(JSON.parse(body).tools).toBeUndefined();
       expect(body).toContain("assignedRuntimeContext");
       expect(body).not.toContain(credential);
+      if (!entry) throw new Error("paused_draft_plan_missing");
       const [reservation] = await db.select().from(orchestrationModelReservations)
         .where(eq(orchestrationModelReservations.planId, entry.plan.id));
       expect(reservation).toMatchObject({ status: "dispatched", maximumMinor: 3 });
@@ -464,6 +459,13 @@ describe("dependency scheduling through the installed Native text draft controll
       { status: 200, headers: { "content-type": "application/json" } });
     };
     await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      entry = await createDraftPlan(fixture, "Human comment interaction under a pause hold");
+      const [hold] = await db.insert(issueTreeHolds).values({
+        companyId: f.home, rootIssueId: entry.task.id, mode: "pause", status: "active",
+        reason: "Preserve the Human pause while allowing a genuine comment interaction.",
+        releasePolicy: { strategy: "manual" },
+      }).returning();
+      expect(hold).toBeDefined();
       const ordinary = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
         reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
         payload: { issueId: entry.task.id }, contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" } });

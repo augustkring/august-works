@@ -61,6 +61,30 @@ describe("native status wake context provenance", () => {
     expect(merged.statusDecisionSource).toBe("native_status_decision");
   });
 
+  it("preserves the actual commentId-only Task producer through its exact continuation origin", () => {
+    const continuation = { version: 1, issueId: "issue-1", originCommentIds: ["comment-1"] };
+    const originalWake = {
+      reason: "issue_commented",
+      issue: { id: "issue-1" },
+      commentIds: [],
+      executionContinuation: continuation,
+    };
+    const original = {
+      issueId: "issue-1",
+      source: "heartbeat",
+      wakeReason: "issue_commented",
+      commentId: "comment-1",
+      executionContinuation: continuation,
+      paperclipWake: originalWake,
+    };
+
+    const merged = mergeCoalescedContextSnapshot(original, statusControl);
+
+    expect(merged.paperclipWake).toBe(originalWake);
+    expect(merged.executionContinuation).toBe(continuation);
+    expect(merged.wakeCommentIds).toEqual(["comment-1"]);
+  });
+
   it("preserves an unchanged zero-comment continuation only through its exact empty-origin closure", () => {
     const continuation = { version: 1, issueId: "issue-1", originCommentIds: [] };
     const original = {

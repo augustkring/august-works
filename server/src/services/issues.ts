@@ -12368,7 +12368,7 @@ export function issueService(db: Db) {
                   !workspaceTuple?.digest || !lease || (nextPreference === "reuse_existing" && nextMode !== expectedMode))
                 throw unprocessable("Manual Task workspace binding lacks its current persisted lease");
               const [currentProof] = await tx.execute<{ digestValid: boolean; bodyHash: string }>(sql`select
-                ${receiptExisting.payloadSourceSnapshot}::jsonb->>'digest' = encode(sha256(convert_to((${receiptExisting.payloadSourceSnapshot}::jsonb-'digest')::text,'UTF8')),'hex') as "digestValid",
+                ${JSON.stringify(receiptExisting.payloadSourceSnapshot)}::jsonb->>'digest' = encode(sha256(convert_to((${JSON.stringify(receiptExisting.payloadSourceSnapshot)}::jsonb-'digest')::text,'UTF8')),'hex') as "digestValid",
                 public.aw_native_payload_body_hash('issue',to_jsonb(${issues})) as "bodyHash"
                 from ${issues} where ${idPredicate}`);
               if (!currentProof?.digestValid || currentProof.bodyHash !== snapshot.owner.contentHash)

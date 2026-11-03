@@ -7392,6 +7392,9 @@ export function mergeCoalescedContextSnapshot(
   }
   const existingWake = parseObject(existing[PAPERCLIP_WAKE_PAYLOAD_KEY]);
   const existingCommentIds = extractWakeCommentIds(existing);
+  // Native Task sources may be produced from the canonical single-comment
+  // field. Keep the chat branch's stricter batched-ID witness separate.
+  const nativeTaskCommentIds = mergeWakeCommentIds(existing);
   const payloadCommentIds = Array.isArray(existingWake.commentIds)
     ? existingWake.commentIds
     : [];
@@ -7400,13 +7403,13 @@ export function mergeCoalescedContextSnapshot(
     ? payloadContinuation.originCommentIds
     : [];
   const payloadCommentsMatchWake =
-    existingCommentIds.length > 0 &&
-    payloadCommentIds.length === existingCommentIds.length &&
-    payloadCommentIds.every((id, index) => id === existingCommentIds[index]);
+    nativeTaskCommentIds.length > 0 &&
+    payloadCommentIds.length === nativeTaskCommentIds.length &&
+    payloadCommentIds.every((id, index) => id === nativeTaskCommentIds[index]);
   const emptyPayloadMapsToWakeContinuation =
     payloadCommentIds.length === 0 &&
-    continuationOriginIds.length === existingCommentIds.length &&
-    continuationOriginIds.every((id, index) => id === existingCommentIds[index]);
+    continuationOriginIds.length === nativeTaskCommentIds.length &&
+    continuationOriginIds.every((id, index) => id === nativeTaskCommentIds[index]);
   const nativeStatusCoalescence = incomingSource === "native_status_decision";
   const nativeStatusControl =
     nativeStatusCoalescence &&
@@ -7423,8 +7426,8 @@ export function mergeCoalescedContextSnapshot(
     existing.executionContinuation !== undefined &&
     isDeepStrictEqual(existingWake.executionContinuation, existing.executionContinuation) &&
     (payloadCommentsMatchWake || emptyPayloadMapsToWakeContinuation) &&
-    mergedCommentIds.length === existingCommentIds.length &&
-    mergedCommentIds.every((id, index) => id === existingCommentIds[index]);
+    mergedCommentIds.length === nativeTaskCommentIds.length &&
+    mergedCommentIds.every((id, index) => id === nativeTaskCommentIds[index]);
   const preservesAdmittedWake =
     preservesExternalChatOrigin &&
     parseObject(existingWake.issue).id === existing.issueId &&
