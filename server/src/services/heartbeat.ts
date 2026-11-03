@@ -85,7 +85,7 @@ import { normalizeLegacyRunnerProvider } from "@paperclipai/adapter-utils";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile as execFileCallback } from "node:child_process";
-import { promisify } from "node:util";
+import { isDeepStrictEqual, promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { nativeCommentProjectionHash, nativeSha256 } from "./native-runtime/canonical.js";
 import {
@@ -7395,6 +7395,36 @@ export function mergeCoalescedContextSnapshot(
   const payloadCommentIds = Array.isArray(existingWake.commentIds)
     ? existingWake.commentIds
     : [];
+  const payloadContinuation = parseObject(existingWake.executionContinuation);
+  const continuationOriginIds = Array.isArray(payloadContinuation.originCommentIds)
+    ? payloadContinuation.originCommentIds
+    : [];
+  const payloadCommentsMatchWake =
+    existingCommentIds.length > 0 &&
+    payloadCommentIds.length === existingCommentIds.length &&
+    payloadCommentIds.every((id, index) => id === existingCommentIds[index]);
+  const emptyPayloadMapsToWakeContinuation =
+    payloadCommentIds.length === 0 &&
+    continuationOriginIds.length === existingCommentIds.length &&
+    continuationOriginIds.every((id, index) => id === existingCommentIds[index]);
+  const nativeStatusCoalescence = incomingSource === "native_status_decision";
+  const nativeStatusControl =
+    nativeStatusCoalescence &&
+    readNonEmptyString(existing.issueId) !== null &&
+    existing.issueId === incoming.issueId &&
+    readNonEmptyString(incoming.statusDecisionSource) ===
+      "native_status_decision";
+  const preservesNativeTaskWake =
+    nativeStatusControl &&
+    !existingSource?.startsWith("chat:") &&
+    parseObject(existingWake.issue).id === existing.issueId &&
+    readNonEmptyString(existingWake.reason) !== null &&
+    existingWake.reason === existing.wakeReason &&
+    existing.executionContinuation !== undefined &&
+    isDeepStrictEqual(existingWake.executionContinuation, existing.executionContinuation) &&
+    (payloadCommentsMatchWake || emptyPayloadMapsToWakeContinuation) &&
+    mergedCommentIds.length === existingCommentIds.length &&
+    mergedCommentIds.every((id, index) => id === existingCommentIds[index]);
   const preservesAdmittedWake =
     preservesExternalChatOrigin &&
     parseObject(existingWake.issue).id === existing.issueId &&
@@ -7419,6 +7449,23 @@ export function mergeCoalescedContextSnapshot(
     if (existing[PAPERCLIP_EXTERNAL_CHAT_EXECUTION_BOUND_KEY] === true) {
       merged[PAPERCLIP_EXTERNAL_CHAT_EXECUTION_BOUND_KEY] = true;
     }
+  } else if (nativeStatusControl && preservesNativeTaskWake) {
+    // A status-control wake may update Run control metadata, but the original
+    // Task wake and its selected continuation stay paired. The later source
+    // reader rebinds this exact closure to Run.wakeupRequestId and the sealed
+    // receipt; no incoming status context can mint either one.
+    merged[PAPERCLIP_WAKE_PAYLOAD_KEY] = existingWake;
+    if (Object.hasOwn(existing, "executionContinuation")) {
+      merged.executionContinuation = existing.executionContinuation;
+    } else {
+      delete merged.executionContinuation;
+    }
+  } else if (nativeStatusCoalescence) {
+    // A status coalescence with changed Task/comment scope or missing control
+    // marker cannot carry an old admitted wake or introduce a caller-supplied
+    // closure into this Run.
+    delete merged[PAPERCLIP_WAKE_PAYLOAD_KEY];
+    delete merged.executionContinuation;
   }
   if (
     !hasInteractionContinuationWakeContext(incoming) &&

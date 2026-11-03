@@ -3063,6 +3063,7 @@ describe.sequential("issue comment reopen routes", () => {
       mockTx,
       undefined,
       expect.any(Array),
+      {},
     );
   });
 
@@ -3155,6 +3156,7 @@ describe.sequential("issue comment reopen routes", () => {
       mockTx,
       undefined,
       expect.any(Array),
+      {},
     );
   });
 
@@ -3814,6 +3816,7 @@ describe.sequential("issue comment reopen routes", () => {
         mockTx,
         undefined,
         expect.any(Array),
+        {},
       );
       expect(mockLogActivity).toHaveBeenCalledWith(
         expect.anything(),

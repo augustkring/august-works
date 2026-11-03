@@ -360,6 +360,8 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
         sourceVersion: p.sourceVersion, contentHash: nativeSha256({ rendition: "native_governed_pending_reference_v1", projection: p }) })) return null;
   }
   const origins = c.originCommentIds.map(id => c.messages.find(message => message.id === id));
+  const admittedWakeOrigins = capture.wake.originCommentIds.map(id =>
+    c.messages.find(message => message.id === id));
   if (hasGoverned) {
     const captures = governed!;
     if (captures.some(value => !value || typeof value !== "object" || !value.projection || typeof value.projection !== "object" ||
@@ -473,9 +475,10 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       response.kind !== "request_confirmation" || response.status !== "accepted" || response.resolvedByUserId !== plan.resolvedByUserId ||
       response.resolvedAt !== plan.resolvedAt || capture.delivery !== undefined || governed !== undefined) return null;
     if (origins.some(message => !message) || capture.wake.originCommentIds.some(id => !plan.originCommentIds.includes(id))) return null;
-  } else if (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
-    !capture.wake.originCommentIds.includes(message.id)) ||
-    !origins.some(message => message?.authorId === capture.wake.requestedByActorId)))) return null;
+  } else if (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null) ||
+    admittedWakeOrigins.length === 0 || admittedWakeOrigins.some(message => !message || message.authorType !== "user" ||
+      message.createdByRunId !== null || message.authorId !== capture.wake.requestedByActorId ||
+      !c.originCommentIds.includes(message.id))))) return null;
   const latest = c.messages.findLast(message => message.authorType === "user" && message.createdByRunId === null && message.body.trim());
   if ((!latest && !hasStageTrigger && !hasAcceptedPlanReview) ||
     c.objective !== (latest?.body ?? (hasAcceptedPlanReview ? acceptedPlanReview!.taskObjective : stageTrigger?.taskObjective)) || Object.keys(c.coverage).sort().join(",") !==

@@ -359,4 +359,16 @@ $$;
 --> statement-breakpoint
 CREATE CONSTRAINT TRIGGER issues_native_stage_source_owner
 AFTER UPDATE ON public.issues DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW EXECUTE FUNCTION public.aw_issue_native_stage_source_owner();
+FOR EACH ROW WHEN (
+  CASE
+    WHEN jsonb_typeof(coalesce(OLD.payload_source_snapshot->'transforms','[]'::jsonb))='array' AND
+         jsonb_typeof(NEW.payload_source_snapshot->'transforms')='array'
+    THEN jsonb_array_length(NEW.payload_source_snapshot->'transforms') =
+           jsonb_array_length(coalesce(OLD.payload_source_snapshot->'transforms','[]'::jsonb)) + 1 AND
+         jsonb_array_length(NEW.payload_source_snapshot->'transforms') > 0 AND
+         NEW.payload_source_snapshot->'transforms'->
+           (jsonb_array_length(NEW.payload_source_snapshot->'transforms') - 1)->>'kind'='native_stage_policy'
+    ELSE false
+  END
+)
+EXECUTE FUNCTION public.aw_issue_native_stage_source_owner();

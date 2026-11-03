@@ -71,8 +71,10 @@ async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
   if (otherHumanHistory) {
     const otherUserId = `other-human-${randomUUID()}`;
     const otherActor = await seedCurrentHumanSourceActor(db, [f.home], otherUserId);
+    // Use the supported current-input path so this independent Human comment
+    // receives its own source snapshot and is rechecked by the current reader.
     await tasks.addComment(task.id, "Earlier readable history from another Human.", { userId: otherUserId },
-      { manualInputActor: otherActor, createdAt: "2026-10-01T00:00:00.000Z" });
+      { manualInputActor: otherActor });
   }
   const comment = await tasks.addComment(task.id, "The real current Human request.", { userId: f.userId }, { manualInputActor: actor });
   const [wake] = await db.insert(agentWakeupRequests).values({ companyId: f.home, agentId: f.presence.id,

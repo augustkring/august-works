@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "077d2781f11078560cec5310588c63ec23f1f44a27048c6b10f0ac99262b1383"
+      "sha256": "5cb32724d7da7202d246c1d31465450cd750616083fafaa09c5ca77b0f73bebe"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",

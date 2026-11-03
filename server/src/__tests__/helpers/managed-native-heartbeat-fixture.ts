@@ -1056,7 +1056,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     // session.error schema has eight name literals and APIError.data.statusCode;
     // it declares no code field. Never print messages, bodies, paths or IDs.
     try {
-      const failedRuns = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+      const failedRuns = await db.select({ id: heartbeatRuns.id, error: heartbeatRuns.error, errorCode: heartbeatRuns.errorCode }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.agentId, agentIds),
           eq(heartbeatRuns.status, "failed"))).orderBy(desc(heartbeatRuns.createdAt)).limit(8);
       // Broker facts are fixture-wide, not Run-scoped. Never emit request hashes,
@@ -1099,6 +1099,17 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const record = (value: unknown): Record<string, unknown> =>
         value !== null && typeof value === "object" && !Array.isArray(value)
           ? value as Record<string, unknown> : {};
+      const preparationFailures = new Map([
+        ["workspace_preparation_controller_changed", "controller_changed"],
+        ["workspace_preparation_binding_owner_changed", "binding_owner_changed"],
+        ["Workspace preparation requires its exact manual Task binding", "manual_task_binding_changed"],
+        ["Workspace preparation actor changed", "actor_changed"],
+        ["Manual Task workspace source policy changed", "source_policy_changed"],
+        ["Manual Task workspace binding requires its running Native Run", "native_run_required"],
+        ["This orchestration attempt no longer has write authority", "orchestration_stopped"],
+        ["This run was cancelled", "run_cancelled"],
+      ]);
+      const storedRunCodes = new Set(["adapter_failed", "setup_failed", "configuration_incomplete"]);
       for (const [index, failedRun] of failedRuns.entries()) {
         const events = await db.select({ payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents)
           .where(and(eq(heartbeatRunEvents.companyId, companyId), inArray(heartbeatRunEvents.agentId, agentIds),
@@ -1107,6 +1118,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         console.info("managed_scheduler_failed_turn_projection", JSON.stringify({
           failedRunOrdinal: index + 1, failedRunStatus: "failed",
           executionObserved: executionsByRun.has(failedRun.id),
+          storedErrorPresent: typeof failedRun.error === "string" && failedRun.error.length > 0,
+          storedErrorCode: typeof failedRun.errorCode === "string"
+            ? storedRunCodes.has(failedRun.errorCode) ? failedRun.errorCode : "unrecognized" : null,
+          preparationFailure: preparationFailures.get((failedRun.error ?? "").split("\n", 1)[0].replace(/^Error: /, "")) ?? "unclassified",
           preModelFailure: preModelFailures.get(failedRun.id) ?? null,
           providerCallCount: providerCalls.filter(call => call.runId === failedRun.id).length,
           modelIssuanceCount: issuerFacts.filter(fact => fact.runId === failedRun.id).length,

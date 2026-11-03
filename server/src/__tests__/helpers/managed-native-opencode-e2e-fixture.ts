@@ -45,6 +45,8 @@ import {
   orchestrationWorkerAttempts,
   orchestrationWorkers,
   nativeRunFinalizations,
+  nativeRunResults,
+  statusDecisionEffects,
   workAssessments,
   statusDecisions,
   toolInvocations,
@@ -77,6 +79,7 @@ import { preparePlatformSkillAdmission } from "../../services/platform-skill-adm
 import { hasPendingRunCleanup } from "../../services/execution-blocker.js";
 import { remoteExecutionHasStopped, readNativeRemoteWorkloadIntent } from "../../services/remote-execution-termination.js";
 import { heartbeatService } from "../../services/heartbeat.js";
+import { managedNativeProjectArgumentsJsonSchema } from "../../services/native-project-output.js";
 import { verifyNativeCleanupRuntimeState } from "../../services/execution-sandbox/run-lease-cleanup.js";
 import { recordNativeLocalProcessStopAfterExit } from "../../services/native-local-process-stop.js";
 import { managedOpenCodeRuntimeDirectory } from "../../services/native-runtime/runtime-asset-retention.js";
@@ -1294,15 +1297,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         }
         if (step.tool === "create_project") {
           const createTool = findTool("create_project");
-          expect(createTool?.input_schema).toEqual({ type: "object", additionalProperties: false,
-            properties: { name: { type: "string", minLength: 1, maxLength: 200 },
-              description: { type: "string", maxLength: 4000 },
-              workspace: { type: "object", additionalProperties: false,
-                properties: { name: { type: "string", minLength: 1, maxLength: 200 } }, required: ["name"] },
-              repositoryUrls: { type: "array", maxItems: 100,
-                items: { type: "string", format: "uri", maxLength: 2000 } },
-              idempotencyKey: { type: "string", minLength: 1, maxLength: 255 } },
-            required: ["name", "workspace", "idempotencyKey"] });
+          expect(createTool?.input_schema).toEqual(managedNativeProjectArgumentsJsonSchema());
         }
         if (step.tool === "paperclip_finish") {
           const finish = findTool(step.tool);
@@ -2880,7 +2875,64 @@ export async function runManagedNativeOpenCodeFixture(input: {
         responsibleUserId: aliceUserId, facets,
       }, null, 2), { mode: 0o600 });
     }
-    expect(agentReconciled).toBe(true);
+    // A terminal Run can correctly leave real work queued. The default model
+    // finish has no evidence; certify that exact arbiter continuation rather
+    // than asking the Agent reconciler to discard its live claim.
+    const [settledCoordinator] = await db.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.issueId, task.id),
+      eq(nativeRunFinalizations.runId, run!.id)));
+    const [settledDecision] = settledCoordinator?.decisionId ? await db.select().from(statusDecisions).where(and(
+      eq(statusDecisions.companyId, companyId), eq(statusDecisions.issueId, task.id),
+      eq(statusDecisions.runId, run!.id), eq(statusDecisions.id, settledCoordinator.decisionId))) : [];
+    if (settledDecision?.reasonCode === "completion_evidence_incomplete") {
+      if (!settledCoordinator?.resultId || !settledCoordinator.assessmentId) throw new Error("managed_fixture_incomplete_owner_missing");
+      const [currentTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, task.id)));
+      const [currentAgent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
+      const [currentRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, run!.id)));
+      const [accepted] = await db.select().from(nativeRunResults).where(and(eq(nativeRunResults.companyId, companyId),
+        eq(nativeRunResults.issueId, task.id), eq(nativeRunResults.runId, run!.id), eq(nativeRunResults.id, settledCoordinator.resultId)));
+      const [assessment] = await db.select().from(workAssessments).where(and(eq(workAssessments.companyId, companyId),
+        eq(workAssessments.issueId, task.id), eq(workAssessments.runId, run!.id), eq(workAssessments.id, settledCoordinator.assessmentId)));
+      const continuationEffects = await db.select().from(statusDecisionEffects).where(and(
+        eq(statusDecisionEffects.companyId, companyId), eq(statusDecisionEffects.issueId, task.id),
+        eq(statusDecisionEffects.decisionId, settledDecision.id), eq(statusDecisionEffects.effectKind, "enqueue_continuation")));
+      const activeClaims = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, companyId),
+        eq(agentWakeupRequests.agentId, agentId), inArray(agentWakeupRequests.status, ["queued", "claimed", "deferred", "deferred_issue_execution"])));
+      expect(settledCoordinator).toMatchObject({phase:"committed",leaseOwner:null});
+      expect(currentRun).toMatchObject({agentId,responsibleUserId:aliceUserId,nativeIssueId:task.id,status:"succeeded",nativePhase:"committed",
+        nativeProcessCleanupPending:false,resultJson:{finalizationPhase:"committed",decisionId:settledDecision.id,assessmentId:settledCoordinator.assessmentId}});
+      expect(accepted).toMatchObject({schemaStatus:"accepted",completionContractId:contractRow.id});
+      expect(assessment).toMatchObject({resultId:settledCoordinator.resultId,contractId:contractRow.id,assessmentJson:{reportedDisposition:"done",objectiveClaimSatisfied:true,allCriteriaSatisfied:false,verificationPassed:false}});
+      expect(settledDecision).toMatchObject({assessmentId:settledCoordinator.assessmentId,applicationState:"applied",toStatus:"in_progress",
+        decisionJson:{statusAction:"in_progress",reasonCode:"completion_evidence_incomplete",effects:[{kind:"enqueue_continuation",
+          continuationKind:"same_agent",idempotencyKey:"native-completion-incomplete",agentId}]}});
+      const continuationSummary = "Finish the remaining work and report done, or explicitly request a named reviewer decision. Waiting for checks or an incomplete completion report does not require human approval.";
+      expect(settledDecision.decisionJson.effects).toEqual([{kind:"enqueue_continuation",continuationKind:"same_agent",
+        summary:continuationSummary,idempotencyKey:"native-completion-incomplete",agentId}]);
+      expect(settledDecision.appliedAt).not.toBeNull();
+      expect(currentTask).toMatchObject({status:"in_progress",lastStatusDecisionId:settledDecision.id,assigneeAgentId:agentId,responsibleUserId:aliceUserId,
+        statusVersion:settledDecision.decisionJson.projectedStatusVersion});
+      expect(currentAgent).toMatchObject({status:"running"});
+      expect(continuationEffects).toHaveLength(1);expect(activeClaims).toHaveLength(1);
+      const continuation = activeClaims[0], effect = continuationEffects[0];
+      if (!continuation || !effect) throw new Error("managed_fixture_incomplete_continuation_missing");
+      expect(continuation).toMatchObject({source:"automation",triggerDetail:"system",reason:"issue_status_changed",status:"queued",runId:null,
+        requestedByActorType:"system",requestedByActorId:"native-status-committer",idempotencyKey:`native-status:${settledDecision.id}:continuation`,
+        payload:{issueId:task.id,taskId:task.id,nativeDecisionId:settledDecision.id,continuationKind:"same_agent",
+          continuationIdempotencyKey:"native-completion-incomplete",_paperclipWakeContext:{issueId:task.id,taskId:task.id,
+            wakeReason:"issue_status_changed",source:"native_status_decision",statusDecisionSource:"native_status_decision"}}});
+      expect(effect).toMatchObject({targetType:"agent_wakeup_request",targetId:continuation.id,deliveryState:"delivered",attemptCount:1,
+        payload:{continuationKind:"same_agent",summary:continuation.payload?.continuationSummary}});
+      expect(continuation.payload).toEqual({issueId:task.id,taskId:task.id,nativeDecisionId:settledDecision.id,continuationKind:"same_agent",
+        continuationSummary,continuationIdempotencyKey:"native-completion-incomplete",_paperclipWakeContext:{issueId:task.id,taskId:task.id,
+          wakeReason:"issue_status_changed",source:"native_status_decision",statusDecisionSource:"native_status_decision"}});
+      expect(effect.idempotencyKey).toBe(`native-status:${settledDecision.id}:${effect.ordinal}`);
+      expect(effect.payload).toEqual({continuationKind:"same_agent",summary:continuationSummary});
+      expect(effect.deliveredAt).not.toBeNull();
+      expect(agentReconciled).toBe(false);
+    } else {
+      expect(agentReconciled).toBe(true);
+    }
     expect(completedHumanActions.size).toBe(input.humanActions?.length ?? 0);
     const bobApp = express();
     bobApp.use(express.json());

@@ -171,6 +171,37 @@ describe("native bootstrap rendered-source closure", () => {
     expect(check(changedOrigin)).toBeNull();
   });
 
+  it("keeps later readable Human history distinct from the admitted trigger author", () => {
+    const responsibleUserId = "trigger-human";
+    const otherUserId = "other-readable-human";
+    const triggerCommentId = randomUUID(), historyCommentId = randomUUID(), wakeupRequestId = randomUUID();
+    const at = new Date("2026-10-01T00:00:00.000Z");
+    const trigger = nativeContinuationCommentProjection({ id: triggerCommentId, authorType: "user", authorUserId: responsibleUserId,
+      authorAgentId: null, createdByRunId: null, body: "The current Human request.", createdAt: at,
+      updatedAt: at, deletedAt: null, sourceTrust: null });
+    const history = nativeContinuationCommentProjection({ id: historyCommentId, authorType: "user", authorUserId: otherUserId,
+      authorAgentId: null, createdByRunId: null, body: "Later readable history, not the admitted trigger.",
+      createdAt: new Date(at.getTime()+1000), updatedAt: new Date(at.getTime()+1000), deletedAt: null, sourceTrust: null });
+    const capture: NativeTaskContinuationCapture = { companyId, issueId, agentId, runId, responsibleUserId, wakeupRequestId,
+      wake: { requestedByActorType: "user", requestedByActorId: responsibleUserId, reason: "issue_commented",
+        originCommentIds: [triggerCommentId] },
+      envelope: { version: 1, companyId, issueId, trigger: { reason: "issue_commented", interactionId: null, sourceRunId: null },
+        originCommentIds: [triggerCommentId], objective: history.body, messages: [trigger, history], humanResponses: [],
+        interactionOutcomes: [], completedWork: null, recoveryOutcomes: [], unresolvedInteractionIds: [], completedActions: [],
+        coverage: { kind: "full_task_history", throughCommentId: historyCommentId, summaryThroughCommentId: null } },
+      commentSources: [history, trigger].map(message => ({ input: { kind: "comment" as const, issueId,
+        commentId: message.id, sourceVersion: "1", contentHash: nativeContinuationMessageHash(message) }, payloadSourceSnapshot: null })) };
+    const check = (value: NativeTaskContinuationCapture) => exactNativeTaskContinuation({ value: value.envelope, companyId, issueId,
+      runId, agentId, responsibleUserId, wakeupRequestId, wakeReason: "issue_commented", capture: value });
+    expect(check(capture)).toBe(capture);
+    const wrongTrigger = structuredClone(capture);
+    wrongTrigger.envelope.objective = trigger.body;
+    expect(check(wrongTrigger)).toBeNull();
+    const wrongRequester = structuredClone(capture);
+    wrongRequester.wake.requestedByActorId = otherUserId;
+    expect(check(wrongRequester)).toBeNull();
+  });
+
   it("binds completed Stage actions to their distinct producer and exact retained rendition", () => {
     const humanId="current-readable-human",wakeId=randomUUID(),parentRunId=randomUUID(),parentAgentId=randomUUID();
     const message=nativeContinuationCommentProjection({id:randomUUID(),authorType:"user",authorUserId:humanId,

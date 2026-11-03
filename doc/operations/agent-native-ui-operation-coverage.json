@@ -29753,7 +29753,7 @@
         "post:`/cli-auth/challenges/${id}/approve`"
       ],
       "argumentsSignature": "receipt.challengeId, receipt.token, receipt.userId, receipt.sessionId",
-      "line": 105,
+      "line": 128,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "HUMAN_ONLY",
@@ -29881,7 +29881,7 @@
         "post:`/cli-auth/challenges/${id}/cancel`"
       ],
       "argumentsSignature": "receipt.challengeId, receipt.token",
-      "line": 126,
+      "line": 149,
       "occurrence": 0,
       "owner": "server/src/routes/access.ts",
       "classification": "NOT_APPLICABLE",
