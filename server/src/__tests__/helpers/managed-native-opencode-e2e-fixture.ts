@@ -15,7 +15,7 @@ import { basename, dirname, join } from "node:path";
 import express from "express";
 import request from "supertest";
 import postgres from "postgres";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, ne, or, sql } from "drizzle-orm";
 import { expect } from "vitest";
 import { nativeCommentProjectionHash, nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
@@ -27,6 +27,7 @@ import {
   authSessions,
   createDb,
   heartbeatRuns,
+  agentWakeupRequests,
   environmentLeases,
   completionContracts,
   companyMemberships,
@@ -2822,6 +2823,12 @@ export async function runManagedNativeOpenCodeFixture(input: {
       const [gateAssessment] = gateCoordinator?.assessmentId ? await db.select().from(workAssessments).where(eq(workAssessments.id, gateCoordinator.assessmentId)) : [];
       const gateLeases = await db.select({ provider: environmentLeases.provider, status: environmentLeases.status,
         cleanupStatus: environmentLeases.cleanupStatus, releasedAt: environmentLeases.releasedAt }).from(environmentLeases).where(eq(environmentLeases.heartbeatRunId, run!.id));
+      const [gateClaim] = await db.select({ idempotencyKey: agentWakeupRequests.idempotencyKey }).from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+        inArray(agentWakeupRequests.status, ["queued", "claimed", "deferred", "deferred_issue_execution"]))).limit(1);
+      const [gateSuccessor] = gateRun ? await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId), ne(heartbeatRuns.id, gateRun.id),
+        or(inArray(heartbeatRuns.status, ["queued", "running", "retry_wait"]), gte(heartbeatRuns.createdAt, gateRun.createdAt)))).limit(1) : [];
       const decisionProof = (gateDecision?.decisionJson ?? {}) as Record<string, unknown>;
       const projectedVersion = decisionProof.projectedStatusVersion;
       const action = decisionProof.statusAction;
@@ -2842,6 +2849,23 @@ export async function runManagedNativeOpenCodeFixture(input: {
         priorDecisionPointerMatches: gateTask?.lastStatusDecisionId === gateAssessment?.priorDecisionId,
         priorStatusVersionMatches: gateTask?.statusVersion === gateAssessment?.priorStatusVersion,
         priorStatusMatches: gateTask?.status === gateAssessment?.priorIssueStatus,
+        responsibleUserMatches: gateRun?.responsibleUserId === aliceUserId,
+        nativeIssueMatches: gateRun?.nativeIssueId === task.id,
+        finishedAtPresent: Boolean(gateRun?.finishedAt),
+        assessmentOwnerMatches: Boolean(gateAssessment && gateAssessment.companyId === companyId &&
+          gateAssessment.issueId === task.id && gateAssessment.runId === run!.id &&
+          gateAssessment.resultId === gateCoordinator?.resultId && gateAssessment.contractId === gateRun?.completionContractId),
+        decisionOwnerMatches: Boolean(gateDecision && gateDecision.companyId === companyId &&
+          gateDecision.issueId === task.id && gateDecision.runId === run!.id &&
+          gateDecision.assessmentId === gateCoordinator?.assessmentId && gateDecision.applicationState === "applied" && gateDecision.appliedAt),
+        decisionStatusMatches: gateDecision?.toStatus === gateTask?.status,
+        decisionPriorVersionMatches: decisionProof.priorStatusVersion === gateAssessment?.priorStatusVersion,
+        decisionFromStatusMatches: gateDecision?.fromStatus === gateAssessment?.priorIssueStatus,
+        activeClaimPresent: Boolean(gateClaim),
+        activeClaimFromCurrentDecisionContinuation: Boolean(gateCoordinator?.decisionId &&
+          gateClaim?.idempotencyKey === `native-status:${gateCoordinator.decisionId}:continuation`),
+        successorPresent: Boolean(gateSuccessor),
+        completionEvidenceIncomplete: gateDecision?.reasonCode === "completion_evidence_incomplete",
         resultAssessmentMatches: gateRun?.resultJson?.assessmentId === gateCoordinator?.assessmentId,
         resultDecisionMatches: gateRun?.resultJson?.decisionId === gateCoordinator?.decisionId,
         pendingCleanup: await hasPendingRunCleanup(db, companyId, run!.id),

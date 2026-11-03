@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "ab20b8c3bc01d7be7e5f3959975bb1c9d96677947e79f5f65401da8e0baa7845"
+      "sha256": "077d2781f11078560cec5310588c63ec23f1f44a27048c6b10f0ac99262b1383"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -358,7 +358,7 @@
     },
     {
       "path": "server/src/services/issues.ts",
-      "sha256": "aa4d2e8a4fc558d86fdb108202dda926349fe116026faa7319a9775424d4c9ca"
+      "sha256": "077025cc54f7503b8ede898c4a8e131bbd626c2a4017e26931209e62a0803ba3"
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",
@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "8d67b38092b67ffeea9c3e2e105fbba6bf0fb6550c9b3492d290b06899013dea"
+      "sha256": "6cccb1548d95fb6d90db47319331f84cd09c6f55e53838941ae933d2d8688d9d"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -378,11 +378,11 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "389cba8641dc2d86340bf67cdb61bc3e8283b742a39e06e4a11d38f4f4c1ee5d"
+      "sha256": "b79f5e8b83351b31fcf580ed1660935d9fc841838abe3047ec86c20ffad8bee7"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "27fe646ec991a32a761bffcf884a504ede28d9c5d74744b4021ebc9f1c53e90c"
+      "sha256": "e8cac40f9a50dd3af45a2b1bac7026bfdd5387a8b42936ecf445a79670f5f606"
     },
     {
       "path": "server/src/services/notification-preference-proposals.ts",

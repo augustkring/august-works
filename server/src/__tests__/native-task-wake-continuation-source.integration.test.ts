@@ -133,7 +133,7 @@ async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
     agentId: f.presence.id, runId: run.id, onBehalfOfUserId: f.userId };
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.home, issueId: task.id, runId: run.id,
     actor: reader, ...sourceSet });
-  return { f, task, comment, run, wake, envelope, capture, validate, sourceSet, reader, payload, executionInput, receipt };
+  return { f, actor, task, comment, run, wake, envelope, capture, validate, sourceSet, reader, payload, executionInput, receipt };
 }
 
 it("captures a real initial Human comment and independently revalidates its selected source rendition", async () => {
@@ -189,10 +189,16 @@ it("retains another legitimate Human's readable history without promoting it to 
   await expect(f.validate()).resolves.toBeUndefined();
 }, 30_000);
 
-it.each(["edit", "delete", "revoke", "forged_wake", "cross_company_wake"] as const)("rejects %s after the original capture", async mutation => {
+it.each(["edit", "tombstone", "delete", "revoke", "forged_wake", "cross_company_wake"] as const)("treats %s as a current source-owner change", async mutation => {
   const f = await fixture(); await f.validate();
-  if (mutation === "edit") await db.update(issueComments).set({ body: "Changed original source" }).where(eq(issueComments.id, f.comment.id));
-  else if (mutation === "delete") await db.delete(issueComments).where(eq(issueComments.id, f.comment.id));
+  if (mutation === "edit") {
+    await expect(db.update(issueComments).set({ body: "Changed original source" }).where(eq(issueComments.id, f.comment.id)))
+      .rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(f.validate()).resolves.toBeUndefined();
+    return;
+  }
+  if (mutation === "tombstone") await issueService(db).tombstoneComment(f.comment.id, { actorType: "user", userId: f.f.userId });
+  else if (mutation === "delete") await issueService(db).removeComment(f.comment.id);
   else if (mutation === "revoke") await db.update(companyMemberships).set({ status: "inactive" })
     .where(and(eq(companyMemberships.companyId, f.f.home), eq(companyMemberships.principalId, f.f.userId)));
   else if (mutation === "forged_wake") await db.update(agentWakeupRequests)
@@ -244,6 +250,16 @@ it("binds an unresolved reference to its real pending request, invocation and or
   expect(captures[0]).not.toHaveProperty("nativeResponse");
   const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, f.invocationId));
   expect(invocation?.status).toBe("awaiting_approval"); expect(invocation?.completedAt).toBeNull();
+}, 30_000);
+
+
+it("allows a current Human reader with Task access to inspect a pending read-only interaction", async () => {
+  const f = await pendingFixture();
+  const captures = await captureNativeGovernedPendingInteractions({ db, companyId: f.f.home, issueId: f.task.id,
+    runId: f.run.id, agentId: f.f.presence.id, interactionIds: [f.interactionId], reader: f.actor });
+  expect(captures).toHaveLength(1);
+  expect(captures[0]!.projection.status).toBe("pending");
+  expect(captures[0]).not.toHaveProperty("nativeResponse");
 }, 30_000);
 
 it.each(["arguments", "expiry", "deleted", "revoked_reader", "changed_run", "resolved"] as const)("rejects pending owner %s mutations", async mutation => {

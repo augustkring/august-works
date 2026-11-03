@@ -1,6 +1,7 @@
 import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
 import { mirrorSlackBoardComment, slackBoardReplyBindings } from "./slack-board-messages.js";
-import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
+import { assertAgentRunPolicyAllowed, assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
+import { assertWorkspacePreparationBindingOwned } from "./legacy-controller-lease.js";
 import { externalConversationStateSql, nonIdleSlackIssueCondition, resumeSlackConversation } from "./slack-conversation-state.js";
 import { documentService } from "./documents.js";
 import { parseTaskSearch, taskSearchCtes, taskSearchScore } from "./task-search.js";
@@ -11737,8 +11738,9 @@ export function issueService(db: Db) {
       dbOrTx: any = db,
       postCommitActivityPublications?: ActivityPublication[],
       postCommitActions?: IssuePostCommitAction[],
-      options: { bindRuntimeSharedWorkspace?: boolean; workspaceBindingSourceTransform?: {
+      options: { bindRuntimeSharedWorkspace?: boolean; nativeStagePolicySourceTransform?: import("./native-stage-task-body-source.js").NativeStageTaskBodyOwner; workspaceBindingSourceTransform?: {
         agentId: string; runId: string; workspaceId: string; expectedPreviousSnapshotDigest: string;
+        preparingControllerBootId?: string;
       } } = {},
     ) => {
       const ownedActivityPublications: ActivityPublication[] = [];
@@ -12099,7 +12101,35 @@ export function issueService(db: Db) {
           patch.privacyParentIssueId = privacy.privacyParentIssueId;
           if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
         }
-        if (actorAgentId && actorRunId) {
+        let workspacePreparationOwner: Awaited<ReturnType<typeof assertWorkspacePreparationBindingOwned>> | null = null;
+        const preparationBinding = options.workspaceBindingSourceTransform;
+        const workspaceOnlyKeys = new Set(["executionWorkspaceId", "projectWorkspaceId",
+          "executionWorkspacePreference", "executionWorkspaceSettings"]);
+        const workspaceSourcePolicy = {issueIds: receiptExisting.parentId ? [receiptExisting.parentId] : [],
+          projectIds: receiptExisting.projectId ? [receiptExisting.projectId] : [], runIds: [], memoryIds: [], foundationRevisionIds: []};
+        if (preparationBinding?.preparingControllerBootId !== undefined) {
+          const snapshot = nativePayloadSourceSnapshotSchema.safeParse(receiptExisting.payloadSourceSnapshot);
+          if (![...Object.keys(issueData)].every(key => workspaceOnlyKeys.has(key)) ||
+              (issueData.executionWorkspaceId ?? receiptExisting.executionWorkspaceId) !== preparationBinding.workspaceId ||
+              receiptExisting.payloadSourceProtocolVersion !== 1 || receiptExisting.payloadSourceSnapshotInvalidated ||
+              receiptExisting.originKind !== "manual" || !receiptExisting.createdByUserId || receiptExisting.createdByAgentId ||
+              receiptExisting.conversationAgentId || (!receiptExisting.parentId && !receiptExisting.projectId) ||
+              !snapshot.success || snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== receiptExisting.companyId ||
+              snapshot.data.owner.id !== receiptExisting.id || snapshot.data.inputs.length !== 0 ||
+              !isDeepStrictEqual(snapshot.data.policy,workspaceSourcePolicy) ||
+              snapshot.data.digest !== preparationBinding.expectedPreviousSnapshotDigest)
+            throw unprocessable("Workspace preparation requires its exact manual Task binding");
+          if (actorAgentId !== preparationBinding.agentId || actorRunId !== preparationBinding.runId)
+            throw unprocessable("Workspace preparation actor changed");
+          workspacePreparationOwner = await assertWorkspacePreparationBindingOwned(tx as unknown as Db, {
+            companyId: receiptExisting.companyId, issueId: receiptExisting.id, agentId: preparationBinding.agentId,
+            runId: preparationBinding.runId, workspaceId: preparationBinding.workspaceId,
+            controllerBootId: preparationBinding.preparingControllerBootId,
+          });
+          await assertAgentRunPolicyAllowed(tx, receiptExisting.companyId, {agentId: actorAgentId, runId: actorRunId});
+          await tx.execute(sql`select set_config('paperclip.workspace_preparation_controller_boot_id',
+            ${workspacePreparationOwner.controllerBootId},true)`);
+        } else if (actorAgentId && actorRunId) {
           // Recheck under a run lock: a request admitted before Stop must not
           // commit a late Done after cancellation revoked its credentials.
           await assertAgentRunWriteAllowed(tx, receiptExisting.companyId, {
@@ -12245,6 +12275,8 @@ export function issueService(db: Db) {
               ${columns[key as keyof typeof columns].name}::text,
               ${is(value, SQL) ? sql`to_jsonb(${value})` : sql`${JSON.stringify(value)}::jsonb`})`), sql` || `);
           const binding = options.workspaceBindingSourceTransform;
+          const stageBinding = options.nativeStagePolicySourceTransform;
+          if (binding && stageBinding) throw unprocessable("Task source transforms require one exact owner");
           const [body] = await tx.execute<{ changed: boolean; nextHash: string }>(sql`select
             public.aw_native_payload_body_hash('issue', to_jsonb(${issues})) is distinct from
             public.aw_native_payload_body_hash('issue', to_jsonb(jsonb_populate_record(
@@ -12258,16 +12290,20 @@ export function issueService(db: Db) {
             // A self-Run edge cannot retain a body's restricted source closure:
             // it would form a cycle. Until exact payload sources are captured,
             // keep the old body rather than copy private run input into it.
-            if (agentBodyActor && !options.workspaceBindingSourceTransform && (!agentBodyActor.runId || !await canActorReadHeartbeatRunPrivacy(
+            if (agentBodyActor && !binding && !stageBinding && (!agentBodyActor.runId || !await canActorReadHeartbeatRunPrivacy(
               tx, { type: "none" }, { companyId: receiptExisting.companyId, id: agentBodyActor.runId },
             ))) throw unprocessable("Task body changes require retained access to the run's restricted sources");
-            if (!binding) {
+            if (stageBinding) {
+              const { prepareNativeStageTaskBodySnapshot } = await import("./native-stage-task-body-source.js");
+              payloadSourceSnapshotSql = await prepareNativeStageTaskBodySnapshot(tx, {task: receiptExisting, owner: stageBinding,
+                nextExecutionState: patch.executionState !== undefined ? patch.executionState : receiptExisting.executionState,
+                nextUnblockDescriptor: patch.unblockDescriptor !== undefined ? patch.unblockDescriptor : receiptExisting.unblockDescriptor,
+                actualBodyPatch: bodyPatch});
+            } else if (!binding) {
               patch.payloadSourceSnapshot = null;
             } else {
               const parsedSnapshot = nativePayloadSourceSnapshotSchema.safeParse(receiptExisting.payloadSourceSnapshot);
               const snapshot = parsedSnapshot.success ? parsedSnapshot.data : null;
-              const workspaceOnlyKeys = new Set(["executionWorkspaceId", "projectWorkspaceId",
-                "executionWorkspacePreference", "executionWorkspaceSettings"]);
               if (!snapshot || (!receiptExisting.parentId && !receiptExisting.projectId) ||
                   snapshot.owner.kind !== "issue" || snapshot.owner.companyId !== receiptExisting.companyId ||
                   snapshot.owner.id !== receiptExisting.id || snapshot.inputs.length !== 0 ||
@@ -12278,26 +12314,24 @@ export function issueService(db: Db) {
                   binding.expectedPreviousSnapshotDigest !== snapshot.digest) {
                 throw unprocessable("Manual Task workspace source cannot be rebound");
               }
-              const expectedPolicy = {
-                issueIds: receiptExisting.parentId ? [receiptExisting.parentId] : [],
-                projectIds: receiptExisting.projectId ? [receiptExisting.projectId] : [],
-                runIds: [], memoryIds: [], foundationRevisionIds: [],
-              };
+              const expectedPolicy = workspaceSourcePolicy;
               if (!isDeepStrictEqual(snapshot.policy, expectedPolicy))
                 throw unprocessable("Manual Task workspace source policy changed");
-              const originalProjectWorkspaceId = snapshot.transforms?.length
-                ? snapshot.transforms[0]!.beforeProjectWorkspaceId : receiptExisting.projectWorkspaceId;
+              const firstWorkspace = snapshot.transforms?.find(step => step.kind === "workspace_binding");
+              const originalProjectWorkspaceId = firstWorkspace ? firstWorkspace.beforeProjectWorkspaceId : receiptExisting.projectWorkspaceId;
               await assertManualRelatedSourcesCurrent(tx, receiptExisting.companyId, currentActor, {
                 parentId: receiptExisting.parentId, projectId: receiptExisting.projectId,
                 projectWorkspaceId: originalProjectWorkspaceId,
               });
-              const [run] = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
-                agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.issueId, nativeIssueId: heartbeatRuns.nativeIssueId })
-                .from(heartbeatRuns).where(and(eq(heartbeatRuns.id, binding.runId),
-                  eq(heartbeatRuns.companyId, receiptExisting.companyId))).for("share");
-              if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.agentId !== binding.agentId ||
-                  (run.nativeIssueId ?? run.issueId) !== receiptExisting.id)
-                throw unprocessable("Manual Task workspace binding requires its running Native Run");
+              if (!workspacePreparationOwner) {
+                const [run] = await tx.select({ id: heartbeatRuns.id, status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
+                  agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.issueId, nativeIssueId: heartbeatRuns.nativeIssueId })
+                  .from(heartbeatRuns).where(and(eq(heartbeatRuns.id, binding.runId),
+                    eq(heartbeatRuns.companyId, receiptExisting.companyId))).for("share");
+                if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.agentId !== binding.agentId ||
+                    (run.nativeIssueId ?? run.issueId) !== receiptExisting.id)
+                  throw unprocessable("Manual Task workspace binding requires its running Native Run");
+              }
               const [workspace] = await tx.select({ id: executionWorkspaces.id, companyId: executionWorkspaces.companyId,
                 projectId: executionWorkspaces.projectId, projectWorkspaceId: executionWorkspaces.projectWorkspaceId,
                 mode: executionWorkspaces.mode, status: executionWorkspaces.status }).from(executionWorkspaces).where(and(
@@ -12360,7 +12394,7 @@ export function issueService(db: Db) {
               const validWorkspacePreferences = ["inherit", "shared_workspace", "isolated_workspace", "operator_branch", "reuse_existing", "agent_default"];
               if (beforePreferenceValue !== null && !validWorkspacePreferences.includes(beforePreferenceValue))
                 throw unprocessable("Manual Task workspace preference is not eligible for source binding");
-              const beforePreference = beforePreferenceValue as NativePayloadSourceTransform["beforePreference"];
+              const beforePreference = beforePreferenceValue as Extract<NativePayloadSourceTransform, {kind: "workspace_binding"}>["beforePreference"];
               const beforeModeValue = (receiptExisting.executionWorkspaceSettings as Record<string, unknown> | null)?.mode;
               const validWorkspaceModes = ["inherit", "shared_workspace", "isolated_workspace", "isolated", "project_primary",
                 "operator_branch", "reuse_existing", "agent_default"];
@@ -12368,7 +12402,7 @@ export function issueService(db: Db) {
                   (typeof beforeModeValue !== "string" || !validWorkspaceModes.includes(beforeModeValue)))
                 throw unprocessable("Manual Task workspace mode is not eligible for source binding");
               const beforeMode = typeof beforeModeValue === "string"
-                ? beforeModeValue as NativePayloadSourceTransform["beforeMode"] & string
+                ? beforeModeValue as Extract<NativePayloadSourceTransform, {kind: "workspace_binding"}>["beforeMode"] & string
                 : null;
               const transitionId = randomUUID();
               const previousSnapshotDigest = snapshot.digest;
@@ -12388,8 +12422,8 @@ export function issueService(db: Db) {
                 previousSnapshotDigest,
                 previousOwnerContentHash: snapshot.owner.contentHash, nextOwnerContentHash: body.nextHash,
                 beforePreference, beforeMode, beforeSettingsHash,
-                afterPreference: nextPreference as NativePayloadSourceTransform["afterPreference"],
-                afterMode: (typeof afterModeValue === "string" ? afterModeValue : null) as NativePayloadSourceTransform["afterMode"],
+                afterPreference: nextPreference as Extract<NativePayloadSourceTransform, {kind: "workspace_binding"}>["afterPreference"],
+                afterMode: (typeof afterModeValue === "string" ? afterModeValue : null) as Extract<NativePayloadSourceTransform, {kind: "workspace_binding"}>["afterMode"],
                 afterSettingsHash,
               };
               const persisted = await persistActivity(tx as unknown as Db, {

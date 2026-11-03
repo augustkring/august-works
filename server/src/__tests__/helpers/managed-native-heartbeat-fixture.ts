@@ -117,6 +117,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   managedTwoAgentSignoff?: true;
   /** Existing Native session test seam for API-policy components that must not dispatch a provider request. */
   controlledNativeSessionBackendFactory?: (execution: NativeExecutionInput) => NativeSessionBackend;
+  /** Private fixture observer before the real Native runtime selection; no Run state is mutated. */
+  beforeNativeRuntimeSelection?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["beforeNativeRuntimeSelection"]>;
   providerReply: (facts: { body: Record<string, unknown>; callIndex: number; execution: NativeExecutionInput;
     runId: string; issueId: string | null }) => {
     stop_reason: "tool_use" | "end_turn"; content: Array<Record<string, unknown>>;
@@ -896,6 +898,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   registerNativeDraftGateway(db, gateway);
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
     environmentRuntime: sandboxHeartbeat?.environmentRuntime,
+    ...(input.beforeNativeRuntimeSelection ? { beforeNativeRuntimeSelection: input.beforeNativeRuntimeSelection } : {}),
     ...(input.controlledNativeSessionBackendFactory
       ? { nativeSessionBackendFactory: input.controlledNativeSessionBackendFactory }
       : {}),

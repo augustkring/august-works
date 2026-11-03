@@ -3,11 +3,16 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import request from "supertest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createDb, agentExecutionManifests, agentWakeupRequests, agents, environmentLeases, heartbeatRuns, issues,
-  statusDecisions, statusDecisionEffects, workAssessments } from "@paperclipai/db";
-import type { NativePayloadSourceInput } from "@paperclipai/shared";
+  statusDecisions, statusDecisionEffects, workAssessments, activityLog, companyMemberships } from "@paperclipai/db";
+import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
+import { captureNativeFinalizedStageTaskBodyRead, readNativeStageTaskBodyStep } from "../native-stage-task-body-source.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { captureNativeFinalizedContinuationSummary } from "../execution-continuation.js";
+import { captureNativeStageContinuationForDispatch } from "../native-stage-wake-source.js";
 import { issueService } from "../issues.js";
 import { verifyNativeCleanupRuntimeState } from "../execution-sandbox/run-lease-cleanup.js";
 import { withManagedNativeHeartbeatFixture } from "../../__tests__/helpers/managed-native-heartbeat-fixture.js";
@@ -48,6 +53,7 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
   let issueId = "";
   let fixtureExecutorId = "";
   let fixtureReviewerId = "";
+  let preNativeStageSummary: { runId: string; body: string } | null = null;
   const backendOwner = createControlledNativeSignoffBackend();
   const { controlsByRun, waitForBackend, controlledBackend } = backendOwner;
   await withManagedNativeHeartbeatFixture({
@@ -58,6 +64,19 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
     schedulerMode: "serial",
     managedTwoAgentSignoff: true,
     controlledNativeSessionBackendFactory: controlledBackend,
+    beforeNativeRuntimeSelection: async runId => {
+      const [preNativeRun]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId)).limit(1);
+      const context=preNativeRun?.contextSnapshot as Record<string,unknown>|undefined;
+      if(!preNativeRun || preNativeRun.agentId!==fixtureReviewerId || context?.source!=="issue.execution_stage") return;
+      expect(preNativeRun).toMatchObject({status:"running",runtimeMode:"legacy",nativeIssueId:null});
+      expect((preNativeRun.runnerProfileJson as Record<string,unknown>).nativeInputSourceReceipt).toBeFalsy();
+      const reader:AuthorizationActor={type:"agent",source:"agent_jwt",companyId:preNativeRun.companyId,
+        agentId:preNativeRun.agentId,runId:preNativeRun.id,onBehalfOfUserId:preNativeRun.responsibleUserId};
+      const selected=await captureNativeStageContinuationForDispatch(db,{companyId:preNativeRun.companyId,
+        issueId:String(context.issueId),receiver:preNativeRun,reader});
+      expect(selected).toMatchObject({trigger:{runId:preNativeRun.id},summary:{stageEntryRead:{kind:"stage_entry"}}});
+      preNativeStageSummary={runId:preNativeRun.id,body:selected!.summary!.body};
+    },
     prepareNativeRuntimeContext: async ({ agentId }) => {
       if (!fixtureExecutorId) fixtureExecutorId = agentId;
       else if (!fixtureReviewerId && agentId !== fixtureExecutorId) fixtureReviewerId = agentId;
@@ -79,6 +98,9 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       expect(issueId).toBeTruthy();
       await issueService(db).update(issueId, { assigneeAgentId: managedAgentIds.executor,
         actorUserId: actor.userId!, privacyActor: actor, companyGuard: companyId });
+      const [initialTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
+      const initialSnapshot = nativePayloadSourceSnapshotSchema.parse(initialTask?.payloadSourceSnapshot);
+      expect(initialSnapshot.transforms).toBeUndefined();
       await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, managedAgentIds.executor));
       await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
@@ -193,6 +215,14 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       expect(capturedWake).toBeTruthy();
       expect(capturedTask).toBeTruthy();
       expect(capturedWake).toMatchObject({ contentHash: nativeSha256(reviewerWake) });
+      const {nativeStageCommentApiEligible}=await import("../native-stage-comment-api.js");
+      const stageApiBinding={companyId,issueId,runId:reviewerRun!.id,agentId:managedAgentIds.reviewer};
+      expect(await nativeStageCommentApiEligible(db,stageApiBinding)).toBe(true);
+      expect(await nativeStageCommentApiEligible(db,{...stageApiBinding,preparedSourceSet:nativeRunInputSourceReceiptSchema.parse(reviewerProfile.nativeInputSourceReceipt).bootstrap})).toBe(true);
+      expect(await nativeStageCommentApiEligible(db,{...stageApiBinding,agentId:managedAgentIds.executor})).toBe(false);
+      await db.update(heartbeatRuns).set({contextSnapshot:{...reviewerContext,wakeReason:"issue_status_changed"}}).where(eq(heartbeatRuns.id,reviewerRun!.id));
+      expect(await nativeStageCommentApiEligible(db,stageApiBinding)).toBe(true);
+      await db.update(heartbeatRuns).set({contextSnapshot:reviewerContext}).where(eq(heartbeatRuns.id,reviewerRun!.id));
       expect(reviewerWake.executionStage).toMatchObject({ wakeRole: "reviewer", stageType: "review", stageId: reviewStageId,
         currentParticipant: { type: "agent", agentId: managedAgentIds.reviewer } });
       const reviewerIssue = reviewerWake.issue as Record<string, unknown>;
@@ -212,6 +242,8 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       });
       const { captureNativeExecutionStageTaskWakeSource } = await import("../native-stage-wake-source.js");
       expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toEqual(capturedWake);
+      expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput({ ...reviewerContext,
+        wakeReason: "issue_assigned" }, reviewerWake))).toEqual(capturedWake);
       const [stageIntentBeforeControl] = await db.select().from(agentWakeupRequests)
         .where(and(eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.id, reviewerContext.nativeStatusWakeIntentId as string))).limit(1);
       const [deliveredWakeBeforeControl] = await db.select().from(agentWakeupRequests)
@@ -221,6 +253,7 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       await db.update(agentWakeupRequests).set({ status: "skipped" })
         .where(eq(agentWakeupRequests.id, stageIntentBeforeControl!.id));
       expect(await captureNativeExecutionStageTaskWakeSource(db, stageCaptureInput(reviewerContext, reviewerWake))).toBeNull();
+      expect(await nativeStageCommentApiEligible(db,stageApiBinding)).toBe(false);
       await db.update(agentWakeupRequests).set({ status: stageIntentBeforeControl!.status, runId: stageIntentBeforeControl!.runId })
         .where(eq(agentWakeupRequests.id, stageIntentBeforeControl!.id));
       await db.update(agentWakeupRequests).set({ status: "completed", runId: reviewerRun!.id })
@@ -248,6 +281,143 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       expect(facts().sandboxRuntimeFacts?.closedAgentHosts).toContain(managedAgentIds.executor);
       expect(facts().sandboxRuntimeFacts?.closedAgentHosts).not.toContain(managedAgentIds.reviewer);
       await assertStoppedLease(executorRun!.id);
+
+      // Genuine machine-entry owners only: this backend produces its result through
+      // normal Native finalization. It does not exercise an SDK/model/tool dispatch.
+      const stageSnapshot = nativePayloadSourceSnapshotSchema.parse(reviewStageIssue!.payloadSourceSnapshot);
+      expect(reviewStageIssue!.payloadSourceSnapshotInvalidated).toBe(false);
+      expect(stageSnapshot.policy).toEqual(initialSnapshot.policy);
+      expect(stageSnapshot.inputs).toEqual(initialSnapshot.inputs);
+      expect(stageSnapshot.transforms).toHaveLength(1);
+      const entryStep = stageSnapshot.transforms![0]!;
+      if (entryStep.kind !== "native_stage_policy") throw new Error("managed_signoff_entry_transform_missing");
+      expect(entryStep).toMatchObject({ ownerKind: "native_status_decision", runId: executorRun!.id,
+        decisionId: executorDecision!.id, previousSnapshotDigest: initialSnapshot.digest,
+        previousOwnerContentHash: initialSnapshot.owner.contentHash });
+      expect((executorRun!.contextSnapshot as Record<string, unknown>).source).not.toBe("issue.execution_stage");
+      const [stageHash] = await db.execute<{ hash: string; digestValid: boolean }>(sql`select
+        public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash,
+        i.payload_source_snapshot->>'digest'=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as "digestValid"
+        from issues i where i.company_id=${companyId}::uuid and i.id=${issueId}::uuid`);
+      expect(stageHash).toEqual({ hash: stageSnapshot.owner.contentHash, digestValid: true });
+      expect(capturedTask!.contentHash).toBe(stageHash!.hash);
+      expect(reviewerProfile.nativeBootstrapTaskSource).toMatchObject({ input: capturedTask, payloadSourceSnapshot: stageSnapshot });
+      const entryReceipt = await readNativeStageTaskBodyStep(db, { task: reviewStageIssue!, step: entryStep });
+      expect(entryReceipt.originalSnapshot).toEqual(initialSnapshot);
+      expect(entryReceipt.fromExecutionState).toEqual(initialTask!.executionState);
+      expect(entryReceipt.toExecutionState).toEqual(reviewStageIssue!.executionState);
+      const reviewerReader: AuthorizationActor = { type: "agent", source: "none", companyId,
+        agentId: reviewerRun!.agentId, runId: reviewerRun!.id, onBehalfOfUserId: reviewerRun!.responsibleUserId };
+      const finalizedEntry = () => captureNativeFinalizedStageTaskBodyRead(db, { companyId, issueId,
+        runId: executorRun!.id, reader: reviewerReader });
+      expect(await finalizedEntry()).toMatchObject({ kind: "stage_entry", runId: executorRun!.id,
+        decisionId: executorDecision!.id, transitionIds: [entryStep.transitionId],
+        taskCapture: { payloadSourceSnapshot: initialSnapshot } });
+      const currentReceipt = nativeRunInputSourceReceiptSchema.parse(reviewerProfile.nativeInputSourceReceipt);
+      const readReviewerSources = (scopeDb: Parameters<typeof assertNativePayloadSourceSetCurrent>[0] = db) =>
+        assertNativePayloadSourceSetCurrent(scopeDb, { companyId, issueId, runId: reviewerRun!.id,
+          actor: reviewerReader, ...currentReceipt.bootstrap });
+      await expect(readReviewerSources()).resolves.toBeUndefined();
+      const executorReceipt = nativeRunInputSourceReceiptSchema.parse((executorRun!.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt);
+      const oldTask = executorReceipt.bootstrap.inputs.find((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+        source.kind === "task" && source.issueId === issueId);
+      expect(oldTask?.contentHash).toBe(initialSnapshot.owner.contentHash);
+      expect(oldTask?.contentHash).not.toBe(stageHash!.hash);
+      await expect(assertNativeTaskSourceOwnerCurrent(db, { companyId, actor: reviewerReader, source: oldTask! })).rejects.toBeDefined();
+      // Ordinary summary reads retain the same-Agent rule. Stage output is
+      // selected only through the current Stage entry and its finalized proof.
+      expect(await captureNativeFinalizedContinuationSummary({ db, companyId, issueId,
+        agentId: reviewerRun!.agentId, receiverRunId: reviewerRun!.id, sourceRunId: executorRun!.id,
+        reader: reviewerReader })).toBeNull();
+      const stageContinuation = await captureNativeStageContinuationForDispatch(db,{companyId,issueId,
+        receiver:reviewerRun!,reader:reviewerReader});
+      expect(stageContinuation).toMatchObject({trigger:{runId:reviewerRun!.id,executorRunId:executorRun!.id,
+        executorAgentId:executorRun!.agentId},summary:{stageEntryRead:{kind:"stage_entry",runId:executorRun!.id,
+          agentId:executorRun!.agentId}}});
+      expect(await captureNativeStageContinuationForDispatch(db,{companyId,issueId,receiver:reviewerRun!,
+        reader:{...reviewerReader,onBehalfOfUserId:randomUUID()}})).toBeNull();
+      expect(await captureNativeStageContinuationForDispatch(db,{companyId,issueId,
+        receiver:{...reviewerRun!,responsibleUserId:randomUUID()},reader:reviewerReader})).toBeNull();
+      expect(await captureNativeFinalizedContinuationSummary({db,companyId,issueId,agentId:reviewerRun!.agentId,
+        receiverRunId:reviewerRun!.id,sourceRunId:executorRun!.id,reader:reviewerReader,
+        stageEntryRead:stageContinuation!.summary!.stageEntryRead,stageTrigger:{...stageContinuation!.trigger,chainHash:"0".repeat(64)}})).toBeNull();
+      expect((reviewerContext.executionContinuation as {completedWork?:string}).completedWork).toBe(stageContinuation!.summary!.body);
+      expect((reviewerProfile.nativeBootstrapFinalizedContinuationSummary as {stageEntryRead?:{kind:string}}).stageEntryRead)
+        .toMatchObject({kind:"stage_entry"});
+      expect(parseNativeExecutionInput(reviewerProfile.nativeExecutionInput).task.prompt).toContain(stageContinuation!.summary!.body);
+      expect(preNativeStageSummary).toEqual({runId:reviewerRun!.id,body:stageContinuation!.summary!.body});
+
+      const postgresCause = (error: unknown): { code?: string; message?: string } => {
+        let current = error;
+        for (let depth = 0; depth < 8 && current && typeof current === "object"; depth++) {
+          const value = current as { code?: string; message?: string; cause?: unknown };
+          if (value.code) return value;
+          current = value.cause;
+        }
+        return {};
+      };
+      const forgedUpdate = async (kind: "literal" | "missing_receipt" | "copied_receipt" | "reordered" | "pruned") => {
+        let reachedDeferredGuard = false;
+        let rejection: unknown;
+        try {
+          await db.transaction(async tx => {
+            const transitionId = kind === "copied_receipt" ? entryStep.transitionId : randomUUID();
+            const forgedStep = { ...entryStep, transitionId, previousSnapshotDigest: stageSnapshot.digest,
+              previousOwnerContentHash: stageSnapshot.owner.contentHash, nextOwnerContentHash: stageSnapshot.owner.contentHash };
+            const transforms = kind === "pruned" ? [] : kind === "reordered" ? [forgedStep, entryStep]
+              : [...stageSnapshot.transforms!, forgedStep];
+            const value = { ...stageSnapshot, transforms };
+            await tx.execute(sql`with original as (select to_jsonb(i) as row from issues i
+              where i.company_id=${companyId}::uuid and i.id=${issueId}::uuid),
+              changed as (select row || ${JSON.stringify(kind === "literal" ? { title: "Substituted literal" } : {})}::jsonb as row from original),
+              projected as (select jsonb_set(${JSON.stringify(value)}::jsonb-'digest','{owner,contentHash}',
+                to_jsonb(public.aw_native_payload_body_hash('issue',row))) as value,
+                public.aw_native_payload_body_hash('issue',row) as hash from changed),
+              body as (select case when ${kind}='literal' then jsonb_set(value,
+                array['transforms',${String(transforms.length - 1)},'nextOwnerContentHash'],to_jsonb(hash)) else value end as value from projected),
+              sealed as (select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) as snapshot from body)
+              update issues i set payload_source_snapshot=sealed.snapshot,
+                title=case when ${kind}='literal' then 'Substituted literal' else i.title end
+              from sealed where i.company_id=${companyId}::uuid and i.id=${issueId}::uuid`);
+            reachedDeferredGuard = true;
+            await tx.execute(sql`set constraints issues_native_stage_source_owner immediate`);
+          });
+        } catch (error) { rejection = error; }
+        expect(postgresCause(rejection).code).toBe("23514");
+        if (kind === "missing_receipt" || kind === "copied_receipt") {
+          expect(reachedDeferredGuard).toBe(true);
+          expect(postgresCause(rejection).message).toContain("Native Stage source is not bound to its actual producer receipt");
+        }
+        const [restored] = await db.select().from(issues).where(eq(issues.id, issueId)).limit(1);
+        expect(restored!.payloadSourceSnapshot).toEqual(stageSnapshot);
+        expect(restored!.title).toBe(reviewStageIssue!.title);
+      };
+      for (const kind of ["literal", "missing_receipt", "copied_receipt", "reordered", "pruned"] as const) await forgedUpdate(kind);
+      await expect(readReviewerSources()).resolves.toBeUndefined();
+      const rollback = new Error("managed_signoff_source_negative_rollback");
+      await expect(db.transaction(async tx => {
+        const erased = await tx.delete(activityLog).where(and(eq(activityLog.companyId, companyId),
+          eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
+          eq(activityLog.action, "issue.payload_source_captured"))).returning({ id: activityLog.id });
+        expect(erased).toHaveLength(1);
+        await expect(readReviewerSources(tx)).rejects.toBeDefined();
+        throw rollback;
+      })).rejects.toBe(rollback);
+      await expect(readReviewerSources()).resolves.toBeUndefined();
+      await expect(db.transaction(async tx => {
+        const revoked = await tx.update(companyMemberships).set({ status: "inactive" }).where(and(
+          eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, actor.userId!))).returning({ id: companyMemberships.id });
+        expect(revoked).toHaveLength(1);
+        await expect(readReviewerSources(tx)).rejects.toBeDefined();
+        // A real revoked Human cannot use the live Stage owner path even when
+        // the actor/run identity otherwise matches the Reviewer exactly.
+        await expect(captureNativeStageContinuationForDispatch(tx,{companyId,issueId,
+          receiver:reviewerRun!,reader:reviewerReader})).resolves.toBeNull();
+        throw rollback;
+      })).rejects.toBe(rollback);
+      await expect(readReviewerSources()).resolves.toBeUndefined();
+      expect(await finalizedEntry()).not.toBeNull();
 
       const missingComment = await request(managedSignoff.app).patch(`/api/issues/${issueId}`)
         .set("Authorization", `Bearer ${managedSignoff.agentApiTokens.reviewer}`)
@@ -390,3 +560,81 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
   expect(issueId).toBeTruthy();
   completed = true;
 }, 600_000);
+
+it("executes the declared Reviewer comment and terminal result from one actual managed model response", async()=>{
+  completed=false;
+  let issueId="",executorId="",reviewerId="";
+  const calls=new Map<string,number>();
+  await withManagedNativeHeartbeatFixture({db,root:home,opencodeBinary:qualifiedOpenCodeBinary(),timeoutSec:180,
+    schedulerMode:"serial",managedTwoAgentSignoff:true,
+    providerReply:({body,execution,runId})=>{
+      const number=(calls.get(runId)??0)+1;calls.set(runId,number);
+      if(number!==1)throw new Error("managed_stage_comment_unexpected_fresh_model_turn");
+      const tools=body.tools as Array<{name:string;input_schema?:unknown}>;
+      const tool=(name:string)=>{
+        const found=tools.find(value=>value.name===name || ["paperclip__","paperclip_","paperclip."].some(prefix=>value.name===`${prefix}${name}`));
+        if(!found)throw new Error(`managed_stage_comment_missing_tool_${name}`);
+        return found;
+      };
+      const finish={type:"tool_use",id:`finish-${runId}`,name:tool("paperclip_finish").name,input:{schema:"paperclip.run_result.v1",
+        reportedWorkDisposition:"done",summary:"Completed the declared stage with the required decision comment.",
+        completionClaim:{contractRevision:execution.completionContract.contract.revision,objectiveSatisfied:true,
+          criteria:execution.completionContract.contract.criteria.map(criterion=>({criterionId:criterion.id,status:"satisfied",evidenceRefs:[]})),remainingWork:[]},
+        evidence:[],verification:[],attentionRequests:[],artifacts:[]}};
+      const api=tool("call_api");
+      if(execution.binding.agentId===executorId){
+        expect(JSON.stringify(api)).not.toContain("POST /api/issues/{id}/comments");
+        return {stop_reason:"tool_use",content:[finish]};
+      }
+      if(execution.binding.agentId!==reviewerId)throw new Error("managed_stage_comment_foreign_reviewer");
+      expect(JSON.stringify(api)).toContain("POST /api/issues/{id}/comments");
+      expect(JSON.stringify(api)).toContain(issueId);
+      return {stop_reason:"tool_use",content:[{type:"tool_use",id:`stage-comment-${runId}`,name:api.name,
+        input:{operationId:"POST /api/issues/{id}/comments",pathParams:{id:issueId},body:{body:"## Review: APPROVED\nThe declared work satisfies the review criteria."}}},finish]};
+    },
+    driveScheduler:async({actor,companyId,heartbeat,managedAgentIds,managedSignoff,factsForRun})=>{
+      if(!managedAgentIds || !managedSignoff)throw new Error("managed_stage_comment_two_agents_missing");
+      executorId=managedAgentIds.executor;reviewerId=managedAgentIds.reviewer;
+      const created=await request(managedSignoff.app).post(`/api/companies/${companyId}/issues`).set("Cookie",managedSignoff.humanCookie)
+        .send({title:"Actual managed Reviewer decision",description:"Complete the declared review with one same-Task decision comment.",status:"todo",
+          executionPolicy:{stages:[{type:"review",participants:[{type:"agent",agentId:reviewerId}]}]}});
+      expect(created.status).toBe(201);issueId=created.body.id;
+      await issueService(db).update(issueId,{assigneeAgentId:executorId,actorUserId:actor.userId!,privacyActor:actor,companyGuard:companyId});
+      const wake=await heartbeat.wakeup(executorId,{source:"assignment",triggerDetail:"system",reason:"issue_assigned",requestedByActorType:"user",
+        requestedByActorId:actor.userId!,payload:{issueId},contextSnapshot:{issueId}});
+      expect(wake).not.toBeNull();
+      const runs=()=>db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.nativeIssueId,issueId)));
+      await expect.poll(async()=>{
+        const rows=await runs();return rows.length===2 && rows.every(run=>["succeeded","failed","cancelled","timed_out"].includes(run.status));
+      },{timeout:360_000}).toBe(true);
+      await heartbeat.drainActiveRunExecutions();
+      const rows=await runs();expect(rows).toHaveLength(2);
+      const reviewer=rows.find(run=>run.agentId===reviewerId);
+      expect(reviewer,JSON.stringify(rows.map(run=>({id:run.id,status:run.status,errorCode:run.errorCode})))).toMatchObject({status:"succeeded",runtimeMode:"native",responsibleUserId:actor.userId});
+      for(const run of rows){expect(calls.get(run.id)).toBe(1);expect(factsForRun(run.id).providerCallCount).toBe(1)}
+      if(!reviewer)throw new Error("managed_stage_comment_reviewer_missing");
+      const profile=reviewer.runnerProfileJson as Record<string,unknown>;
+      const captures=profile.nativeToolResultSourceCaptures as Array<Record<string,unknown>>;
+      const stage=captures.filter(capture=>capture.stageComment!==undefined);
+      expect(stage).toHaveLength(1);
+      const witness=stage[0]!.stageComment as import("../native-stage-comment-api.js").NativeManagedStageCommentCapture;
+      expect(witness).toMatchObject({operationId:"POST /api/issues/{id}/comments",callId:`stage-comment-${reviewer.id}`});
+      const apiReceipts=(reviewer.resultJson as Record<string,unknown>).apiToolReceipts as Record<string,Record<string,unknown>>;
+      const api=Object.values(apiReceipts).find(value=>value.callId===witness.callId);
+      expect(api).toMatchObject({state:"completed",operationId:"POST /api/issues/{id}/comments",method:"POST",pathAndQuery:`/api/issues/${issueId}/comments`,
+        result:expect.objectContaining({ok:true,status:201,data:expect.objectContaining({id:witness.commentId,issueId,createdByRunId:reviewer.id})})});
+      const {operationId:_operationId,...response}=api!.result as Record<string,unknown>;
+      const {readNativeManagedStageCommentCapture}=await import("../native-stage-comment-api.js");
+      expect(await readNativeManagedStageCommentCapture(db,{companyId,issueId,runId:reviewer.id,agentId:reviewerId,callId:witness.callId,
+        argumentsHash:witness.argumentsHash,result:{...response,apiOperationId:api!.operationId},outputCapture:witness.outputCapture,reader:actor})).toEqual(witness);
+      const {captureNativeFinalizedStageConsumption}=await import("../native-stage-wake-source.js");
+      expect(await captureNativeFinalizedStageConsumption(db,{companyId,issueId,runId:reviewer.id,reader:actor})).toBeTruthy();
+      const [task]=await db.select().from(issues).where(eq(issues.id,issueId));
+      expect(task).toMatchObject({status:"done"});
+      // A historical acknowledgement never offers a new Stage call profile.
+      const {nativeStageCommentApiEligible}=await import("../native-stage-comment-api.js");
+      expect(await nativeStageCommentApiEligible(db,{companyId,issueId,runId:reviewer.id,agentId:reviewerId})).toBe(false);
+    },
+  });
+  completed=true;
+},600_000);

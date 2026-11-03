@@ -21052,6 +21052,7 @@ export function heartbeatService(
       }
       const continuationCommentSources: NativeCommentSourceCapture[] = [];
       const nativeTaskContinuationCapture: { value: import("./execution-continuation.js").NativeTaskContinuationCapture | null } = { value: null };
+      const nativeStageContinuationTrigger: { value: import("./execution-continuation.js").NativeStageTaskContinuationTrigger | null } = { value: null };
       const executionContinuation =
         issueRef && !isConversation(issueContext) && issueContext?.assigneeAgentId === agent.id
           ? await buildExecutionContinuation({
@@ -21070,6 +21071,8 @@ export function heartbeatService(
                 ? capture => continuationCommentSources.push(capture) : undefined,
               onContinuationSourceCapture: agent.adapterType === "paperclip_runner"
                 ? capture => { nativeTaskContinuationCapture.value = capture; } : undefined,
+              onStageTriggerCapture: agent.adapterType === "paperclip_runner"
+                ? trigger => { nativeStageContinuationTrigger.value = trigger; } : undefined,
             })
           : null;
       context.executionContinuation = executionContinuation;
@@ -22329,8 +22332,11 @@ export function heartbeatService(
             Boolean(issueContext.createdByUserId) && issueContext.createdByAgentId === null &&
             Boolean(issueContext.parentId || issueContext.projectId) && issueContext.conversationAgentId === null && Boolean(taskSourceCapture.value?.payloadSourceSnapshot?.digest)
             ? { agentId: agent.id, runId: run.id, workspaceId: workspace.id,
-                expectedPreviousSnapshotDigest: taskSourceCapture.value?.payloadSourceSnapshot?.digest ?? "" }
+                expectedPreviousSnapshotDigest: taskSourceCapture.value?.payloadSourceSnapshot?.digest ?? "",
+                ...(run.runtimeMode === "legacy" && agent.adapterType === "paperclip_runner"
+                  ? { preparingControllerBootId: legacyControllerBootId } : {}) }
             : undefined;
+          if (workspaceBindingSourceTransform) await controllerLease.assertOwned();
           await issuesSvc.update(
             issueId,
             { ...nextIssuePatch, companyGuard: agent.companyId,
@@ -24398,6 +24404,7 @@ export function heartbeatService(
                 commentSources: nativeTaskWakeCapture.commentSources,
                 continuationCapture: nativeTaskContinuationCapture.value ? { ...nativeTaskContinuationCapture.value,
                   ...(nativeBootstrapRetainedRunSource ? { retainedSource: nativeBootstrapRetainedRunSource.source } : {}) } : null,
+                expectedStageTrigger: nativeStageContinuationTrigger.value ?? undefined,
                 onContinuationCapture: capture => { closedTaskContinuation = capture; },
               }))
               : null;
@@ -24663,6 +24670,8 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContinuationCommentSources: continuationCommentSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInteractionSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapFinalizedContinuationSummary: nativeBootstrapContinuationCapture?.finalizedSummary ?? null,
+                    nativeBootstrapStageTrigger: nativeStageContinuationTrigger.value ?? null,
+                    nativeBootstrapStageActionSources: nativeBootstrapContinuationCapture?.stageActions ?? null,
                     nativeBootstrapContinuationSummaryDocument: nativeBootstrapContinuationCapture?.summary ?? null }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,

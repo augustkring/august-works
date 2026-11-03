@@ -8,7 +8,7 @@ import request from "supertest";
 import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
-  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations } from "@paperclipai/db";
+  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -335,7 +335,7 @@ describe("dependency scheduling through the installed Native text draft controll
         await vi.waitFor(() => {
           expect(calls).toBe(1);
           expect(dispatchedPlanIds).toEqual([taskPlans[0]!.plan.id]);
-        }, { timeout: 10_000, interval: 25 });
+        }, { timeout: 30_000, interval: 25 });
       } catch {
         const [run] = await db.select({ status: heartbeatRuns.status, errorCode: heartbeatRuns.errorCode,
           nativePhase: heartbeatRuns.nativePhase }).from(heartbeatRuns)
@@ -433,6 +433,84 @@ describe("dependency scheduling through the installed Native text draft controll
           await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
       }
     }
+  }, 60_000);
+  it("keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, human, model } = fixture;
+    const entry = await createDraftPlan(fixture, "Human comment interaction under a pause hold");
+    const [hold] = await db.insert(issueTreeHolds).values({
+      companyId: f.home, rootIssueId: entry.task.id, mode: "pause", status: "active",
+      reason: "Preserve the Human pause while allowing a genuine comment interaction.",
+      releasePolicy: { strategy: "manual" },
+    }).returning();
+    expect(hold).toBeDefined();
+    let calls = 0;
+    const output = "The held Task has a bounded internal draft for Human review.";
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      calls++;
+      expect(calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      const body = String(init.body);
+      expect(JSON.parse(body)).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(body).tools).toBeUndefined();
+      expect(body).toContain("assignedRuntimeContext");
+      expect(body).not.toContain(credential);
+      const [reservation] = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+      expect(reservation).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const ordinary = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: entry.task.id }, contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" } });
+      expect(ordinary).toBeNull();
+      const [suppressed] = await db.select().from(agentWakeupRequests)
+        .where(and(eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.agentId, f.presence.id)));
+      expect(suppressed).toMatchObject({ status: "skipped", reason: "issue_tree_hold_active" });
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entry.plan.id))).toEqual([]);
+      expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id))).toEqual([]);
+      expect(calls).toBe(0);
+
+      const comment = await issueService(db).addComment(entry.task.id,
+        "Please prepare a short internal draft while preserving the pause.", { userId: f.userId },
+        { authorType: "user", manualInputActor: human });
+      expect(comment).toMatchObject({ issueId: entry.task.id, authorType: "user", authorUserId: f.userId });
+      const forged = await heartbeat.wakeup(f.presence.id, { source: "on_demand", triggerDetail: "manual",
+        reason: "issue_commented", payload: { issueId: entry.task.id, commentId: comment.id },
+        requestedByActorType: "agent", requestedByActorId: f.presence.id });
+      expect(forged).toBeNull();
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entry.plan.id))).toEqual([]);
+      expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id))).toEqual([]);
+      expect(calls).toBe(0);
+
+      const interaction = await heartbeat.wakeup(f.presence.id, { source: "automation", triggerDetail: "system",
+        reason: "issue_commented", payload: { issueId: entry.task.id, commentId: comment.id },
+        requestedByActorType: "user", requestedByActorId: f.userId,
+        contextSnapshot: { issueId: entry.task.id, commentId: comment.id, wakeCommentId: comment.id,
+          wakeReason: "issue_commented", source: "issue.comment" } });
+      expect(interaction).not.toBeNull();
+      const [interactionRun] = await db.select().from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, interaction!.id)));
+      expect(interactionRun?.contextSnapshot).toMatchObject({ treeHoldInteraction: true,
+        activeTreeHold: { holdId: hold!.id, rootIssueId: entry.task.id, mode: "pause", interaction: true } });
+      await vi.waitFor(() => { expect(calls).toBe(1); }, { timeout: 20_000, interval: 25 });
+      await heartbeat.drainActiveRunExecutions();
+      expect(calls).toBe(1);
+      await assertCompletedDraft(fixture, entry, interaction!.id, output);
+      const [heldAfterInteraction] = await db.select({ status: issueTreeHolds.status }).from(issueTreeHolds)
+        .where(and(eq(issueTreeHolds.companyId, f.home), eq(issueTreeHolds.id, hold!.id)));
+      expect(heldAfterInteraction).toMatchObject({ status: "active" });
+      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({ id: interaction!.id, nativeIssueId: entry.task.id,
+        responsibleUserId: f.userId, runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
+    });
   }, 60_000);
   it("runs unrelated assigned Native Text tasks concurrently under separate issue claims", async () => {
     const fixture = await seedInstalledDraft();

@@ -1,3 +1,4 @@
+import { nativeStageCommentApiCallSchema, nativeStageCommentApiEligible, nativeStageCommentApiDecisionCurrent, nativeStageCommentApiToolDefinition, readNativeManagedStageCommentCapture, type NativeManagedStageCommentCapture } from "../native-stage-comment-api.js";
 import { configuredNativeProviderPackInstallRoot, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT } from "./native-artifact-preparation.js";
 import { REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_PINS, REMOTE_PROVIDER_PACK_PROFILE_DIGESTS, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "./native-artifact-preparation.js";
 import { NATIVE_PROVIDER_PACK_DISCOVERY_SCRIPT, NATIVE_RUNNER_ARTIFACT_CHECKSUM_SCRIPT, nativeProviderPackLinkCommand, nativeProviderPackVerificationArgs } from "./native-artifact-preparation.js";
@@ -161,7 +162,7 @@ import {
 } from "@paperclipai/db";
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
-import { nativeSha256 } from "./canonical.js";
+import { nativeSha256, nativeCallApiResultEnvelope } from "./canonical.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
@@ -1546,7 +1547,7 @@ class SessionToolAuthorityEpoch {
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
-    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>,
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>,
     private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null },
     private readonly serializeManagedOperation?: <T>(operation: () => Promise<T>) => Promise<T>) {
     this.runId = runId;
@@ -1638,6 +1639,7 @@ class SessionToolAuthorityEpoch {
       markPhase("dispatch_binding");
       const projectReadCapture: { value: NativeProjectToolResultSource | null } = { value: null };
       const projectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
+      const stageCommentCapture: { value: NativeManagedStageCommentCapture | null } = { value: null };
       let result: unknown;
       try {
         result = await this.#authority.execute(call, {
@@ -1648,6 +1650,7 @@ class SessionToolAuthorityEpoch {
           },
           onNativeInputToolResult: this.onNativeInputToolResult,
           onManagedProjectCreateToolResult: async capture => { projectCreateCapture.value = capture; },
+          onManagedStageCommentToolResult: async capture => { stageCommentCapture.value = capture; },
           ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
         });
       } catch (error) {
@@ -1670,12 +1673,13 @@ class SessionToolAuthorityEpoch {
           throw error;
         }
       }
-      if (call.turnId && call.tool === "call_api" && (projectReadCapture.value?.source || projectCreateCapture.value))
+      if (call.turnId && call.tool === "call_api" && (projectReadCapture.value?.source || projectCreateCapture.value || stageCommentCapture.value))
         try {
           await this.onManagedOpenCodeToolResult?.({ tool: "call_api", callId: call.callId, turnId: call.turnId,
             argumentsHash, result,
             ...(projectReadCapture.value?.source ? { projectRead: projectReadCapture.value } : {}),
-            ...(projectCreateCapture.value ? { projectCreate: projectCreateCapture.value } : {}) });
+            ...(projectCreateCapture.value ? { projectCreate: projectCreateCapture.value } : {}),
+            ...(stageCommentCapture.value ? { stageComment: stageCommentCapture.value } : {}) });
         } catch (error) {
           reportCreateTaskFailure("managed_project_api_result_callback_failure_test_facts", error);
           throw error;
@@ -8317,7 +8321,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
     "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; result: unknown;
   contextRead?: NativeContextReadBinding;
   projectRead?: NativeProjectToolResultSource;
-  projectCreate?: NativeManagedProjectCreateCapture;
+  stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture;
   outputCapture?: NativeModelOutputCapture | null;
 }): Promise<void> {
   type CapturePhase = "capture_binding" | "transaction_locks" | "run_receipt" | "provider_dispatch" |
@@ -8335,6 +8339,11 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
     diagnosticPhase = next;
   };
   const projectRead = input.tool === "call_api" ? input.projectRead : undefined;
+  const stageComment = input.tool === "call_api" ? input.stageComment : undefined;
+  if (stageComment && (input.projectRead || input.projectCreate || stageComment.callId !== input.callId ||
+    stageComment.argumentsHash !== input.argumentsHash || stageComment.operationId !== "POST /api/issues/{id}/comments" ||
+    stageComment.resultDigest !== nativeSha256(nativeCallApiResultEnvelope(input.callId,input.result))))
+    throw new Error("managed_opencode_tool_result_binding_invalid");
   const projectCreate = input.tool === "create_project" ||
     (input.tool === "call_api" && input.projectCreate?.receipt.tool === "call_api") ? input.projectCreate : undefined;
   const projectOutput = input.tool === "call_api" ? record(input.result).data : input.result;
@@ -8347,11 +8356,11 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
     projectCreate.outputCapture.managedOpenCodeToolUse?.toolName !== projectCreate.receipt.tool ||
     projectCreate.outputCapture.managedOpenCodeToolUse?.argumentsHash !== input.argumentsHash))
     throw new Error("managed_opencode_tool_result_binding_invalid");
-  if (input.tool === "call_api" && !projectCreate && (!projectRead?.source || projectRead.tool !== "call_api" ||
+  if (input.tool === "call_api" && !projectCreate && !stageComment && (!projectRead?.source || projectRead.tool !== "call_api" ||
     projectRead.operationId !== "GET /api/projects/{id}" || projectRead.callId !== input.callId ||
     projectRead.turnId !== input.turnId || !/^[0-9a-f]{64}$/.test(projectRead.requestHash) ||
     !/^[0-9a-f]{64}$/.test(projectRead.resultDigest))) throw new Error("managed_opencode_tool_result_binding_invalid");
-  const digest = projectRead?.resultDigest ?? (projectCreate && input.tool === "call_api"
+  const digest = stageComment?.resultDigest ?? projectRead?.resultDigest ?? (projectCreate && input.tool === "call_api"
     ? nativeSha256({ ok: true, operationId: "call_api", callId: input.callId, result: input.result })
     : nativeSha256(input.result));
   try {
@@ -8359,6 +8368,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       markResultPhase("transaction_locks");
       await lockAnalyticalCompany(tx as unknown as Db, input.companyId);
       await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+      if (stageComment) await tx.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,input.companyId),eq(issues.id,input.issueId))).for("share");
       await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
       markResultPhase("run_receipt");
       const [run] = await tx.select().from(heartbeatRuns).where(and(
@@ -8502,6 +8512,12 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
         managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
         managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash);
+      if (stageComment) {
+        if (!outputCaptureMatchesCall || !managedOutputCapture || !isDeepStrictEqual(stageComment.outputCapture,managedOutputCapture))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        const current = await readNativeManagedStageCommentCapture(tx,{...input,outputCapture:managedOutputCapture});
+        if (!isDeepStrictEqual(current,stageComment))throw new Error("managed_opencode_tool_result_binding_invalid");
+      }
       let returnedProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
       let createdProjectSource: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
       let createdProjectWorkspaceSources: Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[] = [];
@@ -8806,6 +8822,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         ...(nativeReadCapture ? { nativeReadResult: true, sourceSet: nativeReadCapture.sourceSet,
           sourceInputs: nativeReadCapture.sourceSet.inputs } : {}),
         ...(returnedProjectSource ? { projectSource: returnedProjectSource } : {}),
+        ...(stageComment ? {stageComment} : {}),
         ...(projectCreateSourceSet ? { projectCreate: { receipt: projectCreate!.receipt,
           sourceSet: projectCreateSourceSet, workspaceSources: createdProjectWorkspaceSources,
           outputCapture: projectCreate!.outputCapture,
@@ -8925,7 +8942,10 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
     const projectRead = isDeepStrictEqual(Object.keys(args).sort(), ["operationId", "pathParams"]) &&
       args.operationId === "GET /api/projects/{id}" && isDeepStrictEqual(Object.keys(pathParams), ["id"]) && uuid;
     const projectCreate = managedNativeProjectApiCallSchema.safeParse(input.arguments);
-    if (!projectRead && (!projectCreate.success || projectCreate.data.pathParams.companyId !== input.companyId))
+    const stageComment = nativeStageCommentApiCallSchema.safeParse(input.arguments);
+    const stageCommentAllowed = stageComment.success && stageComment.data.pathParams.id === input.issueId &&
+      await nativeStageCommentApiDecisionCurrent(input.db,{...input,arguments:input.arguments});
+    if (!projectRead && !stageCommentAllowed && (!projectCreate.success || projectCreate.data.pathParams.companyId !== input.companyId))
       throw new Error("managed_opencode_project_api_operation_not_supported");
   }
   if (input.tool === "create_project") {
@@ -11032,7 +11052,8 @@ async function executePaperclipNativeSessionWithinScope(
                   leaseOwner, attempt, controller, ...call,
                 });
                 const managedProjectApiCreate = call.tool === "call_api" &&
-                  managedNativeProjectApiCallSchema.safeParse(call.arguments).success;
+                  (managedNativeProjectApiCallSchema.safeParse(call.arguments).success ||
+                    nativeStageCommentApiCallSchema.safeParse(call.arguments).success);
                 if (managedOpenCodeOutputCaptureRef && (["write_document", "create_task", "create_project", "self_remember"].includes(call.tool) || managedProjectApiCreate)) {
                   if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
                   managedOpenCodeOutputCaptureRef.value = await prepareManagedOpenCodeOutputCapture({
@@ -13371,7 +13392,7 @@ export async function createRunnerdBackend(input: {
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
   onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
-  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -13670,6 +13691,9 @@ async function createRunnerdBackendWithinSessionClaim(
   let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
   if (managedOpenCode) {
+    const stageCommentCatalog = input.conversationMode !== true && input.bootstrapSourceClosure?.sourceSet &&
+      await nativeStageCommentApiEligible(input.db,{...input.execution.binding,
+        preparedSourceSet:input.bootstrapSourceClosure.sourceSet});
     const allowedNames = new Set(["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context",
       "call_api", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
@@ -13700,6 +13724,9 @@ async function createRunnerdBackendWithinSessionClaim(
           },
           required: ["operationId", "pathParams"],
         };
+      }
+      if (name === "call_api" && stageCommentCatalog) {
+        Object.assign(schema,nativeStageCommentApiToolDefinition(schema,input.execution.binding.issueId));
       }
       if (name === "create_project") {
         // Managed OpenCode may create only an internal private Project from a

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { addAbortListener } from "node:events";
 import {
   chmod,
   mkdir,
@@ -487,6 +488,7 @@ class OpenCodeHarnessSession implements HarnessSession {
   readonly #taskEnvelope: CodexTaskEnvelope;
   readonly #systemInstructions: string;
   readonly #dynamicToolHandler?: DynamicToolHandler;
+  readonly #pendingDynamicTools = new Map<Promise<unknown>, string>();
   readonly #now: () => Date;
   readonly #events = new AsyncQueue<PrpEvent>();
   readonly #transcript: PrpEvent[] = [];
@@ -1029,6 +1031,28 @@ class OpenCodeHarnessSession implements HarnessSession {
           // Emitting a bad result here kills runnerd's strict outer validation.
           throw new Error(`Semantic result criteria must contain exactly these criterionIds, once each: ${JSON.stringify(expectedIds)}. Keep contractRevision ${JSON.stringify(this.#taskEnvelope.completionContract.revision)}.`);
         }
+        // A single provider response may dispatch work and its terminal tool in
+        // parallel. Settle the already admitted tool results before proposing
+        // completion or interrupting the provider; this grants no new turn.
+        if (this.#closed || this.#activeTurnId !== turnId)
+          throw new Error("OpenCode terminal tool lost its active turn");
+        let abortListener: ReturnType<typeof addAbortListener> | undefined;
+        const aborted = new Promise<never>((_, reject) => {
+          abortListener = addAbortListener(this.#abort.signal, () =>
+            reject(new Error("OpenCode terminal tool session closed")));
+        });
+        try {
+          for (;;) {
+            const pending = [...this.#pendingDynamicTools]
+              .filter(([, ownerTurnId]) => ownerTurnId === turnId).map(([promise]) => promise);
+            if (pending.length === 0) break;
+            await Promise.race([Promise.all(pending), aborted]);
+          }
+        } finally {
+          abortListener?.[Symbol.dispose]();
+        }
+        if (this.#closed || this.#activeTurnId !== turnId)
+          throw new Error("OpenCode terminal tool lost its active turn");
         const fingerprint = canonicalJson(validation.result);
         if (this.#resultFingerprint && this.#resultFingerprint !== fingerprint)
           throw new Error("A different semantic result was already committed");
@@ -1075,8 +1099,18 @@ class OpenCodeHarnessSession implements HarnessSession {
     }
     if (!this.#dynamicToolHandler)
       throw new Error("Unsupported Paperclip operation");
+    const pending = Promise.resolve().then(() => this.#dispatchDynamicTool(call, tool, turnId));
+    this.#pendingDynamicTools.set(pending, turnId);
     try {
-      const result = await this.#dynamicToolHandler({
+      return await pending;
+    } finally {
+      this.#pendingDynamicTools.delete(pending);
+    }
+  }
+
+  async #dispatchDynamicTool(call: { tool: string; callId: string; arguments: unknown }, tool: string, turnId: string): Promise<unknown> {
+    try {
+      const result = await this.#dynamicToolHandler!({
         tool,
         callId: call.callId,
         threadId: this.#providerSessionId,

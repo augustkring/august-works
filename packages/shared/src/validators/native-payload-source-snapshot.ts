@@ -118,7 +118,13 @@ const workspaceBindingTransformSchema = z.object({
   afterSettingsHash: sha256,
 }).strict();
 
-export const nativePayloadSourceTransformSchema = workspaceBindingTransformSchema;
+const nativeStagePolicyTransformSchema = z.object({
+  kind: z.literal("native_stage_policy"), transitionId: id, runId: id,
+  ownerKind: z.enum(["native_status_decision", "native_stage_comment"]), decisionId: id,
+  receiptHash: sha256, previousSnapshotDigest: sha256,
+  previousOwnerContentHash: sha256, nextOwnerContentHash: sha256,
+}).strict();
+export const nativePayloadSourceTransformSchema = z.discriminatedUnion("kind", [workspaceBindingTransformSchema, nativeStagePolicyTransformSchema]);
 export type NativePayloadSourceTransform = z.infer<typeof nativePayloadSourceTransformSchema>;
 const MAX_NATIVE_PAYLOAD_SOURCE_TRANSFORMS = 32;
 
@@ -162,12 +168,12 @@ export const nativePayloadSourceSnapshotSchema = z.object({
 }).strict().superRefine((snapshot, ctx) => {
   checkSources(snapshot, ctx);
   if (snapshot.transforms?.length && snapshot.owner.kind !== "issue") {
-    ctx.addIssue({ code: "custom", path: ["transforms"], message: "Only Task source snapshots can record workspace binding history." });
+    ctx.addIssue({ code: "custom", path: ["transforms"], message: "Only Task source snapshots can record machine-state source history." });
   }
-  const activityIds = snapshot.transforms?.map(item => item.activityId) ?? [];
+  const activityIds = snapshot.transforms?.flatMap(item => item.kind === "workspace_binding" ? [item.activityId] : []) ?? [];
   const transitionIds = snapshot.transforms?.map(item => item.transitionId) ?? [];
   if (new Set(activityIds).size !== activityIds.length || new Set(transitionIds).size !== transitionIds.length) {
-    ctx.addIssue({ code: "custom", path: ["transforms"], message: "Duplicate workspace binding transition." });
+    ctx.addIssue({ code: "custom", path: ["transforms"], message: "Duplicate source owner transition." });
   }
 });
 

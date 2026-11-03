@@ -2010,6 +2010,10 @@ export async function commitNativeStatusDecision(input: {
         },
         tx,
         publications,
+        undefined,
+        executionStageWakeup ? {nativeStagePolicySourceTransform: {
+          kind: "native_status_decision", runId: input.runId, decisionId: decisionRow.id,
+        }} : {},
       );
       if (!projected) throw new NativeStatusRaceError();
       updated = projected;
@@ -2223,6 +2227,10 @@ export async function commitNativeStatusDecision(input: {
         updatedAt: new Date(),
       })
       .where(eq(nativeRunFinalizations.runId, input.runId));
+    if (executionStageWakeup && updated.payloadSourceSnapshot !== null) {
+      const {assertNativeStageTaskBodyTransitionsCommitted}=await import("../native-stage-task-body-source.js");
+      await assertNativeStageTaskBodyTransitionsCommitted(tx,{companyId:input.companyId,issueId:input.issueId,runId:input.runId});
+    }
     if (externalChatReviewPresentation && input.reviewResponsePresentation) {
       await restoreNativeChatReviewPresentationInTransaction(
         tx as unknown as Db,

@@ -472,7 +472,14 @@ interface NativeSourceReadContext { db: object; memoryTemporalIdentity: string |
   checkedReadResultChecks: Set<string>;
   scopedTaskReads: Map<string, NativeScopedTaskRead>; pendingScopedTaskReads: Set<string>; activeScopedTaskReads: Set<string>;
   pendingReaderChecks: Set<string>; activeReaderChecks: Set<string> }
-type NativeHistoricalPendingTransitionContext = import("./native-runtime/native-interaction-bridge.js").NativeHistoricalPendingTransitionContext;
+type NativePendingTransitionContext = import("./native-runtime/native-interaction-bridge.js").NativeHistoricalPendingTransitionContext;
+type NativeHistoricalPendingTransitionContext = {
+  pending?: NativePendingTransitionContext;
+  stageBodyReads?: Array<{producer:import("./native-stage-task-body-source.js").NativeFinalizedStageTaskBodyRead;
+    edgeKind:"model_output"|"retained_run"|"finalized_summary"|"stage_action";edgeDigest:string}>;
+  stageReads?: Array<{ producer: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption;
+    edgeKind: "model_output" | "retained_run" | "finalized_summary" | "stage_action"; edgeDigest: string }>;
+};
 interface NativeSourceReadScope { context: NativeSourceReadContext; actorKey: string; pinnedRows: NativeSourceReadPinnedRows;
   active: Set<string>; completedImmutableSourceLeafProofs: Set<string>;
   frozenTaskSnapshots: Map<string, Set<string>>;
@@ -1674,10 +1681,10 @@ export async function assertNativeModelOutputCaptureCurrent(db: Db | Transaction
 /** Recompute the exact Task-wake source from the persisted Run and current Task
  * owner. This is shared by original receipt validation and captured model
  * outputs so a wake is never admitted by a source-kind allowlist alone. */
-async function nativeHistoricalPendingContextForParent(db: Db | Transaction, scope: NativeSourceReadScope, input: {
+async function nativeHistoricalPendingContextForParentInner(db: Db | Transaction, scope: NativeSourceReadScope, input: {
   companyId: string; issueId: string; consumerRunId: string; parent: typeof heartbeatRuns.$inferSelect;
-  actor: AuthorizationActor; inherited?: NativeHistoricalPendingTransitionContext;
-}): Promise<NativeHistoricalPendingTransitionContext | undefined> {
+  actor: AuthorizationActor; inherited?: NativePendingTransitionContext;
+}): Promise<NativePendingTransitionContext | undefined> {
   const parentReceipt = nativeRunInputSourceReceiptSchema.safeParse(nativeSourceRecord(input.parent.runnerProfileJson).nativeInputSourceReceipt);
   if (!parentReceipt.success || parentReceipt.data.binding.companyId !== input.companyId ||
     parentReceipt.data.binding.issueId !== input.issueId || parentReceipt.data.binding.runId !== input.parent.id) return undefined;
@@ -1696,7 +1703,7 @@ async function nativeHistoricalPendingContextForParent(db: Db | Transaction, sco
     !Array.isArray(outcomes) || outcomes.length === 0 || outcomes.length > 256 ||
     !outcomes.every(value => nativeSourceRecord(value).kind === "request_confirmation" && typeof nativeSourceRecord(value).id === "string")) return undefined;
   const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
-  const terminalSources: NativeHistoricalPendingTransitionContext["terminalSources"] = [];
+  const terminalSources: NativePendingTransitionContext["terminalSources"] = [];
   await prepareNativeSourceEffectBoundary(scope);
   await materializeNativeInteractionResponses({db:db as Db,companyId:input.companyId,issueId:input.issueId,
     runId:consumer.id,agentId:consumer.agentId,interactionIds:outcomes.map(value=>String(nativeSourceRecord(value).id)),
@@ -1704,6 +1711,52 @@ async function nativeHistoricalPendingContextForParent(db: Db | Transaction, sco
   if (terminalSources.length !== outcomes.length || terminalSources.some(value=>!receipt.data.bootstrap.inputs.some(source=>
     isDeepStrictEqual(source,value.continuationSource)))) return undefined;
   return {consumerRunId:consumer.id,parentRunId:input.parent.id,parentReceiptDigest:edge.receiptDigest,terminalSources,lineage:[edge]};
+}
+
+async function nativeHistoricalPendingContextForParent(db: Db | Transaction, scope: NativeSourceReadScope, input: {
+  companyId: string; issueId: string; consumerRunId: string; parent: typeof heartbeatRuns.$inferSelect;
+  actor: AuthorizationActor; inherited?: NativeHistoricalPendingTransitionContext;
+  edge: {kind:"retained_run" | "finalized_summary" | "stage_action";digest:string};
+}): Promise<NativeHistoricalPendingTransitionContext | undefined> {
+  const pending=await nativeHistoricalPendingContextForParentInner(db,scope,{...input,inherited:input.inherited?.pending});
+  const stageReads=[...(input.inherited?.stageReads ?? [])];
+  if (nativeSourceRecord(input.parent.contextSnapshot).source === "issue.execution_stage") {
+    const {captureNativeFinalizedStageConsumption}=await import("./native-stage-wake-source.js");
+    const producer=await captureNativeFinalizedStageConsumption(db,{companyId:input.companyId,issueId:input.issueId,
+      runId:input.parent.id,reader:input.actor,readWork:()=>nativeSourceReadWork(scope)});
+    if (producer) {
+      const consumer=await nativeSourceReadRun(db,input.companyId,input.consumerRunId,scope);
+      const consumerReceipt=nativeRunInputSourceReceiptSchema.safeParse(nativeSourceRecord(consumer?.runnerProfileJson).nativeInputSourceReceipt);
+      if(!consumer || !consumerReceipt.success || consumerReceipt.data.binding.companyId !== input.companyId ||
+        consumerReceipt.data.binding.issueId !== input.issueId || consumerReceipt.data.binding.runId !== consumer.id ||
+        consumerReceipt.data.binding.agentId !== consumer.agentId || consumerReceipt.data.binding.responsibleUserId !== consumer.responsibleUserId)
+        throw forbidden("The Stage history consumer receipt changed");
+      const edgeDigest=nativeSha256({edge:input.edge,consumerRunId:consumer.id,consumerReceiptDigest:consumerReceipt.data.digest,reader:scope.actorKey});
+      if(stageReads.length>=64 || stageReads.some(value=>value.producer.runId===producer.runId && !isDeepStrictEqual(value.producer,producer)))
+        throw forbidden("The historical Stage lineage changed");
+      if(!stageReads.some(value=>value.producer.runId===producer.runId && value.edgeKind===input.edge.kind && value.edgeDigest===edgeDigest))
+        stageReads.push({producer,edgeKind:input.edge.kind,edgeDigest});
+    }
+  }
+  const stageBodyReads=[...(input.inherited?.stageBodyReads ?? [])];
+  const {captureNativeFinalizedStageTaskBodyRead}=await import("./native-stage-task-body-source.js");
+  const bodyProducer=await captureNativeFinalizedStageTaskBodyRead(db,{companyId:input.companyId,issueId:input.issueId,
+    runId:input.parent.id,reader:input.actor});
+  if(bodyProducer){
+    const consumer=await nativeSourceReadRun(db,input.companyId,input.consumerRunId,scope);
+    const receipt=nativeRunInputSourceReceiptSchema.safeParse(nativeSourceRecord(consumer?.runnerProfileJson).nativeInputSourceReceipt);
+    if(!consumer || !receipt.success || consumer.nativeIssueId!==input.issueId || receipt.data.binding.runId!==consumer.id ||
+      receipt.data.binding.companyId!==input.companyId || receipt.data.binding.issueId!==input.issueId ||
+      receipt.data.binding.agentId!==consumer.agentId || receipt.data.binding.responsibleUserId!==consumer.responsibleUserId)
+      throw forbidden("The Stage Task history consumer changed");
+    const edgeDigest=nativeSha256({edge:input.edge,consumerRunId:consumer.id,consumerReceiptDigest:receipt.data.digest,reader:scope.actorKey});
+    if(stageBodyReads.length>=64 || stageBodyReads.some(value=>value.producer.runId===bodyProducer.runId && !isDeepStrictEqual(value.producer,bodyProducer)))
+      throw forbidden("The Stage Task history lineage changed");
+    if(!stageBodyReads.some(value=>value.producer.runId===bodyProducer.runId && value.edgeKind===input.edge.kind && value.edgeDigest===edgeDigest))
+      stageBodyReads.push({producer:bodyProducer,edgeKind:input.edge.kind,edgeDigest});
+  }
+  return pending || stageReads.length || stageBodyReads.length ? {...(pending?{pending}:{}),...(stageReads.length?{stageReads}:{}),
+    ...(stageBodyReads.length?{stageBodyReads}:{})}:undefined;
 }
 
 async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, scope: NativeSourceReadScope, input: {
@@ -1766,7 +1819,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   if (run && admittedWake && Array.isArray(unresolvedIds) && unresolvedIds.length > 0 && unresolvedIds.length <= 256 &&
     unresolvedIds.every(id => typeof id === "string")) {
     const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
-    if (input.historicalTransition && input.historicalTransition.parentRunId === input.runId) {
+    if (input.historicalTransition && input.historicalTransition.pending?.parentRunId === input.runId) {
       const { nativeGovernedPendingTransitionCurrent } = await import("./native-runtime/native-interaction-bridge.js");
       pendingInteractions = [];
       for (const id of unresolvedIds) {
@@ -1775,7 +1828,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
         const matches: NonNullable<NativeTaskContinuationCapture["pendingInteractions"]> = [];
         for (const source of originals) {
           const capture = await nativeGovernedPendingTransitionCurrent({db:db as Db,companyId:input.companyId,issueId:input.issueId,
-            agentId:run.agentId,source,context:input.historicalTransition,reader:input.actor,readWork:()=>nativeSourceReadWork(scope)});
+            agentId:run.agentId,source,context:input.historicalTransition.pending,reader:input.actor,readWork:()=>nativeSourceReadWork(scope)});
           if(capture)matches.push(capture);
         }
         if(matches.length!==1)throw forbidden("A historical pending reference changed");
@@ -1820,24 +1873,78 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     }
   }
   let finalizedSummary: NativeTaskContinuationCapture["finalizedSummary"];
-  if (!summary && run && typeof nativeSourceRecord(nativeSourceRecord(continuation).trigger).sourceRunId === "string" &&
-    nativeSourceRecord(continuation).completedWork !== null) {
+  if (!summary && run && nativeSourceRecord(continuation).completedWork !== null &&
+    (typeof nativeSourceRecord(nativeSourceRecord(continuation).trigger).sourceRunId === "string" ||
+      nativeSourceRecord(run.runnerProfileJson).nativeBootstrapStageTrigger)) {
     const { captureNativeFinalizedContinuationSummary } = await import("./execution-continuation.js");
-    const selected = await captureNativeFinalizedContinuationSummary({ db: db as Db, companyId: input.companyId,
-      issueId: input.issueId, agentId: run.agentId, receiverRunId: run.id,
-      sourceRunId: String(nativeSourceRecord(nativeSourceRecord(continuation).trigger).sourceRunId), reader: input.actor });
+    const profile = nativeSourceRecord(run.runnerProfileJson);
+    const savedStageTrigger = profile.nativeBootstrapStageTrigger;
+    let selected: NativeTaskContinuationCapture["finalizedSummary"] | null = null;
+    if (savedStageTrigger) {
+      const { captureNativeStageContinuationForDispatch } = await import("./native-stage-wake-source.js");
+      const current = await captureNativeStageContinuationForDispatch(db as Db, { companyId: input.companyId,
+        issueId: input.issueId, receiver: run, reader: input.actor });
+      if (current && isDeepStrictEqual(current.trigger, savedStageTrigger)) selected = current.summary;
+      else {
+        const historicalConsumption=input.historicalTransition?.stageReads?.find(value=>value.producer.runId===run.id)?.producer;
+        const originalSummary=profile.nativeBootstrapFinalizedContinuationSummary as NativeTaskContinuationCapture["finalizedSummary"]|null;
+        if(historicalConsumption && originalSummary?.stageEntryRead){
+          selected=await captureNativeFinalizedContinuationSummary({db:db as Db,companyId:input.companyId,issueId:input.issueId,
+            agentId:run.agentId,receiverRunId:run.id,sourceRunId:String(nativeSourceRecord(savedStageTrigger).executorRunId),
+            reader:input.actor,stageEntryRead:originalSummary.stageEntryRead,stageTrigger:savedStageTrigger as import("./execution-continuation.js").NativeStageTaskContinuationTrigger,
+            historicalConsumption,readWork:()=>nativeSourceReadWork(scope)});
+        }
+      }
+    } else {
+      selected = await captureNativeFinalizedContinuationSummary({ db: db as Db, companyId: input.companyId,
+        issueId: input.issueId, agentId: run.agentId, receiverRunId: run.id,
+        sourceRunId: String(nativeSourceRecord(nativeSourceRecord(continuation).trigger).sourceRunId), reader: input.actor });
+    }
     const original = nativeSourceRecord(run.runnerProfileJson).nativeBootstrapFinalizedContinuationSummary;
     if (selected && selected.body === nativeSourceRecord(continuation).completedWork && isDeepStrictEqual(selected, original)) {
       const parent = await nativeSourceReadRun(db, input.companyId, selected.sourceRunId, scope);
       const parentTransition = parent ? await nativeHistoricalPendingContextForParent(db, scope, {
         companyId: input.companyId, issueId: input.issueId, consumerRunId: run.id, parent, actor: input.actor,
-        inherited: input.historicalTransition }) : undefined;
+        inherited: input.historicalTransition, edge:{kind:"finalized_summary",digest:nativeSha256(selected)} }) : undefined;
       for (const set of [selected.parentReceipt.bootstrap, ...selected.parentReceipt.dispatches, ...selected.parentReceipt.additionalInputs]) {
         await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
           runId: selected.sourceRunId, actor: input.actor, policy: set.policy, inputs: set.inputs }, scope,
           undefined, undefined, new Map(), undefined, 0, parentTransition);
       }
       finalizedSummary = selected;
+    }
+  }
+  const stageActions: NonNullable<NativeTaskContinuationCapture["stageActions"]> = [];
+  const completedActions=nativeSourceRecord(continuation).completedActions;
+  if(run && Array.isArray(completedActions) && completedActions.length > 0 && completedActions.length <= 64){
+    const {captureNativeFinalizedStageConsumption}=await import("./native-stage-wake-source.js");
+    const originalActions=nativeSourceRecord(run.runnerProfileJson).nativeBootstrapStageActionSources;
+    if(!Array.isArray(originalActions) || originalActions.length !== completedActions.length)
+      throw forbidden("The exact Stage action capture is unavailable");
+    for(let index=0;index<completedActions.length;index++){
+      const action=nativeSourceRecord(completedActions[index]);
+      if(typeof action.runId !== "string" || action.runId === run.id) throw forbidden("The Stage action parent changed");
+      const selected=await captureNativeFinalizedStageConsumption(db,{companyId:input.companyId,issueId:input.issueId,
+        runId:action.runId,reader:input.actor,readWork:()=>nativeSourceReadWork(scope)});
+      if(!selected || !isDeepStrictEqual(selected.action,completedActions[index]) || !isDeepStrictEqual(selected,originalActions[index]))
+        throw forbidden("The original Stage action owner changed");
+      const parent=await nativeSourceReadRun(db,input.companyId,selected.runId,scope);
+      const parentReceipt=nativeRunInputSourceReceiptSchema.safeParse(nativeSourceRecord(parent?.runnerProfileJson).nativeInputSourceReceipt);
+      if(!parent || !parentReceipt.success || parentReceipt.data.digest !== selected.receiptDigest)
+        throw forbidden("The Stage action input receipt changed");
+      const context=await nativeHistoricalPendingContextForParent(db,scope,{companyId:input.companyId,issueId:input.issueId,
+        consumerRunId:run.id,parent,actor:input.actor,
+        inherited:input.historicalTransition?.stageReads ? {stageReads:input.historicalTransition.stageReads}:undefined,
+        edge:{kind:"stage_action",digest:nativeSha256({consumerReceipt:input.bootstrapInputs,action:selected})}});
+      if(!context?.stageReads?.some(value=>isDeepStrictEqual(value.producer,selected)))
+        throw forbidden("The exact Stage action transition is unavailable");
+      disableNativeSourceGraphCheckpoints(scope);
+      const sets=[parentReceipt.data.bootstrap,...parentReceipt.data.dispatches,...parentReceipt.data.additionalInputs];
+      if(sets.length>64) throw forbidden("The Stage action source graph is too large");
+      for(const set of sets) await assertNativePayloadSourceSetCurrentInScope(db,{companyId:input.companyId,issueId:input.issueId,
+        runId:parent.id,actor:input.actor,policy:set.policy,inputs:set.inputs},scope,
+        undefined,undefined,new Map(),undefined,0,context);
+      stageActions.push(selected);
     }
   }
   let previousContext: NativeTaskContinuationCapture["previousContext"];
@@ -1882,6 +1989,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       envelope: continuation as NativeTaskContinuationCapture["envelope"],
       ...(governedInteractions.length ? { governedInteractions } : {}),
       ...(acceptedPlanReview ? { acceptedPlanReview } : {}),
+      ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),
       ...(pendingInteractions?.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),
@@ -1940,6 +2048,10 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
           commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
             value.kind === "comment"), continuationCapture,
           historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined,
+          historicalConsumption: input.historicalTransition?.stageReads?.find(value=>value.producer.runId === input.runId)?.producer,
+          expectedStageTrigger: nativeSourceRecord(run.runnerProfileJson).nativeBootstrapStageTrigger as
+            import("./execution-continuation.js").NativeStageTaskContinuationTrigger|undefined,
+          reader:input.actor,
         })) : null;
   if (!current || !isDeepStrictEqual(current, input.source) ||
     input.source.runId !== input.runId || input.source.issueId !== input.issueId ||
@@ -2205,6 +2317,33 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
   }
   // On an uncached walk, validate historical Documents at the suffix's depth
   // first. The suffix still enforces that depth when a canonical proof hits.
+  if (conversationState === "settled" && nativeSourceRecord(run.contextSnapshot).source === "issue.execution_stage") {
+    const {captureNativeFinalizedStageConsumption}=await import("./native-stage-wake-source.js");
+    const producer=await captureNativeFinalizedStageConsumption(db,{companyId,issueId,runId:run.id,reader:actor,
+      readWork:()=>nativeSourceReadWork(scope)});
+    if(producer){
+      const stageReads=[...(historicalTransition?.stageReads ?? [])];
+      if(stageReads.length>=64 || stageReads.some(value=>value.producer.runId===producer.runId && !isDeepStrictEqual(value.producer,producer)))
+        throw forbidden("The settled Stage output lineage changed");
+      const edgeDigest=nativeSha256({capture,reader:scope.actorKey});
+      if(!stageReads.some(value=>value.producer.runId===producer.runId && value.edgeKind==="model_output" && value.edgeDigest===edgeDigest))
+        stageReads.push({producer,edgeKind:"model_output",edgeDigest});
+      historicalTransition={...historicalTransition,stageReads};
+      disableNativeSourceGraphCheckpoints(scope);
+    }
+  }
+  if(conversationState==="settled"){
+    const {captureNativeFinalizedStageTaskBodyRead}=await import("./native-stage-task-body-source.js");
+    const producer=await captureNativeFinalizedStageTaskBodyRead(db,{companyId,issueId,runId:run.id,reader:actor});
+    if(producer){
+      const reads=[...(historicalTransition?.stageBodyReads ?? [])],edgeDigest=nativeSha256({capture,reader:scope.actorKey});
+      if(reads.length>=64 || reads.some(value=>value.producer.runId===producer.runId && !isDeepStrictEqual(value.producer,producer)))
+        throw forbidden("The settled Stage Task lineage changed");
+      if(!reads.some(value=>value.producer.runId===producer.runId && value.edgeKind==="model_output" && value.edgeDigest===edgeDigest))
+        reads.push({producer,edgeKind:"model_output",edgeDigest});
+      historicalTransition={...historicalTransition,stageBodyReads:reads};disableNativeSourceGraphCheckpoints(scope);
+    }
+  }
   await assertNativeManagedConsumedSourceSetCurrentInScope(db, { companyId, issueId, runId: capture.runId,
     actor, components: capture.consumedSourceComponents, sourceSet: capture.sourceSet }, scope, siblingToolSourceProofs, depth + 1, historicalTransition);
   // The source-set walk above checks every ordinary owner. Keep the
@@ -2577,7 +2716,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       source.kind === "task" && source.issueId === issueId);
     if (sources.length) {
       for (const source of sources) {
-        const proofIdentity = completedTaskSourceProofs && nativeManagedConsumedTaskSourceProofIdentity(input.companyId,
+        const proofIdentity = !historicalTransition?.stageBodyReads?.length && completedTaskSourceProofs && nativeManagedConsumedTaskSourceProofIdentity(input.companyId,
           input.actor, source, scope.context.memoryTemporalIdentity);
         const taskProof = proofIdentity ? completedTaskSourceProofs?.get(proofIdentity) : undefined;
         if (taskProof && taskProof.mutableSources.compatible && !scope.context.ancestry.graphProofsDisabled &&
@@ -2605,7 +2744,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           readerSelection: { context: scope.context, sets: new Map(), complete: true } };
         taskProofStack.push(taskFrame);
         try {
-          const snapshotDigest = await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope, siblingToolSourceProofs);
+          const snapshotDigest = await assertNativeTaskSourceInputCurrentInScope(db, input.companyId, input.actor, source, scope, siblingToolSourceProofs, historicalTransition);
           if (proofIdentity && snapshotDigest) completedTaskSourceProofs!.set(proofIdentity, {
             key: nativeManagedConsumedTaskSourceProofKey(input.companyId, input.actor, source, snapshotDigest,
               scope.context.memoryTemporalIdentity), descendants: taskFrame.descendants, mutableSources: taskFrame.mutableSources,
@@ -2696,7 +2835,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         !await canActorReadHeartbeatRunPrivacy(db, input.actor, { id: previous.id, companyId: input.companyId }))
         throw forbidden("The retained Native Run witness is unavailable");
       const parentTransition = await nativeHistoricalPendingContextForParent(db, scope, { companyId: input.companyId,
-        issueId: input.issueId, consumerRunId: run.id, parent: previous, actor: input.actor, inherited: historicalTransition });
+        issueId: input.issueId, consumerRunId: run.id, parent: previous, actor: input.actor, inherited: historicalTransition, edge:{kind:"retained_run",digest:nativeSha256({source,witness})} });
       for (const componentSet of witness.sets) {
         await assertNativePayloadSourceSetCurrentInScope(db, { companyId: input.companyId, issueId: input.issueId,
           runId: previous.id, actor: input.actor, policy: componentSet.policy, inputs: componentSet.inputs }, scope,
@@ -2976,12 +3115,15 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       const projectCreateReceipt = nativeSourceRecord(projectCreateCapture.receipt);
       const managedProjectApiCreateResult = source.toolName === "call_api" && source.invocationId === null &&
         projectCreateReceipt.tool === "call_api";
-      const projectApiResult = source.toolName === "call_api" && source.invocationId === null && !managedProjectApiCreateResult;
+      const stageCommentResult = source.toolName === "call_api" && source.invocationId === null && Object.hasOwn(capture,"stageComment");
+      if (stageCommentResult && (capture.projectCreate !== undefined || capture.projectSource !== undefined || capture.operationId !== undefined))
+        throw forbidden("A Native Stage API result has mixed owners");
+      const projectApiResult = source.toolName === "call_api" && source.invocationId === null && !managedProjectApiCreateResult && !stageCommentResult;
       const managedProjectCreateResult = source.invocationId === null &&
         (source.toolName === "create_project" || managedProjectApiCreateResult);
       const managedConversationTaskResult = source.toolName === "create_task" && source.invocationId === null;
       const nativeReadResultTool = ["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(source.toolName);
-      if ((source.invocationId === null && !projectApiResult && !managedProjectCreateResult &&
+      if ((source.invocationId === null && !projectApiResult && !stageCommentResult && !managedProjectCreateResult &&
           !managedConversationTaskResult && !nativeReadResultTool) ||
         (source.toolName === "call_api" && source.invocationId !== null) ||
         (source.toolName === "create_project" && source.invocationId !== null))
@@ -2994,7 +3136,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       const matchingReceiptInputs = receipt?.success ? nativeToolResultReceiptCopies(receipt.data, source) : null;
       if (!producerRun || !sourceBindingCurrent || !receipt?.success || !matchingReceiptInputs || matchingReceiptInputs.exact < 1 || matchingReceiptInputs.conflicting ||
         matchingReceiptInputs.duplicateWithinEntry || captures.length !== 1 ||
-        (projectApiResult || managedProjectCreateResult || managedConversationTaskResult || nativeReadResultTool ? invocation !== undefined : !invocation || invocation.issueId !== producerRun.nativeIssueId ||
+        (projectApiResult || stageCommentResult || managedProjectCreateResult || managedConversationTaskResult || nativeReadResultTool ? invocation !== undefined : !invocation || invocation.issueId !== producerRun.nativeIssueId ||
           invocation.toolName !== source.toolName || invocation.idempotencyKey !== `aw-native-tool:${source.runId}:${source.callId}`))
         throw forbidden("A Native historical tool result changed");
       const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
@@ -3017,6 +3159,28 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         (providerUses.length === 1 && !associations.some(value =>
           (value as Record<string, unknown>).argumentsHash === (providerUses[0] as Record<string, unknown>).argumentsHash)))
         throw forbidden("A Native historical tool result dispatch changed");
+      if (stageCommentResult) {
+        const witness = nativeSourceRecord(capture.stageComment), output = nativeSourceRecord(witness.outputCapture);
+        const producerIssueId = producerRun.nativeIssueId;
+        if (!producerIssueId) throw forbidden("A Native Stage API Task is unavailable");
+        const expectedKeys=["operationId","callId","argumentsHash","resultDigest","commentId","transitionHash","apiReceiptHash","outputCapture"].sort();
+        const use=nativeSourceRecord(output.managedOpenCodeToolUse),dispatch=nativeSourceRecord(output.dispatch);
+        if(!profile || capture.managedOpenCode!==true || !isDeepStrictEqual(Object.keys(witness).sort(),expectedKeys) ||
+          witness.operationId!=="POST /api/issues/{id}/comments" || witness.callId!==source.callId || witness.argumentsHash!==capture.argumentsHash ||
+          witness.resultDigest!==source.contentHash || output.runId!==source.runId || use.callId!==source.callId ||
+          use.toolName!=="call_api" || use.argumentsHash!==witness.argumentsHash || dispatch.kind!=="worker_model_dispatch" ||
+          !Array.isArray(output.consumedSourceComponents) || !Array.isArray(nativeSourceRecord(output.sourceSet).inputs))
+          throw forbidden("A Native Stage API result witness changed");
+        const api=nativeSourceRecord(nativeSourceRecord(nativeSourceRecord(producerRun.resultJson).apiToolReceipts)[createHash("sha256").update(source.callId).digest("hex")]);
+        const {operationId:_operationId,...response}=nativeSourceRecord(api.result);
+        const {readNativeManagedStageCommentCapture}=await import("./native-stage-comment-api.js");
+        const current=await readNativeManagedStageCommentCapture(db,{companyId:input.companyId,issueId:producerIssueId,runId:source.runId,
+          agentId:producerRun.agentId,callId:source.callId,argumentsHash:String(witness.argumentsHash),
+          result:{...response,apiOperationId:api.operationId},outputCapture:witness.outputCapture as NativeModelOutputCapture,reader:input.actor});
+        if(!isDeepStrictEqual(current,witness))throw forbidden("A Native Stage API result owner changed");
+        await assertNativeModelOutputCaptureCurrentInScope(db,input.companyId,producerIssueId,current.outputCapture,"call_api",scope,depth+1,
+          input.actor,producerRun.finishedAt?"settled":"live",siblingToolSourceProofs,historicalTransition);
+      }
       if (projectApiResult) {
         if (!profile) throw forbidden("A Native Project API profile is unavailable");
         await assertNativeProjectApiToolResultCurrentInScope(db, {
@@ -3336,10 +3500,10 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, source.issueId),
         eq(issueThreadInteractions.id, source.interactionId))).limit(1);
       if (pendingOwner?.status === "pending") {
-        if (historicalTransition?.parentRunId === input.runId) {
+        if (historicalTransition?.pending?.parentRunId === input.runId) {
           const { nativeGovernedPendingTransitionCurrent } = await import("./native-runtime/native-interaction-bridge.js");
           const original = await nativeGovernedPendingTransitionCurrent({db:db as Db,companyId:input.companyId,
-            issueId:source.issueId,agentId:run.agentId,source,context:historicalTransition,reader:input.actor,
+            issueId:source.issueId,agentId:run.agentId,source,context:historicalTransition.pending,reader:input.actor,
             readWork:()=>nativeSourceReadWork(scope)});
           if (!original) throw forbidden("A historical pending Native interaction source changed");
           continue;
@@ -3370,9 +3534,9 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       if (current.length !== 1 || (!isDeepStrictEqual(current[0], source) &&
         (continuationCurrent.length !== 1 || !isDeepStrictEqual(continuationCurrent[0], source)) && !isDeepStrictEqual(deliveryCurrent, source))) {
         const { nativeGovernedPendingTransitionCurrent } = await import("./native-runtime/native-interaction-bridge.js");
-        if (!historicalTransition || historicalTransition.parentRunId !== input.runId || !await nativeGovernedPendingTransitionCurrent({
+        if (!historicalTransition?.pending || historicalTransition.pending.parentRunId !== input.runId || !await nativeGovernedPendingTransitionCurrent({
           db:db as Db,companyId:input.companyId,issueId:source.issueId,agentId:run.agentId,source,
-          context:historicalTransition,reader:input.actor,readWork:()=>nativeSourceReadWork(scope)})) throw forbidden("A Native source Interaction changed or was erased");
+          context:historicalTransition.pending,reader:input.actor,readWork:()=>nativeSourceReadWork(scope)})) throw forbidden("A Native source Interaction changed or was erased");
       }
       continue;
     }
@@ -3981,8 +4145,46 @@ export function nativeTemporalContextContentHash(manifest: typeof contextManifes
   }), "utf8").digest("hex");
 }
 
+/** Machine metadata history is checked even for the original empty-policy
+ * Human root. The original source closure is still read by its existing owner. */
+async function nativeStageTaskOriginalSnapshot(db: Db | Transaction, companyId: string, issueId: string,
+  snapshot: NativePayloadSourceSnapshot): Promise<NativePayloadSourceSnapshot> {
+  const transforms=snapshot.transforms ?? [];
+  if(!transforms.some(step=>step.kind==="native_stage_policy")) return snapshot;
+  const [task]=await db.select().from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,issueId))).limit(1).for("share");
+  if(!task || task.payloadSourceSnapshotInvalidated) throw forbidden("A Native Stage Task source is unavailable");
+  const {readNativeStageTaskBodyStep}=await import("./native-stage-task-body-source.js");
+  const original={version:1 as const,owner:{...snapshot.owner,contentHash:transforms[0]!.previousOwnerContentHash},
+    policy:snapshot.policy,inputs:snapshot.inputs};
+  let digest=await nativePayloadSourceDigest(db,original),bodyHash=original.owner.contentHash;
+  const prefix:NonNullable<NativePayloadSourceSnapshot["transforms"]>=[];
+  for(const step of transforms){
+    if(step.previousSnapshotDigest!==digest || step.previousOwnerContentHash!==bodyHash)
+      throw forbidden("A Native Stage Task source history changed");
+    if(step.kind==="native_stage_policy") await readNativeStageTaskBodyStep(db,{task,step});
+    prefix.push(step);bodyHash=step.nextOwnerContentHash;
+    digest=await nativePayloadSourceDigest(db,{...original,owner:{...original.owner,contentHash:bodyHash},transforms:prefix});
+  }
+  if(snapshot.digest!==digest || snapshot.owner.contentHash!==bodyHash)
+    throw forbidden("A Native Stage Task source history changed");
+  if(transforms.some(step=>step.kind==="workspace_binding") && !await readAuditedManualRelatedOwner(db,companyId,issueId,snapshot))
+    throw forbidden("A Native Stage Task workspace source history changed");
+  if(snapshot.inputs.length===0 && Object.values(snapshot.policy).every(values=>values.length===0)){
+    if(!task.createdByUserId || task.createdByAgentId || task.originKind!=="manual" || task.parentId || task.projectId || task.conversationAgentId)
+      throw forbidden("A Native Stage Task original Human source is unavailable");
+    const [audit]=await db.select({id:activityLog.id}).from(activityLog).where(and(eq(activityLog.companyId,companyId),
+      eq(activityLog.entityType,"issue"),eq(activityLog.entityId,issueId),eq(activityLog.action,"issue.payload_source_captured"),
+      eq(activityLog.actorType,"user"),eq(activityLog.actorId,task.createdByUserId),
+      sql`${activityLog.details}->>'producer'='direct_manual_input'`,sql`${activityLog.details}->>'digest'=${await nativePayloadSourceDigest(db,original)}`,
+      sql`${activityLog.details}->>'contentHash'=${original.owner.contentHash}`)).limit(1);
+    if(!audit) throw forbidden("A Native Stage Task original Human source was erased");
+  }
+  return {...original,digest:await nativePayloadSourceDigest(db,original)};
+}
+
 async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
   issueId: string, snapshot: NativePayloadSourceSnapshot, scope: NativeSourceReadScope, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map()): Promise<void> {
+  snapshot=await nativeStageTaskOriginalSnapshot(db,companyId,issueId,snapshot);
   const references = snapshot.inputs.length + Object.values(snapshot.policy).reduce((total, values) => total + values.length, 0);
   if (references > 256 || snapshot.inputs.length > 256)
     throw forbidden("The frozen Native Task source closure exceeds its bound");
@@ -4128,7 +4330,7 @@ async function assertNativeFrozenTaskSnapshotCurrent(db: Db | Transaction, compa
 }
 
 async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, companyId: string, actor: AuthorizationActor,
-  source: Extract<NativePayloadSourceInput, { kind: "task" }>, scope: NativeSourceReadScope, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map()): Promise<string | null> {
+  source: Extract<NativePayloadSourceInput, { kind: "task" }>, scope: NativeSourceReadScope, siblingToolSourceProofs: NativeSiblingToolSourceProofs = new Map(), historicalTransition?: NativeHistoricalPendingTransitionContext): Promise<string | null> {
   nativeSourceReadWork(scope);
   const [task] = await db.select({ id: issues.id, companyId: issues.companyId, identifier: issues.identifier,
     title: issues.title, description: issues.description, workMode: issues.workMode, status: issues.status,
@@ -4143,9 +4345,29 @@ async function assertNativeTaskSourceInputCurrentInScope(db: Db | Transaction, c
     workMode: task.workMode }), "utf8").digest("hex") : null;
   const ancestorHash = task ? createHash("sha256").update(JSON.stringify({ id: source.issueId,
     identifier: task.identifier ?? null, title: task.title, status: task.status, priority: task.priority }), "utf8").digest("hex") : null;
-  if (!task || (task.ownerBodyHash !== source.contentHash &&
-      bodyHash !== source.contentHash && ancestorHash !== source.contentHash))
-    throw forbidden("A Native source Task changed");
+  let historicalTask=false;
+  if(task && task.ownerBodyHash!==source.contentHash && bodyHash!==source.contentHash && ancestorHash!==source.contentHash && historicalTransition?.stageBodyReads?.length){
+    const {captureNativeFinalizedStageTaskBodyRead}=await import("./native-stage-task-body-source.js");
+    for(const read of historicalTransition.stageBodyReads){
+      if(read.producer.companyId!==companyId || read.producer.issueId!==source.issueId || !isDeepStrictEqual(read.producer.taskCapture.input,source)) continue;
+      const current=await captureNativeFinalizedStageTaskBodyRead(db,{companyId,issueId:source.issueId,runId:read.producer.runId,reader:actor});
+      if(!current || !isDeepStrictEqual(current,read.producer)) throw forbidden("A historical Stage Task owner changed");
+      const [owner]=await db.select({snapshot:issues.payloadSourceSnapshot}).from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,source.issueId))).for("share");
+      const snapshot=nativePayloadSourceSnapshotSchema.safeParse(owner?.snapshot);
+      if(!snapshot.success) throw forbidden("A historical Stage Task source was erased");
+      let prefixDigest=read.producer.taskCapture.payloadSourceSnapshot.digest;
+      let prefixHash=source.contentHash,matched=false;
+      for(const step of snapshot.data.transforms ?? []){
+        if(step.previousSnapshotDigest===prefixDigest && step.previousOwnerContentHash===prefixHash) matched=true;
+        if(matched){prefixHash=step.nextOwnerContentHash;}
+      }
+      if(!matched || prefixHash!==snapshot.data.owner.contentHash) throw forbidden("A historical Stage Task source lineage changed");
+      historicalTask=true;
+    }
+    disableNativeSourceGraphCheckpoints(scope);
+  }
+  if (!task || (!historicalTask && task.ownerBodyHash !== source.contentHash &&
+      bodyHash !== source.contentHash && ancestorHash !== source.contentHash)) throw forbidden("A Native source Task changed");
   return assertNativeTaskSnapshotOwnerCurrentInScope(db, companyId, actor, source.issueId, scope, undefined, source, siblingToolSourceProofs);
 }
 
@@ -5357,7 +5579,8 @@ async function readAuditedManualRelatedOwner(db: Db | Transaction, companyId: st
         issueIds: owner.parentId ? [owner.parentId] : [], projectIds: owner.projectId ? [owner.projectId] : [], runIds: [], memoryIds: [], foundationRevisionIds: [],
       })) return false;
   const transforms = snapshot.transforms ?? [];
-  const originalProjectWorkspaceId = transforms.length ? transforms[0]!.beforeProjectWorkspaceId : owner.projectWorkspaceId;
+  const firstWorkspace=transforms.find(step=>step.kind==="workspace_binding");
+  const originalProjectWorkspaceId = firstWorkspace ? firstWorkspace.beforeProjectWorkspaceId : owner.projectWorkspaceId;
   let originalContentHash = snapshot.owner.contentHash;
   let originalDigest = snapshot.digest;
   let priorProjectWorkspaceId = originalProjectWorkspaceId;
@@ -5374,6 +5597,16 @@ async function readAuditedManualRelatedOwner(db: Db | Transaction, companyId: st
     let priorContentHash = originalContentHash;
     let priorDigest = originalDigest;
     for (const transform of transforms) {
+      if(transform.kind==="native_stage_policy"){
+        if(transform.previousOwnerContentHash!==priorContentHash || transform.previousSnapshotDigest!==priorDigest) return null;
+        const [task]=await db.select().from(issues).where(and(eq(issues.companyId,companyId),eq(issues.id,issueId))).limit(1).for("share");
+        if(!task) return null;
+        const {readNativeStageTaskBodyStep}=await import("./native-stage-task-body-source.js");
+        await readNativeStageTaskBodyStep(db,{task,step:transform});
+        prefix=[...prefix,transform];priorContentHash=transform.nextOwnerContentHash;
+        priorDigest=await nativePayloadSourceDigest(db,{...originalSnapshot,owner:{...originalSnapshot.owner,contentHash:priorContentHash},transforms:prefix});
+        continue;
+      }
       if (transform.beforeProjectWorkspaceId !== priorProjectWorkspaceId ||
           transform.previousOwnerContentHash !== priorContentHash ||
           transform.previousSnapshotDigest !== priorDigest) return null;

@@ -1,4 +1,5 @@
 import { exactNativeWorkspaceCoordination, type NativeWorkspaceCoordinationCapture } from "./native-workspace-coordination-source.js";
+import { issueExecutionStateSchema } from "@paperclipai/shared";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { nativeContinuationMessageHash, nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
@@ -175,6 +176,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const captureKeys = ["agentId", "commentSources", "companyId", "envelope", "issueId", "responsibleUserId", "runId", "wake", "wakeupRequestId",
     ...(capture.governedInteractions !== undefined ? ["governedInteractions"] : []),
     ...(capture.acceptedPlanReview !== undefined ? ["acceptedPlanReview"] : []),
+    ...(capture.stageActions !== undefined ? ["stageActions"] : []),
     ...(capture.summary !== undefined ? ["summary"] : []),
     ...(capture.finalizedSummary !== undefined ? ["finalizedSummary"] : []),
     ...(capture.delivery !== undefined ? ["delivery"] : []),
@@ -225,7 +227,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || (!hasGoverned && !hasAcceptedPlanReview && c.humanResponses.length !== 0))) ||
     !Array.isArray(c.interactionOutcomes) || (!hasGoverned && !hasAcceptedPlanReview && c.interactionOutcomes.length !== 0) ||
     (c.recoveryOutcomes !== undefined && (!Array.isArray(c.recoveryOutcomes) || c.recoveryOutcomes.length !== 0)) ||
-    (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length !== 0)) ||
+    (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length > 64)) ||
     (c.completedWork !== null && c.completedWork !== capture.summary?.rendition?.body && c.completedWork !== capture.finalizedSummary?.body) || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length > 256 ||
     capture.commentSources.length !== c.messages.length || capture.wake.reason !== input.wakeReason ||
     (!hasStageTrigger && (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId))) return null;
@@ -233,6 +235,32 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   if (![input.companyId, input.issueId, input.runId, input.agentId, input.wakeupRequestId].every(id => typeof id === "string" && uuid.test(id)) ||
     capture.wake.originCommentIds.length > 256 || capture.wake.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
     c.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id))) return null;
+  const stageActions=capture.stageActions;
+  if ((c.completedActions?.length ?? 0) > 0) {
+    if(!Array.isArray(stageActions) || stageActions.length !== c.completedActions!.length ||
+      new Set(stageActions.map(value=>`${value.runId}:${value.apiReceiptId}`)).size !== stageActions.length) return null;
+    for(const value of stageActions){
+      if(!value || Object.keys(value).sort().join(",") !==
+        "action,agentId,apiReceiptHash,apiReceiptId,assessmentId,callId,companyId,dispatchId,executionInputDigest,finalizationVersion,finalizerDecisionHash,finalizerDecisionId,fromState,issueId,originHash,receiptDigest,reservationId,responsibleUserId,resultHash,resultId,runId,stageDecisionHash,stageDecisionId,stageSource,toState" ||
+        value.companyId !== input.companyId || value.issueId !== input.issueId || value.runId === input.runId ||
+        ![value.runId,value.agentId,value.resultId,value.assessmentId,value.finalizerDecisionId,value.stageDecisionId,value.dispatchId,value.reservationId].every(id=>typeof id === "string" && uuid.test(id)) ||
+        ![value.originHash,value.apiReceiptId,value.apiReceiptHash,value.receiptDigest,value.executionInputDigest,value.stageDecisionHash,value.finalizerDecisionHash].every(hash=>typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash)) ||
+        typeof value.resultHash !== "string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(value.resultHash) ||
+        typeof value.responsibleUserId !== "string" || !value.responsibleUserId || typeof value.callId !== "string" ||
+        typeof value.finalizationVersion !== "string" || !Number.isFinite(Date.parse(value.finalizationVersion)) ||
+        !value.action || Object.keys(value.action).sort().join(",") !== "operationId,receiptId,result,runId" ||
+        value.action.runId !== value.runId || value.action.receiptId !== value.apiReceiptId || value.action.operationId !== "POST /api/issues/{id}/comments" ||
+        !c.completedActions!.some(action=>isDeepStrictEqual(action,value.action)) ||
+        !value.stageSource || value.stageSource.kind !== "native_task_wake" || value.stageSource.runId !== value.runId || value.stageSource.issueId !== input.issueId ||
+        !nativePayloadSourceInputSchema.safeParse(value.stageSource).success ||
+        !value.fromState || !issueExecutionStateSchema.safeParse(value.fromState).success ||
+        !isDeepStrictEqual(issueExecutionStateSchema.parse(value.fromState),value.fromState) ||
+        !value.toState || !issueExecutionStateSchema.safeParse(value.toState).success ||
+        !isDeepStrictEqual(issueExecutionStateSchema.parse(value.toState),value.toState) || value.fromState.status !== "pending" || value.fromState.currentParticipant?.type !== "agent" ||
+        value.fromState.currentParticipant.agentId !== value.agentId || !value.toState || value.toState.lastDecisionId !== value.stageDecisionId ||
+        !["approved","changes_requested"].includes(value.toState.lastDecisionOutcome ?? "")) return null;
+    }
+  } else if (stageActions !== undefined) return null;
   if (capture.summary) {
     const summary = capture.summary;
     if (Object.keys(summary).sort().join(",") !== "rawTrustHash,rendition,source" ||
@@ -247,10 +275,12 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   }
   if (capture.finalizedSummary) {
     const value = capture.finalizedSummary, receipt = nativeRunInputSourceReceiptSchema.safeParse(value.parentReceipt);
-    if (!hasGoverned || capture.summary || Object.keys(value).sort().join(",") !==
-      "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId" ||
+    const stageEntry=value.stageEntryRead;
+    const expectedKeys=stageEntry ? "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId,stageEntryRead" :
+      "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId";
+    if ((!hasGoverned && !(hasStageTrigger && stageEntry)) || capture.summary || Object.keys(value).sort().join(",") !== expectedKeys ||
       value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId ||
-      value.receiverRunId !== input.runId || value.sourceRunId !== c.trigger.sourceRunId ||
+      value.receiverRunId !== input.runId || value.sourceRunId !== (hasStageTrigger ? stageTrigger!.executorRunId : c.trigger.sourceRunId) ||
       ![value.sourceRunId,value.resultId,value.assessmentId,value.decisionId].every(id => typeof id === "string" && uuid.test(id)) ||
       typeof value.resultCanonicalSha256 !== "string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(value.resultCanonicalSha256) ||
       typeof value.decisionDigest !== "string" || !/^[a-f0-9]{64}$/.test(value.decisionDigest) ||
@@ -259,7 +289,23 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       typeof value.finalizationVersion !== "string" || !Number.isFinite(Date.parse(value.finalizationVersion)) ||
       typeof value.body !== "string" || value.body.length > 32_000 || c.completedWork !== value.body || !receipt.success ||
       receipt.data.binding.companyId !== input.companyId || receipt.data.binding.issueId !== input.issueId ||
-      receipt.data.binding.agentId !== input.agentId || receipt.data.binding.runId !== value.sourceRunId) return null;
+      receipt.data.binding.agentId !== (stageEntry?.agentId ?? input.agentId) || receipt.data.binding.runId !== value.sourceRunId ||
+      (hasStageTrigger && (!stageEntry || stageEntry.kind !== "stage_entry" || stageEntry.companyId !== input.companyId ||
+        stageEntry.issueId !== input.issueId || stageEntry.runId !== stageTrigger!.executorRunId ||
+        stageEntry.agentId !== stageTrigger!.executorAgentId || stageTrigger!.runId !== input.runId ||
+        stageEntry.resultId!==value.resultId || stageEntry.resultHash!==value.resultCanonicalSha256 ||
+        stageEntry.decisionId!==value.decisionId || stageEntry.finalizationVersion!==value.finalizationVersion ||
+        Object.keys(stageEntry).sort().join(",") !== "agentId,companyId,decisionId,executionInputDigest,finalizationVersion,issueId,kind,receiptDigest,resultHash,resultId,runId,taskCapture,transitionIds" ||
+        ![stageEntry.runId,stageEntry.agentId,stageEntry.resultId,stageEntry.decisionId].every(value=>typeof value === "string" && uuid.test(value)) ||
+        ![stageEntry.receiptDigest,stageEntry.executionInputDigest].every(value=>typeof value === "string" && /^[a-f0-9]{64}$/.test(value)) ||
+        typeof stageEntry.resultHash!=="string" || !/^(?:sha256:)?[a-f0-9]{64}$/.test(stageEntry.resultHash) ||
+        typeof stageEntry.finalizationVersion !== "string" || !Number.isFinite(Date.parse(stageEntry.finalizationVersion)) ||
+        !Array.isArray(stageEntry.transitionIds) || stageEntry.transitionIds.length===0 || stageEntry.transitionIds.some(id=>typeof id!=="string" || !uuid.test(id)) ||
+        !stageEntry.taskCapture || !nativePayloadSourceInputSchema.safeParse(stageEntry.taskCapture.input).success ||
+        !nativePayloadSourceSnapshotSchema.safeParse(stageEntry.taskCapture.payloadSourceSnapshot).success ||
+        stageEntry.taskCapture.input.kind!=="task" || stageEntry.taskCapture.input.issueId !== input.issueId ||
+        stageEntry.taskCapture.input.contentHash!==stageEntry.taskCapture.payloadSourceSnapshot.owner.contentHash ||
+        !receipt.data.bootstrap.inputs.some(source=>isDeepStrictEqual(source,stageEntry.taskCapture.input)))) || (!hasStageTrigger && stageEntry)) return null;
   }
   const ids = new Set<string>();
   for (const message of c.messages) {

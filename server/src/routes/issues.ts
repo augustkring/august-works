@@ -1,3 +1,4 @@
+import { prepareNativeStagePolicyTransition, recordNativeStagePolicyTransition } from "../services/native-stage-wake-source.js";
 import { publicNativePayloadRow } from "../services/native-payload-public.js";
 import { experienceTaskReceiptSchema, nativePayloadSourceSnapshotSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
@@ -319,6 +320,7 @@ import {
 } from "../services/company-search-rate-limit.js";
 import {
   applyIssueExecutionPolicyTransition,
+  isApprovalReviewComment,
   normalizeIssueExecutionPolicy,
   parseIssueExecutionState,
   redactIssueMonitorExternalRef,
@@ -2081,38 +2083,6 @@ function actorMatchesExecutionParticipant(
     : participant.userId === actor.actorId;
 }
 
-// Negation/rejection markers that invalidate an otherwise approval-looking heading.
-// Match common phrasings ("NOT APPROVED", "Do not approve", "Not approving", "Changes requested",
-// "Rejected", "Denied", "Blocked") so a reviewer comment intending to reject cannot auto-complete
-// the issue. We rely on the heading being a single line, so testing the heading text alone is safe.
-const APPROVAL_NEGATION_REGEX =
-  /\b(?:NOT|REJECT(?:ED|ING|S)?|DENY|DENIED|DENYING|BLOCK(?:ED|ING|S)?|CHANGES?\s+REQUESTED)\b/i;
-
-function isApprovalReviewComment(body: string) {
-  const normalized = body.replace(/\r\n?/g, "\n");
-  const headingMatch = normalized.match(/(?:^|\n)##\s*Review:\s*([^\n]*)/i);
-  if (headingMatch) {
-    const headingText = headingMatch[1];
-    if (
-      /\bAPPROVED\b/i.test(headingText) &&
-      !APPROVAL_NEGATION_REGEX.test(headingText)
-    ) {
-      return true;
-    }
-  }
-  // Require the `kind: review` and `decision: approved` lines to appear on truly consecutive
-  // lines (no blank-line separation) so prose like "the previous sprint decision: approved"
-  // can't combine with an unrelated `kind: review` line elsewhere in the body to trigger
-  // auto-approval. Use `[ \t]*` between the lines so `\s*` does not silently swallow a newline.
-  return (
-    /^[ \t]*kind[ \t]*:[ \t]*review[ \t]*\n[ \t]*decision[ \t]*:[ \t]*approved[ \t]*$/im.test(
-      normalized,
-    ) ||
-    /^[ \t]*decision[ \t]*:[ \t]*approved[ \t]*\n[ \t]*kind[ \t]*:[ \t]*review[ \t]*$/im.test(
-      normalized,
-    )
-  );
-}
 
 function summarizeIssueRelationForActivity(relation: {
   id: string;
@@ -18367,6 +18337,9 @@ export function issueRoutes(
         const postCommitIssueActions: IssuePostCommitAction[] = [];
         try {
           txResult = await db.transaction(async (tx) => {
+            const nativeStageEffect=req.actor.type === "agent" ? req.actor.nativeToolEffect : undefined;
+            const preparedStage=nativeStageEffect ? await prepareNativeStagePolicyTransition(tx,{companyId:currentIssue.companyId,
+              issueId:currentIssue.id,agentId:actor.agentId ?? "",runId:actor.runId ?? "",effect:nativeStageEffect}) : null;
             const insertedComment = await svc.addComment(
               id,
               req.body.body,
@@ -18382,6 +18355,20 @@ export function issueRoutes(
               },
               tx,
             );
+            if (transition.decision && decisionId) {
+              await tx.insert(issueExecutionDecisions).values({
+                id: decisionId,
+                companyId: currentIssue.companyId,
+                issueId: currentIssue.id,
+                stageId: transition.decision.stageId,
+                stageType: transition.decision.stageType,
+                actorAgentId: actor.agentId ?? null,
+                actorUserId: actor.actorType === "user" ? actor.actorId : null,
+                outcome: transition.decision.outcome,
+                body: transition.decision.body,
+                createdByRunId: actor.runId ?? null,
+              });
+            }
             const updated =
               actor.actorType === "user" && currentIssue.status !== "done"
                 ? await svc.update(
@@ -18397,26 +18384,23 @@ export function issueRoutes(
                     tx,
                     undefined,
                     postCommitIssueActions,
+                    preparedStage && decisionId ? {nativeStagePolicySourceTransform: {
+                      kind: "native_stage_comment", runId: preparedStage.runId, decisionId,
+                      commentId: insertedComment.id, effect: preparedStage.effect,
+                    }} : {},
                   );
             // Throw (not return null) so drizzle rolls back the inserted comment when the issue
             // has been concurrently deleted between the initial fetch and the in-transaction update.
             if (!updated) throw new AutoApprovalIssueMissingError();
 
-            if (transition.decision && decisionId) {
-              await tx.insert(issueExecutionDecisions).values({
-                id: decisionId,
-                companyId: updated.companyId,
-                issueId: updated.id,
-                stageId: transition.decision.stageId,
-                stageType: transition.decision.stageType,
-                actorAgentId: actor.agentId ?? null,
-                actorUserId: actor.actorType === "user" ? actor.actorId : null,
-                outcome: transition.decision.outcome,
-                body: transition.decision.body,
-                createdByRunId: actor.runId ?? null,
-              });
-            }
 
+
+            if(preparedStage){
+              if(!decisionId || !transition.decision) throw new Error("native_stage_transition_decision_missing");
+              await recordNativeStagePolicyTransition(tx,{prepared:preparedStage,decisionId,commentId:insertedComment.id,updatedIssue:updated});
+              const {assertNativeStageTaskBodyTransitionsCommitted}=await import("../services/native-stage-task-body-source.js");
+              await assertNativeStageTaskBodyTransitionsCommitted(tx,{companyId:updated.companyId,issueId:updated.id,runId:preparedStage.runId});
+            }
             return { comment: insertedComment, issue: updated };
           });
         } catch (err) {

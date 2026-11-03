@@ -43,6 +43,7 @@ export type NativeTaskContinuationCapture = {
   summary?: { rawTrustHash: string; source: import("./documents.js").DocumentRevisionSourceCapture;
     rendition: { key: string; title: string | null; body: string;
       sourceTrust: import("@paperclipai/shared").SourceTrustMetadata | null; updatedAt: string } };
+  stageActions?: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption[];
   pendingInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   governedInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[];
   acceptedPlanReview?: import("./native-runtime/accepted-plan-review-source.js").NativeAcceptedPlanReviewCapture;
@@ -57,11 +58,37 @@ export type NativeFinalizedContinuationSummaryCapture = {
   resultId: string; resultCanonicalSha256: string; resultCreatedAt: string;
   finalizationVersion: string; assessmentId: string; decisionId: string; decisionDigest: string; decisionSnapshotHash: string;
   parentReceipt: NativeRunInputSourceReceipt; body: string;
+  stageEntryRead?: import("./native-stage-task-body-source.js").NativeFinalizedStageTaskBodyRead;
 };
 
 export async function captureNativeFinalizedContinuationSummary(input: {
   db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0]; companyId: string; issueId: string; agentId: string; receiverRunId: string; sourceRunId: string; reader?: AuthorizationActor;
+  stageEntryRead?: import("./native-stage-task-body-source.js").NativeFinalizedStageTaskBodyRead;
+  stageTrigger?: NativeStageTaskContinuationTrigger;
+  historicalConsumption?: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption;
+  readWork?: () => void;
 }): Promise<NativeFinalizedContinuationSummaryCapture | null> {
+  if (input.stageEntryRead) {
+    if (!input.reader || !input.stageTrigger) return null;
+    const [receiver] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id,input.receiverRunId),
+      eq(heartbeatRuns.companyId,input.companyId),eq(heartbeatRuns.agentId,input.agentId))).limit(1);
+    if (!receiver || input.stageTrigger.runId!==receiver.id || input.stageTrigger.agentId!==receiver.agentId ||
+      input.stageTrigger.companyId!==input.companyId || input.stageTrigger.issueId!==input.issueId ||
+      input.stageTrigger.responsibleUserId!==receiver.responsibleUserId || input.stageTrigger.wakeupRequestId!==receiver.wakeupRequestId ||
+      input.stageTrigger.executorRunId!==input.sourceRunId || input.stageEntryRead.runId!==input.sourceRunId ||
+      input.stageEntryRead.agentId!==input.stageTrigger.executorAgentId ||
+      (input.historicalConsumption ? (!receiver.finishedAt || !["succeeded","failed","timed_out","cancelled"].includes(receiver.status)) : receiver.status!=="running")) return null;
+    const {captureNativeStageContinuationOwner}=await import("./native-stage-wake-source.js");
+    const owner=await captureNativeStageContinuationOwner(input.db,{companyId:input.companyId,issueId:input.issueId,
+      receiver,reader:input.reader,...(input.historicalConsumption ? {historicalConsumption:input.historicalConsumption,readWork:input.readWork} : {})});
+    const {nativeStageContinuationOwnerMatches}=await import("./native-stage-wake-source.js");
+    if(!owner || !nativeStageContinuationOwnerMatches({candidate:owner.trigger,expected:input.stageTrigger,
+      ...(input.historicalConsumption ? {historicalConsumption:input.historicalConsumption} : {})})) return null;
+    const { captureNativeFinalizedStageTaskBodyRead } = await import("./native-stage-task-body-source.js");
+    const currentStageEntry = await captureNativeFinalizedStageTaskBodyRead(input.db, { companyId: input.companyId,
+      issueId: input.issueId, runId: input.stageEntryRead.runId, reader: input.reader });
+    if (!currentStageEntry || !isDeepStrictEqual(currentStageEntry, input.stageEntryRead)) return null;
+  }
   const [receiver] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.receiverRunId),
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId))).limit(1);
   const [source] = await input.db.select({ run: heartbeatRuns,
@@ -70,7 +97,7 @@ export async function captureNativeFinalizedContinuationSummary(input: {
     inputDigestValid: sql<boolean>`(${heartbeatRuns.runnerProfileJson}->'nativeInputSourceReceipt'->'bootstrap'->>'executionInputDigest') =
       encode(sha256(convert_to((${heartbeatRuns.runnerProfileJson}->'nativeExecutionInput')::text,'UTF8')),'hex')`,
   }).from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.sourceRunId), eq(heartbeatRuns.companyId, input.companyId),
-    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"))).for("share");
+    eq(heartbeatRuns.agentId, input.stageEntryRead?.agentId ?? input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"))).for("share");
   if (!receiver || (!input.reader && receiver.status !== "running") ||
     ![receiver.issueId,receiver.nativeIssueId,object(receiver.contextSnapshot).issueId,object(receiver.contextSnapshot).taskId].includes(input.issueId) ||
     !receiver.responsibleUserId || !source || source.run.nativeInputSourceProtocolVersion !== 1 || source.run.id === receiver.id || !source.run.finishedAt ||
@@ -78,6 +105,7 @@ export async function captureNativeFinalizedContinuationSummary(input: {
   const reader: AuthorizationActor = input.reader ?? { type: "agent", source: "agent_jwt", companyId: input.companyId,
     agentId: input.agentId, runId: receiver.id, onBehalfOfUserId: receiver.responsibleUserId };
   if (!await canActorReadHeartbeatRunPrivacy(input.db, reader, receiver) || !await canActorReadHeartbeatRunPrivacy(input.db, reader, source.run)) return null;
+  if (input.stageEntryRead && receiver.responsibleUserId !== source.run.responsibleUserId) return null;
   const [coordinator] = await input.db.select().from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.runId, source.run.id),
     eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
     eq(nativeRunFinalizations.phase, "committed"), isNull(nativeRunFinalizations.leaseOwner))).for("share");
@@ -91,7 +119,7 @@ export async function captureNativeFinalizedContinuationSummary(input: {
   const profile = object(source.run.runnerProfileJson), receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
   if (!accepted || !decision || !receipt.success || accepted.completionContractId !== source.run.completionContractId ||
     receipt.data.binding.companyId !== input.companyId || receipt.data.binding.issueId !== input.issueId ||
-    receipt.data.binding.agentId !== input.agentId || receipt.data.binding.runId !== source.run.id ||
+    receipt.data.binding.agentId !== (input.stageEntryRead?.agentId ?? input.agentId) || receipt.data.binding.runId !== source.run.id ||
     receipt.data.binding.responsibleUserId !== source.run.responsibleUserId ||
     object(source.run.resultJson).decisionId !== decision.id || object(source.run.resultJson).finalizationPhase !== "committed") return null;
   const { acceptedResponseDigestMatches } = await import("./native-runtime/native-run-finalizer.js");
@@ -102,13 +130,16 @@ export async function captureNativeFinalizedContinuationSummary(input: {
   const sets = [receipt.data.bootstrap, ...receipt.data.dispatches, ...receipt.data.additionalInputs];
   if (sets.length > 64) return null;
   const body = await createRunSecretRedactionRegistry(input.db as Db).redactForIssue(input.companyId, input.issueId, rawSummary.slice(0, 32_000));
+  if (input.stageEntryRead && (input.stageEntryRead.kind !== "stage_entry" || input.stageEntryRead.companyId !== input.companyId ||
+      input.stageEntryRead.issueId !== input.issueId || input.stageEntryRead.runId !== source.run.id ||
+      input.stageEntryRead.agentId !== source.run.agentId || !input.reader || input.stageEntryRead.taskCapture.input.issueId !== input.issueId)) return null;
   return { companyId: input.companyId, issueId: input.issueId, agentId: input.agentId, receiverRunId: receiver.id, sourceRunId: source.run.id,
     resultId: accepted.id, resultCanonicalSha256: accepted.canonicalSha256, resultCreatedAt: accepted.createdAt.toISOString(),
     finalizationVersion: coordinator.updatedAt.toISOString(), assessmentId: coordinator.assessmentId, decisionId: decision.id,
     decisionDigest: decision.decisionDigest, decisionSnapshotHash: nativeSha256({decisionVersion:decision.decisionVersion,
       policyVersion:decision.policyVersion,fromStatus:decision.fromStatus,toStatus:decision.toStatus,reasonCode:decision.reasonCode,
       decisionJson:decision.decisionJson,applicationState:decision.applicationState,appliedAt:decision.appliedAt?.toISOString()}),
-    parentReceipt: receipt.data, body };
+    parentReceipt: receipt.data, body, ...(input.stageEntryRead ? { stageEntryRead: input.stageEntryRead } : {}) };
 }
 
 export class StaleExecutionContinuationError extends Error {
@@ -224,6 +255,7 @@ export async function buildExecutionContinuation(input: {
   /** Selected message sources only; interactions and prior results are separate. */
   onCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
   onContinuationSourceCapture?: (capture: NativeTaskContinuationCapture) => void;
+  onStageTriggerCapture?: (trigger: NativeStageTaskContinuationTrigger) => void;
 }): Promise<ExecutionContinuationEnvelope> {
   const { db, companyId, issueId } = input;
   const [issue] = await db
@@ -239,6 +271,8 @@ export async function buildExecutionContinuation(input: {
   // Preflight has no current run and cannot borrow a saved owner's authority.
   // Dispatch uses only the actual matching running receiver and its current Human.
   let outcomeReader: AuthorizationActor = { type: "none" };
+  let stageContinuation: { trigger: NativeStageTaskContinuationTrigger;
+    summary: NativeFinalizedContinuationSummaryCapture | null } | null = null;
   const [receiver] = input.runId ? await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, companyId),
     eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"),
@@ -249,6 +283,12 @@ export async function buildExecutionContinuation(input: {
       runId: receiver.id, onBehalfOfUserId: receiver.responsibleUserId };
     if (refs.some(ref => typeof ref === "string" && ref.toLowerCase() === issueId.toLowerCase()) &&
       await canActorReadHeartbeatRunPrivacy(db, reader, receiver)) outcomeReader = reader;
+    if (outcomeReader.type === "agent") {
+      const { captureNativeStageContinuationForDispatch } = await import("./native-stage-wake-source.js");
+      const selected = await captureNativeStageContinuationForDispatch(db, { companyId, issueId, receiver, reader });
+      stageContinuation = selected ? { ...selected, summary: input.summary === null ? selected.summary : null } : null;
+      if (stageContinuation) input.onStageTriggerCapture?.(stageContinuation.trigger);
+    }
   }
   const rows = await db
     .select({
@@ -517,9 +557,9 @@ export async function buildExecutionContinuation(input: {
     // Low-trust evidence only: renderPaperclipWakePrompt removes completedWork
     // from requestContext and encodes it in the fenced, non-authoritative
     // continuation-evidence section. It cannot supply objective or authority.
-    completedWork: input.summary ??
+    completedWork: input.summary ?? (stageContinuation ? stageContinuation.summary?.body ?? null :
       string(object(object(sourceRun?.result).nativeResult).summary)?.slice(0, 32_000) ??
-      string(object(sourceRun?.result).summary)?.slice(0, 32_000) ?? null,
+      string(object(sourceRun?.result).summary)?.slice(0, 32_000) ?? null),
     completedActions,
     unresolvedInteractionIds: interactions
       .filter((row) => row.status === "pending")
@@ -572,12 +612,20 @@ export async function buildExecutionContinuation(input: {
     const pendingInteractions = wake && envelope.unresolvedInteractionIds.length
       ? await captureNativeGovernedPendingInteractions({ db, companyId, issueId, runId: receiver.id, agentId: input.agentId,
           interactionIds: envelope.unresolvedInteractionIds }) : [];
-    const finalizedSummary = wake && input.summary === null && sourceRunId && envelope.completedWork !== null
+    const finalizedSummary = (wake && stageContinuation?.summary) ?? (wake && input.summary === null && sourceRunId && envelope.completedWork !== null
       ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
-          receiverRunId: receiver.id, sourceRunId }) : null;
+          receiverRunId: receiver.id, sourceRunId }) : null);
     const { captureNativeToolActionDelivery } = await import("./tool-action-delivery.js");
     const delivery = wake && governedInteractions.length ? await captureNativeToolActionDelivery({ db, companyId, issueId,
       agentId: input.agentId, runId: receiver.id, wakeupRequestId: wake.id }) : null;
+    const stageActions: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption[] = [];
+    if (wake && completedActions.length > 0 && completedActions.length <= 64) {
+      const {captureNativeFinalizedStageConsumption}=await import("./native-stage-wake-source.js");
+      for (const action of completedActions) {
+        const selected=await captureNativeFinalizedStageConsumption(db,{companyId,issueId,runId:action.runId,reader:outcomeReader});
+        if(selected) stageActions.push(selected);
+      }
+    }
     const interaction = nativeTaskWakeInteraction(wake?.payload);
     const summary = input.summaryDocument && input.summary === input.summaryDocument.value.body
       ? { source: input.summaryDocument.source, rawTrustHash: nativeSha256(input.summaryDocument.value.sourceTrust),
@@ -588,6 +636,7 @@ export async function buildExecutionContinuation(input: {
     if (wake) input.onContinuationSourceCapture(structuredClone({ companyId, issueId, agentId: input.agentId, runId: receiver.id,
       responsibleUserId: receiver.responsibleUserId, wakeupRequestId: wake.id, envelope, commentSources: finalCommentSources,
       ...(governedInteractions.length ? { governedInteractions } : {}),
+      ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),
       ...(pendingInteractions.length ? { pendingInteractions } : {}),
       ...(summary ? { summary } : {}),

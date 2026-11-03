@@ -1,3 +1,4 @@
+import { nativeStageTaskBodyResultProjection } from "../native-stage-task-body-source.js";
 import { settleSlackConversation } from "../slack-conversation-lifecycle.js";
 import { dismissAutomaticCompletionReviews } from "./automatic-completion-reviews.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -403,7 +404,7 @@ async function recordRetryableFailure(input: {
           : {}),
         nativePhase: phase,
         nativePhaseUpdatedAt: now,
-        resultJson: {
+        resultJson: nativeStageTaskBodyResultProjection({
           ...record(input.run.resultJson),
           finalizationPhase: phase,
           failureCode,
@@ -412,7 +413,7 @@ async function recordRetryableFailure(input: {
             supersededByNewerRun || exhausted
               ? null
               : nextAttemptAt.toISOString(),
-        },
+        }),
         updatedAt: now,
       })
       .where(eq(heartbeatRuns.id, input.run.id))
@@ -1316,7 +1317,7 @@ export async function finalizeNativeRun(input: {
             : {}),
           nativePhase: finalizationPhase,
           nativePhaseUpdatedAt: now,
-          resultJson: {
+          resultJson: nativeStageTaskBodyResultProjection({
             ...record(run.resultJson),
             finalizationPhase,
             assessmentId: assessmentRow.id,
@@ -1348,7 +1349,7 @@ export async function finalizeNativeRun(input: {
             statusVersionBefore: Number(authoritativeIssue.statusVersion),
             statusVersionAfter: Number(committed.issue.statusVersion),
             workspaceFinalizeStatus: input.workspaceFinalizeStatus,
-          },
+          }),
           updatedAt: now,
         })
         .where(eq(heartbeatRuns.id, run.id))

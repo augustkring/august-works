@@ -1556,6 +1556,100 @@ describe("OpenCodeServerDriver", () => {
     await session.close({ reason: "test" });
   });
 
+  it.each(["acknowledged", "rejected", "non201", "closed", "no-pending", "foreign-turn"] as const)("settles an already in-flight dynamic tool before terminal completion: %s", async (outcome) => {
+    await chmod(fixture, 0o755);
+    const root = await mkdtemp(join(tmpdir(), "paperclip-opencode-tool-settlement-"));
+    const workspace = await mkdtemp(join(tmpdir(), "paperclip-opencode-workspace-"));
+    roots.push(root, workspace);
+    let entered!: () => void, release!: (value: unknown) => void, reject!: (reason: unknown) => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const pending = new Promise<unknown>((resolve, fail) => { release = resolve; reject = fail; });
+    let providerEvents!: ReadableStreamDefaultController<Uint8Array>;
+    let markEventsReady!: () => void;
+    const eventsReady = new Promise<void>(resolve => { markEventsReady = resolve; });
+    const bounded = async <T,>(promise: Promise<T>): Promise<T> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([promise, new Promise<never>((_, fail) => {
+          timer = setTimeout(() => fail(new Error("terminal settlement deadline")), 1_000);
+        })]);
+      } finally { clearTimeout(timer); }
+    };
+    const driver = new OpenCodeServerDriver({ model: "openrouter/deepseek/deepseek-v4-flash-0731",
+      runtimeDirectory: root, command: fixture,
+      environment: { PATH: process.env.PATH, OPENROUTER_API_KEY: "fixture-key" },
+      // Keep the real driver/MCP runtime, but own this turn's tool scheduling.
+      fetch: (url, init) => {
+        if (String(url).includes("/prompt_async")) return Promise.resolve(new Response("{}", { status: 200 }));
+        if (String(url).endsWith("/event")) return Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+          start(controller) {
+            providerEvents = controller;
+            markEventsReady();
+            init?.signal?.addEventListener("abort", () => controller.close(), { once: true });
+          },
+        }), { status: 200, headers: { "Content-Type": "text/event-stream" } }));
+        return fetch(url, init);
+      },
+      dynamicToolHandler: async () => { entered(); return pending; },
+      taskEnvelope: createCodexTaskEnvelope({ objective: "Settle the admitted API call", contractRevision: "settlement-v1",
+        criteria: [{ id: "result", requirement: "Retain the bounded result" }] }),
+    });
+    const session = await driver.openSession({ runId: `settlement-${outcome}`, normalizedSessionId: `settlement-${outcome}`,
+      workingDirectory: workspace });
+    const dispatch = (session as unknown as { dispatchTool(call: { tool: string; callId: string; arguments: unknown }): Promise<unknown> }).dispatchTool.bind(session);
+    await session.startTurn({ message: { role: "user", text: "One already admitted provider response." } });
+    const api = outcome === "no-pending" ? Promise.resolve(null)
+      : dispatch({ tool: "call_api", callId: "approval", arguments: { operationId: "POST /api/issues/{id}/comments" } });
+    const apiOutcome = api.then(value => ({ value }), error => ({ error }));
+    if (outcome !== "no-pending") await started;
+    if (outcome === "foreign-turn") {
+      await bounded(eventsReady);
+      providerEvents.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: "session.idle",
+        properties: { sessionID: session.ids().providerSessionId } })}\n\n`));
+      await bounded((async () => {
+        while ((await session.snapshot()).activeTurnId !== null) await new Promise(resolve => setTimeout(resolve, 1));
+      })());
+      await session.startTurn({ message: { role: "user", text: "A distinct current turn." } });
+    }
+    const semantic = { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done", summary: "Retained semantic result.",
+      completionClaim: { contractRevision: "settlement-v1", objectiveSatisfied: true,
+        criteria: [{ criterionId: "result", status: "satisfied", evidenceRefs: [] }], remainingWork: [] },
+      evidence: [], verification: [], attentionRequests: [], artifacts: [] };
+    const finish = dispatch({ tool: "paperclip_finish", callId: "finish", arguments: semantic });
+    const finishOutcome = finish.then(value => ({ value }), error => ({ error }));
+    if (outcome !== "no-pending" && outcome !== "foreign-turn") {
+      await Promise.resolve();
+      expect((await session.snapshot()).semanticResult).toBeNull();
+      expect((await session.transcript()).events.some(event => event.eventType === "run.result.proposed")).toBe(false);
+    }
+    if (outcome === "closed") await bounded(session.close({ reason: "test-cancel" }));
+    const failure = new Error("unknown API acknowledgement");
+    if (outcome === "rejected") reject(failure);
+    else if (outcome !== "closed" && outcome !== "foreign-turn")
+      release(outcome === "non201" ? { ok: false, status: 422 } : { ok: true, status: 201 });
+    // closed/foreign-turn intentionally leave the old API promise unresolved.
+    const settledFinish = await bounded(finishOutcome);
+    const transcript = (await session.transcript()).events;
+    if (outcome === "rejected" || outcome === "closed") {
+      expect(settledFinish).toHaveProperty("error");
+      expect((await session.snapshot()).semanticResult).toBeNull();
+      expect(transcript.some(event => event.eventType === "run.result.proposed")).toBe(false);
+      if (outcome === "rejected") expect(await apiOutcome).toEqual({ error: failure });
+    } else {
+      expect(settledFinish).toEqual({ value: { accepted: true } });
+      const apiIndex = transcript.findIndex(event => event.eventType === "item.completed" && event.itemId === "approval");
+      const resultIndex = transcript.findIndex(event => event.eventType === "run.result.proposed");
+      if (outcome === "foreign-turn" || outcome === "no-pending") expect(apiIndex).toBe(-1);
+      else {
+        expect(await apiOutcome).toEqual({ value: outcome === "non201" ? { ok: false, status: 422 } : { ok: true, status: 201 } });
+        expect(apiIndex).toBeGreaterThan(-1);
+        expect(resultIndex).toBeGreaterThan(apiIndex);
+      }
+      expect((await session.snapshot()).semanticResult?.result).toEqual(semantic);
+    }
+    await session.close({ reason: "test" });
+  });
+
   it("normalizes a structured block result", async () => {
     await chmod(fixture, 0o755);
     const root = await mkdtemp(join(tmpdir(), "paperclip-opencode-driver-"));

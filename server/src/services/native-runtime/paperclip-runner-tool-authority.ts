@@ -1,3 +1,5 @@
+import { nativeStageCommentApiCallSchema, nativeStageCommentApiDecisionCurrent, readNativeManagedStageCommentCapture, type NativeManagedStageCommentCapture } from "../native-stage-comment-api.js";
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { publicChatTaskUrl } from "../chat-task-url.js";
 import { assertPlatformSkillAdmission } from "../platform-skill-admission.js";
 import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,executeManagementAnalyticalTool} from "./management-analytical-tools.js";
@@ -551,6 +553,7 @@ export class PaperclipRunnerToolAuthority {
     onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
     onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
     onManagedProjectCreateToolResult?: (capture: NativeManagedProjectCreateCapture) => Promise<void>;
+    onManagedStageCommentToolResult?: (capture: NativeManagedStageCommentCapture) => Promise<void>;
     nativeToolCallIdentity?: NativeBackendToolCallIdentity;
   } = {}): Promise<unknown> {
     const nativeCall = options.nativeToolCallIdentity;
@@ -575,9 +578,10 @@ export class PaperclipRunnerToolAuthority {
       const nativeInputSource: { value: { sourceSet: NativePayloadSourceSet | null;
         observedSourceInputs: NativePayloadSourceInput[] } | null } = { value: null };
       const managedProjectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
+      const managedStageCommentCapture: { value: NativeManagedStageCommentCapture | null } = { value: null };
       const result = await withOrchestrationNativeTool(this.db, this.binding, call,
         () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult,
-          source => { nativeInputSource.value = source; }, capture => { managedProjectCreateCapture.value = capture; }),
+          source => { nativeInputSource.value = source; }, capture => { managedProjectCreateCapture.value = capture; }, capture => { managedStageCommentCapture.value = capture; }),
         call.tool === MANAGED_NATIVE_REMEMBER_TOOL ||
           (call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false)));
       if (call.tool === "read_document") {
@@ -641,6 +645,8 @@ export class PaperclipRunnerToolAuthority {
           result, sourceSet: nativeInputSource.value.sourceSet,
           observedSourceInputs: nativeInputSource.value.observedSourceInputs });
       }
+      if (managedStageCommentCapture.value && options.onManagedStageCommentToolResult)
+        await options.onManagedStageCommentToolResult(managedStageCommentCapture.value);
       if (managedProjectCreateCapture.value && options.onManagedProjectCreateToolResult)
         await options.onManagedProjectCreateToolResult(managedProjectCreateCapture.value);
       return result;
@@ -664,7 +670,8 @@ export class PaperclipRunnerToolAuthority {
     onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     onNativeInputSource?: (source: { sourceSet: NativePayloadSourceSet | null;
       observedSourceInputs: NativePayloadSourceInput[] }) => void,
-    onManagedProjectCreateCapture?: (capture: NativeManagedProjectCreateCapture) => void): Promise<unknown> {
+    onManagedProjectCreateCapture?: (capture: NativeManagedProjectCreateCapture) => void,
+    onManagedStageCommentCapture?: (capture: NativeManagedStageCommentCapture) => void): Promise<unknown> {
     if (this.binding.nativeReview) {
       if (call.tool === "resolve_review") return this.#resolveReview(call.arguments);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
@@ -893,7 +900,8 @@ export class PaperclipRunnerToolAuthority {
         const { operationId, ...response } = record(await this.#callApi(call.callId, call.arguments,
           onProjectToolResult, onManagedProjectCreateCapture
             ? async capture => { onManagedProjectCreateCapture(capture); }
-            : undefined));
+            : undefined, onManagedStageCommentCapture
+            ? async capture => { onManagedStageCommentCapture(capture); } : undefined));
         return { ...response, apiOperationId: operationId };
       }
       case "get_task_context": {
@@ -1130,7 +1138,8 @@ export class PaperclipRunnerToolAuthority {
 
   async #callApi(callId: string, value: unknown,
     onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
-    onManagedProjectCreateToolResult?: (capture: NativeManagedProjectCreateCapture) => Promise<void>): Promise<unknown> {
+    onManagedProjectCreateToolResult?: (capture: NativeManagedProjectCreateCapture) => Promise<void>,
+    onManagedStageCommentToolResult?: (capture: NativeManagedStageCommentCapture) => Promise<void>): Promise<unknown> {
     const bound = await this.#boundContext();
     const context = { ...this.binding, issueIdentifier: bound.issue.identifier, workMode: bound.issue.workMode };
     const { input, operation } = validateRunnerApiCall(value, context);
@@ -1148,6 +1157,15 @@ export class PaperclipRunnerToolAuthority {
       managedProjectOutputCapture.managedOpenCodeToolUse.callId === callId &&
       managedProjectOutputCapture.managedOpenCodeToolUse.argumentsHash === nativeSha256(value)
       ? managedProjectOutputCapture : null;
+    const stageComment = nativeStageCommentApiCallSchema.safeParse(value);
+    const managedStageComment = this.binding.nativeModelOutputCapture !== undefined && operation.operationId === "POST /api/issues/{id}/comments";
+    if (managedStageComment && (!stageComment.success || stageComment.data.pathParams.id !== this.binding.issueId ||
+      !managedProjectOutputCapture || managedProjectOutputCapture.runId !== this.binding.runId ||
+      managedProjectOutputCapture.managedOpenCodeToolUse?.toolName !== "call_api" ||
+      managedProjectOutputCapture.managedOpenCodeToolUse.callId !== callId ||
+      managedProjectOutputCapture.managedOpenCodeToolUse.argumentsHash !== nativeSha256(value) ||
+      !await nativeStageCommentApiDecisionCurrent(this.db,{...this.binding,arguments:value})))
+      throw forbidden("Managed Stage comment requires its current declared Reviewer and exact model call");
     const contentType = input.contentType ?? (input.files?.length ? "multipart/form-data" : "application/json");
     if (mutation && nativeInputDispatch && callIdentity && !input.files?.length &&
       (!input.body || (typeof input.body === "object" && !Array.isArray(input.body))) &&
@@ -1183,6 +1201,9 @@ export class PaperclipRunnerToolAuthority {
       nativeToolEffect.operationId !== managedProjectApiCall.data.operationId || nativeToolEffect.method !== "POST" ||
       nativeToolEffect.pathAndQuery !== `/api/companies/${this.binding.companyId}/projects`))
       throw forbidden("Managed Project API creation requires the exact signed POST effect claim");
+    if (managedStageComment && (!nativeToolEffect || nativeToolEffect.operationId !== "POST /api/issues/{id}/comments" ||
+      nativeToolEffect.method !== "POST" || nativeToolEffect.pathAndQuery !== `/api/issues/${this.binding.issueId}/comments`))
+      throw forbidden("Managed Stage comment requires the exact signed POST effect claim");
     const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId, bound.actor.adapterType,
       this.binding.runId, bound.run.responsibleUserId, { kind: "standard" }, nativeToolEffect);
     if (!token) throw new Error("Paperclip run authentication is unavailable");
@@ -1195,6 +1216,8 @@ export class PaperclipRunnerToolAuthority {
           const fresh = await this.#boundContext();
           if (!runnerApiToolsEnabled(this.binding.companyId, this.binding.apiToolsEnabled)) throw new Error("paperclip_runner_tool_not_advertised");
           validateRunnerApiCall(input, { ...context, workMode: fresh.issue.workMode });
+          if (managedStageComment && !await nativeStageCommentApiDecisionCurrent(this.db,{...this.binding,arguments:value}))
+            throw forbidden("Managed Stage comment Reviewer changed before HTTP dispatch");
         },
         readFile: (file) => this.#readApiFile(file),
         saveResponse: async (bytes, contentType) => {
@@ -1270,7 +1293,8 @@ export class PaperclipRunnerToolAuthority {
       }
       if (Object.keys(receipts).length >= 512) throw badRequest("Run API mutation limit reached");
       const receipt = { digest, operationId: operation.operationId, state: "pending" as const,
-        ...(managedProjectApiCapture ? { argumentsHash: managedProjectOutputCapture!.managedOpenCodeToolUse!.argumentsHash } : {}),
+        ...(managedProjectApiCapture ? { argumentsHash: managedProjectOutputCapture!.managedOpenCodeToolUse!.argumentsHash }
+          : managedStageComment ? {argumentsHash:nativeSha256(value)} : {}),
         ...(nativeToolEffect ? { callId, turnId: nativeToolEffect.turnId, dispatchId: nativeToolEffect.dispatchId,
           eventSeq: nativeToolEffect.eventSeq, attempt: nativeToolEffect.attempt,
           method: nativeToolEffect.method, pathAndQuery: nativeToolEffect.pathAndQuery,
@@ -1307,7 +1331,8 @@ export class PaperclipRunnerToolAuthority {
       const providerResultDigest = nativeSha256(nativeCallApiResultEnvelope(callId,
         { ...publicResult, apiOperationId: operation.operationId }));
       receipts[key] = { digest, operationId: operation.operationId, state: "completed", providerResultDigest, result,
-        ...(managedProjectApiCapture ? { argumentsHash: managedProjectOutputCapture!.managedOpenCodeToolUse!.argumentsHash } : {}),
+        ...(managedProjectApiCapture ? { argumentsHash: managedProjectOutputCapture!.managedOpenCodeToolUse!.argumentsHash }
+          : managedStageComment ? {argumentsHash:nativeSha256(value)} : {}),
         ...(nativeToolEffect ? { callId, turnId: nativeToolEffect.turnId, dispatchId: nativeToolEffect.dispatchId,
           eventSeq: nativeToolEffect.eventSeq, attempt: nativeToolEffect.attempt,
           method: nativeToolEffect.method, pathAndQuery: nativeToolEffect.pathAndQuery,
@@ -1317,6 +1342,14 @@ export class PaperclipRunnerToolAuthority {
       await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: receipts,
         nativeManagedProjectApiCaptures: captures } }).where(eq(heartbeatRuns.id, this.binding.runId));
     });
+    if (managedStageComment) {
+      if (!managedProjectOutputCapture) throw forbidden("Managed Stage comment output capture is unavailable");
+      const {operationId: _operationId, ...publicResponse} = record(result);
+      const capture = await readNativeManagedStageCommentCapture(this.db,{...this.binding,callId,
+        argumentsHash:nativeSha256(value),result:{...publicResponse,apiOperationId:operation.operationId},
+        outputCapture:managedProjectOutputCapture});
+      await onManagedStageCommentToolResult?.(capture);
+    }
     const resultData = "data" in result ? result.data : undefined;
     if (managedProjectApiCapture && managedProjectApiCall.success && result.ok === true && result.status === 201 &&
       resultData && typeof resultData === "object" && !Array.isArray(resultData)) {
@@ -2596,6 +2629,21 @@ export class PaperclipRunnerToolAuthority {
     const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: this.binding.companyId,
       agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
     await assertPlatformSkillAdmission(tx, actor, blenteraPlatformContractHashes());
+    const stageContext = record(context.run.contextSnapshot);
+    if (stageContext.source === "issue.execution_stage" || Object.hasOwn(stageContext,"nativeStatusWakeIntentId")) {
+      const profile = record(context.run.runnerProfileJson);
+      const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+      if (!receipt.success || receipt.data.binding.companyId !== this.binding.companyId ||
+        receipt.data.binding.issueId !== this.binding.issueId || receipt.data.binding.runId !== context.run.id ||
+        receipt.data.binding.agentId !== this.binding.agentId || receipt.data.binding.responsibleUserId !== context.run.responsibleUserId ||
+        receipt.data.bootstrap.inputs.filter(source=>source.kind === "native_task_wake" && source.runId === context.run.id).length !== 1)
+        throw forbidden("The current Stage input receipt is unavailable");
+      // This is a NEW mutation authorization. It deliberately uses the public
+      // current-source boundary, which cannot receive a historical-read context.
+      const { assertNativePayloadSourceSetCurrent } = await import("../native-direct-input.js");
+      await assertNativePayloadSourceSetCurrent(tx,{companyId:this.binding.companyId,issueId:this.binding.issueId,
+        runId:context.run.id,actor,policy:receipt.data.bootstrap.policy,inputs:receipt.data.bootstrap.inputs});
+    }
   }
 
   async #captureIdentity() {

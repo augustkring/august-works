@@ -81,11 +81,15 @@ export async function captureNativeGovernedPendingInteractions(input: {
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"))).limit(1);
   const [task] = await input.db.select().from(issues).where(and(eq(issues.id, input.issueId), eq(issues.companyId, input.companyId),
     eq(issues.assigneeAgentId, input.agentId))).limit(1);
-  const { canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
+  const reader = input.reader ?? { type: "agent" as const, source: "agent_jwt" as const, companyId: input.companyId,
+    agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run?.responsibleUserId ?? null };
+  const { canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, isCurrentTaskPrivacyPrincipal } =
+    await import("../authorization.js");
   if (!run || !task || ["done", "cancelled"].includes(task.status) || !run.responsibleUserId ||
     ![run.issueId, run.nativeIssueId, record(run.contextSnapshot).issueId].includes(input.issueId) ||
-    !await canActorReadHeartbeatRunPrivacy(input.db, input.reader ?? { type: "agent", source: "agent_jwt", companyId: input.companyId,
-      agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId }, run))
+    !await isCurrentTaskPrivacyPrincipal(input.db, reader, input.companyId) ||
+    !await canActorReadHeartbeatRunPrivacy(input.db, reader, run) ||
+    !await canActorReadIssuePrivacy(input.db, reader, task))
     throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Pending interaction reader is unavailable");
   const versions = new Map<string, string>();
   const rows = await issueThreadInteractionService(input.db).listForIssue(input.issueId,

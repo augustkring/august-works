@@ -177,3 +177,22 @@ describe("Native run input source receipt structural boundary", () => {
     expect(nativeRunInputSourceReceiptSchema.safeParse({ ...value, additionalInputs: Array(80).fill(sources) }).success).toBe(false);
   });
 });
+
+
+describe("Native Stage policy transform structural boundary", () => {
+  const entry = { kind: "native_stage_policy" as const, transitionId: randomUUID(), runId: randomUUID(),
+    ownerKind: "native_status_decision" as const, decisionId: randomUUID(), receiptHash: hash,
+    previousSnapshotDigest: hash, previousOwnerContentHash: hash, nextOwnerContentHash: "b".repeat(64) };
+  it("retains both actual owner variants without adding source authority", () => {
+    for (const ownerKind of ["native_status_decision", "native_stage_comment"] as const) {
+      const value = { ...snapshot(), transforms: [{ ...entry, ownerKind }] };
+      expect(nativePayloadSourceSnapshotSchema.parse(value)).toEqual(value);
+    }
+  });
+  it("rejects workspace authority, undeclared owners and extra machine-field grants", () => {
+    for (const step of [{ ...entry, ownerKind: "workspace_binding" }, { ...entry, kind: "activity" },
+      { ...entry, activityId: randomUUID() }, { ...entry, allowedFields: ["title"] },
+      { ...entry, decisionId: undefined }, { ...entry, receiptHash: "unverified" }])
+      expect(nativePayloadSourceSnapshotSchema.safeParse({ ...snapshot(), transforms: [step] }).success).toBe(false);
+  });
+});
