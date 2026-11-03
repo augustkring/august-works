@@ -3512,8 +3512,16 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const wrongPolicyDenied = wrongPolicy.failedBoundaries.includes("filesystem_write_expansion");
     negativeAdmissionControls={wrongRunDenied,wrongLeaseDenied,wrongCwdDenied,wrongPolicyDenied};
     if (!wrongRunDenied || !wrongLeaseDenied || !wrongCwdDenied || !wrongPolicyDenied ||
-      !wrongSessionStartCommandDenied || !wrongSessionStartRootDenied || wrongSessionStartExecuted)
+      !wrongSessionStartCommandDenied || !wrongSessionStartRootDenied || wrongSessionStartExecuted) {
+      try {
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+          console.info("managed_native_negative_admission_control_failed", JSON.stringify({
+            wrongRunDenied, wrongLeaseDenied, wrongCwdDenied, wrongPolicyDenied,
+            wrongSessionStartCommandDenied, wrongSessionStartRootDenied, wrongSessionStartExecuted,
+          }));
+      } catch { /* Keep the original admission failure authoritative. */ }
       throw new Error("conversation_software_host_negative_admission_control_failed");
+    }
     negativeNativeSessionStartControls = { wrongCommandDenied: wrongSessionStartCommandDenied,
       wrongRootDenied: wrongSessionStartRootDenied, noExecution: !wrongSessionStartExecuted };
   };

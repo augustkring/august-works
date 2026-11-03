@@ -28,7 +28,9 @@ afterAll(async () => {
 }, 30000);
 
 it("dispatches an ordinary scheduler-created capped Worker through current Sandbox admission and model reservation", async () => {
+  // Serial fixture transport authenticates each incoming model channel; the production scheduler still creates one ordinary Worker Run.
   await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    schedulerMode: "serial",
     providerReply: ({ body, callIndex, execution }) => {
       const tools = body.tools as Array<{ name: string }>;
       const tool = (name: string) => {
@@ -122,7 +124,17 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
       expect(observed.issuerFacts).toEqual([{ scope: "worker_model", runId: wake!.id,
         manifestId: attempts[0]!.executionManifestId }]);
       expect(observed.sandboxRuntimeFacts?.relayAuthenticated).toBe(true);
-      expect(observed.sandboxRuntimeFacts?.brokerTokenSubstitutionCount).toBe(0);
+      // These are observations of the actual authenticated ingress and its signed session, not the nonserial fixture transport.
+      expect(observed.sandboxRuntimeFacts?.authenticatedModelTunnels).toBeGreaterThan(0);
+      const injections = observed.sandboxRuntimeFacts?.appliedModelProfileInjections as Array<{ runId: string; leaseId: string; sessionKey: string }>;
+      const sessionReceipts = observed.sandboxRuntimeFacts?.modelBrokerSessionReceipts as Array<{ phase: string; sessionKey: string }>;
+      const starts = sessionReceipts.filter(row => row.phase === "start");
+      expect(starts).toHaveLength(1);
+      expect(typeof starts[0]?.sessionKey).toBe("string");
+      expect(starts[0]?.sessionKey.length).toBeGreaterThan(0);
+      expect(injections.length).toBeGreaterThan(0);
+      expect(injections.every(row => row.runId === wake!.id && row.leaseId === leases[0]!.id && row.sessionKey === starts[0]?.sessionKey)).toBe(true);
+      expect(sessionReceipts.at(-1)).toMatchObject({ phase: "stop", sessionKey: starts[0]?.sessionKey });
       expect(observed.sandboxRuntimeFacts?.attachedModelBrokerProviderCount).toBe(0);
       expect((observed.sandboxRuntimeFacts?.modelBrokerSessionReceipts as Array<{ phase: string }>).at(-1)?.phase).toBe("stop");
     },

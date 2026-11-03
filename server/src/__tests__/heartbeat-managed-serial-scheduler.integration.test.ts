@@ -9,6 +9,8 @@ import { verifyNativeCleanupRuntimeState } from "../services/execution-sandbox/r
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { issueService } from "../services/issues.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { verificationService } from "../services/supervision/verification-service.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -64,6 +66,7 @@ it("keeps two real serial Plan/Run lifecycles on one Task isolated after actual 
       expect(manifest.runId).toBe(run.id); expect(sourceReceipt).toBeTruthy();
     },
     driveScheduler: async ({ actor, companyId, agentId, heartbeat, facts, factsForRun }) => {
+      await instanceSettingsService(db).updateExperimental({ verifier_v7: true });
       await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, agentId));
       const task = await issueService(db).create(companyId, { title: "Two bounded serial lifecycles",
@@ -127,6 +130,30 @@ it("keeps two real serial Plan/Run lifecycles on one Task isolated after actual 
           reservationsHash: nativeSha256(reservations.sort((a,b) => a.id.localeCompare(b.id))), providerCount: perRun.providerCallCount,
           issuerHash: nativeSha256(perRun.issuerFacts), sessionKey: injections[0]!.sessionKey,
           hostId: runtime.hostId, cellId: runtime.cellId, environmentId: runtime.environmentId });
+        // A successful provider Run retains a result; the initiating Human must
+        // independently verify that result before this Task can have a new Plan.
+        const verifier = verificationService(db);
+        const packet = await verifier.packet(actor, companyId, plan.id);
+        expect(packet.deterministicFailures).toEqual([]);
+        expect(packet.policy.workerSelfCertification).toBe(false);
+        const resultEvidence = packet.evidence.filter(item => item.type === "task_document"
+          && item.hash === nativeSha256(`Actual serial lifecycle ${ordinal} retained result.`));
+        expect(resultEvidence).toHaveLength(1);
+        const evidenceRefs = resultEvidence.map(item => item.ref);
+        const judgement = (_: unknown, index: number) => ({ index, satisfied: true, evidenceRefs });
+        const review = await verifier.review(actor, companyId, plan.id, {
+          expectedPlanVersion: packet.planVersion, expectedResultHash: packet.resultHash,
+          workerId: packet.workerId, result: "pass", objectiveSatisfied: true,
+          rationale: `Human checked the exact retained document for serial lifecycle ${ordinal}`,
+          businessInvariants: packet.contract.businessInvariants.map(judgement),
+          evidenceRequirements: packet.contract.evidenceRequirements.map(judgement),
+          prohibitedOutcomes: packet.contract.prohibitedOutcomes.map(judgement),
+        });
+        expect(review.result).toBe("pass");
+        expect(review.workerAttemptId).toBe(attempts[0]!.id);
+        expect((await orchestrationService(db).get(actor, companyId, plan.id)).status).toBe("completed");
+        const [reviewedTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, task.id)));
+        expect(reviewedTask?.status).toBe("done");
       }
       expect(providerRuns).toEqual(observed.map(row => row.runId));
       for (const key of ["runId", "leaseId", "attemptId", "manifestId", "sessionKey"] as const) expect(observed[0]![key]).not.toBe(observed[1]![key]);

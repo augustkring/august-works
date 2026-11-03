@@ -13,6 +13,7 @@ import { projectRoutes } from "../routes/projects.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { projectService } from "../services/projects.js";
 import { lockIssuePrivacyTree } from "../services/issues.js";
+import { nativeCallApiResultEnvelope, nativeSha256 } from "../services/native-runtime/canonical.js";
 import { captureNativeProjectToolResult } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 
 describe("manual Human Project payload source capture", () => {
@@ -142,7 +143,8 @@ describe("manual Human Project payload source capture", () => {
     } });
     const modelResult = { ok: true, status: 200, contentType: "application/json", retryAfter: null,
       data: selected.body, apiOperationId: "GET /api/projects/{id}" };
-    expect(capture.resultDigest).toBe(createHash("sha256").update(JSON.stringify(modelResult)).digest("hex"));
+    expect(capture.resultDigest).toBe(nativeSha256(nativeCallApiResultEnvelope("actual-project-read-result", modelResult)));
+    expect(capture.apiResultDigest).toBe(nativeSha256(result));
     expect(JSON.stringify(capture)).not.toContain("Direct Human project description");
   });
 

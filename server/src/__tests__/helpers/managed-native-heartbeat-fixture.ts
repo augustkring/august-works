@@ -214,6 +214,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     providerBindingsByAgent.set(configuredAgentId, provider.provider.id);
   }
   const executionsByRun = new Map<string, { execution: NativeExecutionInput; issueId: string | null; agentId: string }>();
+  const preModelFailures = new Map<string, { stage: "input" | "host" | "mint" | "issuer";
+    code: string; httpStatus: number | null }>();
   let activeToken: string | null = null;
   let activeExecution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput | null = null;
   let activeRunId: string | null = null;
@@ -826,6 +828,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       : {}),
     testNativeRunnerEnvironment: async ({ execution, runId, issueId,
     agentId: currentAgentId, responsibleUserId, bootstrapSourceClosure }) => {
+    let stage: "input" | "host" | "mint" | "issuer" = "input";
+    try {
     if (execution.provider.kind !== "opencode" || !responsibleUserId)
       throw new Error("conversation_fixture_provider_or_human_missing");
     const existing = executionsByRun.get(runId);
@@ -838,13 +842,16 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       activeRunId = runId;
       activeIssueId = issueId;
     }
+    stage = "host";
     const hostEnvironment = sandboxHeartbeat?.beforeNativeExecution
       ? await sandboxHeartbeat.beforeNativeExecution({ execution, runId, issueId, agentId: currentAgentId,
           responsibleUserId, bootstrapSourceClosure })
       : {};
+    stage = "mint";
     const minted = input.controlledNativeSessionBackendFactory
       ? null
       : await gateway.issueForRun({ companyId, agentId: currentAgentId, runId, responsibleUserId });
+    stage = "issuer";
     if (minted) {
       const claims = verifyRuntimeToolsToken(minted.token, "worker_model");
       if (!claims?.worker_model || claims.scope !== "worker_model") throw new Error("scheduler_fixture_issuer_scope_missing");
@@ -867,6 +874,54 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       HTTP_PROXY: "", http_proxy: "", HTTPS_PROXY: brokerProxyOrigin ?? "", https_proxy: brokerProxyOrigin ?? "",
       ALL_PROXY: "", all_proxy: "",
       NODE_EXTRA_CA_CERTS: certBundlePath, SSL_CERT_FILE: certBundlePath };
+    } catch (error) {
+      // The exact admission/issuance error still reaches Heartbeat unchanged.
+      // Retain only closed static labels and bounded API status for failed Runs.
+      try {
+        const row = error !== null && typeof error === "object"
+          ? error as { message?: unknown; status?: unknown } : {};
+        const labels = new Set([
+          "conversation_fixture_provider_or_human_missing",
+          "scheduler_fixture_execution_changed_for_run",
+          "scheduler_fixture_issuer_scope_missing",
+          "worker_software_host_run_changed",
+          "worker_software_host_run_binding_invalid",
+          "worker_software_host_task_binding_invalid",
+          "worker_software_host_bootstrap_closure_missing",
+          "worker_software_host_bootstrap_closure_changed",
+          "worker_software_host_workspace_owner_changed",
+          "worker_software_host_workspace_binding_invalid",
+          "worker_software_host_bootstrap_task_changed",
+          "worker_software_host_workspace_source_invalid",
+          "worker_software_host_project_workspace_source_invalid",
+          "worker_software_host_project_binding_invalid",
+          "worker_software_host_project_source_denied",
+          "worker_software_host_project_source_missing",
+          "worker_software_host_project_workspace_binding_invalid",
+          "worker_software_host_project_worktree_identity_invalid",
+          "worker_software_host_project_current_lease_or_task_changed",
+          "conversation_software_host_issue_missing",
+          "conversation_software_host_admission_unavailable",
+          "conversation_software_host_run_lease_missing",
+          "conversation_software_host_issue_binding_changed",
+          "conversation_software_host_native_run_binding_invalid",
+          "conversation_software_host_issue_binding_invalid",
+          "conversation_software_host_issue_changed",
+          "conversation_software_host_manifest_missing",
+          "conversation_software_host_private_task_root_missing",
+          "conversation_software_host_workload_not_running",
+          "conversation_software_host_provider_lease_expiry_missing",
+          "conversation_software_host_negative_admission_control_failed",
+          "conversation_software_host_lease_binding_changed",
+        ]);
+        const firstLine = typeof row.message === "string" ? row.message.split("\n", 1)[0] : null;
+        const code = typeof firstLine === "string" && labels.has(firstLine) ? firstLine : "OTHER";
+        const httpStatus = typeof row.status === "number" && Number.isInteger(row.status)
+          && row.status >= 100 && row.status <= 599 ? row.status : null;
+        if (!preModelFailures.has(runId)) preModelFailures.set(runId, { stage, code, httpStatus });
+      } catch { /* Failure projection must never replace the original error. */ }
+      throw error;
+    }
   } });
   let managedSignoff: { app: ExpressApp; humanCookie: string;
     agentApiTokens: { executor: string; reviewer: string } } | null = null;
@@ -928,6 +983,40 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const failedRuns = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.agentId, agentIds),
           eq(heartbeatRuns.status, "failed"))).orderBy(desc(heartbeatRuns.createdAt)).limit(8);
+      // Broker facts are fixture-wide, not Run-scoped. Never emit request hashes,
+      // arbitrary server strings, constraints, stack frames or credential data.
+      if (failedRuns.length > 0) {
+        const brokerFailures = brokerRequestFacts.filter(fact => Number.isInteger(fact.status)
+          && fact.status >= 400 && fact.status <= 599);
+        const knownCodes = new Set(["worker_model_unsettled", "worker_model_result_withheld",
+          "worker_model_budget_exhausted", "conversation_model_unsettled", "conversation_model_result_withheld",
+          "native_tool_budget_exhausted", "native_tool_result_unsettled", "forbidden", "conflict",
+          "unauthorized", "bad_request"]);
+        const knownStages = new Set(["provider_authority_recheck", "credential_lookup", "credential_recheck",
+          "wire_authority_recheck", "wire_run_binding", "wire_receipt_binding", "wire_intent_budget",
+          "wire_intent_write", "provider_transport", "reservation_settlement", "response_run_binding",
+          "response_history_revalidation", "response_receipt_binding", "response_wire_intent_match",
+          "response_result_identity", "response_source_union", "response_receipt_finalize",
+          "response_capture_write", "post_response_recheck"]);
+        const knownSqlStates = new Set(["40001", "40P01", "23503", "23505", "23514", "25P02",
+          "57014", "55P03", "53300"]);
+        const knownErrorNames = new Set(["Error", "TypeError", "RangeError", "AbortError", "UnknownError"]);
+        const closed = (value: unknown, allowed: Set<string>) => typeof value === "string"
+          ? allowed.has(value) ? value : "unrecognized" : null;
+        if (brokerFailures.length > 0) console.info("managed_scheduler_fixture_broker_failure_projection", JSON.stringify({
+          fixtureTotalBrokerFailures: brokerFailures.length,
+          failures: brokerFailures.slice(0, 8).map(fact => ({
+            status: fact.status,
+            errorStatus: typeof fact.errorStatus === "number" && Number.isInteger(fact.errorStatus)
+              && fact.errorStatus >= 400 && fact.errorStatus <= 599 ? fact.errorStatus : null,
+            code: closed(fact.code, knownCodes), codePresent: typeof fact.code === "string",
+            errorCode: closed(fact.errorCode, knownCodes), errorCodePresent: typeof fact.errorCode === "string",
+            stage: closed(fact.stage, knownStages), sqlState: closed(fact.sqlState, knownSqlStates),
+            constraintPresent: typeof fact.constraint === "string",
+            errorName: closed(fact.errorName, knownErrorNames),
+          })),
+        }));
+      }
       const knownNames = new Set(["ProviderAuthError", "UnknownError", "MessageOutputLengthError",
         "MessageAbortedError", "StructuredOutputError", "ContextOverflowError", "ContentFilterError", "APIError"]);
       const record = (value: unknown): Record<string, unknown> =>
@@ -941,6 +1030,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         console.info("managed_scheduler_failed_turn_projection", JSON.stringify({
           failedRunOrdinal: index + 1, failedRunStatus: "failed",
           executionObserved: executionsByRun.has(failedRun.id),
+          preModelFailure: preModelFailures.get(failedRun.id) ?? null,
           providerCallCount: providerCalls.filter(call => call.runId === failedRun.id).length,
           modelIssuanceCount: issuerFacts.filter(fact => fact.runId === failedRun.id).length,
           fixtureTotalAuthenticatedModelTunnels: authenticatedModelTunnels,

@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import request from "supertest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
-  nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts } from "@paperclipai/db";
+  nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -25,6 +25,12 @@ import { orchestrationService } from "../services/orchestration/orchestration-se
 import { issueService } from "../services/issues.js";
 import { documentService } from "../services/documents.js";
 import { heartbeatService } from "../services/heartbeat.js";
+import {
+  CHAT_CONTROL_RECOVERY_ADMISSION_KEY,
+  CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE,
+  chatControlRecoveryAdmission,
+  readChatControlRecoveryAdmission,
+} from "../services/chat-control-recovery-stop.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
 import { errorHandler } from "../middleware/index.js";
@@ -417,5 +423,400 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }, 60_000);
+  // Same current-Human/Plan and installed HTTP/listener owners as the two
+  // cases above. The new cases share only their identical local setup/proofs.
+  async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string) {
+    const { f, human } = fixture;
+    const tasks = issueService(db), plans = orchestrationService(db);
+    const draft = await tasks.create(f.home, { title, description: "Retain one internal document for Human review; no interactive tools or external effects.",
+      status: "todo", workMode: "standard", responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+      { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+    const task = await tasks.update(draft.id, { assigneeAgentId: f.presence.id, actorUserId: f.userId, privacyActor: human });
+    if (!task) throw new Error("dependency_domain_draft_missing");
+    const plan = await plans.create(human, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+      workload: "semantic", riskClass: "C0", completionContract: { objective: title,
+        requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"] },
+      budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }] });
+    await plans.decide(human, f.home, plan.id, { expectedVersion: plan.version, action: "start",
+      rationale: "Admit one eligible internal document through the installed controller and real scheduler" });
+    return { task, plan };
+  }
+
+  async function withInstalledDraftTransport(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>,
+    fetch: typeof guardedRemoteHttpFetch, drive: (heartbeat: ReturnType<typeof heartbeatService>) => Promise<void>,
+    beforeChatControlRecoveryCheck?: (input: { runId: string; issueId: string; stage: "claim" | "dispatch" }) => Promise<void>) {
+    const consumer = workerModelGateway(db, { profiles: [fixture.profile], sourceSha,
+      protectedEvidenceOrigin: "https://protected.test.invalid", fetch });
+    const app = express(); app.use(express.json()); app.use(mcpGatewayProtocolRoutes(createToolGatewayService(db))); app.use(errorHandler);
+    const server = createServer(app), priorApiUrl = process.env.PAPERCLIP_API_URL;
+    let heartbeat: ReturnType<typeof heartbeatService> | undefined;
+    const substitution = vi.fn(() => { throw new Error("Installed draft controller must not use the provider backend seam"); });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => { server.off("error", reject); resolve(); });
+      });
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("dependency_domain_api_listener_missing");
+      process.env.PAPERCLIP_API_URL = `http://127.0.0.1:${address.port}`;
+      registerNativeDraftGateway(db, consumer);
+      heartbeat = heartbeatService(db, {
+        nativeSessionBackendFactory: substitution,
+        ...(beforeChatControlRecoveryCheck ? { beforeChatControlRecoveryCheck } : {}),
+      });
+      await drive(heartbeat);
+      expect(substitution).not.toHaveBeenCalled();
+    } finally {
+      try { await heartbeat?.drainActiveRunExecutions(); }
+      finally {
+        registerNativeDraftGateway(db, undefined);
+        if (priorApiUrl === undefined) delete process.env.PAPERCLIP_API_URL; else process.env.PAPERCLIP_API_URL = priorApiUrl;
+        server.closeAllConnections();
+        if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+      }
+    }
+  }
+
+  async function assertCompletedDraft(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>,
+    entry: Awaited<ReturnType<typeof createDraftPlan>>, runId: string, body: string) {
+    const { f } = fixture; const { task, plan } = entry;
+    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, runId)));
+    expect(run).toMatchObject({ nativeIssueId: task.id, responsibleUserId: f.userId,
+      runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
+    const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plan.id));
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]).toMatchObject({ runId, agentId: f.presence.id });
+    const manifests = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId));
+    expect(manifests).toHaveLength(1);
+    expect(attempts[0]!.executionManifestId).toBe(manifests[0]!.id);
+    const reservations = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id));
+    expect(reservations).toHaveLength(1);
+    expect(reservations[0]).toMatchObject({ workerAttemptId: attempts[0]!.id, status: "completed", maximumMinor: 3,
+      usage: { inputTokens: 10, outputTokens: 20 } });
+    expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+      .toMatchObject({ toolActionsUsed: 2, modelCostReserved: 3 });
+    expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, runId)))
+      .toEqual([expect.objectContaining({ schemaStatus: "accepted" })]);
+    const receipt = nativeRunInputSourceReceiptSchema.parse(run?.runnerProfileJson?.nativeInputSourceReceipt);
+    expect(receipt.binding).toMatchObject({ companyId: f.home, agentId: f.presence.id, issueId: task.id, runId });
+    expect((await documentService(db).getIssueDocumentByKey(task.id, "result"))?.body)
+      .toBe(body);
+    const revisions = await db.select({ revision: documentRevisions }).from(issueDocuments)
+      .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+      .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
+        eq(documentRevisions.id, documents.latestRevisionId), eq(documentRevisions.documentId, documents.id)))
+      .where(and(eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+    expect(revisions).toHaveLength(1);
+    const source = nativePayloadSourceSnapshotSchema.parse(revisions[0]!.revision.payloadSourceSnapshot);
+    const intents = run?.runnerProfileJson?.nativeAwModelWireIntents;
+    if (!Array.isArray(intents) || intents.length !== 1) throw new Error("capacity_draft_wire_intent_missing");
+    const intent: unknown = intents[0];
+    if (!intent || typeof intent !== "object" || !("requestHash" in intent) || !("wireBodyHash" in intent))
+      throw new Error("capacity_draft_wire_intent_invalid");
+    expect(intent.requestHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(intent.wireBodyHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(source.inputs).toContainEqual(expect.objectContaining({ kind: "worker_model_dispatch", runId,
+      reservationId: reservations[0]!.id, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash }));
+    expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]!.status).not.toBe("done");
+  }
+
+  it("coalesces two durable status-wake domain inputs into one real installed-controller Run", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
+    let calls = 0;
+    const output = "One coalesced internal draft retained for Human review.";
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      expect(++calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      expect(String(init.body)).toContain("assignedRuntimeContext");
+      expect(String(init.body)).not.toContain(credential);
+      if (!entry) throw new Error("coalesced_draft_plan_missing");
+      const reservations = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+      expect(reservations).toHaveLength(1);
+      expect(reservations[0]).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      entry = await createDraftPlan(fixture, "Retain the coalesced status-wake draft");
+      const issueId = entry.task.id;
+      // Explicit dispatcher input-domain fixture only: these outbox inputs are
+      // not evidence that a real Native status committer emitted them. Run,
+      // attempt, manifest, reservation and accepted output remain owner-created.
+      const payload = { issueId, taskId: issueId,
+        _paperclipWakeContext: { issueId, taskId: issueId, source: "native_status_decision" } };
+      const intents = await db.insert(agentWakeupRequests).values([
+        { companyId: f.home, agentId: f.presence.id, source: "automation", triggerDetail: "system",
+          reason: "issue_children_completed", payload, requestedByActorType: "system",
+          requestedByActorId: "native-status-committer", idempotencyKey: `native-parent:${issueId}` },
+        { companyId: f.home, agentId: f.presence.id, source: "automation", triggerDetail: "system",
+          reason: "issue_blockers_resolved", payload, requestedByActorType: "system",
+          requestedByActorId: "native-status-committer", idempotencyKey: `native-dependency:${issueId}` },
+      ]).returning({ id: agentWakeupRequests.id });
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await heartbeat.dispatchPendingNativeStatusWakeups({ companyId: f.home }))
+        .toMatchObject({ scanned: 2, dispatched: 1, recovered: 1 });
+      await heartbeat.drainActiveRunExecutions();
+      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      expect(runs).toHaveLength(1);
+      const deliveries = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, f.home),
+        inArray(agentWakeupRequests.requestedByActorId, intents.map(intent => `native-status-wake-dispatch:${intent.id}`))));
+      expect(deliveries).toHaveLength(1);
+      expect(deliveries[0]!.runId).toBe(runs[0]!.id);
+      expect(runs[0]).toMatchObject({ contextSnapshot: { source: "native_status_decision", statusDecisionSource: "native_status_decision" } });
+      const persisted = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, f.home),
+        inArray(agentWakeupRequests.id, intents.map(intent => intent.id))));
+      expect(persisted).toHaveLength(2);
+      for (const intent of persisted) expect(intent).toMatchObject({ status: "coalesced", runId: runs[0]!.id });
+      await assertCompletedDraft(fixture, entry, runs[0]!.id, output);
+      expect(calls).toBe(1);
+    });
+  }, 60_000);
+
+  it("cancels a genuinely queued Task after a Human adds its blocker, repairs its stale pointer, and completes ready work", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, human, model } = fixture;
+    const entries: Awaited<ReturnType<typeof createDraftPlan>>[] = [];
+    const dispatchedPlans: string[] = [];
+    let calls = 0;
+    let releaseHolder!: () => void;
+    const holderResponse = new Promise<void>(resolve => { releaseHolder = resolve; });
+    const output = (ordinal: number) => `Queue repair internal draft ${ordinal} retained for Human review.`;
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      const ordinal = ++calls;
+      expect(ordinal).toBeLessThanOrEqual(2);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      expect(String(init.body)).toContain("assignedRuntimeContext");
+      expect(String(init.body)).not.toContain(credential);
+      const entry = entries[ordinal === 1 ? 0 : 2];
+      if (!entry) throw new Error("queue_repair_dispatch_plan_missing");
+      const reservations = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+      expect(reservations).toHaveLength(1);
+      expect(reservations[0]).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+      dispatchedPlans.push(entry.plan.id);
+      if (ordinal === 1) await holderResponse;
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output(ordinal) }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      try {
+        for (const title of ["Capacity holder draft", "Draft blocked after queue admission", "Independent ready draft"])
+          entries.push(await createDraftPlan(fixture, title));
+        const wake = (issueId: string) => heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+          reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+          payload: { issueId }, contextSnapshot: { issueId, wakeReason: "issue_assigned" } });
+        const holder = await wake(entries[0]!.task.id);
+        expect(holder).not.toBeNull();
+        await vi.waitFor(() => { expect(calls).toBe(1); expect(dispatchedPlans).toEqual([entries[0]!.plan.id]); },
+          { timeout: 10_000, interval: 25 });
+        const blocked = await wake(entries[1]!.task.id), ready = await wake(entries[2]!.task.id);
+        expect(blocked).not.toBeNull(); expect(ready).not.toBeNull();
+        expect(new Set([holder!.id, blocked!.id, ready!.id]).size).toBe(3);
+        for (const id of [blocked!.id, ready!.id])
+          expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id)))[0]?.status).toBe("queued");
+        const [modernQueuedIssue] = await db.select().from(issues).where(eq(issues.id, entries[1]!.task.id));
+        expect(modernQueuedIssue).toMatchObject({ executionRunId: null, executionAgentNameKey: null, executionLockedAt: null });
+        expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entries[1]!.plan.id))).toEqual([]);
+        expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entries[1]!.plan.id))).toEqual([]);
+        expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, blocked!.id))).toEqual([]);
+        // Explicit legacy/corrupt persisted-pointer input: the actual scheduler
+        // created this queued Run above. This does not claim a real modern
+        // execution owner stamped the pointer, or fabricate a running/accepted Run.
+        const legacyPointer = { executionRunId: blocked!.id, executionAgentNameKey: "fixture-legacy-queued-owner",
+          executionLockedAt: new Date() };
+        await db.update(issues).set(legacyPointer).where(and(eq(issues.companyId, f.home), eq(issues.id, entries[1]!.task.id)));
+        expect((await db.select().from(issues).where(eq(issues.id, entries[1]!.task.id)))[0]).toMatchObject(legacyPointer);
+        const tasks = issueService(db);
+        const blocker = await tasks.create(f.home, { title: "Human-added unresolved prerequisite", status: "todo",
+          responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+          { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+        await tasks.update(entries[1]!.task.id, { blockedByIssueIds: [blocker.id], actorUserId: f.userId, privacyActor: human });
+        expect((await db.select().from(issues).where(eq(issues.id, entries[1]!.task.id)))[0]).toMatchObject(legacyPointer);
+        expect(calls).toBe(1);
+        releaseHolder();
+        await heartbeat.drainActiveRunExecutions();
+        await heartbeat.resumeQueuedRuns();
+        await heartbeat.drainActiveRunExecutions();
+        const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+        expect(runs).toHaveLength(3);
+        const blockedRun = runs.find(run => run.id === blocked!.id);
+        expect(blockedRun).toMatchObject({ status: "cancelled", errorCode: "issue_dependencies_blocked",
+          resultJson: expect.objectContaining({ stopReason: "issue_dependencies_blocked" }) });
+        expect(blockedRun!.finishedAt).toBeInstanceOf(Date);
+        const [blockedWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, blockedRun!.wakeupRequestId!));
+        expect(blockedWake).toMatchObject({ status: "skipped" });
+        expect(blockedWake!.error).toContain("dependencies are still blocked");
+        expect((await db.select().from(issues).where(eq(issues.id, entries[1]!.task.id)))[0])
+          .toMatchObject({ executionRunId: null, executionAgentNameKey: null, executionLockedAt: null });
+        expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entries[1]!.plan.id))).toEqual([]);
+        expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entries[1]!.plan.id))).toEqual([]);
+        expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, blocked!.id))).toEqual([]);
+        expect(await db.select().from(toolInvocations).where(and(eq(toolInvocations.companyId, f.home), eq(toolInvocations.runId, blocked!.id)))).toEqual([]);
+        expect(await documentService(db).getIssueDocumentByKey(entries[1]!.task.id, "result")).toBeNull();
+        expect(dispatchedPlans).toEqual([entries[0]!.plan.id, entries[2]!.plan.id]);
+        expect(calls).toBe(2);
+        await assertCompletedDraft(fixture, entries[0]!, holder!.id, output(1));
+        await assertCompletedDraft(fixture, entries[2]!, ready!.id, output(2));
+        expect(runs.every(run => run.status !== "queued" && run.status !== "running")).toBe(true);
+      } finally { releaseHolder(); }
+    });
+  }, 60_000);
+
+  it.each(["intact", "lost", "copied"] as const)(
+    "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: %s",
+    async mode => {
+      const fixture = await seedInstalledDraft();
+      const { f, model } = fixture;
+      const entries: Awaited<ReturnType<typeof createDraftPlan>>[] = [];
+      const wakeIds: string[] = [];
+      let releaseFirst!: () => void;
+      const firstResponse = new Promise<void>(resolve => { releaseFirst = resolve; });
+      let calls = 0;
+      const dispatchedPlanIds: string[] = [];
+      const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+        const call = ++calls;
+        expect(call).toBeLessThanOrEqual(2);
+        expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+        expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+        expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+        expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+        expect(String(init.body)).toContain("assignedRuntimeContext");
+        expect(String(init.body)).not.toContain(credential);
+        const entry = entries[call - 1];
+        if (!entry) throw new Error("marker_native_draft_plan_missing");
+        dispatchedPlanIds.push(entry.plan.id);
+        const reservations = await db.select().from(orchestrationModelReservations)
+          .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+        expect(reservations).toHaveLength(1);
+        expect(reservations[0]).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+        if (call === 1) await firstResponse;
+        return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+          content: [{ type: "text", text: `Marker ${call} internal draft retained for Human review.` }],
+          usage: { input_tokens: 10, output_tokens: 20 } }),
+        { status: 200, headers: { "content-type": "application/json" } });
+      };
+      let secondDispatchMarkerObserved = false;
+      await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+        try {
+          entries.push(await createDraftPlan(fixture, "Marker admission holder draft"));
+          entries.push(await createDraftPlan(fixture, "Marker admission queued draft"));
+          // Domain-shaped user-origin automation input matching issue-comment wake provenance;
+          // it claims no HTTP-route execution or system continuation ancestry.
+          const userAutomationWake = (issueId: string) => heartbeat.wakeup(f.presence.id, {
+            source: "automation", triggerDetail: "system", reason: "issue_commented",
+            requestedByActorType: "user", requestedByActorId: f.userId,
+            payload: { issueId, mutation: "comment" },
+            contextSnapshot: { issueId, taskId: issueId, wakeReason: "issue_commented", source: "issue.comment" },
+          });
+          const first = await userAutomationWake(entries[0]!.task.id);
+          expect(first).not.toBeNull();
+          wakeIds.push(first!.id);
+          expect(first).toMatchObject({ invocationSource: "automation" });
+          await vi.waitFor(() => {
+            expect(calls).toBe(1);
+            expect(dispatchedPlanIds).toEqual([entries[0]!.plan.id]);
+          }, { timeout: 10_000, interval: 25 });
+          const [activeFirst] = await db.select().from(heartbeatRuns)
+            .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, first!.id)));
+          expect(activeFirst).toMatchObject({ invocationSource: "automation", runtimeMode: "native", driverKind: "aw_text_messages", status: "running" });
+
+          const second = await userAutomationWake(entries[1]!.task.id);
+          expect(second).not.toBeNull();
+          wakeIds.push(second!.id);
+          expect(second).toMatchObject({ invocationSource: "automation" });
+          expect((await db.select().from(heartbeatRuns)
+            .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, second!.id))))[0])
+            .toMatchObject({ status: "queued" });
+          expect(calls).toBe(1);
+          expect(dispatchedPlanIds).toEqual([entries[0]!.plan.id]);
+          expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entries[1]!.plan.id))).toEqual([]);
+          expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entries[1]!.plan.id))).toEqual([]);
+          expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, second!.id))).toEqual([]);
+
+          releaseFirst();
+          await heartbeat.drainActiveRunExecutions();
+        } finally {
+          releaseFirst();
+          await heartbeat.drainActiveRunExecutions();
+        }
+      }, async ({ runId, issueId, stage }) => {
+        if (stage !== "dispatch") return;
+        const entryIndex = entries.findIndex(entry => entry.task.id === issueId);
+        if (entryIndex < 0) return;
+        const [row] = await db.select().from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, runId)));
+        expect(row).toBeDefined();
+        expect(row).toMatchObject({ invocationSource: "automation", runtimeMode: "native", driverKind: "aw_text_messages" });
+        expect(readChatControlRecoveryAdmission(row!)).toBe("required");
+        if (entryIndex === 1) {
+          secondDispatchMarkerObserved = true;
+          if (mode === "lost") {
+            const profile = { ...(row!.runnerProfileJson ?? {}) };
+            delete profile[CHAT_CONTROL_RECOVERY_ADMISSION_KEY];
+            await db.update(heartbeatRuns).set({ runnerProfileJson: profile })
+              .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, runId)));
+          } else if (mode === "copied") {
+            await db.update(heartbeatRuns).set({ runnerProfileJson: {
+              ...(row!.runnerProfileJson ?? {}),
+              [CHAT_CONTROL_RECOVERY_ADMISSION_KEY]: {
+                ...chatControlRecoveryAdmission(row!, "required"),
+                runId: wakeIds[0]!,
+              },
+            } }).where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, runId)));
+          }
+        }
+      });
+      const firstId = wakeIds[0]!, secondId = wakeIds[1]!;
+      expect(secondDispatchMarkerObserved).toBe(true);
+      await assertCompletedDraft(fixture, entries[0]!, firstId, "Marker 1 internal draft retained for Human review.");
+      const [firstRun] = await db.select().from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, firstId)));
+      expect(readChatControlRecoveryAdmission(firstRun!)).toBe("admitted");
+      const [secondRun] = await db.select().from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, secondId)));
+      expect(secondRun).toBeDefined();
+      if (mode === "intact") {
+        expect(calls).toBe(2);
+        expect(dispatchedPlanIds).toEqual(entries.map(({ plan }) => plan.id));
+        expect(readChatControlRecoveryAdmission(secondRun!)).toBe("admitted");
+        await assertCompletedDraft(fixture, entries[1]!, secondId, "Marker 2 internal draft retained for Human review.");
+      } else {
+        expect(calls).toBe(1);
+        expect(dispatchedPlanIds).toEqual([entries[0]!.plan.id]);
+        expect(secondRun).toMatchObject({ nativeIssueId: entries[1]!.task.id, invocationSource: "automation",
+          runtimeMode: "native", driverKind: "aw_text_messages", status: "failed",
+          errorCode: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE,
+          resultJson: expect.objectContaining({ automaticRecovery: { providerDispatched: false } }) });
+        const [secondWake] = await db.select().from(agentWakeupRequests)
+          .where(eq(agentWakeupRequests.id, secondRun!.wakeupRequestId!));
+        expect(secondWake).toMatchObject({ status: "failed", runId: secondId });
+        expect(readChatControlRecoveryAdmission(secondRun!)).toBe(mode === "lost" ? "historical" : "invalid");
+        // Runtime Fabric admits the actual run before the later dispatch gate. The
+        // gate terminalizes the Run but does not synchronously reconcile its
+        // orchestration attempt; supervision/admission owns that later transition.
+        const secondManifests = await db.select().from(agentExecutionManifests)
+          .where(and(eq(agentExecutionManifests.companyId, f.home), eq(agentExecutionManifests.runId, secondId)));
+        expect(secondManifests).toHaveLength(1);
+        const secondAttempts = await db.select().from(orchestrationWorkerAttempts)
+          .where(and(eq(orchestrationWorkerAttempts.companyId, f.home), eq(orchestrationWorkerAttempts.planId, entries[1]!.plan.id)));
+        expect(secondAttempts).toHaveLength(1);
+        expect(secondAttempts[0]).toMatchObject({ runId: secondId, executionManifestId: secondManifests[0]!.id, status: "running", attempt: 1 });
+        expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entries[1]!.plan.id))).toEqual([]);
+        expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, secondId))).toEqual([]);
+        expect(await documentService(db).getIssueDocumentByKey(entries[1]!.task.id, "result")).toBeNull();
+      }
+    },
+  );
 
 });

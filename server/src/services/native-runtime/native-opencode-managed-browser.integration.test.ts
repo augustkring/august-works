@@ -157,7 +157,7 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
             }
             origin = `http://127.0.0.1:${address.port}`;
             try {
-              const app = await createApp(db, { heartbeat, resolveSession, uiMode: "static", serverPort: address.port,
+              const app = await createApp(db, { heartbeat, resolveSession, uiMode: "vite-dev", serverPort: address.port,
                 storageService: createStorageService(createLocalDiskStorageProvider(join(root, "storage"))),
                 deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1",
                 allowedHostnames: ["127.0.0.1"], authReady: true, companyDeletionEnabled: false,
@@ -311,7 +311,7 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
             }
             origin = `http://127.0.0.1:${address.port}`;
             try {
-              const app = await createApp(db, { heartbeat, resolveSession, uiMode: "static", serverPort: address.port,
+              const app = await createApp(db, { heartbeat, resolveSession, uiMode: "vite-dev", serverPort: address.port,
                 storageService: createStorageService(createLocalDiskStorageProvider(join(root, "storage"))),
                 deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1",
                 allowedHostnames: ["127.0.0.1"], authReady: true, companyDeletionEnabled: false,

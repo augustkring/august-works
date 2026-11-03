@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "f50fbbe1596256c5ec2a5709e20fe5bb7ab39a223d765be8909826b0516652c4",
+      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Current-session checks now admit the original conversation owner to first-message uploads and current interaction resolution, with original source/privacy checks retained. The linked recovery and support articles still correctly require checking the original Task and sharing only authorized non-secret information."
+      "rationale": "Stage wake construction now uses the shared builder; current account, Task, source-access and interaction checks remain in place. The article still correctly directs users to the original Task and to share only authorized, non-secret information."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "f50fbbe1596256c5ec2a5709e20fe5bb7ab39a223d765be8909826b0516652c4",
+      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Current-session checks now admit the original conversation owner to first-message uploads and current interaction resolution, with original source/privacy checks retained. The linked recovery and support articles still correctly require checking the original Task and sharing only authorized non-secret information."
+      "rationale": "Vækning af en fase bruger nu den fælles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "f50fbbe1596256c5ec2a5709e20fe5bb7ab39a223d765be8909826b0516652c4",
+      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Current-session checks now admit the original conversation owner to first-message uploads and current interaction resolution, with original source/privacy checks retained. The linked recovery and support articles still correctly require checking the original Task and sharing only authorized non-secret information."
+      "rationale": "Stage wake construction now uses the shared builder; current account, Task, source-access and interaction checks remain in place. The article still correctly directs users to the original Task and to share only authorized, non-secret information."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "231ed4bde22dc9ae7d9aacf108c1432054298712a21857ee3c9eb64a99fdd7d0",
+      "sourceSha256": "ecf29290a04a7b2b826577393c05cb6ef073f40618d077fd0b5c4ef7ec215f5b",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The current heartbeat changes preserve exact interaction/run provenance and retry only eligible saved interactions. They do not change the documented user guidance to inspect the original Task and current run before retrying. For Forget cleanup, process stop and storage removal are still separately verified."
+      "rationale": "Native review wakes now require the applied decision, exact current review stage and Task status version before dispatch. The guidance to inspect the original Task and current run before retrying remains accurate; Forget still verifies process stop and storage removal separately."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "f50fbbe1596256c5ec2a5709e20fe5bb7ab39a223d765be8909826b0516652c4",
+      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Current-session checks now admit the original conversation owner to first-message uploads and current interaction resolution, with original source/privacy checks retained. The linked recovery and support articles still correctly require checking the original Task and sharing only authorized non-secret information."
+      "rationale": "Vækning af en fase bruger nu den fælles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "231ed4bde22dc9ae7d9aacf108c1432054298712a21857ee3c9eb64a99fdd7d0",
+      "sourceSha256": "ecf29290a04a7b2b826577393c05cb6ef073f40618d077fd0b5c4ef7ec215f5b",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "De aktuelle heartbeat-ændringer bevarer præcis proveniens for interaktion og kørsel og gentager kun tilladte gemte interaktioner. De ændrer ikke vejledningen om at kontrollere den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Ved oprydning efter Slet permanent kontrolleres processtop og fjernelse fra lageret fortsat separat."
+      "rationale": "Native-vækninger til gennemgang kræver nu den anvendte beslutning, den præcise aktuelle fase og opgavens statusversion før afsendelse. Vejledningen om at kontrollere den oprindelige opgave og aktuelle kørsel før et nyt forsøg er fortsat korrekt. Forget kontrollerer stadig processtop og fjernelse fra lageret separat."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "231ed4bde22dc9ae7d9aacf108c1432054298712a21857ee3c9eb64a99fdd7d0",
+      "sourceSha256": "ecf29290a04a7b2b826577393c05cb6ef073f40618d077fd0b5c4ef7ec215f5b",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "The current heartbeat changes preserve exact interaction/run provenance and retry only eligible saved interactions. They do not change the documented user guidance to inspect the original Task and current run before retrying. For Forget cleanup, process stop and storage removal are still separately verified."
+      "rationale": "Native review wakes now require the applied decision, exact current review stage and Task status version before dispatch. The guidance to inspect the original Task and current run before retrying remains accurate; Forget still verifies process stop and storage removal separately."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "231ed4bde22dc9ae7d9aacf108c1432054298712a21857ee3c9eb64a99fdd7d0",
+      "sourceSha256": "ecf29290a04a7b2b826577393c05cb6ef073f40618d077fd0b5c4ef7ec215f5b",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "De aktuelle heartbeat-ændringer bevarer præcis proveniens for interaktion og kørsel og gentager kun tilladte gemte interaktioner. De ændrer ikke vejledningen om at kontrollere den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Ved oprydning efter Slet permanent kontrolleres processtop og fjernelse fra lageret fortsat separat."
+      "rationale": "Native-vækninger til gennemgang kræver nu den anvendte beslutning, den præcise aktuelle fase og opgavens statusversion før afsendelse. Vejledningen om at kontrollere den oprindelige opgave og aktuelle kørsel før et nyt forsøg er fortsat korrekt. Forget kontrollerer stadig processtop og fjernelse fra lageret separat."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
