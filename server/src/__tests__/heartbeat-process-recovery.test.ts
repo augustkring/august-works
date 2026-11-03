@@ -535,7 +535,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const localServiceSupervisor = await vi.importActual<
       typeof import("../services/local-service-supervisor.js")
     >("../services/local-service-supervisor.js");
-    mockTerminateLocalService.mockImplementation(
+    // A blocked dispatch can leave a one-shot Stop barrier unconsumed.
+    mockTerminateLocalService.mockReset().mockImplementation(
       localServiceSupervisor.terminateLocalService,
     );
     mockAdapterExecute.mockImplementation(async () => ({

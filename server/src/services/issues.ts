@@ -12500,7 +12500,13 @@ export function issueService(db: Db) {
               issueId: updated.id,
               issueStatus: updated.status,
             });
-            await finalizeSummarySlotsForTerminalIssue(tx, updated);
+            await finalizeSummarySlotsForTerminalIssue(tx, {
+              id: updated.id,
+              companyId: updated.companyId,
+              identifier: updated.identifier,
+              title: updated.title,
+              status: updated.status,
+            });
             // Every terminal transition funnels through here, including direct
             // service callers (tree control, recovery, pipelines, status cards)
             // that never touch the HTTP routes, so pending interaction cards
@@ -12574,7 +12580,13 @@ export function issueService(db: Db) {
             updated.status === "cancelled" ||
             updated.status === "blocked"
           ) {
-            await finalizeStatusCardsForStalledGeneration(tx, updated);
+            await finalizeStatusCardsForStalledGeneration(tx, {
+              id: updated.id,
+              companyId: updated.companyId,
+              identifier: updated.identifier,
+              title: updated.title,
+              status: updated.status,
+            });
           }
         }
         if (nextLabelIds !== undefined) {
