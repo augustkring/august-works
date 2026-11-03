@@ -8,7 +8,7 @@ import { activityLog, agents, issues, projects, projectWorkspaces, issueComments
   memoryDeletionMarkers,
   completionContracts, heartbeatRuns, orchestrationModelReservations, agentExecutionManifests, executionWorkspaces, foundationDocuments,
   documents, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems,
-  agentRolePackAssignments, issueThreadInteractions, type Db } from "@paperclipai/db";
+  agentRolePackAssignments, issueThreadInteractions, agentWakeupRequests, type Db } from "@paperclipai/db";
 import { toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   unionNativePayloadSourceInputs, AUTHORED_AGENT_DEFINITION_KEY, conversationModelBindingSchema,
@@ -31,9 +31,11 @@ import { assertRetainedRuntimeSkillSourceCurrent } from "./learning/learning-ass
 import { publicNativePayloadRow } from "./native-payload-public.js";
 import { projectService } from "./projects.js";
 import { skillResolverService } from "./skill-resolver.js";
-import { nativeCommentProjectionHash, nativeSha256 } from "./native-runtime/canonical.js";
+import { nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds, nativeContinuationCommentProjection, nativeCommentProjectionHash, nativeSha256 } from "./native-runtime/canonical.js";
 import { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } from "./native-runtime/native-session-resume.js";
 import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
+import type { NativeTaskContinuationCapture } from "./execution-continuation.js";
 import { sanitizeQuarantinedCommentForHigherTrust } from "./source-trust.js";
 import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type NativeModelOutputCapture,
   type NativePayloadSourceSet } from "./native-runtime/native-execution-input.js";
@@ -1675,10 +1677,36 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     ? { id: wakeIssue.id, identifier: wakeIssue.identifier as string | null, title: wakeIssue.title,
       description: wakeIssue.description as string | null, status: wakeIssue.status,
       priority: wakeIssue.priority, workMode: wakeIssue.workMode } : null;
+  // Reconstruct the capture from the immutable Run/wake and independently
+  // validated constituent source set, never from a saved 'verified' descriptor.
+  const continuation = wakeRecord?.executionContinuation;
+  const continuationMessages = nativeSourceRecord(continuation).messages;
+  const hasBoundedContinuation = Array.isArray(continuationMessages) && continuationMessages.length > 0 && continuationMessages.length <= 256;
+  const [admittedWake] = hasBoundedContinuation && run?.wakeupRequestId ? await db.select().from(agentWakeupRequests).where(and(
+    eq(agentWakeupRequests.companyId, input.companyId), eq(agentWakeupRequests.id, run.wakeupRequestId),
+    eq(agentWakeupRequests.agentId, run.agentId), eq(agentWakeupRequests.runId, input.runId),
+  )).limit(1) : [];
+  const continuationCapture: NativeTaskContinuationCapture | null = run && admittedWake && run.responsibleUserId &&
+    Array.isArray(continuationMessages) && hasBoundedContinuation && isDeepStrictEqual(context?.executionContinuation, continuation) ? {
+      companyId: input.companyId, issueId: input.issueId, agentId: run.agentId, runId: input.runId,
+      responsibleUserId: run.responsibleUserId, wakeupRequestId: admittedWake.id,
+      envelope: continuation as NativeTaskContinuationCapture["envelope"],
+      commentSources: continuationMessages.flatMap(message => {
+        const m = nativeSourceRecord(message);
+        if (!message || typeof message !== "object" || Array.isArray(message) || typeof m.id !== "string") return [];
+        const hash = nativeContinuationMessageHash(message as NativeTaskContinuationCapture["envelope"]["messages"][number]);
+        return input.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
+          source.kind === "comment" && source.issueId === input.issueId && source.commentId === m.id && source.contentHash === hash)
+          .map(source => ({ input: source, payloadSourceSnapshot: null }));
+      }),
+      wake: { requestedByActorType: admittedWake.requestedByActorType, requestedByActorId: admittedWake.requestedByActorId,
+        reason: admittedWake.reason, originCommentIds: nativeTaskWakeOriginCommentIds(admittedWake.payload) },
+    } : null;
   const current = run && run.nativeIssueId === input.issueId && taskSources.length === 1 && taskSource && wakeTask &&
     taskSource.sourceVersion === input.source.sourceVersion
     ? captureNativeTaskWakeSource({ companyId: input.companyId, runId: input.runId, issueId: input.issueId,
-      sourceVersion: taskSource.sourceVersion, persistedWakeReason: typeof context?.wakeReason === "string" ? context.wakeReason : null,
+      sourceVersion: taskSource.sourceVersion, agentId: run.agentId, responsibleUserId: run.responsibleUserId,
+      wakeupRequestId: run.wakeupRequestId, continuationCapture, persistedWakeReason: typeof context?.wakeReason === "string" ? context.wakeReason : null,
       task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
       commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
         value.kind === "comment"), payload: wake }) : null;
@@ -2511,6 +2539,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         task.sourceVersion !== source.sourceVersion || !isDeepStrictEqual(sourceReceipt.data.bootstrap.inputs.find(value =>
           value.kind === "native_task_wake" && value.runId === source.runId), source))
         throw forbidden("A Native task wake source changed");
+      await assertNativeTaskWakeSourceCurrentInScope(db, scope, { companyId: input.companyId, issueId: source.issueId,
+        runId: source.runId, source, inputs: inputs.data, bootstrapInputs: sourceReceipt.data.bootstrap.inputs });
       continue;
     }
     if (source.kind === "worker_model_dispatch") {
@@ -3894,8 +3924,19 @@ async function assertConversationCommentSourceCurrent(db: Db | Transaction, inpu
   const replayHashes = replayBodies.map(body => createHash("sha256").update(JSON.stringify({
     author: comment.authorAgentId ? "agent" : "user", body,
   }), "utf8").digest("hex"));
-  if (![ownerProjectionHash, publicProjectionHash, ...inlineWakeProjectionHashes, ...replayHashes].includes(input.source.contentHash))
-    reject();
+  const ordinaryHashes = [ownerProjectionHash, publicProjectionHash, ...inlineWakeProjectionHashes, ...replayHashes];
+  if (!ordinaryHashes.includes(input.source.contentHash)) {
+    const continuationHashes: string[] = [];
+    const redactions = createRunSecretRedactionRegistry(db as Db);
+    for (const body of [...new Set([comment.body, sanitizeQuarantinedCommentForHigherTrust({ body: comment.body,
+      presentation: comment.rawPresentation, metadata: comment.rawMetadata, sourceTrust: comment.sourceTrust }).body])]) {
+      const projection = nativeContinuationCommentProjection({ ...comment, id: input.source.commentId, body, deletedAt: null });
+      const redacted = await redactions.redactForIssue(input.companyId, input.source.issueId, projection);
+      continuationHashes.push(nativeContinuationMessageHash(redacted));
+    }
+    if (!continuationHashes.includes(input.source.contentHash)) reject();
+  }
+
   // Comment and every other source input are still validated against this
   // exact current owner above. The Issue reader ACL is time-sensitive and
   // applies once per exact actor/Issue; defer it into the source transaction's

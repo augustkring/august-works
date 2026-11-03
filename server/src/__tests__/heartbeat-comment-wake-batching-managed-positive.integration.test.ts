@@ -183,27 +183,60 @@ describe("heartbeat comment wake batching", () => {
 
   it("cancels a deferred wake containing only a comment authored by the closing run", async () => {
     let providerEntered = false;
-    let releaseProvider!: () => void;
-    const providerGate = new Promise<void>(resolve => { releaseProvider = resolve; });
     let firstProviderResponse = true;
     let providerRunId = "";
     let firstRunId = "";
     let companyId = "";
     let agentId = "";
 
-    try {
-      await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    let authenticatedRequests = 0;
+    let injectSelfComment: (() => Promise<void>) | undefined;
+    let deferredWake: typeof agentWakeupRequests.$inferSelect | undefined;
+
+    await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
         providerReply: ({ body, callIndex, execution }) => realTaskCompletion(body, callIndex, execution, "self-comment"),
+        beforeManagedModelRequest: async ({ runId }) => {
+          if (firstRunId && runId !== firstRunId) throw new Error("self_comment_unexpected_second_run");
+          authenticatedRequests++;
+          if (authenticatedRequests === 2) {
+            expect(runId).toBe(firstRunId);
+            expect(injectSelfComment).toBeDefined();
+            await injectSelfComment!();
+          }
+        },
         beforeProviderResponse: async ({ run }) => {
-          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; providerEntered = true; await providerGate; }
+          if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; providerEntered = true; }
           if (firstRunId && run.id !== firstRunId) throw new Error("self_comment_unexpected_second_run");
         },
         driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun }) => {
-          try {
-            companyId = fixtureCompanyId; agentId = fixtureAgentId;
+          companyId = fixtureCompanyId; agentId = fixtureAgentId;
           const task = await createAssignedTask({ actor, companyId, agentId, title: "Self-comment must not reopen" });
           await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: task.updatedAt,
             objective: "Close the task and ignore the run-authored comment wake", outputKey: "self-comment-document" });
+          // Run the unchanged domain mutation between settled model requests, before fresh authority is read.
+          injectSelfComment = async () => {
+            // Use the real comment owner with the exact live Run as its attribution.
+            const selfComment = await issueService(db).addComment(task.id, "Closing comment from the same run",
+              { userId: actor.userId!, runId: firstRunId });
+            const [commentRow] = await db.select().from(issueComments).where(eq(issueComments.id, selfComment.id));
+            expect(commentRow).toMatchObject({ id: selfComment.id, authorUserId: actor.userId, createdByRunId: firstRunId });
+
+            expect(await heartbeat.wakeup(agentId, { source: "automation", triggerDetail: "system", reason: "issue_commented",
+              payload: { issueId: task.id, commentId: selfComment.id },
+              contextSnapshot: { issueId: task.id, taskId: task.id, commentId: selfComment.id, wakeCommentId: selfComment.id,
+                wakeReason: "issue_commented" }, requestedByActorType: "user", requestedByActorId: actor.userId! })).toBeNull();
+            await waitFor(async () => (await db.select().from(agentWakeupRequests).where(and(
+              eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+              eq(agentWakeupRequests.status, "deferred_issue_execution"))).then(rows => rows.length)) === 1);
+            [deferredWake] = await db.select().from(agentWakeupRequests).where(and(
+              eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+              eq(agentWakeupRequests.status, "deferred_issue_execution")));
+            expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_execution_deferred",
+              requestedByActorType: "user", requestedByActorId: actor.userId,
+              payload: { issueId: task.id, commentId: selfComment.id } });
+            expect(deferredWake?.payload?._paperclipWakeContext).toMatchObject({ issueId: task.id, taskId: task.id,
+              commentId: selfComment.id, wakeCommentId: selfComment.id, wakeReason: "issue_commented" });
+          };
           const firstRun = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
             reason: "issue_assigned", payload: { issueId: task.id },
             contextSnapshot: { issueId: task.id, taskId: task.id, wakeReason: "issue_assigned" },
@@ -214,29 +247,9 @@ describe("heartbeat comment wake batching", () => {
           await waitFor(() => providerEntered && Boolean(providerRunId), 120_000);
           expect(providerRunId).toBe(firstRunId);
 
-          // Use the real comment owner with the exact live Run as its attribution.
-          const selfComment = await issueService(db).addComment(task.id, "Closing comment from the same run",
-            { userId: actor.userId!, runId: firstRunId });
-          const [commentRow] = await db.select().from(issueComments).where(eq(issueComments.id, selfComment.id));
-          expect(commentRow).toMatchObject({ id: selfComment.id, authorUserId: actor.userId, createdByRunId: firstRunId });
-
-          expect(await heartbeat.wakeup(agentId, { source: "automation", triggerDetail: "system", reason: "issue_commented",
-            payload: { issueId: task.id, commentId: selfComment.id },
-            contextSnapshot: { issueId: task.id, taskId: task.id, commentId: selfComment.id, wakeCommentId: selfComment.id,
-              wakeReason: "issue_commented" }, requestedByActorType: "user", requestedByActorId: actor.userId! })).toBeNull();
-          await waitFor(async () => (await db.select().from(agentWakeupRequests).where(and(
-            eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
-            eq(agentWakeupRequests.status, "deferred_issue_execution"))).then(rows => rows.length)) === 1);
-          const [deferredWake] = await db.select().from(agentWakeupRequests).where(and(
-            eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
-            eq(agentWakeupRequests.status, "deferred_issue_execution")));
-          expect(deferredWake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_execution_deferred",
-            requestedByActorType: "user", requestedByActorId: actor.userId,
-            payload: { issueId: task.id, commentId: selfComment.id } });
-          expect(deferredWake?.payload?._paperclipWakeContext).toMatchObject({ issueId: task.id, taskId: task.id,
-            commentId: selfComment.id, wakeCommentId: selfComment.id, wakeReason: "issue_commented" });
-          releaseProvider();
           await heartbeat.drainActiveRunExecutions();
+          expect(authenticatedRequests).toBeGreaterThanOrEqual(2);
+          expect(deferredWake).toBeDefined();
 
           const [finalWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, deferredWake!.id));
           expect(finalWake).toMatchObject({ id: deferredWake!.id, status: "cancelled",
@@ -257,11 +270,9 @@ describe("heartbeat comment wake batching", () => {
             .from(issues).where(eq(issues.id, task.id));
           expect(issueAfterPromotion).toMatchObject({ status: "done" });
           expect(issueAfterPromotion?.completedAt).not.toBeNull();
-          } finally { releaseProvider(); }
         },
       });
-      completedTests++;
-    } finally { releaseProvider?.(); }
+    completedTests++;
   }, 600_000);
 
   it("cancels a deferred comment wake when its only queued comment is deleted before promotion", async () => {

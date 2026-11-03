@@ -58,7 +58,7 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
       expect(manifest.runId).toBe(run.id);
       expect(sourceReceipt).toBeTruthy();
     },
-    driveScheduler: async ({ actor, companyId, agentId, gateway, heartbeat, facts }) => {
+    driveScheduler: async ({ actor, companyId, agentId, gateway, heartbeat, facts, factsForRun }) => {
       const human = actor; // Reuse the factory's current session; a new passkey would revoke it.
       await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, agentId));
@@ -120,14 +120,15 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
         leases[0]!.metadata?.remoteExecutionTermination);
       expect(cleanup).toMatchObject({ runId: wake!.id, leaseId: leases[0]!.id, state: "stopped" });
       const observed = facts();
+      const runtime = factsForRun(wake!.id).sandboxRuntimeFacts;
       expect(observed.providerCallCount).toBe(reservations.length);
       expect(observed.issuerFacts).toEqual([{ scope: "worker_model", runId: wake!.id,
         manifestId: attempts[0]!.executionManifestId }]);
-      expect(observed.sandboxRuntimeFacts?.relayAuthenticated).toBe(true);
+      expect(runtime?.relayAuthenticated).toBe(true);
       // These are observations of the actual authenticated ingress and its signed session, not the nonserial fixture transport.
       expect(observed.sandboxRuntimeFacts?.authenticatedModelTunnels).toBeGreaterThan(0);
-      const injections = observed.sandboxRuntimeFacts?.appliedModelProfileInjections as Array<{ runId: string; leaseId: string; sessionKey: string }>;
-      const sessionReceipts = observed.sandboxRuntimeFacts?.modelBrokerSessionReceipts as Array<{ phase: string; sessionKey: string }>;
+      const injections = runtime?.appliedModelProfileInjections as Array<{ runId: string; leaseId: string; sessionKey: string }>;
+      const sessionReceipts = runtime?.modelBrokerSessionReceipts as Array<{ phase: string; sessionKey: string }>;
       const starts = sessionReceipts.filter(row => row.phase === "start");
       expect(starts).toHaveLength(1);
       expect(typeof starts[0]?.sessionKey).toBe("string");
@@ -135,8 +136,8 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
       expect(injections.length).toBeGreaterThan(0);
       expect(injections.every(row => row.runId === wake!.id && row.leaseId === leases[0]!.id && row.sessionKey === starts[0]?.sessionKey)).toBe(true);
       expect(sessionReceipts.at(-1)).toMatchObject({ phase: "stop", sessionKey: starts[0]?.sessionKey });
-      expect(observed.sandboxRuntimeFacts?.attachedModelBrokerProviderCount).toBe(0);
-      expect((observed.sandboxRuntimeFacts?.modelBrokerSessionReceipts as Array<{ phase: string }>).at(-1)?.phase).toBe("stop");
+      expect(runtime?.attachedModelBrokerProviderCount).toBe(0);
+      expect((runtime?.modelBrokerSessionReceipts as Array<{ phase: string }>).at(-1)?.phase).toBe("stop");
     },
   });
 }, 600000);

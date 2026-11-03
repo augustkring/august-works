@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { and, asc, desc, eq, getTableColumns, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -17,7 +16,17 @@ import { queuedCommentIdsFromWakePayload } from "./issue-queued-comment-queue.js
 import { childReviewOutcomes } from "./native-runtime/child-review-outcomes.js";
 import { canActorReadHeartbeatRunPrivacy, type AuthorizationActor } from "./authorization.js";
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
+import { nativeContinuationCommentProjection, nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds } from "./native-runtime/canonical.js";
 import type { NativeCommentSourceCapture } from "./agent-conversations.js";
+
+/** A snapshot of the actual receiver and final redacted owner rendition; not
+ * an authority boolean. Consumers still validate every source owner/current ACL. */
+export type NativeTaskContinuationCapture = {
+  companyId: string; issueId: string; agentId: string; runId: string;
+  responsibleUserId: string; wakeupRequestId: string;
+  envelope: ExecutionContinuationEnvelope; commentSources: NativeCommentSourceCapture[];
+  wake: { requestedByActorType: string | null; requestedByActorId: string | null; reason: string | null; originCommentIds: string[] };
+};
 
 export class StaleExecutionContinuationError extends Error {
   constructor(readonly code: "continuation_task_ownership_changed") {
@@ -129,6 +138,7 @@ export async function buildExecutionContinuation(input: {
   exposeLowTrustRaw: boolean;
   /** Selected message sources only; interactions and prior results are separate. */
   onCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
+  onContinuationSourceCapture?: (capture: NativeTaskContinuationCapture) => void;
 }): Promise<ExecutionContinuationEnvelope> {
   const { db, companyId, issueId } = input;
   const [issue] = await db
@@ -158,7 +168,7 @@ export async function buildExecutionContinuation(input: {
   const rows = await db
     .select({
       ...getTableColumns(issueComments),
-      ...(input.onCommentSourceCapture ? {
+      ...((input.onCommentSourceCapture || input.onContinuationSourceCapture) ? {
         sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
       } : {}),
     })
@@ -242,19 +252,7 @@ export async function buildExecutionContinuation(input: {
     const safe = input.exposeLowTrustRaw
       ? row
       : sanitizeQuarantinedCommentForHigherTrust(row);
-    return {
-      id: row.id,
-      authorType:
-        row.authorType ??
-        (row.authorUserId ? "user" : row.authorAgentId ? "agent" : "system"),
-      authorId: row.authorUserId ?? row.authorAgentId,
-      createdByRunId: row.createdByRunId,
-      body: row.deletedAt ? "" : safe.body,
-      createdAt: row.createdAt.toISOString(),
-      updatedAt: row.updatedAt.toISOString(),
-      deleted: row.deletedAt !== null,
-      sourceTrust: row.sourceTrust,
-    };
+    return nativeContinuationCommentProjection({ ...row, body: safe.body });
   });
   const previousRun = input.previousContextRunId
     ? (
@@ -447,7 +445,8 @@ export async function buildExecutionContinuation(input: {
       summaryThroughCommentId: null,
     },
   });
-  if (input.onCommentSourceCapture) {
+  const finalCommentSources: NativeCommentSourceCapture[] = [];
+  if (input.onCommentSourceCapture || input.onContinuationSourceCapture) {
     // Match final redacted renditions to their own selected rows, never a new
     // live lookup or the independently selected wake/replay comment version.
     const selectedById = new Map(rows.map(row => [row.id, row]));
@@ -457,13 +456,28 @@ export async function buildExecutionContinuation(input: {
       if (!selected || typeof selected.sourceVersion !== "string") {
         throw new Error("Selected continuation comment source is unavailable");
       }
-      input.onCommentSourceCapture({
+      const capture: NativeCommentSourceCapture = {
         input: { kind: "comment", issueId, commentId: selected.id,
           sourceVersion: selected.sourceVersion,
-          contentHash: createHash("sha256").update(JSON.stringify(message), "utf8").digest("hex") },
+          contentHash: nativeContinuationMessageHash(message) },
         payloadSourceSnapshot: selected.payloadSourceSnapshot,
-      });
+      };
+      finalCommentSources.push(capture);
+      input.onCommentSourceCapture?.(capture);
     }
+  }
+  if (input.onContinuationSourceCapture && receiver && outcomeReader.type === "agent" &&
+    receiver.responsibleUserId && receiver.wakeupRequestId) {
+    const [wake] = await db.select({ id: agentWakeupRequests.id, payload: agentWakeupRequests.payload,
+      requestedByActorType: agentWakeupRequests.requestedByActorType, requestedByActorId: agentWakeupRequests.requestedByActorId,
+      reason: agentWakeupRequests.reason }).from(agentWakeupRequests).where(and(
+      eq(agentWakeupRequests.id, receiver.wakeupRequestId), eq(agentWakeupRequests.companyId, companyId),
+      eq(agentWakeupRequests.agentId, input.agentId), eq(agentWakeupRequests.runId, receiver.id),
+    )).limit(1);
+    if (wake) input.onContinuationSourceCapture(structuredClone({ companyId, issueId, agentId: input.agentId, runId: receiver.id,
+      responsibleUserId: receiver.responsibleUserId, wakeupRequestId: wake.id, envelope, commentSources: finalCommentSources,
+      wake: { requestedByActorType: wake.requestedByActorType, requestedByActorId: wake.requestedByActorId, reason: wake.reason,
+        originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload) } }));
   }
   return envelope;
 }

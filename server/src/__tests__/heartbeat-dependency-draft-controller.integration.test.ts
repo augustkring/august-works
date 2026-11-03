@@ -331,10 +331,21 @@ describe("dependency scheduling through the installed Native text draft controll
         payload: { issueId }, contextSnapshot: { issueId, wakeReason: "issue_assigned" } });
       const first = await wake(taskPlans[0]!.task.id);
       expect(first).not.toBeNull();
-      await vi.waitFor(() => {
-        expect(calls).toBe(1);
-        expect(dispatchedPlanIds).toEqual([taskPlans[0]!.plan.id]);
-      }, { timeout: 10_000, interval: 25 });
+      try {
+        await vi.waitFor(() => {
+          expect(calls).toBe(1);
+          expect(dispatchedPlanIds).toEqual([taskPlans[0]!.plan.id]);
+        }, { timeout: 10_000, interval: 25 });
+      } catch {
+        const [run] = await db.select({ status: heartbeatRuns.status, errorCode: heartbeatRuns.errorCode,
+          nativePhase: heartbeatRuns.nativePhase }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, first!.id)));
+        const category = (value: unknown) => typeof value === "string"
+          ? (/^[a-z0-9_:-]{1,96}$/i.test(value) ? value : "other") : null;
+        throw new Error(`capacity_draft_first_dispatch_wait_failed:${JSON.stringify({
+          status: category(run?.status), errorCode: category(run?.errorCode), nativePhase: category(run?.nativePhase),
+        })}`);
+      }
       const activeRun = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, first!.id)))[0];
       expect(activeRun).toMatchObject({ status: "running", errorCode: null });
       expect(activeRun?.wakeupRequestId).toBeTruthy();
@@ -423,6 +434,99 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }, 60_000);
+  it("runs unrelated assigned Native Text tasks concurrently under separate issue claims", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    await db.update(agents).set({ runtimeConfig: { heartbeat: {
+      enabled: false, wakeOnDemand: true, maxConcurrentRuns: 2,
+    } } }).where(eq(agents.id, f.presence.id));
+
+    const entries: Awaited<ReturnType<typeof createDraftPlan>>[] = [];
+    const dispatchedPlanIds: string[] = [];
+    let closing = false;
+    const releaseResponses: Array<() => void> = [];
+    let calls = 0;
+    const output = (ordinal: number) => `Unrelated Native draft ${ordinal} retained for Human review.`;
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      const ordinal = ++calls;
+      expect(ordinal).toBeLessThanOrEqual(2);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      const body = String(init.body);
+      expect(JSON.parse(body)).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(body).tools).toBeUndefined();
+      expect(body).toContain("assignedRuntimeContext");
+      expect(body).not.toContain(credential);
+      const entry = entries[ordinal - 1];
+      if (!entry) throw new Error("unrelated_native_draft_plan_missing");
+      dispatchedPlanIds.push(entry.plan.id);
+      const reservations = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+      expect(reservations).toHaveLength(1);
+      expect(reservations[0]).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+      await new Promise<void>(resolve => {
+        if (closing) resolve();
+        else releaseResponses.push(resolve);
+      });
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output(ordinal) }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const releaseBoth = () => { for (const release of releaseResponses.splice(0)) release(); };
+      try {
+        entries.push(await createDraftPlan(fixture, "Unrelated issue claim one"));
+        entries.push(await createDraftPlan(fixture, "Unrelated issue claim two"));
+        expect(entries[0]!.task.id).not.toBe(entries[1]!.task.id);
+        const wake = (issueId: string) => heartbeat.wakeup(f.presence.id, {
+          source: "assignment", triggerDetail: "system", reason: "issue_assigned",
+          requestedByActorType: "user", requestedByActorId: f.userId,
+          payload: { issueId }, contextSnapshot: { issueId, wakeReason: "issue_assigned" },
+        });
+        const first = await wake(entries[0]!.task.id);
+        expect(first).not.toBeNull();
+        await vi.waitFor(() => { expect(calls).toBe(1); }, { timeout: 10_000, interval: 25 });
+        const second = await wake(entries[1]!.task.id);
+        expect(second).not.toBeNull();
+        expect(second!.id).not.toBe(first!.id);
+        await vi.waitFor(() => { expect(calls).toBe(2); }, { timeout: 10_000, interval: 25 });
+
+        const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+        expect(runs).toHaveLength(2);
+        expect(new Set(runs.map(run => run.id))).toEqual(new Set([first!.id, second!.id]));
+        expect(dispatchedPlanIds).toHaveLength(2);
+        expect(new Set(dispatchedPlanIds)).toEqual(new Set(entries.map(entry => entry.plan.id)));
+        for (const [index, entry] of entries.entries()) {
+          const runId = index === 0 ? first!.id : second!.id;
+          const run = runs.find(candidate => candidate.id === runId);
+          expect(run).toMatchObject({ nativeIssueId: entry.task.id, responsibleUserId: f.userId,
+            runtimeMode: "native", driverKind: "aw_text_messages", status: "running", error: null });
+          const [issue] = await db.select().from(issues).where(eq(issues.id, entry.task.id));
+          expect(issue).toMatchObject({ assigneeAgentId: f.presence.id, executionRunId: runId });
+          const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entry.plan.id));
+          expect(attempts).toHaveLength(1);
+          expect(attempts[0]).toMatchObject({ runId, agentId: f.presence.id });
+          expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id)))
+            .toEqual([expect.objectContaining({ status: "dispatched", workerAttemptId: attempts[0]!.id })]);
+          expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, runId))).toEqual([]);
+          expect(await documentService(db).getIssueDocumentByKey(entry.task.id, "result")).toBeNull();
+        }
+        expect(calls).toBe(2);
+        releaseBoth();
+        await heartbeat.drainActiveRunExecutions();
+        for (const [index, entry] of entries.entries()) {
+          const runId = index === 0 ? first!.id : second!.id;
+          await assertCompletedDraft(fixture, entry, runId, output(index + 1));
+        }
+        expect(calls).toBe(2);
+        expect(new Set(dispatchedPlanIds)).toEqual(new Set(entries.map(entry => entry.plan.id)));
+      } finally {
+        closing = true;
+        releaseBoth();
+      }
+    });
+  }, 60_000);
+
   // Same current-Human/Plan and installed HTTP/listener owners as the two
   // cases above. The new cases share only their identical local setup/proofs.
   async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string) {
@@ -797,7 +901,7 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(secondRun).toMatchObject({ nativeIssueId: entries[1]!.task.id, invocationSource: "automation",
           runtimeMode: "native", driverKind: "aw_text_messages", status: "failed",
           errorCode: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE,
-          resultJson: expect.objectContaining({ automaticRecovery: { providerDispatched: false } }) });
+          resultJson: expect.objectContaining({ automaticRecovery: { code: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE, providerDispatched: false } }) });
         const [secondWake] = await db.select().from(agentWakeupRequests)
           .where(eq(agentWakeupRequests.id, secondRun!.wakeupRequestId!));
         expect(secondWake).toMatchObject({ status: "failed", runId: secondId });

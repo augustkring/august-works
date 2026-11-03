@@ -30,6 +30,10 @@ const protectedCaps = (): SandboxCapabilitySnapshot => {
   snapshot.qualificationHash = snapshot.qualificationTarget.targetHash;
   return snapshot;
 };
+// Structural protected-report input only; this unit fixture does not qualify a host.
+const brokerCaps = (): SandboxCapabilitySnapshot => ({ ...protectedCaps(), credentialBrokerProviderProfile: {
+  id: "paperclip-broker", hash: "d".repeat(64), origin: "https://paperclip.example.test", binaries: ["/usr/bin/node"],
+} });
 const compile = (candidate = policyFixture(), capabilities: SandboxCapabilitySnapshot | null = caps(), boundary = policyFixture(), grants = {}) => compileSandboxPolicy({ candidate, capabilities, boundary, authorizedConnectionGrantHashes: grants, sourcePolicyRefs: ["fixture-only"], now });
 describe("V7 policy subset proofs, distinct from physical boundary qualification", () => {
   it("keeps report and target hashes separate while qualification verifies the canonical target body", async () => {
@@ -99,45 +103,51 @@ describe("V7 policy subset proofs, distinct from physical boundary qualification
     p.credentials = { mode: "brokered", bindings: [{ connectionId: "11111111-1111-4111-8111-111111111111", grantVersionHash: "b".repeat(64), hostname: "provider.example.com", port: 443, methods: ["POST"], pathPrefixes: ["/mcp"], binary: "/usr/bin/node", ttlSeconds: 30 }] };
     const resolved = [{ connectionId: p.credentials.bindings[0]!.connectionId, grantVersionHash: p.credentials.bindings[0]!.grantVersionHash, gatewayPublicId: "gateway_1", endpointPath: "/mcp/gateways/gateway_1", allowedTools: ["read_record"], binary: "/usr/bin/node", destination: { hostname: "provider.example.com", port: 443, method: "POST" as const, path: "/mcp" } }];
     const grants = { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash };
-    const mismatch = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: grants, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, binary: "/usr/bin/python" }], sourcePolicyRefs: [], now });
+    const mismatch = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: brokerCaps(), authorizedConnectionGrantHashes: grants, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, binary: "/usr/bin/python" }], sourcePolicyRefs: [], now });
     expect(mismatch.failedBoundaries).toContain("credential_broker_binding_resolution_mismatch");
     expect(mismatch.failedBoundaries).toContain("credential_binary_grant_resolution_mismatch");
-    const exact = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: grants, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: resolved, sourcePolicyRefs: [], now });
+    const exact = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: brokerCaps(), authorizedConnectionGrantHashes: grants, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: resolved, sourcePolicyRefs: [], now });
     expect(exact.proverResult).toBe("pass");
+    expect(compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: grants,
+      credentialBrokerOrigin: "https://paperclip.example.test", credentialBrokerBindings: resolved, sourcePolicyRefs: [], now })
+      .unsupportedFeatures).toContain("credential_binary_profile_unqualified");
     const second = structuredClone(p.credentials.bindings[0]!); second.connectionId = "22222222-2222-4222-8222-222222222222"; second.binary = "/usr/bin/python";
     p.credentials.bindings.push(second);
-    const mixed = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: grants, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [resolved[0]!, { ...resolved[0]!, connectionId: second.connectionId, binary: second.binary }], sourcePolicyRefs: [], now });
+    const mixed = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: brokerCaps(), authorizedConnectionGrantHashes: grants, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [resolved[0]!, { ...resolved[0]!, connectionId: second.connectionId, binary: second.binary }], sourcePolicyRefs: [], now });
     expect(mixed.unsupportedFeatures).toContain("credential_binary_profile_not_separable");
     const nullFirst = structuredClone(p);
     nullFirst.credentials.bindings[0]!.binary = null;
-    const mixedNullFirst = compileSandboxPolicy({ boundary: nullFirst, candidate: nullFirst, capabilities: caps(), authorizedConnectionGrantHashes: grants,
+    const mixedNullFirst = compileSandboxPolicy({ boundary: nullFirst, candidate: nullFirst, capabilities: brokerCaps(), authorizedConnectionGrantHashes: grants,
       credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, binary: null }, { ...resolved[0]!, connectionId: second.connectionId, binary: second.binary }], sourcePolicyRefs: [], now });
     expect(mixedNullFirst.unsupportedFeatures).toContain("credential_binary_profile_not_separable");
     const writable = structuredClone(p); writable.credentials.bindings = [structuredClone(writable.credentials.bindings[0]!)];
     writable.filesystem.writePaths = ["/usr"];
-    const writableBinary = compileSandboxPolicy({ boundary: writable, candidate: writable, capabilities: caps(), authorizedConnectionGrantHashes: grants,
+    const writableBinary = compileSandboxPolicy({ boundary: writable, candidate: writable, capabilities: brokerCaps(), authorizedConnectionGrantHashes: grants,
       credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: resolved, sourcePolicyRefs: [], now });
     expect(writableBinary.failedBoundaries).toContain("credential_binary_not_immutable");
   });
   it("adds only the configured Paperclip MCP route for brokered calls", () => {
     const p = policyFixture();
     p.network.destinations = [];
-    p.credentials = { mode: "brokered", bindings: [{ connectionId: "11111111-1111-4111-8111-111111111111", grantVersionHash: "b".repeat(64), hostname: "provider.example.com", port: 443, methods: ["POST"], pathPrefixes: ["/mcp"], binary: null, ttlSeconds: 30 }] };
-    const resolved = [{ connectionId: p.credentials.bindings[0]!.connectionId, grantVersionHash: p.credentials.bindings[0]!.grantVersionHash, gatewayPublicId: "gateway_1", endpointPath: "/mcp/gateways/gateway_1", allowedTools: ["read_record"], binary: null, destination: { hostname: "provider.example.com", port: 443, method: "POST" as const, path: "/mcp" } }];
-    const result = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: resolved, sourcePolicyRefs: ["fixture-only"], now });
+    p.filesystem.readPaths = ["/usr"];
+    p.credentials = { mode: "brokered", bindings: [{ connectionId: "11111111-1111-4111-8111-111111111111", grantVersionHash: "b".repeat(64), hostname: "provider.example.com", port: 443, methods: ["POST"], pathPrefixes: ["/mcp"], binary: "/usr/bin/node", ttlSeconds: 30 }] };
+    const resolved = [{ connectionId: p.credentials.bindings[0]!.connectionId, grantVersionHash: p.credentials.bindings[0]!.grantVersionHash, gatewayPublicId: "gateway_1", endpointPath: "/mcp/gateways/gateway_1", allowedTools: ["read_record"], binary: "/usr/bin/node", destination: { hostname: "provider.example.com", port: 443, method: "POST" as const, path: "/mcp" } }];
+    const result = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: brokerCaps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: resolved, sourcePolicyRefs: ["fixture-only"], now });
     expect(result.proverResult).toBe("pass");
     expect(result.compiledPolicy.network.destinations).toEqual([{ hostname: "paperclip.example.test", port: 443, methods: ["POST"], pathPrefixes: ["/mcp/gateways/gateway_1"] }]);
     const projected = projectOpenShellPolicy(result.compiledPolicy);
     expect(projected.document.network_policies.aw_0?.endpoints[0]?.rules).toEqual([{ allow: { method: "POST", path: "/mcp/gateways/gateway_1" } }]);
-    const wrongDestination = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, destination: { ...resolved[0]!.destination, hostname: "other-provider.example.test" } }], sourcePolicyRefs: ["fixture-only"], now });
+    const wrongDestination = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: brokerCaps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, destination: { ...resolved[0]!.destination, hostname: "other-provider.example.test" } }], sourcePolicyRefs: ["fixture-only"], now });
     expect(wrongDestination.failedBoundaries).toContain("credential_broker_binding_resolution_mismatch");
   });
   it("adds the exact managed Messages route from its separate host profile without ToolGateway bindings", () => {
     const p = policyFixture();
     p.network.destinations = [];
     p.credentials = { mode: "none", bindings: [] };
+    p.filesystem.readPaths = ["/usr"];
     const capability = protectedCaps();
-    capability.modelBrokerProviderProfile = { id: "paperclip-model-broker", hash: "e".repeat(64) };
+    capability.modelBrokerProviderProfile = { id: "paperclip-model-broker", hash: "e".repeat(64),
+      origin: "https://paperclip.example.test", binaries: ["/usr/bin/node"] };
     const result = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: capability,
       authorizedConnectionGrantHashes: {}, credentialBrokerOrigin: "https://paperclip.example.test/",
       sourcePolicyRefs: ["fixture-only"], now });

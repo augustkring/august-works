@@ -34,6 +34,7 @@ afterAll(async () => {
 }, 30_000);
 
 it("runs a real capped Project Worker in its realized worktree without changing the base repository", async () => {
+  vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
   const projectFixture = managedNativeProjectWorkspaceFixture({ root: home });
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, {
     cwd, encoding: "utf8", timeout: 5_000, maxBuffer: 64 * 1024, stdio: ["ignore", "pipe", "pipe"],

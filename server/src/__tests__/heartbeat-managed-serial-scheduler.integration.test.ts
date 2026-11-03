@@ -66,7 +66,7 @@ it("keeps two real serial Plan/Run lifecycles on one Task isolated after actual 
       expect(manifest.runId).toBe(run.id); expect(sourceReceipt).toBeTruthy();
     },
     driveScheduler: async ({ actor, companyId, agentId, heartbeat, facts, factsForRun }) => {
-      await instanceSettingsService(db).updateExperimental({ verifier_v7: true });
+      await instanceSettingsService(db).updateExperimental({ supervision_v7: true, verifier_v7: true });
       await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
         heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, agentId));
       const task = await issueService(db).create(companyId, { title: "Two bounded serial lifecycles",

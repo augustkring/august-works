@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
+import { nativeContinuationMessageHash, nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
+import type { NativeTaskContinuationCapture } from "../execution-continuation.js";
 import { buildNativeContinuationPrompt } from "./native-continuation.js";
 import type {
   NativeAcpxAgent,
@@ -14,7 +15,7 @@ import type {
   StrictCompletionContractInput,
 } from "../../vendor/paperclip-runner/index.js";
 import {
-  nativePayloadSourceInputSchema,
+  nativePayloadSourceInputSchema, sourceTrustMetadataSchema,
   nativePayloadSourceSnapshotSchema,
   type NativePayloadSourceInput,
   type NativePayloadSourcePolicy,
@@ -148,6 +149,72 @@ function isClosedEmptyTaskContinuation(value: unknown, input: {
     coverageRecord.kind === "full_task_history" && coverageRecord.throughCommentId === null && coverageRecord.summaryThroughCommentId === null;
 }
 
+/** Closed initial Human-comment continuation. Rich retained/action/interaction
+ * envelopes remain unsupported until their own independent owner is closed. */
+export function exactNativeInitialTaskContinuation(input: { value: unknown; companyId: string; issueId: string;
+  runId: string; agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null; wakeReason: string | null;
+  capture?: NativeTaskContinuationCapture | null }): NativeTaskContinuationCapture | null {
+  const { capture } = input;
+  let serialized: string;
+  try { const value = JSON.stringify(input.value); if (typeof value !== "string") return null; serialized = value; }
+  catch { return null; }
+  if (!capture || !input.agentId || !input.responsibleUserId || !input.wakeupRequestId ||
+    capture.companyId !== input.companyId || capture.issueId !== input.issueId || capture.runId !== input.runId ||
+    capture.agentId !== input.agentId || capture.responsibleUserId !== input.responsibleUserId ||
+    capture.wakeupRequestId !== input.wakeupRequestId || !isDeepStrictEqual(capture.envelope, input.value) ||
+    Buffer.byteLength(serialized, "utf8") > 64_000) return null;
+  if (Object.keys(capture).sort().join(",") !== "agentId,commentSources,companyId,envelope,issueId,responsibleUserId,runId,wake,wakeupRequestId") return null;
+  const c = capture.envelope;
+  if (!c || typeof c !== "object" || Array.isArray(c) || !c.trigger || typeof c.trigger !== "object" ||
+    Array.isArray(c.trigger) || !c.coverage || typeof c.coverage !== "object" || Array.isArray(c.coverage) ||
+    !capture.wake || Object.keys(capture.wake).sort().join(",") !== "originCommentIds,reason,requestedByActorId,requestedByActorType" ||
+    !Array.isArray(capture.wake.originCommentIds) || !Array.isArray(capture.commentSources)) return null;
+  const keys = ["version", "companyId", "issueId", "trigger", "originCommentIds", "objective", "messages", "humanResponses",
+    "interactionOutcomes", "completedWork", "recoveryOutcomes", "unresolvedInteractionIds", "coverage", "completedActions"];
+  if (Object.keys(c).some(key => !keys.includes(key)) || c.version !== 1 || c.companyId !== input.companyId || c.issueId !== input.issueId ||
+    Object.keys(c.trigger).sort().join(",") !== "interactionId,reason,sourceRunId" ||
+    c.trigger.reason !== (input.wakeReason ?? "task_execution") || c.trigger.interactionId !== null || c.trigger.sourceRunId !== null ||
+    !Array.isArray(c.messages) || c.messages.length === 0 || c.messages.length > 256 ||
+    !Array.isArray(c.originCommentIds) || c.originCommentIds.length === 0 || c.originCommentIds.length > 256 ||
+    new Set(c.originCommentIds).size !== c.originCommentIds.length ||
+    (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || c.humanResponses.length !== 0)) ||
+    !Array.isArray(c.interactionOutcomes) || c.interactionOutcomes.length !== 0 ||
+    (c.recoveryOutcomes !== undefined && (!Array.isArray(c.recoveryOutcomes) || c.recoveryOutcomes.length !== 0)) ||
+    (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length !== 0)) ||
+    c.completedWork !== null || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length !== 0 ||
+    capture.commentSources.length !== c.messages.length || capture.wake.reason !== input.wakeReason ||
+    capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId) return null;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (![input.companyId, input.issueId, input.runId, input.agentId, input.wakeupRequestId].every(id => typeof id === "string" && uuid.test(id)) ||
+    capture.wake.originCommentIds.length > 256 || capture.wake.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
+    c.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id))) return null;
+  const ids = new Set<string>();
+  for (const message of c.messages) {
+    if (!message || Object.keys(message).sort().join(",") !==
+      "authorId,authorType,body,createdAt,createdByRunId,deleted,id,sourceTrust,updatedAt" ||
+      typeof message.id !== "string" || !uuid.test(message.id) || ids.has(message.id) || typeof message.body !== "string" ||
+      message.deleted !== false || !["user", "agent", "system"].includes(message.authorType) ||
+      (message.sourceTrust !== null && !sourceTrustMetadataSchema.safeParse(message.sourceTrust).success) ||
+      !(message.authorId === null || typeof message.authorId === "string") ||
+      !(message.createdByRunId === null || typeof message.createdByRunId === "string") ||
+      !Number.isFinite(Date.parse(message.createdAt)) || !Number.isFinite(Date.parse(message.updatedAt))) return null;
+    ids.add(message.id);
+    const sources = capture.commentSources.filter(value => value && value.input?.kind === "comment" && value.input.commentId === message.id &&
+      value.input.issueId === input.issueId && /^\d+(?:\.\d+)?$/.test(value.input.sourceVersion) &&
+      value.input.contentHash === nativeContinuationMessageHash(message));
+    if (sources.length !== 1) return null;
+  }
+  const origins = c.originCommentIds.map(id => c.messages.find(message => message.id === id));
+  if (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null ||
+    !capture.wake.originCommentIds.includes(message.id)) ||
+    !origins.some(message => message?.authorId === capture.wake.requestedByActorId)) return null;
+  const latest = c.messages.findLast(message => message.authorType === "user" && message.createdByRunId === null && message.body.trim());
+  if (!latest || c.objective !== latest.body || Object.keys(c.coverage).sort().join(",") !==
+    "kind,summaryThroughCommentId,throughCommentId" || c.coverage.kind !== "full_task_history" ||
+    c.coverage.throughCommentId !== c.messages.at(-1)?.id || c.coverage.summaryThroughCommentId !== null) return null;
+  return capture;
+}
+
 /** Capture only the closed Task wake profile. Inline comments are admitted only
  * when their exact bounded renditions match unique owner captures. Any other
  * wake source, attachment, annotation, interaction, continuation or unknown
@@ -157,6 +224,8 @@ export function captureNativeTaskWakeSource(input: {
   runId: string;
   issueId: string;
   sourceVersion: string;
+  agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null;
+  continuationCapture?: NativeTaskContinuationCapture | null;
   task: { id: string; identifier: string | null; title: string; description: string | null; status: string;
     priority: string; workMode: string };
   /** Read from the persisted heartbeat run, independently of the rendered
@@ -204,7 +273,9 @@ export function captureNativeTaskWakeSource(input: {
     reason: payload.reason === input.persistedWakeReason,
     continuation: payload.executionContinuation === null || isClosedEmptyTaskContinuation(payload.executionContinuation, {
       companyId: input.companyId, issueId: input.issueId, wakeReason: input.persistedWakeReason, task: input.task,
-    }),
+    }) || exactNativeInitialTaskContinuation({ value: payload.executionContinuation, companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId, wakeupRequestId: input.wakeupRequestId,
+      wakeReason: input.persistedWakeReason, capture: input.continuationCapture }) !== null,
     attachmentOmissions: Array.isArray(payload.attachmentOmissions) && payload.attachmentOmissions.length === 0,
     externalChatProvider: payload.externalChatProvider === null, recovery: payload.recovery === null, agentMessage: payload.agentMessage === null,
     childIssueSummaries: Array.isArray(payload.childIssueSummaries) && payload.childIssueSummaries.length === 0,
@@ -286,6 +357,7 @@ export function buildNativeBootstrapSourceSet(input: {
   candidates: readonly NativePreparedSourceCandidate[];
   runtimeInputs: readonly NativePayloadSourceInput[] | null;
   additionalInputs?: readonly NativePayloadSourceInput[] | null;
+  taskWakeCommentCandidates?: readonly NativePreparedSourceCandidate[];
   additionalPolicy?: NativePayloadSourcePolicy | null;
   interactionResponses?: readonly NativeInteractionResponseEnvelope[] | null;
   interactionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null;
@@ -364,6 +436,15 @@ export function buildNativeBootstrapSourceSet(input: {
     if (!sourceMatchesReference) return reject("reference_source_mismatch");
     if (!addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: expectedOwner, id: reference.id }))
       return reject("source_snapshot_invalid");
+    append(candidate.input);
+  }
+  if ((input.taskWakeCommentCandidates?.length ?? 0) > 0 &&
+    input.additionalInputs?.filter(source => source.kind === "native_task_wake" &&
+      source.runId === input.runId && source.issueId === input.issueId).length !== 1) return reject("source_snapshot_invalid");
+  for (const candidate of input.taskWakeCommentCandidates ?? []) {
+    if (candidate.kind !== "comment" || candidate.input.kind !== "comment" ||
+      candidate.input.commentId !== candidate.id || candidate.input.issueId !== input.issueId ||
+      !addSnapshotPolicy(candidate.payloadSourceSnapshot, { kind: "comment", id: candidate.id })) return reject("source_snapshot_invalid");
     append(candidate.input);
   }
   for (const source of input.runtimeInputs) append(source);

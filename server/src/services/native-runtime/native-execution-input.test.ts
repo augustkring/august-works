@@ -5,11 +5,12 @@ import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource } from "./native-execution-input.js";
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, exactNativeInitialTaskContinuation } from "./native-execution-input.js";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
-import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
+import { nativeContinuationCommentProjection, nativeContinuationMessageHash, nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
+import type { NativeTaskContinuationCapture } from "../execution-continuation.js";
 import type { NativePayloadSourceInput } from "@paperclipai/shared";
 
 describe("native bootstrap rendered-source closure", () => {
@@ -117,6 +118,57 @@ describe("native bootstrap rendered-source closure", () => {
       presentation: null, metadata: null, deletedAt: null };
     const commentWake = { ...payload, commentIds: [commentId], latestCommentId: commentId, comments: [comment],
       commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 } };
+    const humanId = "actual-selected-human", wakeId = randomUUID();
+    const message = nativeContinuationCommentProjection({ id: commentId, authorType: "user", authorUserId: humanId,
+      authorAgentId: null, createdByRunId: null, body: comment.body, createdAt: new Date("2026-10-01T00:00:00Z"),
+      updatedAt: new Date("2026-10-01T00:00:00Z"), deletedAt: null, sourceTrust: null });
+    const initialCapture: NativeTaskContinuationCapture = { companyId, issueId, agentId, runId, responsibleUserId: humanId,
+      wakeupRequestId: wakeId, envelope: { ...emptyContinuation, version: 1, objective: message.body,
+        originCommentIds: [commentId], messages: [message],
+        coverage: { kind: "full_task_history", throughCommentId: commentId, summaryThroughCommentId: null } },
+      commentSources: [{ input: { ...commentSource, contentHash: nativeContinuationMessageHash(message) },
+        payloadSourceSnapshot: null }],
+      wake: { requestedByActorType: "user", requestedByActorId: humanId, reason: "on_demand", originCommentIds: [commentId] } };
+    const captureInitial = (capture = initialCapture) => captureNativeTaskWakeSource({ companyId, runId, issueId, agentId,
+      responsibleUserId: humanId, wakeupRequestId: wakeId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
+      payload: { ...commentWake, executionContinuation: capture.envelope }, commentSources: [commentSource], continuationCapture: capture });
+    expect(captureInitial()).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const jsonbOrdered = structuredClone(initialCapture);
+    Object.assign(jsonbOrdered.envelope, { messages: [Object.fromEntries(Object.entries(message).reverse())] });
+    expect(captureInitial(jsonbOrdered)).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const trustedCapture = structuredClone(initialCapture);
+    trustedCapture.envelope.messages[0]!.sourceTrust = { preset: "standard", disposition: "promoted",
+      promotedFrom: { artifactKind: "comment", artifactId: commentId, issueId } };
+    trustedCapture.commentSources[0]!.input.contentHash = nativeContinuationMessageHash(trustedCapture.envelope.messages[0]!);
+    const trustMessage = trustedCapture.envelope.messages[0]!;
+    Object.assign(trustMessage, { sourceTrust: { promotedFrom: { issueId, artifactId: commentId, artifactKind: "comment" },
+      disposition: "promoted", preset: "standard" } });
+    expect(captureInitial(trustedCapture)).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const otherHumanHistory = structuredClone(initialCapture);
+    const priorMessage = { ...message, id: randomUUID(), authorId: "another-legitimate-human", body: "Earlier readable history.",
+      createdAt: "2026-09-30T00:00:00.000Z", updatedAt: "2026-09-30T00:00:00.000Z" };
+    otherHumanHistory.envelope.messages.unshift(priorMessage);
+    otherHumanHistory.commentSources.unshift({ input: { ...commentSource, commentId: priorMessage.id,
+      contentHash: nativeContinuationMessageHash(priorMessage) }, payloadSourceSnapshot: null });
+    expect(captureInitial(otherHumanHistory)).toMatchObject({ kind: "native_task_wake" });
+    const cyclic: Record<string, unknown> = {}; cyclic.self = cyclic;
+    for (const value of [undefined, cyclic, BigInt(1)]) expect(exactNativeInitialTaskContinuation({ value, companyId, issueId, runId,
+      agentId, responsibleUserId: humanId, wakeupRequestId: wakeId, wakeReason: "on_demand", capture: initialCapture })).toBeNull();
+    for (const change of [
+      (c: NativeTaskContinuationCapture) => { c.companyId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.runId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.wakeupRequestId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.envelope.objective = "Unowned prose"; },
+      (c: NativeTaskContinuationCapture) => { c.envelope.originCommentIds = [randomUUID()]; },
+      (c: NativeTaskContinuationCapture) => { c.envelope.messages[0]!.body = "Uncaptured message"; },
+      (c: NativeTaskContinuationCapture) => { c.commentSources[0]!.input.contentHash = "f".repeat(64); },
+      (c: NativeTaskContinuationCapture) => { c.envelope.messages[0]!.sourceTrust = { preset: "invented", disposition: "promoted" }; },
+      (c: NativeTaskContinuationCapture) => { c.wake.requestedByActorType = "agent"; },
+      (c: NativeTaskContinuationCapture) => { c.wake.requestedByActorId = "wrong-trigger-human"; },
+      (c: NativeTaskContinuationCapture) => { c.envelope.messages[0]!.body = "x".repeat(64_001); },
+      (c: NativeTaskContinuationCapture) => { c.envelope.messages.push(c.envelope.messages[0]!); },
+      (c: NativeTaskContinuationCapture) => { Object.assign(c.envelope, { unknownField: "opaque" }); },
+    ]) { const changed = structuredClone(initialCapture); change(changed); expect(captureInitial(changed)).toBeNull(); }
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
       task, payload: commentWake, commentSources: [commentSource] })).toMatchObject({ kind: "native_task_wake", runId, issueId });
     const unrelatedRendition = { ...commentSource,

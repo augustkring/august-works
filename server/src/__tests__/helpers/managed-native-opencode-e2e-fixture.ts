@@ -98,6 +98,7 @@ import { isRunnerIngressAuthorized, resolveNativeRuntimeMode } from "../../servi
 import { executePaperclipNativeSession } from "../../services/native-runtime/native-session-executor.js";
 import { PaperclipControlPlanePort } from "../../services/native-runtime/paperclip-control-plane-port.js";
 import { finalizeNativeRun } from "../../services/native-runtime/native-run-finalizer.js";
+import { prepareNativeWorkspaceSync, type PreparedNativeWorkspaceSync } from "../../services/native-runtime/native-workspace-sync.js";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "../../services/native-runtime/native-execution-input.js";
 import { buildRetainedNativeRuntimeContext } from "../../services/native-runtime/runtime-context.js";
 import { getIssueExecutionContext, buildPaperclipTaskMarkdown, persistHeartbeatRunProcessMetadata } from "../../services/heartbeat.js";
@@ -958,6 +959,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         config: {}, issue: task, agent: { id: agentId, name: agent.name, companyId }, heartbeatRunId: run!.id }),
       effectiveExecutionWorkspaceMode: null, persistedExecutionWorkspace: null }) : null;
     const runnerExecutionTarget = realization?.executionTarget ?? null;
+    const nativeWorkspaceSync: { current: PreparedNativeWorkspaceSync | null } = { current: null };
     if (input.sandboxRelay && (runnerExecutionTarget?.kind !== "remote" || runnerExecutionTarget.transport !== "sandbox"))
       throw new Error("managed_worker_realized_sandbox_target_missing");
     if (input.sandboxRelay && runnerExecutionTarget?.kind === "remote" && runnerExecutionTarget.remoteCwd !== agentWorkspace)
@@ -2238,6 +2240,19 @@ export async function runManagedNativeOpenCodeFixture(input: {
       const result = await executePaperclipNativeSession({ db, execution, bootstrapSourceClosure, useRunnerd: true, onSpawn: input.sandboxRelay ? undefined : onSpawn,
         runnerInstanceId: prepared.runnerInstanceId, leaseOwner, turnTimeoutMs: fixtureTurnTimeoutMs, adapterType: "paperclip_runner",
         runnerExecutionTarget,
+        ...((input.sandboxRelay && !task.conversationAgentId && !task.conversationUserId && task.originKind !== "chat_channel")
+          ? { prepareManagedWorkspace: async () => {
+            if (!realization) throw new Error("managed_worker_workspace_realization_missing");
+            const preparedWorkspace = await prepareNativeWorkspaceSync({ db, runId: run!.id, companyId,
+              workspaceId: execution.binding.executionWorkspaceId, workspaceLocalDir: execution.workspace.cwd,
+              target: runnerExecutionTarget, lease: realization.lease,
+              workspaceRepositoryMode: "discover", nativeWorkspacePreparation: true });
+            if (!preparedWorkspace) throw new Error("native_workspace_preparation_descriptor_missing");
+            nativeWorkspaceSync.current = preparedWorkspace;
+            // Retain the existing runner environment. The real workspace owner
+            // persists the exact reference checked after immutable Source sealing.
+            return { environment: {}, workspaceSync: preparedWorkspace.reference };
+          } } : {}),
         runnerIngressAuthorized: ingress ? isRunnerIngressAuthorized(ingress) : undefined,
         runnerPublicUrl: input.sandboxRelay ? brokerOrigin.replace(/^https:/, "wss:") : undefined,
         runnerCaBundlePath: input.sandboxRelay ? certBundlePath : undefined,
@@ -2766,7 +2781,12 @@ export async function runManagedNativeOpenCodeFixture(input: {
     await controlPlane.completeRun({ result: nativeFinalization.result as PrpStructuredRunResult,
       terminal: nativeFinalization.terminal, turnId: nativeFinalization.turnId,
       callerResultId: `managed-opencode-e2e:${run!.id}` });
-    await finalizeNativeRun({ db, runId: run!.id, workspaceFinalizeStatus: "succeeded", projectRunStatus: true });
+    // Match Heartbeat's workspace barrier: copy out before certifying success,
+    // and retain the descriptor for recovery if restore/finalization fails.
+    await nativeWorkspaceSync.current?.restoreWorkspace();
+    const finalized = await finalizeNativeRun({ db, runId: run!.id, workspaceFinalizeStatus: "succeeded",
+      projectRunStatus: true, preserveProviderAttempt: Boolean(nativeWorkspaceSync.current) });
+    if (finalized.phase === "committed") await nativeWorkspaceSync.current?.cleanup();
     const [terminalRun] = await db.select({ status: heartbeatRuns.status, nativePhase: heartbeatRuns.nativePhase })
       .from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
     expect(terminalRun?.status).toBe("succeeded");

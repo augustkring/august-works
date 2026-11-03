@@ -77,6 +77,9 @@ describe.skipIf(!qualifiedOpenCodeBinary())("Native managed model session contro
         const stopped = transitions.find(item => item.phase === "stop" && item.status === "SUCCEEDED");
         const runtimeFacts = facts.sandboxRuntimeFacts && typeof facts.sandboxRuntimeFacts === "object"
           ? facts.sandboxRuntimeFacts as Record<string, unknown> : {};
+        // Read the actual signed Host observations; this local collector was never populated.
+        expect(Array.isArray(runtimeFacts.modelBrokerSessionReceipts)).toBe(true);
+        observedHostReceipts = runtimeFacts.modelBrokerSessionReceipts as typeof observedHostReceipts;
         const safeHostFailures = Array.isArray(runtimeFacts.sandboxExecutionFailures) ? runtimeFacts.sandboxExecutionFailures.slice(0, 12).map(value => {
           const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
           return { phase: row.phase, action: row.action, errorCode: row.errorCode, probeCaseId: row.probeCaseId,

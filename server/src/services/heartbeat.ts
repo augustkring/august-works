@@ -224,7 +224,7 @@ import {
 import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
-import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, type NativeBootstrapSourceClosure,
+import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, exactNativeInitialTaskContinuation, type NativeBootstrapSourceClosure,
   prepareNativeTurnWithContext, type NativePreparedSourceCandidate, type NativeRenderedSourceReference } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
@@ -21036,6 +21036,7 @@ export function heartbeatService(
         delete context.paperclipSkillTest;
       }
       const continuationCommentSources: NativeCommentSourceCapture[] = [];
+      let nativeTaskContinuationCapture: import("./execution-continuation.js").NativeTaskContinuationCapture | null = null;
       const executionContinuation =
         issueRef && !isConversation(issueContext) && issueContext?.assigneeAgentId === agent.id
           ? await buildExecutionContinuation({
@@ -21050,6 +21051,8 @@ export function heartbeatService(
               exposeLowTrustRaw,
               onCommentSourceCapture: agent.adapterType === "paperclip_runner"
                 ? capture => continuationCommentSources.push(capture) : undefined,
+              onContinuationSourceCapture: agent.adapterType === "paperclip_runner"
+                ? capture => { nativeTaskContinuationCapture = capture; } : undefined,
             })
           : null;
       context.executionContinuation = executionContinuation;
@@ -24269,9 +24272,14 @@ export function heartbeatService(
             const capturedTaskSource = taskSourceCapture.value;
             const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
             const nativeBootstrapWakeDiagnostics: string[] = [];
+            const closedTaskContinuation = issueRef ? exactNativeInitialTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
+              companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
+              responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
+              wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason), capture: nativeTaskContinuationCapture }) : null;
             const nativeTaskWakeSource = capturedTaskSource?.input.kind === "task" && issueRef
               ? captureNativeTaskWakeSource({ companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
-                sourceVersion: capturedTaskSource.input.sourceVersion,
+                sourceVersion: capturedTaskSource.input.sourceVersion, agentId: agent.id,
+                responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId, continuationCapture: closedTaskContinuation,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
                 checkoutRunId: issueContext?.checkoutRunId ?? null,
                 task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
@@ -24348,6 +24356,9 @@ export function heartbeatService(
                       repoRef: attachmentClosureExecution.workspace.repoRef, branchName: attachmentClosureExecution.workspace.branchName,
                     }), "utf8").digest("hex") },
                 ],
+                taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
+                  ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
+                      input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) : [],
                 additionalPolicy: nativeBootstrapRetainedRunSource
                   ? { issueIds: [], projectIds: [], runIds: [nativeBootstrapRetainedRunSource.source.runId], memoryIds: [], foundationRevisionIds: [] }
                   : null,
