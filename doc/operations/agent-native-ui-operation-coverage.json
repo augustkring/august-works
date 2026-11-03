@@ -40897,7 +40897,7 @@
         "post:`/issues/${id}/tree-control/preview`"
       ],
       "argumentsSignature": "issueId!, {\n        mode: treeControlMode,\n        releasePolicy: {\n          strategy: \"manual\",\n        },\n      }",
-      "line": 3591,
+      "line": 3600,
       "occurrence": 0,
       "owner": "server/src/services/issue-tree-control.ts",
       "classification": "HUMAN_ONLY",
@@ -40933,6 +40933,49 @@
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
+      "clientCall": "issuesApi.previewTreeControl",
+      "apiVerb": "write",
+      "pathSignature": "issueId!",
+      "routeSignatures": [
+        "post:`/issues/${id}/tree-control/preview`"
+      ],
+      "argumentsSignature": "issueId!, {\n      mode: \"resume\", releasePolicy: { strategy: \"manual\" },\n    }",
+      "line": 3614,
+      "occurrence": 0,
+      "owner": "server/src/services/issue-tree-control.ts",
+      "classification": "HUMAN_ONLY",
+      "materiality": "nonmaterial",
+      "reviewRationale": "The existing Board-only tree-control preview computes Resume scope for the current Task root hold. The UI requires current company Board access, an active root-owned pause hold and loaded error-free state; the server independently asserts Board and current root Task access. No Agent tool or automatic hold release is granted.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/issue-tree-control.ts",
+            "line": 65,
+            "claim": "tree-control preview route"
+          },
+          {
+            "path": "server/src/routes/issue-tree-control.ts",
+            "line": 66,
+            "claim": "route asserts Board principal"
+          }
+        ]
+      },
+      "materialityRationale": "This POST returns the current Resume preview and records preview audit activity; it does not create/release a hold, change Task/run state, or dispatch work.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/routes/issue-tree-control.ts",
+          "line": 65,
+          "claim": "Preview route asserts Board, reads current root access, computes preview and writes only audit activity; no hold mutation or work dispatch."
+        },
+        {
+          "path": "ui/src/pages/IssueDetail.tsx",
+          "line": 3614,
+          "claim": "Resume query requires current Board company access and the active root pause hold; results are preview state only."
+        }
+      ]
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
       "clientCall": "issuesApi.unarchiveFromInbox",
       "apiVerb": "write",
       "pathSignature": "id",
@@ -40940,7 +40983,7 @@
         "delete:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "id",
-      "line": 4039,
+      "line": 4054,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -40986,7 +41029,7 @@
         "post:`/issues/${id}/read`"
       ],
       "argumentsSignature": "id",
-      "line": 4129,
+      "line": 4144,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -41039,7 +41082,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "issueId!, data",
-      "line": 4150,
+      "line": 4165,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41095,7 +41138,7 @@
         "post:`/issues/${id}/recovery-actions/resolve`"
       ],
       "argumentsSignature": "issueId!, data",
-      "line": 4236,
+      "line": 4251,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41161,7 +41204,7 @@
         "post:`/issues/${id}/recovery-actions/resolve`"
       ],
       "argumentsSignature": "issueId!, {\n        actionId,\n        outcome: \"restored\",\n        sourceIssueStatus: \"todo\",\n      }",
-      "line": 4270,
+      "line": 4285,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41227,7 +41270,7 @@
         "post:`/issues/${id}/tree-holds/${holdId}/release`"
       ],
       "argumentsSignature": "issueId!, pauseHoldId, {\n            reason: null,\n            metadata: {\n              wakeAgents,\n            },\n          }",
-      "line": 4321,
+      "line": 4332,
       "occurrence": 0,
       "owner": "server/src/services/issue-tree-control.ts",
       "classification": "HUMAN_ONLY",
@@ -41280,7 +41323,7 @@
         "post:`/issues/${id}/tree-holds`"
       ],
       "argumentsSignature": "issueId!, {\n        mode,\n        reason: null,\n        releasePolicy: {\n          strategy: \"manual\",\n          ...(mode === \"pause\"\n            ? {\n                note: scope === \"leaf\" ? \"leaf_pause\" : \"full_pause\",\n              }\n            : {}),\n        },\n        ...(runId\n          ? { metadata: { source: \"issue_active_run_control\", runId } }\n          : {}),\n        ...(mode === \"restore\" ? { metadata: { wakeAgents } } : {}),\n      }",
-      "line": 4333,
+      "line": 4345,
       "occurrence": 0,
       "owner": "server/src/services/issue-tree-control.ts",
       "classification": "HUMAN_ONLY",
@@ -41323,7 +41366,7 @@
         "post:`/heartbeat-runs/${runId}/cancel`"
       ],
       "argumentsSignature": "runId",
-      "line": 4427,
+      "line": 4439,
       "occurrence": 0,
       "owner": "server/src/services/heartbeat.ts",
       "classification": "HUMAN_ONLY",
@@ -41356,7 +41399,7 @@
         "post:`/heartbeat-runs/${runId}/cancel`"
       ],
       "argumentsSignature": "runId",
-      "line": 4443,
+      "line": 4455,
       "occurrence": 0,
       "owner": "server/src/services/heartbeat.ts",
       "classification": "HUMAN_ONLY",
@@ -41389,7 +41432,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "issueId!, { status }",
-      "line": 4445,
+      "line": 4457,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41445,7 +41488,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "id, data",
-      "line": 4503,
+      "line": 4515,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41501,7 +41544,7 @@
         "post:`/issues/${id}/monitor/check-now`"
       ],
       "argumentsSignature": "issueId!",
-      "line": 4578,
+      "line": 4590,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41547,7 +41590,7 @@
         "post:`/approvals/${id}/approve${account(principal)}`"
       ],
       "argumentsSignature": "approvalId",
-      "line": 4609,
+      "line": 4621,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -41650,7 +41693,7 @@
         "post:`/approvals/${id}/reject${account(principal)}`"
       ],
       "argumentsSignature": "approvalId",
-      "line": 4611,
+      "line": 4623,
       "occurrence": 0,
       "owner": "server/src/services/approvals.ts",
       "classification": "HUMAN_ONLY",
@@ -41763,7 +41806,7 @@
         "post:`/issues/${id}/comments`"
       ],
       "argumentsSignature": "await resolveWritableIssueId(), body, reopen, interrupt, attachmentIds, clientRequestId ?? crypto.randomUUID()",
-      "line": 4658,
+      "line": 4670,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41809,7 +41852,7 @@
         "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
       ],
       "argumentsSignature": "comment.issueId, comment.id",
-      "line": 4724,
+      "line": 4736,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41865,7 +41908,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/accept`"
       ],
       "argumentsSignature": "issueId!, interaction.id, {\n        selectedClientKeys,\n        selectedOptionIds,\n        rememberAction,\n      }",
-      "line": 4837,
+      "line": 4849,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41921,7 +41964,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/reject`"
       ],
       "argumentsSignature": "issueId!, interaction.id, reason",
-      "line": 4893,
+      "line": 4905,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -41977,7 +42020,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/respond`"
       ],
       "argumentsSignature": "issueId!, interaction.id, { answers }",
-      "line": 4924,
+      "line": 4936,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42033,7 +42076,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/verdicts`"
       ],
       "argumentsSignature": "issueId!, interaction.id, verdicts",
-      "line": 4955,
+      "line": 4967,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42089,7 +42132,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/cancel`"
       ],
       "argumentsSignature": "issueId!, interaction.id",
-      "line": 4987,
+      "line": 4999,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42142,7 +42185,7 @@
         "post:`/issues/${id}/interactions/${interactionId}/skip`"
       ],
       "argumentsSignature": "issueId!, interaction.id",
-      "line": 5009,
+      "line": 5021,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42195,7 +42238,7 @@
         "patch:`/issues/${id}`"
       ],
       "argumentsSignature": "issueId!, {\n        comment: body,\n        commentClientRequestId: clientRequestId,\n        ...(attachmentIds?.length ? { attachmentIds } : {}),\n        assigneeAgentId: reassignment.assigneeAgentId,\n        assigneeUserId: reassignment.assigneeUserId,\n        ...(reopen ? { status: \"todo\" } : {}),\n        ...(interrupt ? { interrupt } : {}),\n      }",
-      "line": 5041,
+      "line": 5053,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42251,7 +42294,7 @@
         "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
       ],
       "argumentsSignature": "issueId!, comment.id",
-      "line": 5119,
+      "line": 5131,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42308,7 +42351,7 @@
         "post:`/issues/${id}/queued-comments/interrupt`"
       ],
       "argumentsSignature": "issueId!, runId",
-      "line": 5214,
+      "line": 5226,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42361,7 +42404,7 @@
         "delete:`/issues/${id}/comments/${commentId}?mode=cancel`"
       ],
       "argumentsSignature": "issueId!, commentId",
-      "line": 5240,
+      "line": 5252,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42417,7 +42460,7 @@
         "delete:`/issues/${id}/comments/${commentId}`"
       ],
       "argumentsSignature": "issueId!, commentId",
-      "line": 5273,
+      "line": 5285,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42473,7 +42516,7 @@
         "post:`/issues/${id}/feedback-votes`"
       ],
       "argumentsSignature": "issueId!, {\n        targetType: variables.targetType,\n        targetId: variables.targetId,\n        vote: variables.vote,\n        ...(variables.reason ? { reason: variables.reason } : {}),\n        ...(variables.allowSharing ? { allowSharing: true } : {}),\n      }",
-      "line": 5332,
+      "line": 5344,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
@@ -42516,7 +42559,7 @@
         "postForm:`/companies/${companyId}/issues/${issueId}/attachments`"
       ],
       "argumentsSignature": "conversation.agent.companyId, await resolveWritableIssueId(), file",
-      "line": 5400,
+      "line": 5412,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42562,7 +42605,7 @@
         "postForm:`/companies/${companyId}/issues/${issueId}/attachments`"
       ],
       "argumentsSignature": "loadedIssue.companyId, loadedIssue.id, file",
-      "line": 5404,
+      "line": 5416,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42608,7 +42651,7 @@
         "put:`/issues/${id}/documents/${encodeURIComponent(key)}`"
       ],
       "argumentsSignature": "await resolveWritableIssueId(), key, {\n        title: key === \"plan\" ? null : nextTitle,\n        format: \"markdown\",\n        body,\n        baseRevisionId: existing?.latestRevisionId ?? null,\n      }",
-      "line": 5432,
+      "line": 5444,
       "occurrence": 0,
       "owner": "server/src/services/documents.ts",
       "classification": "DIRECT_AGENT",
@@ -42664,7 +42707,7 @@
         "delete:`/attachments/${id}`"
       ],
       "argumentsSignature": "attachmentId",
-      "line": 5456,
+      "line": 5468,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42720,7 +42763,7 @@
         "post:`/issues/${id}/inbox-archive`"
       ],
       "argumentsSignature": "id",
-      "line": 5470,
+      "line": 5482,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -42766,7 +42809,7 @@
         "post:agentPath(id, companyId, \"/resume\")"
       ],
       "argumentsSignature": "issueAssigneeAgentIdForResume, issueCompanyIdForResume ?? undefined",
-      "line": 6537,
+      "line": 6549,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -42862,7 +42905,7 @@
         "post:agentPath(id, companyId, \"/wakeup\")"
       ],
       "argumentsSignature": "issueAssigneeAgentIdForResume, {\n              source: \"assignment\",\n              reason: \"Assignee resumed from the task page\",\n              payload: {\n                issueId: issueIdForResume,\n                mutation: \"assignee_resumed\",\n              },\n            }, issueCompanyIdForResume ?? undefined",
-      "line": 6551,
+      "line": 6563,
       "occurrence": 0,
       "owner": "server/src/services/agents.ts",
       "classification": "DIRECT_AGENT",
@@ -42958,7 +43001,7 @@
         "post:`/companies/${companyId}/issues`"
       ],
       "argumentsSignature": "issue.companyId, {\n        title: `Re-issue (isolated): ${issue.title ?? sourceLabel}`,\n        description: descriptionLines.join(\"\\n\"),\n        priority: issue.priority,\n        projectId: issue.projectId ?? null,\n        parentId: issue.parentId ?? null,\n        assigneeAgentId:\n          issue.activeRecoveryAction?.returnOwnerAgentId ??\n          issue.activeRecoveryAction?.previousOwnerAgentId ??\n          issue.assigneeAgentId ??\n          null,\n        executionWorkspacePreference: \"isolated_workspace\",\n        executionWorkspaceSettings: {\n          mode: \"isolated_workspace\",\n          workspaceStrategy: { type: \"git_worktree\", baseRef: request.baseRef },\n        },\n      }",
-      "line": 6651,
+      "line": 6663,
       "occurrence": 0,
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
@@ -43014,7 +43057,7 @@
         "post:`/execution-workspaces/${id}/reconcile-branch`"
       ],
       "argumentsSignature": "workspaceId, body",
-      "line": 6718,
+      "line": 6730,
       "occurrence": 0,
       "owner": "server/src/services/execution-workspaces.ts",
       "classification": "HUMAN_ONLY",

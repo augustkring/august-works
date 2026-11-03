@@ -486,6 +486,7 @@ export async function captureNativeFinalizedStageConsumption(db: Db | Transactio
         "agentId,commentHash,commentId,companyId,effect,executionInputDigest,fromState,issueId,origin,originalAdditionalInputCount,originalDispatchCount,originalReceiptDigest,responsibleUserId,runId,stageDecisionHash,stageDecisionId,stageSource,toState,version" ||
       transition.version !== 1 || transition.companyId !== input.companyId || transition.issueId !== input.issueId || transition.runId !== run.id ||
       transition.agentId !== run.agentId || transition.responsibleUserId !== run.responsibleUserId ||
+      typeof transition.originalDispatchCount !== "number" || typeof transition.originalAdditionalInputCount !== "number" ||
       !Number.isSafeInteger(transition.originalDispatchCount) || !Number.isSafeInteger(transition.originalAdditionalInputCount) ||
       transition.originalDispatchCount<0 || transition.originalAdditionalInputCount<0 ||
       transition.executionInputDigest !== receipt.data.bootstrap.executionInputDigest ||
@@ -498,7 +499,7 @@ export async function captureNativeFinalizedStageConsumption(db: Db | Transactio
       !Number.isSafeInteger(effect.controllerPid) || Number(effect.controllerPid)<=0 ||
       typeof effect.leaseExpiresAt !== "string" || !Number.isFinite(Date.parse(effect.leaseExpiresAt)) ||
       typeof effect.controllerProcessStartedAt !== "string" || !Number.isFinite(Date.parse(effect.controllerProcessStartedAt)) ||
-      data?.id !== transition.commentId || data.companyId !== input.companyId || data.issueId !== input.issueId || data.createdByRunId !== run.id ||
+      !data || data.id !== transition.commentId || data.companyId !== input.companyId || data.issueId !== input.issueId || data.createdByRunId !== run.id ||
       api.method !== "POST" || api.pathAndQuery !== `/api/issues/${input.issueId}/comments` || typeof api.turnId !== "string" || !api.turnId ||
       typeof api.dispatchId !== "string" || !/^[a-f0-9-]{36}$/i.test(api.dispatchId) || !Number.isSafeInteger(api.eventSeq) || !Number.isSafeInteger(api.attempt) ||
       typeof api.callId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(api.callId) || createHash("sha256").update(api.callId).digest("hex") !== receiptId ||
@@ -531,12 +532,12 @@ export async function captureNativeFinalizedStageConsumption(db: Db | Transactio
     const {operationId:_operationId,...publicResult}=result;
     if (api.providerResultDigest !== nativeSha256(nativeCallApiResultEnvelope(api.callId,{...publicResult,apiOperationId:api.operationId}))) continue;
     const associations=Array.isArray(profile?.nativeToolCallDispatchAssociations)?profile.nativeToolCallDispatchAssociations.map(record).filter(v=>
-      v?.callId === api.callId && v.tool === "call_api" && v.turnId === api.turnId && v.eventSeq === api.eventSeq && v.attempt === api.attempt && v.dispatchId === api.dispatchId):[];
+      v !== null && v.callId === api.callId && v.tool === "call_api" && v.turnId === api.turnId && v.eventSeq === api.eventSeq && v.attempt === api.attempt && v.dispatchId === api.dispatchId):[];
     const intents=Array.isArray(profile?.nativeAwModelWireIntents)?profile.nativeAwModelWireIntents.map(record).flatMap(intent=>{
       const uses=Array.isArray(intent?.responseToolUses)?intent.responseToolUses.map(record):[];
-      return uses.filter(use=>use?.id === api.callId && typeof use.name === "string" && use.name.replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === "call_api" && use.argumentsHash === associations[0]?.argumentsHash).map(use=>({intent,use}));}):[];
+      return uses.filter(use=>use !== null && use.id === api.callId && typeof use.name === "string" && use.name.replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "") === "call_api" && use.argumentsHash === associations[0]?.argumentsHash).map(use=>({intent,use}));}):[];
     const dispatches=Array.isArray(profile?.nativeModelInputDispatchIntents)?profile.nativeModelInputDispatchIntents.map(record).filter(v=>
-      v?.dispatchId === api.dispatchId && v.turnId === api.turnId && v.eventSeq === api.eventSeq && v.attempt === api.attempt && v.responsibleUserId === run.responsibleUserId):[];
+      v !== null && v.dispatchId === api.dispatchId && v.turnId === api.turnId && v.eventSeq === api.eventSeq && v.attempt === api.attempt && v.responsibleUserId === run.responsibleUserId):[];
     const onlyAssociation=associations[0],onlyIntent=intents[0]?.intent,onlyDispatch=dispatches[0];
     if (associations.length !== 1 || intents.length !== 1 || dispatches.length !== 1 || !onlyAssociation || !onlyIntent || !onlyDispatch ||
       typeof onlyAssociation.argumentsHash !== "string" || !/^[a-f0-9]{64}$/.test(onlyAssociation.argumentsHash) ||

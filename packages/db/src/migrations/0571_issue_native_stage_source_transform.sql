@@ -261,29 +261,29 @@ BEGIN
     r.company_id=NEW.company_id AND r.native_issue_id=NEW.id AND r.runtime_mode='native';
   receipt:=producer.result_json->'nativeStageTaskBodyTransitions'->(step->>'transitionId');
   IF producer.id IS NULL OR producer.responsible_user_id IS NULL OR receipt IS NULL OR
-    CASE WHEN jsonb_typeof(receipt)='object' THEN (SELECT count(*) FROM jsonb_object_keys(receipt)) ELSE -1 END<>20 OR
+    (CASE WHEN jsonb_typeof(receipt)='object' THEN (SELECT count(*) FROM jsonb_object_keys(receipt)) ELSE -1 END)<>20 OR
     NOT (receipt ?& ARRAY['version','companyId','issueId','runId','agentId','responsibleUserId',
       'transitionId','owner','originalInputReceiptDigest','originalDispatchCount','originalAdditionalInputCount','executionInputDigest',
       'originalSnapshot','previousOwnerContentHash','nextOwnerContentHash','fromExecutionState','toExecutionState',
       'fromUnblockDescriptor','toUnblockDescriptor','ownerFingerprint']) OR
     jsonb_typeof(receipt->'originalDispatchCount') IS DISTINCT FROM 'number' OR
     jsonb_typeof(receipt->'originalAdditionalInputCount') IS DISTINCT FROM 'number' OR
-    CASE WHEN (receipt->>'originalDispatchCount') ~ '^(0|[1-9][0-9]{0,2})$'
-      THEN (receipt->>'originalDispatchCount')::integer ELSE -1 END NOT BETWEEN 0 AND 64 OR
-    CASE WHEN (receipt->>'originalAdditionalInputCount') ~ '^(0|[1-9][0-9]{0,2})$'
-      THEN (receipt->>'originalAdditionalInputCount')::integer ELSE -1 END NOT BETWEEN 0 AND 256 OR
-    CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches')='array'
-      THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches') ELSE -1 END < 0 OR
-    CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs')='array'
-      THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs') ELSE -1 END < 0 OR
-    CASE WHEN (receipt->>'originalDispatchCount') ~ '^(0|[1-9][0-9]{0,2})$'
-      THEN (receipt->>'originalDispatchCount')::integer ELSE -1 END IS DISTINCT FROM
-      CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches')='array'
-        THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches') ELSE -1 END OR
-    CASE WHEN (receipt->>'originalAdditionalInputCount') ~ '^(0|[1-9][0-9]{0,2})$'
-      THEN (receipt->>'originalAdditionalInputCount')::integer ELSE -1 END IS DISTINCT FROM
-      CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs')='array'
-        THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs') ELSE -1 END OR
+    (CASE WHEN (receipt->>'originalDispatchCount') ~ '^(0|[1-9][0-9]{0,2})$'
+      THEN (receipt->>'originalDispatchCount')::integer ELSE -1 END) NOT BETWEEN 0 AND 64 OR
+    (CASE WHEN (receipt->>'originalAdditionalInputCount') ~ '^(0|[1-9][0-9]{0,2})$'
+      THEN (receipt->>'originalAdditionalInputCount')::integer ELSE -1 END) NOT BETWEEN 0 AND 256 OR
+    (CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches')='array'
+      THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches') ELSE -1 END) < 0 OR
+    (CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs')='array'
+      THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs') ELSE -1 END) < 0 OR
+    (CASE WHEN (receipt->>'originalDispatchCount') ~ '^(0|[1-9][0-9]{0,2})$'
+      THEN (receipt->>'originalDispatchCount')::integer ELSE -1 END) IS DISTINCT FROM
+      (CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches')='array'
+        THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'dispatches') ELSE -1 END) OR
+    (CASE WHEN (receipt->>'originalAdditionalInputCount') ~ '^(0|[1-9][0-9]{0,2})$'
+      THEN (receipt->>'originalAdditionalInputCount')::integer ELSE -1 END) IS DISTINCT FROM
+      (CASE WHEN jsonb_typeof(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs')='array'
+        THEN jsonb_array_length(producer.runner_profile_json->'nativeInputSourceReceipt'->'additionalInputs') ELSE -1 END) OR
     step->>'receiptHash' IS DISTINCT FROM encode(sha256(convert_to(receipt::text,'UTF8')),'hex') OR
     receipt->>'version' IS DISTINCT FROM '1' OR receipt->>'companyId' IS DISTINCT FROM NEW.company_id::text OR
     receipt->>'issueId' IS DISTINCT FROM NEW.id::text OR receipt->>'runId' IS DISTINCT FROM producer.id::text OR
@@ -340,8 +340,8 @@ BEGIN
         d.actor_agent_id=producer.agent_id AND d.actor_user_id IS NULL AND d.id::text=step->>'decisionId' AND
         d.id::text=NEW.execution_state->>'lastDecisionId' AND d.outcome=NEW.execution_state->>'lastDecisionOutcome' AND
         d.stage_id IS NOT DISTINCT FROM OLD.execution_state->>'currentStageId' AND
-        CASE WHEN jsonb_typeof(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)='object'
-          THEN (SELECT count(*) FROM jsonb_object_keys(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)) ELSE -1 END=19 AND
+        (CASE WHEN jsonb_typeof(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)='object'
+          THEN (SELECT count(*) FROM jsonb_object_keys(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)) ELSE -1 END)=19 AND
         (producer.result_json->'nativeStagePolicyTransitions'->receipt_key) ?& ARRAY['version','origin','companyId','issueId','runId','agentId',
           'responsibleUserId','originalReceiptDigest','originalDispatchCount','originalAdditionalInputCount','executionInputDigest',
           'stageSource','effect','fromState','toState','stageDecisionId','stageDecisionHash','commentId','commentHash'] AND

@@ -6,7 +6,7 @@ import { heartbeatRuns, issues, issueComments, issueExecutionDecisions, type Db 
 import { nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import type { NativePayloadSourceSet } from "./native-runtime/native-execution-input.js";
 import { nativeSha256, nativeCallApiResultEnvelope } from "./native-runtime/canonical.js";
-import type { NativeModelOutputCapture } from "./native-direct-input.js";
+import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { captureNativeStageContinuationOwner, captureNativeStageOrigin } from "./native-stage-wake-source.js";
 import { parseIssueExecutionState, isApprovalReviewComment, applyIssueExecutionPolicyTransition, normalizeIssueExecutionPolicy } from "./issue-execution-policy.js";

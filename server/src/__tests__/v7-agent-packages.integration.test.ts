@@ -61,6 +61,7 @@ import { activationService } from "../services/saas/activation.js";
 import { readActivationRequiredAccess } from "../services/saas/activation-connections.js";
 import { approvalService } from "../services/approvals.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { orchestrationRuntimeControl } from "../services/orchestration/orchestration-runtime-control.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { heartbeatService } from "../services/heartbeat.js";
@@ -3217,6 +3218,12 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
         ? created
         : await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
           rationale: "Start the explicitly bounded native fixture draft" });
+      if (!starter) {
+        const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0];
+        if (!worker) throw new Error("The original bounded first-value plan has no worker to dispatch");
+        const dispatch = await orchestrationRuntimeControl(db).dispatch(f.actor, f.home, plan.id, worker.id);
+        expect(dispatch).toEqual([{ workerId: worker.id, runId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i), error: null }]);
+      }
       let run: typeof heartbeatRuns.$inferSelect,
         document: typeof documents.$inferSelect,
         revision: typeof documentRevisions.$inferSelect;

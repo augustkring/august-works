@@ -901,7 +901,7 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
+      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
       "rationale": "Stage wake construction now uses the shared builder; current account, Task, source-access and interaction checks remain in place. The article still correctly directs users to the original Task and to share only authorized, non-secret information."
@@ -1213,7 +1213,7 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
+      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
       "rationale": "Vækning af en fase bruger nu den fælles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
@@ -1541,7 +1541,7 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
+      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "Stage wake construction now uses the shared builder; current account, Task, source-access and interaction checks remain in place. The article still correctly directs users to the original Task and to share only authorized, non-secret information."
@@ -1645,7 +1645,7 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
+      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "Vækning af en fase bruger nu den fælles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."

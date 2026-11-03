@@ -2740,7 +2740,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           taskProofStack = [];
           scope.context.ancestry.frozenTaskProofStacks.set(scope.actorKey, taskProofStack);
         }
-        const taskFrame: NativeSourceProofFrame = { visitKey: proofIdentity ?? "", descendants: new Set<string>(), mutableSources: newNativeMutableSources(),
+        const taskFrame: NativeSourceProofFrame = { visitKey: typeof proofIdentity === "string" ? proofIdentity : "", descendants: new Set<string>(), mutableSources: newNativeMutableSources(),
           readerSelection: { context: scope.context, sets: new Map(), complete: true } };
         taskProofStack.push(taskFrame);
         try {
@@ -3178,7 +3178,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           agentId:producerRun.agentId,callId:source.callId,argumentsHash:String(witness.argumentsHash),
           result:{...response,apiOperationId:api.operationId},outputCapture:witness.outputCapture as NativeModelOutputCapture,reader:input.actor});
         if(!isDeepStrictEqual(current,witness))throw forbidden("A Native Stage API result owner changed");
-        await assertNativeModelOutputCaptureCurrentInScope(db,input.companyId,producerIssueId,current.outputCapture,"call_api",scope,depth+1,
+        await assertNativeModelOutputCaptureCurrentInScope(db,input.companyId,producerIssueId,current.outputCapture,"call_api",scope,Math.max(0, historicalDocumentDepthHint - 1),
           input.actor,producerRun.finishedAt?"settled":"live",siblingToolSourceProofs,historicalTransition);
       }
       if (projectApiResult) {

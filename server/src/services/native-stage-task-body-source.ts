@@ -124,7 +124,8 @@ async function selectStageBodyOwner(db: Db | Transaction, task: Task, owner: Nat
           intent.requestedByActorType!=="agent" || intent.requestedByActorId!==run.agentId ||
           intent.idempotencyKey!==`issue.execution_stage:${task.id}:${decision.id}` ||
           !isDeepStrictEqual(object(effect.payload)?.executionStage,canonical.wakeup.payload.executionStage) ||
-          !isDeepStrictEqual(intent.payload,canonical.wakeup.payload) || !isDeepStrictEqual(intent.contextSnapshot,canonical.wakeup.contextSnapshot))
+          !isDeepStrictEqual(intent.payload,{...canonical.wakeup.payload,taskId:task.id,
+            _paperclipWakeContext:{...canonical.wakeup.contextSnapshot,statusDecisionSource:"native_status_decision"}}))
         throw new Error("native_stage_body_status_effect_unavailable");
     }
     return {run, inputReceipt: inputReceipt.data,
@@ -312,8 +313,8 @@ export async function captureNativeFinalizedStageTaskBodyRead(db:Db|Transaction,
   const result=object(run.resultJson),envelope=object(accepted?.resultJson),semantic=object(envelope?.result),terminal=object(envelope?.terminal);
   const {acceptedResponseDigestMatches}=await import("./native-runtime/native-run-finalizer.js");
   if(!accepted || !decision?.appliedAt || accepted.completionContractId!==run.completionContractId ||
-    result?.decisionId!==decision.id || result.finalizationPhase!=="committed" || semantic?.schema!=="paperclip.run_result.v1" ||
-    terminal?.reportedWorkDisposition!==semantic.reportedWorkDisposition || !((run.status==="succeeded" && terminal.runTerminalState==="succeeded" && terminal.turnTerminalState==="completed") ||
+    result?.decisionId!==decision.id || result.finalizationPhase!=="committed" || semantic?.schema!=="paperclip.run_result.v1" || !terminal ||
+    terminal.reportedWorkDisposition!==semantic.reportedWorkDisposition || !((run.status==="succeeded" && terminal.runTerminalState==="succeeded" && terminal.turnTerminalState==="completed") ||
       (["failed","timed_out"].includes(run.status) && terminal.runTerminalState==="failed" && terminal.turnTerminalState==="failed") ||
       (run.status==="cancelled" && terminal.runTerminalState==="cancelled" && ["cancelled","interrupted"].includes(String(terminal.turnTerminalState)))) ||
     !await acceptedResponseDigestMatches(db,run,accepted)) return null;

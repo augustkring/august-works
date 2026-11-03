@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "6cccb1548d95fb6d90db47319331f84cd09c6f55e53838941ae933d2d8688d9d"
+      "sha256": "53788f506fbb85841333cbf8f61ccfca0ff99692d646273fa8afd0a4dd2a1ce2"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
