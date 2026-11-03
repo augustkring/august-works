@@ -11853,6 +11853,9 @@ export function issueService(db: Db) {
         ...issueData,
         updatedAt: new Date(),
       };
+      // Drizzle accepts SQL expressions at the update boundary, while the
+      // domain patch above remains a concrete persisted Issue shape.
+      let payloadSourceSnapshotSql: SQL | undefined;
       if (existing.status !== "blocked" && issueData.status === "blocked") {
         patch.blockedTransitionAt = patch.updatedAt;
         patch.blockedOwnerNotifiedAt = null;
@@ -12052,7 +12055,7 @@ export function issueService(db: Db) {
         patch.executionLockedAt = null;
       }
 
-      const runUpdate = async (tx: any) => {
+      const runUpdate = async (tx: DbTransaction) => {
         const changesPrivacy = [issueData.visibility, issueData.parentId, issueData.projectId,
           issueData.originRunId, issueData.privacyParentIssueId, issueData.privacyRootIssueId].some(value => value !== undefined);
         if (changesPrivacy) await lockIssuePrivacyTree(tx, existing.companyId);
@@ -12398,7 +12401,7 @@ export function issueService(db: Db) {
               activityPublications.push(persisted.publication);
               const transforms: NativePayloadSourceTransform[] = [...(snapshot.transforms ?? []),
                 { ...transformFacts, activityId: persisted.activity.id }];
-              patch.payloadSourceSnapshot = sql`(
+              payloadSourceSnapshotSql = sql`(
                 with payload as (select jsonb_build_object('version',1,
                   'owner',jsonb_build_object('kind','issue','companyId',${receiptExisting.companyId}::text,
                     'id',${receiptExisting.id}::text,'contentHash',${body.nextHash}),
@@ -12421,7 +12424,9 @@ export function issueService(db: Db) {
         if (monitorScheduleChanged) await notifyDeliveryWork(tx, DELIVERY_QUEUES.issueMonitors);
         const updated = await tx
           .update(issues)
-          .set(patch)
+          .set(payloadSourceSnapshotSql
+            ? { ...patch, payloadSourceSnapshot: payloadSourceSnapshotSql }
+            : patch)
           .where(idPredicate)
           .returning()
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);

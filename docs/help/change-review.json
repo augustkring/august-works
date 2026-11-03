@@ -48,7 +48,7 @@
       "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
       "articleSha256": "b9ef02341c31fea40d5b41c881d1cc60efe7e709a12b3942092001b7b91a91b6",
       "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "Den aktuelle opgaveside kræver fortsat den aktuelle kørsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er ændret, men artiklen henviser til handlingen og status for den aktuelle opgave, så vejledningen er fortsat korrekt."
     },
     {
       "source": "packages/shared/src/app-definitions/slack.json",
@@ -128,7 +128,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "updated",
-      "rationale": "The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -176,7 +176,7 @@
       "sourceSha256": "a2841ff3c8a57df361d49c95c7262c09a328139398123fe5eea3df0617519ad9",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "Oprettelse af projekter kontrollerer nu den pr\u00e6cise repositoryforbindelse og adgang under transaktionsl\u00e5se. Artiklen vejleder allerede om at kontrollere konto, omfang, tilladelser og den viste reparationshandling; denne backendkontrol \u00e6ndrer ikke trinnene."
+      "rationale": "Oprettelse af projekter kontrollerer nu den præcise repositoryforbindelse og adgang under transaktionslåse. Artiklen vejleder allerede om at kontrollere konto, omfang, tilladelser og den viste reparationshandling; denne backendkontrol ændrer ikke trinnene."
     },
     {
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
@@ -216,7 +216,7 @@
       "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen\u2019s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
+      "rationale": "Danish version checked against the same current source behavior: The paired article covers this screen’s unavailable-connection recovery through the same provider sign-in and permission review, without promising reconnection is always available."
     },
     {
       "source": "ui/src/pages/apps/Connections.tsx",
@@ -376,7 +376,7 @@
       "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
       "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
       "decision": "no_change",
-      "rationale": "The OpenAPI change adds model-monitor operations and their authorization classification. It does not change the import/export operations or the article\u2019s direction to use the current API reference and verify authorization."
+      "rationale": "The OpenAPI change adds model-monitor operations and their authorization classification. It does not change the import/export operations or the article’s direction to use the current API reference and verify authorization."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -512,7 +512,7 @@
       "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
       "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
       "decision": "no_change",
-      "rationale": "OpenAPI-\u00e6ndringen tilf\u00f8jer modeloverv\u00e5gningshandlinger og deres autorisationsklassifikation. Den \u00e6ndrer ikke import-/eksporthandlingerne eller artiklens vejledning om at bruge den aktuelle API-reference og kontrollere autorisation."
+      "rationale": "OpenAPI-ændringen tilføjer modelovervågningshandlinger og deres autorisationsklassifikation. Den ændrer ikke import-/eksporthandlingerne eller artiklens vejledning om at bruge den aktuelle API-reference og kontrollere autorisation."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -608,7 +608,7 @@
       "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
       "articleSha256": "2c194388e5ded4b8a285bbbcd8955ebcd437e8bfad81a2d124d47e402565f014",
       "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "Den aktuelle opgaveside kræver fortsat den aktuelle kørsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er ændret, men artiklen henviser til handlingen og status for den aktuelle opgave, så vejledningen er fortsat korrekt."
     },
     {
       "source": "cli/src/index.ts",
@@ -632,7 +632,7 @@
       "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
       "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
       "decision": "no_change",
-      "rationale": "The OpenAPI change adds model-monitor operations and their authorization classification. It does not change the import/export operations or the article\u2019s direction to use the current API reference and verify authorization."
+      "rationale": "The OpenAPI change adds model-monitor operations and their authorization classification. It does not change the import/export operations or the article’s direction to use the current API reference and verify authorization."
     },
     {
       "source": "cli/src/index.ts",
@@ -656,7 +656,7 @@
       "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
       "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
       "decision": "no_change",
-      "rationale": "OpenAPI-\u00e6ndringen tilf\u00f8jer modeloverv\u00e5gningshandlinger og deres autorisationsklassifikation. Den \u00e6ndrer ikke import-/eksporthandlingerne eller artiklens vejledning om at bruge den aktuelle API-reference og kontrollere autorisation."
+      "rationale": "OpenAPI-ændringen tilføjer modelovervågningshandlinger og deres autorisationsklassifikation. Den ændrer ikke import-/eksporthandlingerne eller artiklens vejledning om at bruge den aktuelle API-reference og kontrollere autorisation."
     },
     {
       "source": "server/src/routes/memory.ts",
@@ -680,7 +680,7 @@
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "The current Memory service preserves the article\u2019s owner, scope, and deletion descriptions. The revised implementation does not add a customer-facing export or restore action."
+      "rationale": "The current Memory service preserves the article’s owner, scope, and deletion descriptions. The revised implementation does not add a customer-facing export or restore action."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
@@ -752,7 +752,7 @@
       "sourceSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "De aktuelle kontroller for Memory-privatliv h\u00e5ndh\u00e6ver fortsat synlighed af kilder samt ejerstyret deling og sletning. Artiklen forklarer allerede, at deling ikke giver adgang til privat kildearbejde, og at Slet permanent fjerner den valgte Memory; kundens handlinger er u\u00e6ndrede."
+      "rationale": "De aktuelle kontroller for Memory-privatliv håndhæver fortsat synlighed af kilder samt ejerstyret deling og sletning. Artiklen forklarer allerede, at deling ikke giver adgang til privat kildearbejde, og at Slet permanent fjerner den valgte Memory; kundens handlinger er uændrede."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
@@ -760,7 +760,7 @@
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Den aktuelle Memory-tjeneste stemmer fortsat med artiklens beskrivelser af ejer, omfang og sletning. Den \u00e6ndrede implementering tilf\u00f8jer ikke en eksport- eller gendannelseshandling for kunden."
+      "rationale": "Den aktuelle Memory-tjeneste stemmer fortsat med artiklens beskrivelser af ejer, omfang og sletning. Den ændrede implementering tilføjer ikke en eksport- eller gendannelseshandling for kunden."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
@@ -768,7 +768,7 @@
       "sourceSha256": "8c7c4cf8f84785c2f3ff34b32184e4659f7715f4e0fb30994e48a411b8759d5b",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Sletning af en konto kr\u00e6ver fortsat den sikkerhedsbekr\u00e6ftelse og den kontospecifikke faktor, som siden viser. Artiklen skelner allerede mellem virksomhedslogin og en yderligere p\u00e5kr\u00e6vet faktor og henviser til de viste anvisninger."
+      "rationale": "Sletning af en konto kræver fortsat den sikkerhedsbekræftelse og den kontospecifikke faktor, som siden viser. Artiklen skelner allerede mellem virksomhedslogin og en yderligere påkrævet faktor og henviser til de viste anvisninger."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
@@ -776,7 +776,7 @@
       "sourceSha256": "7029e53654164155404e2af113253022b43f4a221eaf13b34e230370d2dd13b1",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Sletning af virksomheden afventer fortsat uafklarede udbyderresultater eller administreret sletning. Artiklen skelner mellem en accepteret anmodning og bekr\u00e6ftet gennemf\u00f8relse."
+      "rationale": "Sletning af virksomheden afventer fortsat uafklarede udbyderresultater eller administreret sletning. Artiklen skelner mellem en accepteret anmodning og bekræftet gennemførelse."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
@@ -848,7 +848,7 @@
       "sourceSha256": "6a8db48f77c6fa9d25662f13771e994488cc71e5b493381aeede97f6b29e0c2d",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The broker transport implementation does not change the Help actions: search and support cases remain available independently, and the optional assistant may be unavailable. The article\u2019s read-only scope and human-support fallback remain accurate."
+      "rationale": "The broker transport implementation does not change the Help actions: search and support cases remain available independently, and the optional assistant may be unavailable. The article’s read-only scope and human-support fallback remain accurate."
     },
     {
       "source": "packages/shared/src/product-identity.ts",
@@ -1040,7 +1040,7 @@
       "sourceSha256": "972fd7159e0c85db796f4a26a0d4d9b065354002a922e12c01f1db2218c7c51a",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The read-only transport now separates wire deadlines and withholds a cancelled response; it does not change the assistant\u2019s article-only, read-only limits or the human-support fallback."
+      "rationale": "The read-only transport now separates wire deadlines and withholds a cancelled response; it does not change the assistant’s article-only, read-only limits or the human-support fallback."
     },
     {
       "source": "server/src/services/saas/support-case-operator.ts",
@@ -1144,7 +1144,7 @@
       "sourceSha256": "adec57a5d71176f49d0f939c104d7fd0763f3364c9c6d12543bcf7c476f95c1e",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Den aktuelle f\u00e6lles kontrakt beskriver valgfrie produktoplevelsesvurderinger med udtrykkeligt samtykke og mulighed for tilbagetr\u00e6kning. Den \u00e6ndrer ikke supportsager eller overdragelsen fra Support til Opgave, som beskrives her."
+      "rationale": "Den aktuelle fælles kontrakt beskriver valgfrie produktoplevelsesvurderinger med udtrykkeligt samtykke og mulighed for tilbagetrækning. Den ændrer ikke supportsager eller overdragelsen fra Support til Opgave, som beskrives her."
     },
     {
       "source": "packages/shared/src/customer-support.ts",
@@ -1152,7 +1152,7 @@
       "sourceSha256": "e1ca8152ba3944e78f88d4a9a94dccdff64ee6daa990f1d6431e412bbca51cef",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "updated",
-      "rationale": "Den aktuelle Support-detalje indeholder en relateret opgavehenvisning, n\u00e5r adgangen er godkendt. Artiklen beskriver allerede, at eksisterende opf\u00f8lgningsarbejde kun kan knyttes, n\u00e5r l\u00e6seren har adgang til begge poster, og at supportbeskederne bliver i sagen."
+      "rationale": "Den aktuelle Support-detalje indeholder en relateret opgavehenvisning, når adgangen er godkendt. Artiklen beskriver allerede, at eksisterende opfølgningsarbejde kun kan knyttes, når læseren har adgang til begge poster, og at supportbeskederne bliver i sagen."
     },
     {
       "source": "packages/shared/src/model-broker.ts",
@@ -1160,7 +1160,7 @@
       "sourceSha256": "6a8db48f77c6fa9d25662f13771e994488cc71e5b493381aeede97f6b29e0c2d",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Brokertransportens implementering \u00e6ndrer ikke handlingerne i Hj\u00e6lp: s\u00f8gning og supportsager er fortsat tilg\u00e6ngelige uafh\u00e6ngigt, og den valgfrie assistent kan v\u00e6re utilg\u00e6ngelig. Artiklen beskriver fortsat korrekt den skrivebeskyttede funktion og alternativet med menneskelig support."
+      "rationale": "Brokertransportens implementering ændrer ikke handlingerne i Hjælp: søgning og supportsager er fortsat tilgængelige uafhængigt, og den valgfrie assistent kan være utilgængelig. Artiklen beskriver fortsat korrekt den skrivebeskyttede funktion og alternativet med menneskelig support."
     },
     {
       "source": "packages/shared/src/product-identity.ts",
@@ -1200,7 +1200,7 @@
       "sourceSha256": "59f80740134df13c69fc0c582f4e2e7701729f0882674d6c0042e74bf3efad75",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Den aktuelle profilkonfiguration for virksomhedsbeskeder \u00e6ndrer ikke kundens handlinger i Hj\u00e6lp eller support. Artiklen beskriver fortsat supportsager, statusoplysninger og direkte menneskelig kontakt."
+      "rationale": "Den aktuelle profilkonfiguration for virksomhedsbeskeder ændrer ikke kundens handlinger i Hjælp eller support. Artiklen beskriver fortsat supportsager, statusoplysninger og direkte menneskelig kontakt."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1216,7 +1216,7 @@
       "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "V\u00e6kning af en fase bruger nu den f\u00e6lles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
+      "rationale": "Vækning af en fase bruger nu den fælles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1264,7 +1264,7 @@
       "sourceSha256": "0f18d3bfa218283cd46a5a39e5e22dd5154d092b84920eaba7f0523ebb38e043",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Den genererede s\u00f8gevisning indeholder nu de opdaterede runtime- og workflowartikler samt deres kontroldatoer. Artiklen om menneskelig support og dens kundetrin er u\u00e6ndret."
+      "rationale": "Den genererede søgevisning indeholder nu de opdaterede runtime- og workflowartikler samt deres kontroldatoer. Artiklen om menneskelig support og dens kundetrin er uændret."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1320,7 +1320,7 @@
       "sourceSha256": "aea590b7e2032042c8812c63a721576a84d2e888805f6e551b793c07e37263fc",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "updated",
-      "rationale": "Sagsservicen kontrollerer aktuel adgang til sagen og opgaven, f\u00f8r den relaterede henvisning vises; supportbeskederne bliver i sagen. Artiklen beskriver allerede begge gr\u00e6nser."
+      "rationale": "Sagsservicen kontrollerer aktuel adgang til sagen og opgaven, før den relaterede henvisning vises; supportbeskederne bliver i sagen. Artiklen beskriver allerede begge grænser."
     },
     {
       "source": "server/src/services/orchestration/first-party-support-model-gateway.ts",
@@ -1352,7 +1352,7 @@
       "sourceSha256": "972fd7159e0c85db796f4a26a0d4d9b065354002a922e12c01f1db2218c7c51a",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Den skrivebeskyttede transport adskiller nu deadlines for afsendelse og tilbageholder et annulleret svar. Det \u00e6ndrer ikke assistentens gr\u00e6nse til artikler og skrivebeskyttet brug eller alternativet med menneskelig support."
+      "rationale": "Den skrivebeskyttede transport adskiller nu deadlines for afsendelse og tilbageholder et annulleret svar. Det ændrer ikke assistentens grænse til artikler og skrivebeskyttet brug eller alternativet med menneskelig support."
     },
     {
       "source": "server/src/services/saas/support-case-operator.ts",
@@ -1565,7 +1565,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "85c410d143603373b3fe0220204d62ba4c716682c09ed23d28d6834b8f10a51a",
+      "sourceSha256": "863dee2cc30fe2bafff5685c89138b4f20334a27765fd13499018ac24fc13358",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "Native review wakes retain their exact applied-decision and current Task generation checks. Initial Human-comment continuations now retain final redacted comment snapshots, the actual admitted wake and current source access. The article still correctly directs users to the original Task and current run before retrying; Forget separately verifies process stop and storage removal."
@@ -1581,7 +1581,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "aa5d0fb27382753aed7f79e0fad8fe3b30d8fcfaf06bab267b1936f1efe19964",
+      "sourceSha256": "e267ba29832390fb25bba457c77e6f0ebbadaf319c44856434dadbfd4cd6542a",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "The current Task owner captures a real Human-created related Task and its first attachment under current source authority. Recovery guidance still requires checking the original Task, retained access and current state before retrying; this change adds no replacement-work or completion guarantee."
@@ -1624,7 +1624,7 @@
       "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "Blocked-task notice wording now uses the Blentera brand; its recovery action and the article\u2019s instructions are unchanged."
+      "rationale": "Blocked-task notice wording now uses the Blentera brand; its recovery action and the article’s instructions are unchanged."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1632,7 +1632,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "updated",
-      "rationale": "The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1648,7 +1648,7 @@
       "sourceSha256": "485b42fd7568b40184ff366d1e38b064d24e619da7f936e142508955029e1be8",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "V\u00e6kning af en fase bruger nu den f\u00e6lles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
+      "rationale": "Vækning af en fase bruger nu den fælles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "85c410d143603373b3fe0220204d62ba4c716682c09ed23d28d6834b8f10a51a",
+      "sourceSha256": "863dee2cc30fe2bafff5685c89138b4f20334a27765fd13499018ac24fc13358",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Native-v\u00e6kninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Forts\u00e6ttelser efter en f\u00f8rste Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte v\u00e6kning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle k\u00f8rsel f\u00f8r et nyt fors\u00f8g. Forget kontrollerer processtop og fjernelse fra lageret separat."
+      "rationale": "Native-vækninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Fortsættelser efter en første Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte vækning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Forget kontrollerer processtop og fjernelse fra lageret separat."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,7 +1685,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "aa5d0fb27382753aed7f79e0fad8fe3b30d8fcfaf06bab267b1936f1efe19964",
+      "sourceSha256": "e267ba29832390fb25bba457c77e6f0ebbadaf319c44856434dadbfd4cd6542a",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "The current Task owner captures a real Human-created related Task and its first attachment under current source authority. Recovery guidance still requires checking the original Task, retained access and current state before retrying; this change adds no replacement-work or completion guarantee."
@@ -1728,7 +1728,7 @@
       "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: blocked-task notice wording now uses the Blentera brand; its recovery action and the article\u2019s instructions are unchanged."
+      "rationale": "Danish version checked against the same source delta: blocked-task notice wording now uses the Blentera brand; its recovery action and the article’s instructions are unchanged."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
@@ -1736,7 +1736,7 @@
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "updated",
-      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+      "rationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article’s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
@@ -1744,7 +1744,7 @@
       "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "Den aktuelle opgaveside kræver fortsat den aktuelle kørsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er ændret, men artiklen henviser til handlingen og status for den aktuelle opgave, så vejledningen er fortsat korrekt."
     },
     {
       "source": "server/src/services/saas/activation-first-task.ts",
@@ -1808,7 +1808,7 @@
       "sourceSha256": "25e39921b40d1523391a615833ba94d5a93fe8298ec044258dc60efd8bc0fe09",
       "articleSha256": "0fe2ed3f3a0ab78fa404729e29dedc25548dd4ff7c9d9f1e0b40c7d6df026eaf",
       "decision": "updated",
-      "rationale": "Den aktuelle guidede aktivering f\u00f8rer gennem den f\u00f8rste ops\u00e6tning, Co-worker, opgave og resultatevaluering. Artiklen beskriver de samme afgr\u00e6nsede trin."
+      "rationale": "Den aktuelle guidede aktivering fører gennem den første opsætning, Co-worker, opgave og resultatevaluering. Artiklen beskriver de samme afgrænsede trin."
     },
     {
       "source": "ui/src/components/ActivationFirstAgent.tsx",
@@ -1840,7 +1840,7 @@
       "sourceSha256": "e5f2323104495b9d9e86764117bed0034c60b170d01b82a2cb09a72c13673168",
       "articleSha256": "0fe2ed3f3a0ab78fa404729e29dedc25548dd4ff7c9d9f1e0b40c7d6df026eaf",
       "decision": "updated",
-      "rationale": "Den aktuelle side viser guidet ops\u00e6tning, den f\u00f8rste Co-worker og opgave samt evaluering af resultatet; artiklen beskriver trinene uden at love autonom ops\u00e6tning."
+      "rationale": "Den aktuelle side viser guidet opsætning, den første Co-worker og opgave samt evaluering af resultatet; artiklen beskriver trinene uden at love autonom opsætning."
     },
     {
       "source": "server/src/routes/workflows.ts",
@@ -1936,7 +1936,7 @@
       "sourceSha256": "adb8398a293c67ea7306e4c0e1cf6190854b5aa66c81eb794132f109fed1a145",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "no_change",
-      "rationale": "Beskrivelsessiden kontrollerer nu aktuelle workflows og den valgte session f\u00f8r lagring. Den eksisterende danske artikels indledning beskriver allerede tilg\u00e6ngelighed og aktuel adgang korrekt."
+      "rationale": "Beskrivelsessiden kontrollerer nu aktuelle workflows og den valgte session før lagring. Den eksisterende danske artikels indledning beskriver allerede tilgængelighed og aktuel adgang korrekt."
     },
     {
       "source": "ui/src/pages/WorkflowReview.tsx",
@@ -1976,7 +1976,7 @@
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
       "articleSha256": "a019f4c76554bd10229fb1503d72f0871f752aa17d2525a0b1aa355b7d4ae3dc",
       "decision": "updated",
-      "rationale": "The agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
+      "rationale": "The agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
     },
     {
       "source": "server/src/services/agents.ts",
@@ -2000,7 +2000,7 @@
       "sourceSha256": "8040d7f0641c95f8b3d486fa148f4543c03aaf158d26632c5c9447f599dbec9b",
       "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
       "decision": "updated",
-      "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article\u2019s current team setup and activation guidance remains accurate."
+      "rationale": "Danish version checked against the same source delta: the agents list changes Paperclip labels to Blentera; the article’s current team setup and activation guidance remains accurate."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
@@ -2032,7 +2032,7 @@
       "sourceSha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Memory-vedligeholdelsesjob respekterer fortsat de privatlivs- og sletningsmark\u00f8rer, der beskrives her. Artiklen lover ikke en bestemt tidsplan eller fuldf\u00f8relsestilstand ud over den registrerede status og kvittering."
+      "rationale": "Memory-vedligeholdelsesjob respekterer fortsat de privatlivs- og sletningsmarkører, der beskrives her. Artiklen lover ikke en bestemt tidsplan eller fuldførelsestilstand ud over den registrerede status og kvittering."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
@@ -2040,7 +2040,7 @@
       "sourceSha256": "9b334eec762bf63326eea35f65e4d2e5fc2d0e2a9773f3a01c00f2bdc0caca39",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Ekstern oprydning kr\u00e6ver nu ogs\u00e5 den pr\u00e6cise, vellykkede signerede sessionsstartbinding for k\u00f8rsel, lease, runner, host-/celle-generation, manifest og politik. Artiklen siger allerede, at oprydning afventer bekr\u00e6ftet stop og fjernelse fra administreret lager, og at data hos udbyderen ikke er omfattet."
+      "rationale": "Ekstern oprydning kræver nu også den præcise, vellykkede signerede sessionsstartbinding for kørsel, lease, runner, host-/celle-generation, manifest og politik. Artiklen siger allerede, at oprydning afventer bekræftet stop og fjernelse fra administreret lager, og at data hos udbyderen ikke er omfattet."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
@@ -2053,7 +2053,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "85c410d143603373b3fe0220204d62ba4c716682c09ed23d28d6834b8f10a51a",
+      "sourceSha256": "863dee2cc30fe2bafff5685c89138b4f20334a27765fd13499018ac24fc13358",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
       "rationale": "Native review wakes retain their exact applied-decision and current Task generation checks. Initial Human-comment continuations now retain final redacted comment snapshots, the actual admitted wake and current source access. The article still correctly directs users to the original Task and current run before retrying; Forget separately verifies process stop and storage removal."
@@ -2061,10 +2061,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "85c410d143603373b3fe0220204d62ba4c716682c09ed23d28d6834b8f10a51a",
+      "sourceSha256": "863dee2cc30fe2bafff5685c89138b4f20334a27765fd13499018ac24fc13358",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Native-v\u00e6kninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Forts\u00e6ttelser efter en f\u00f8rste Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte v\u00e6kning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle k\u00f8rsel f\u00f8r et nyt fors\u00f8g. Forget kontrollerer processtop og fjernelse fra lageret separat."
+      "rationale": "Native-vækninger til gennemgang bevarer kontrollen af den anvendte beslutning og opgavens aktuelle version. Fortsættelser efter en første Human-kommentar bevarer nu de endeligt redigerede kommentarkilder, den faktisk tilladte vækning og aktuel kildeadgang. Artiklen henviser fortsat korrekt til den oprindelige opgave og aktuelle kørsel før et nyt forsøg. Forget kontrollerer processtop og fjernelse fra lageret separat."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2264,7 +2264,7 @@
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "sourceSha256": "3b22188622a3112fa762e8c9168344a745a69c70c71db11efb4a7355bca2db88",
       "decision": "no_change",
-      "rationale": "Serverens projektion kontrollerer tilstanden og aktualiteten af GitHubs fulde snapshot af repository-adgang. Artiklen beder allerede l\u00e6seren kontrollere aktuel repository-adgang og webhook-status samt f\u00f8lge den viste reparationshandling; den lover hverken fuldst\u00e6ndige h\u00e6ndelser eller et bestemt opdateringsinterval."
+      "rationale": "Serverens projektion kontrollerer tilstanden og aktualiteten af GitHubs fulde snapshot af repository-adgang. Artiklen beder allerede læseren kontrollere aktuel repository-adgang og webhook-status samt følge den viste reparationshandling; den lover hverken fuldstændige hændelser eller et bestemt opdateringsinterval."
     },
     {
       "source": "server/src/services/experience/connector-recovery.ts",
@@ -2504,7 +2504,7 @@
       "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "no_change",
-      "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+      "rationale": "Den aktuelle opgaveside kræver fortsat den aktuelle kørsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er ændret, men artiklen henviser til handlingen og status for den aktuelle opgave, så vejledningen er fortsat korrekt."
     },
     {
       "source": "server/src/routes/access.ts",
@@ -2512,7 +2512,7 @@
       "sourceSha256": "6bf4ffe5a4699d6b2343345466671373fb58f29adf94d79c8567a52035c69d29",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "updated",
-      "rationale": "De aktuelle ruter tilbyder godkendte kontroller for midlertidig workflow-d\u00e6kning, adskilt fra almindelig medlemsadgang. Artiklen beskriver kontrollerne og forskellen."
+      "rationale": "De aktuelle ruter tilbyder godkendte kontroller for midlertidig workflow-dækning, adskilt fra almindelig medlemsadgang. Artiklen beskriver kontrollerne og forskellen."
     },
     {
       "source": "server/src/services/access.ts",
@@ -2520,7 +2520,7 @@
       "sourceSha256": "8b717130bdc9a6e17473ef01c2124f15ec01e2ad4a65233ad283d838bff4902f",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "updated",
-      "rationale": "D\u00e6kning er fortsat knyttet til den aktuelle adgang for Human og kilde samt den valgte publicerede version. Tilbagetr\u00e6kning af en n\u00f8dvendig tilladelse ugyldigg\u00f8r d\u00e6kningen, og en senere gentildeling genopliver den ikke. Artiklen beskriver disse vilk\u00e5r."
+      "rationale": "Dækning er fortsat knyttet til den aktuelle adgang for Human og kilde samt den valgte publicerede version. Tilbagetrækning af en nødvendig tilladelse ugyldiggør dækningen, og en senere gentildeling genopliver den ikke. Artiklen beskriver disse vilkår."
     },
     {
       "source": "server/src/services/workflows/workflow-executor.ts",
@@ -2528,7 +2528,7 @@
       "sourceSha256": "247f249b4fd6f2a821678c6983b648668ffd08bc2c918f21a2ddf37bdf8d1c37",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "updated",
-      "rationale": "Den oprindelige initiativtager kan kun forts\u00e6tte den samme gemte k\u00f8rsel efter aktuelle kontroller af d\u00e6kning og adgang; forts\u00e6ttelsen opretter ikke en ny underordnet k\u00f8rsel. Artiklen beskriver dette."
+      "rationale": "Den oprindelige initiativtager kan kun fortsætte den samme gemte kørsel efter aktuelle kontroller af dækning og adgang; fortsættelsen opretter ikke en ny underordnet kørsel. Artiklen beskriver dette."
     },
     {
       "source": "packages/shared/src/validators/access.ts",
@@ -2544,7 +2544,7 @@
       "sourceSha256": "09affeab6594e5d161381ae2f5a44e861f55e2338aa3ff134d8256f5bd807db4",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "updated",
-      "rationale": "Den gemte d\u00e6kning er knyttet til den Human, der faktisk starter, og den pr\u00e6cise workflowversion; den kopierer ikke en rolle eller tildeler tilladelser. Artiklen beskriver disse begr\u00e6nsninger."
+      "rationale": "Den gemte dækning er knyttet til den Human, der faktisk starter, og den præcise workflowversion; den kopierer ikke en rolle eller tildeler tilladelser. Artiklen beskriver disse begrænsninger."
     },
     {
       "source": "ui/src/components/ServiceHealth.tsx",
@@ -2672,7 +2672,7 @@
       "sourceSha256": "fe2d33847251f13660e1dc5ff471d98835322559ebef45a8a77f2829605e17d1",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "updated",
-      "rationale": "Administrerede v\u00e6rkt\u00f8jshandlinger kan v\u00e6re utilg\u00e6ngelige uafh\u00e6ngigt af appforbindelsens status. Den nye tekst henviser brugeren til en tilg\u00e6ngelig handling eller virksomhedens administrator."
+      "rationale": "Administrerede værktøjshandlinger kan være utilgængelige uafhængigt af appforbindelsens status. Den nye tekst henviser brugeren til en tilgængelig handling eller virksomhedens administrator."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
@@ -2688,7 +2688,7 @@
       "sourceSha256": "7750e0d0038a189dd0b025551446a6c864df636feed7f518bb7b8c302360769c",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "updated",
-      "rationale": "Administrerede v\u00e6rkt\u00f8jshandlinger kan v\u00e6re utilg\u00e6ngelige uafh\u00e6ngigt af appforbindelsens status. Den nye tekst henviser brugeren til en tilg\u00e6ngelig handling eller virksomhedens administrator."
+      "rationale": "Administrerede værktøjshandlinger kan være utilgængelige uafhængigt af appforbindelsens status. Den nye tekst henviser brugeren til en tilgængelig handling eller virksomhedens administrator."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",
@@ -2704,7 +2704,7 @@
       "sourceSha256": "c70f8c6e9486af0a4fe04ff59f7155a1a2e76499e720b4c369e95babc5c420fb",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "updated",
-      "rationale": "HTTP Request-workflowtrinnet er kun til kladder, og k\u00f8rsel returnerer configuration_incomplete f\u00f8r en anmodning sendes. Den nye artikel beder brugeren erstatte trinnet f\u00f8r publicering eller start."
+      "rationale": "HTTP Request-workflowtrinnet er kun til kladder, og kørsel returnerer configuration_incomplete før en anmodning sendes. Den nye artikel beder brugeren erstatte trinnet før publicering eller start."
     },
     {
       "source": "packages/adapter-utils/src/paid-model-probe.ts",
@@ -2720,7 +2720,7 @@
       "sourceSha256": "642b04ad602b39435301df061360a212dc687c3b493e4a22a78757d29d5e0d9f",
       "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
       "decision": "updated",
-      "rationale": "Den betalte modelprobe rapporterer et utilg\u00e6ngeligt resultat med ufuldst\u00e6ndig konfiguration uden at sende inferens. Den nye Runtime-vejledning beder operat\u00f8ren l\u00e6se hele ops\u00e6tningsresultatet og v\u00e6lge en runtime, der aktuelt er tilg\u00e6ngelig."
+      "rationale": "Den betalte modelprobe rapporterer et utilgængeligt resultat med ufuldstændig konfiguration uden at sende inferens. Den nye Runtime-vejledning beder operatøren læse hele opsætningsresultatet og vælge en runtime, der aktuelt er tilgængelig."
     },
     {
       "source": "server/src/services/native-runtime/paid-transport-admission.ts",
@@ -2736,7 +2736,7 @@
       "sourceSha256": "fe2d33847251f13660e1dc5ff471d98835322559ebef45a8a77f2829605e17d1",
       "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
       "decision": "updated",
-      "rationale": "Adgangskontrollen for administrerede modelkald kan afvise en gemt runtime, selv n\u00e5r installation eller forbindelsesopdagelse lykkes. Artiklen henviser operat\u00f8ren til runtimebeskeden og en runtime, der aktuelt er tilg\u00e6ngelig."
+      "rationale": "Adgangskontrollen for administrerede modelkald kan afvise en gemt runtime, selv når installation eller forbindelsesopdagelse lykkes. Artiklen henviser operatøren til runtimebeskeden og en runtime, der aktuelt er tilgængelig."
     }
   ]
 }

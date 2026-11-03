@@ -358,7 +358,7 @@
     },
     {
       "path": "server/src/services/issues.ts",
-      "sha256": "aa5d0fb27382753aed7f79e0fad8fe3b30d8fcfaf06bab267b1936f1efe19964"
+      "sha256": "e267ba29832390fb25bba457c77e6f0ebbadaf319c44856434dadbfd4cd6542a"
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",
@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "35b6b336fb3c8c78b1e3dbf11f187e44f4c553eb8116e1ebb394d17340ca3a90"
+      "sha256": "8d67b38092b67ffeea9c3e2e105fbba6bf0fb6550c9b3492d290b06899013dea"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",

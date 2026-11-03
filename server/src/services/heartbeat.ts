@@ -21584,12 +21584,13 @@ export function heartbeatService(
           }
 
           const coordinationProjectWorkspaceId = issueRef.projectWorkspaceId;
+          const coordinationIssueId = issueRef.id;
           if (agent.adapterType === "paperclip_runner" && !persistedNativeExecutionInput) {
             nativeWorkspaceCoordinationCapture = await recordNativeWorkspaceCoordination(db, {
               companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id,
               projectWorkspaceId: coordinationProjectWorkspaceId, expectedHolder: workspaceHolder,
               selectCurrentHolder: (tx, observedAt) => findSharedWorkspaceHolder({ companyId: agent.companyId,
-                projectWorkspaceId: coordinationProjectWorkspaceId, excludeIssueId: issueRef.id, excludeRunId: run.id,
+                projectWorkspaceId: coordinationProjectWorkspaceId, excludeIssueId: coordinationIssueId, excludeRunId: run.id,
                 honorIsolatedWorkspaceModes: isolatedWorkspacesEnabled, now: observedAt }, tx),
             });
           }
@@ -23749,6 +23750,10 @@ export function heartbeatService(
           if (!issueRef) {
             throw new Error("native_runtime_ineligible: issue is required");
           }
+          const originalCoordinationCapture = nativeWorkspaceCoordinationCapture ??
+            (persistedNativeExecutionInput ? exactNativeWorkspaceCoordination(
+              parseObject(run.runnerProfileJson).nativeWorkspaceCoordinationCapture,
+              { companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id }) : null);
           const nativeExecutionWorkspaceId =
             persistedExecutionWorkspace?.id ?? run.id;
           const nativeReviewContext = readNativeReviewAssignmentContext(context);
@@ -24215,10 +24220,6 @@ export function heartbeatService(
             const selectedNativeTaskBasePrompt = nativeReviewRequest ?? readNonEmptyString(
               selectPaperclipTaskMarkdown(context, { resumedSession: false, includeCommunicationGuidance: false }),
             ) ?? `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`;
-            const originalCoordinationCapture = nativeWorkspaceCoordinationCapture ??
-              (persistedNativeExecutionInput ? exactNativeWorkspaceCoordination(
-                parseObject(run.runnerProfileJson).nativeWorkspaceCoordinationCapture,
-                { companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id }) : null);
             const coordinatedBaseMap = originalCoordinationCapture
               ? composeNativeWorkspaceCoordinationMap({ companyId: agent.companyId, runId: run.id, agentId: agent.id,
                 issueId: issueRef.id, capture: originalCoordinationCapture, baseMap: nativeBootstrapTaskMarkdownSourceMap,

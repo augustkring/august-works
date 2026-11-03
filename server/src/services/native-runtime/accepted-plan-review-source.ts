@@ -59,6 +59,7 @@ export async function captureNativeAcceptedPlanReview(input: {
   const payload = record(input.wakePayload);
   const review = record(payload.planReviewContext) as unknown as PlanReviewContext;
   const interactionContext = record(review.interaction);
+  const interactionResult = record(interactionContext.result);
   const accepted = record(interactionContext.acceptedTargetRevision);
   const interactionId = typeof interactionContext.id === "string" ? interactionContext.id : null;
   if (!interactionId || interactionContext.kind !== "request_confirmation" || interactionContext.status !== "accepted" ||
@@ -91,7 +92,7 @@ export async function captureNativeAcceptedPlanReview(input: {
       target.revisionNumber !== accepted.revisionNumber || result.outcome !== "accepted" ||
       interactionContext.sourceCommentId !== (owner.sourceCommentId ?? null) ||
       interactionContext.continuationPolicy !== owner.continuationPolicy ||
-      interactionContext.result?.outcome !== "accepted" || interactionContext.result?.commentId !== (typeof result.commentId === "string" ? result.commentId : null)) return null;
+      interactionResult.outcome !== "accepted" || interactionResult.commentId !== (typeof result.commentId === "string" ? result.commentId : null)) return null;
   const context = record(input.context);
   const explicitContinuation = record(context.explicitUserContinuation);
   const resumeSourceRunId = (typeof explicitContinuation.previousRunId === "string" ? explicitContinuation.previousRunId : null) ??

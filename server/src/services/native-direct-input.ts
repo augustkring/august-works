@@ -1866,13 +1866,14 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   if (run && admittedWake && run.responsibleUserId && wakeTask && Array.isArray(continuationEnvelope.interactionOutcomes) &&
       continuationEnvelope.interactionOutcomes.length > 0 && wake) {
     const { captureNativeAcceptedPlanReview } = await import("./native-runtime/accepted-plan-review-source.js");
-    acceptedPlanReview = await captureNativeAcceptedPlanReview({ db: db as Db, companyId: input.companyId,
+    const selected = await captureNativeAcceptedPlanReview({ db: db as Db, companyId: input.companyId,
       issueId: input.issueId, agentId: run.agentId, runId: input.runId, responsibleUserId: run.responsibleUserId,
       envelope: continuation as NativeTaskContinuationCapture["envelope"], wakePayload: wake, context,
       workMode: wakeTask.workMode, interactionSources: input.inputs.filter((source): source is Extract<NativePayloadSourceInput,{kind:"interaction"}> =>
         source.kind === "interaction" && source.issueId === input.issueId),
       documentSources: input.inputs.filter((source): source is Extract<NativePayloadSourceInput,{kind:"document_revision"}> =>
         source.kind === "document_revision" && source.issueId === input.issueId) });
+    if (selected) acceptedPlanReview = selected;
   }
   const continuationCapture: NativeTaskContinuationCapture | null = run && admittedWake && run.responsibleUserId &&
     Array.isArray(continuationMessages) && hasBoundedContinuation && isDeepStrictEqual(context?.executionContinuation, continuation) ? {
