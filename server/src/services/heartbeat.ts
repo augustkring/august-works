@@ -925,7 +925,9 @@ export function nativeExecutionFailureLogFields(input: {
     const unsupportedKeys = new Set(["review", "directPrompt", "previousRun", "persistedInput", "resume",
       "initialGuidance", "continuation", "planning", "conversationHistory", "wake", "workspaceCoordination", "projectPaths", "projectWorkspaceSource",
       "authoredContextManifests", "missingTask"]);
-    const builderReasons = new Set(["interaction_sources", "unsupported_or_missing_witness", "ambiguous_reference",
+    const builderReasons = new Set(["interaction_sources", "unsupported_or_missing_witness", "rendered_source_missing",
+      "rendered_digest_mismatch", "runtime_sources_missing", "context_witness_missing", "role_pack_sources_invalid",
+      "unknown_rendered_source", "ambiguous_reference",
       "reference_source_mismatch", "source_snapshot_invalid", "additional_inputs_unknown", "source_budget_exceeded", "unknown"]);
     const wakeReasons = new Set(["identity_invalid", "payload_shape", "payload_keys", "task_projection", "wake_fields_invalid",
       "comment_count_invalid", "comment_shape_invalid", "comment_source_invalid", "comment_hash_mismatch",

@@ -846,7 +846,9 @@ export function buildNativeBootstrapSourceSet(input: {
   contextWitness?: NativeBootstrapContextWitness | null;
   rolePackInputs: readonly NativePayloadSourceInput[] | null;
   unsupportedInputPresent: boolean;
-  onDiagnostic?: (reason: "interaction_sources" | "unsupported_or_missing_witness" | "ambiguous_reference" |
+  onDiagnostic?: (reason: "interaction_sources" | "unsupported_or_missing_witness" | "rendered_source_missing" |
+    "rendered_digest_mismatch" | "runtime_sources_missing" | "context_witness_missing" |
+    "role_pack_sources_invalid" | "unknown_rendered_source" | "ambiguous_reference" |
     "reference_source_mismatch" | "source_snapshot_invalid" | "additional_inputs_unknown" | "source_budget_exceeded") => void;
 }): NativePayloadSourceSet | null {
   const reject = (reason: Parameters<NonNullable<typeof input.onDiagnostic>>[0]) => {
@@ -861,16 +863,20 @@ export function buildNativeBootstrapSourceSet(input: {
     ? readNativeBootstrapContextWitness(input.contextWitness, { companyId: input.companyId, runId: input.runId,
       agentId: input.agentId, issueId: input.issueId, renderedMarkdown: contextMarkdown,
       manifestIds: input.contextManifestIds ?? [] }) : null;
-  if (input.unsupportedInputPresent || !input.references || input.references.length === 0 ||
-    !input.references.some(reference => reference.kind === "task") || !input.renderedMarkdownDigest ||
-    createHash("sha256").update(input.renderedMarkdown, "utf8").digest("hex") !== input.renderedMarkdownDigest ||
-    !input.runtimeInputs || !input.contextManifestIds || input.contextManifestIds.length > 0 && !context ||
-    input.governedContextMarkdown?.trim() && !context ||
-    !input.rolePackInputs || input.rolePackInputs.some(source => {
-      const parsed = nativePayloadSourceInputSchema.safeParse(source);
-      return !parsed.success || parsed.data.kind !== "role_pack_version";
-    }) ||
-    input.references.some(reference => reference.kind === "unknown")) return reject("unsupported_or_missing_witness");
+  if (input.unsupportedInputPresent) return reject("unsupported_or_missing_witness");
+  if (!input.references || input.references.length === 0 ||
+    !input.references.some(reference => reference.kind === "task")) return reject("rendered_source_missing");
+  if (!input.renderedMarkdownDigest ||
+    createHash("sha256").update(input.renderedMarkdown, "utf8").digest("hex") !== input.renderedMarkdownDigest)
+    return reject("rendered_digest_mismatch");
+  if (!input.runtimeInputs) return reject("runtime_sources_missing");
+  if (!input.contextManifestIds || (input.contextManifestIds.length > 0 || input.governedContextMarkdown?.trim()) && !context)
+    return reject("context_witness_missing");
+  if (!input.rolePackInputs || input.rolePackInputs.some(source => {
+    const parsed = nativePayloadSourceInputSchema.safeParse(source);
+    return !parsed.success || parsed.data.kind !== "role_pack_version";
+  })) return reject("role_pack_sources_invalid");
+  if (input.references.some(reference => reference.kind === "unknown")) return reject("unknown_rendered_source");
   const policy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
   const inputs: NativePayloadSourceInput[] = [];
   const append = (source: NativePayloadSourceInput) => {

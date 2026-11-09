@@ -68,6 +68,11 @@ describe("Native execution failure log privacy", () => {
       unsupported: ["workspaceCoordination"], builder: "unsupported_or_missing_witness",
       wake: "wake_fields_invalid", wakeFields: ["continuation", "continuationSummary"],
     });
+    for (const reason of ["rendered_source_missing", "rendered_digest_mismatch", "runtime_sources_missing",
+      "context_witness_missing", "role_pack_sources_invalid", "unknown_rendered_source"]) {
+      expect(project(prefix.replace("unsupported_or_missing_witness", reason) + "continuationSummary")
+        .nativeBootstrapSourceClosureDiagnostic).toMatchObject({ builder: reason });
+    }
     const privateMarker = "private_refusal_marker";
     const unknown = project(prefix + privateMarker);
     expect(unknown.nativeBootstrapSourceClosureDiagnostic).toBeUndefined();

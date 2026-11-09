@@ -70,6 +70,7 @@ function managedModelRepositorySourceFrames(error: unknown): Array<{ sourceFile:
       "server/src/services/memory/memory-privacy.ts",
       "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+      "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
       "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
       "tests/e2e/fixtures/managed-connection-review.ts",
       "tests/e2e/fixtures/managed-connection-intent.ts"
@@ -298,8 +299,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   let activeRunId: string | null = null;
   let activeIssueId: string | null = null;
   let providerHookInvoked = false;
-  let providerHookFailure: { name: string; message: string } | null = null;
-  let providerStubFailure: { stage: string; code: string } | null = null;
+  type ProviderHookFailure = { name: "AssertionError" | "Error" | "TypeError" | "RangeError" | "AbortError" | "UnknownError";
+    sourceFrames: ReturnType<typeof managedModelRepositorySourceFrames> };
+  type ProviderStubFailure = { stage: string; code: string };
+  let providerHookFailure: ProviderHookFailure | null = null;
+  let providerStubFailure: ProviderStubFailure | null = null;
   let providerToolNames: string[] = [];
   const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
     sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
@@ -403,8 +407,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
             model: runProfile.tariff.model },
           usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens } }); }
         catch (error) {
-          providerHookFailure = { name: error instanceof Error ? error.name : "UnknownError",
-            message: error instanceof Error ? error.message.slice(0, 400) : "non_error_throwable" };
+          const name = error instanceof Error && ["AssertionError", "Error", "TypeError", "RangeError", "AbortError"].includes(error.name)
+            ? error.name as "AssertionError" | "Error" | "TypeError" | "RangeError" | "AbortError" : "UnknownError";
+          providerHookFailure = { name, sourceFrames: managedModelRepositorySourceFrames(error) };
           throw error;
         }
       }
@@ -1072,9 +1077,20 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         const knownErrorNames = new Set(["Error", "TypeError", "RangeError", "AbortError", "UnknownError"]);
         const closed = (value: unknown, allowed: Set<string>) => typeof value === "string"
           ? allowed.has(value) ? value : "unrecognized" : null;
+        // Awaited provider callbacks can assign these after their initial null value.
+        const hookFailure = providerHookFailure as ProviderHookFailure | null;
+        const stubFailure = providerStubFailure as ProviderStubFailure | null;
         if (brokerFailures.length > 0) console.info("managed_scheduler_fixture_broker_failure_projection", JSON.stringify({
           fixtureTotalBrokerFailures: brokerFailures.length,
           intentionalOriginDenialsEnabled: input.observeModelOriginDenials === true,
+          providerHookFailure: hookFailure ? { name: hookFailure.name,
+            sourceFrames: hookFailure.sourceFrames } : null,
+          providerStubFailure: stubFailure ? {
+            stage: ["provider_url", "execution_contract", "provider_callback_binding"].includes(stubFailure.stage)
+              ? stubFailure.stage : "unrecognized",
+            code: ["unexpected_provider_url", "completion_contract_missing", "active_run_or_issue_missing"].includes(stubFailure.code)
+              ? stubFailure.code : "unrecognized",
+          } : null,
           failures: brokerFailures.slice(0, 8).map(fact => ({
             status: fact.status,
             errorStatus: typeof fact.errorStatus === "number" && Number.isInteger(fact.errorStatus)

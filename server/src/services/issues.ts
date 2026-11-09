@@ -2371,10 +2371,18 @@ function isManualRootPayloadInput(data: IssueCreateInput) {
 
 /** Literal text is independent input; selected parent/Project links remain privacy dependencies. */
 export function isManualRelatedPayloadInput(data: IssueCreateInput) {
+  const settings = data.executionWorkspaceSettings;
+  // A literal mode selects future execution; it attests no existing runtime,
+  // commands or credentials. The ordinary feature and workspace gates still run.
+  const literalWorkspaceMode = settings != null && typeof settings === "object" && !Array.isArray(settings) &&
+    Object.keys(settings).length === 1 && Object.hasOwn(settings, "mode") &&
+    (settings.mode === "isolated_workspace" || settings.mode === "shared_workspace");
   return !!(data.parentId || data.projectId) && (!data.parentId || isUuidLike(data.parentId)) &&
     (!data.projectId || isUuidLike(data.projectId)) &&
     (data.projectWorkspaceId == null || Boolean(data.projectId && isUuidLike(data.projectWorkspaceId))) &&
-    isManualRootPayloadInput({ ...data, parentId: null, projectId: null, projectWorkspaceId: null });
+    (settings == null || literalWorkspaceMode) &&
+    isManualRootPayloadInput({ ...data, parentId: null, projectId: null, projectWorkspaceId: null,
+      executionWorkspaceSettings: null });
 }
 
 async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$inferSelect,

@@ -926,6 +926,7 @@ const support = await getEmbeddedPostgresTestSupport();
           await assertConversationNativeStopBeforeErasure(exactFrame);
           const runnerProfile = run.runnerProfileJson && typeof run.runnerProfileJson === "object"
             ? run.runnerProfileJson as Record<string, unknown> : {};
+          const retainedWire = reservation.providerWireReceipt;
           const sourceWireIntents = Array.isArray(runnerProfile.nativeAwModelWireIntents)
             ? runnerProfile.nativeAwModelWireIntents : [];
           expect(sourceWireIntents).toContainEqual(expect.objectContaining({

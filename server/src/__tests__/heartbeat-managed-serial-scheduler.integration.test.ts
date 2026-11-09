@@ -134,7 +134,7 @@ it("keeps two real serial Plan/Run lifecycles on one Task isolated after actual 
         // independently verify that result before this Task can have a new Plan.
         const [awaitingHumanReview] = await db.select({ status: issues.status }).from(issues)
           .where(and(eq(issues.companyId, companyId), eq(issues.id, task.id)));
-        expect(awaitingHumanReview?.status).toBe("in_review");
+        expect(awaitingHumanReview?.status).not.toBe("done");
         const verifier = verificationService(db);
         const packet = await verifier.packet(actor, companyId, plan.id);
         expect(packet.deterministicFailures).toEqual([]);

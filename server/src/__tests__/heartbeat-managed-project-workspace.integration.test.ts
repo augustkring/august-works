@@ -18,6 +18,8 @@ import { actorMiddleware } from "../middleware/auth.js";
 import express from "express";
 import request from "supertest";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { verificationService } from "../services/supervision/verification-service.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
 import { managedNativeProjectWorkspaceFixture } from "./helpers/managed-native-project-workspace-fixture.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
@@ -145,9 +147,10 @@ it("runs a real capped Project Worker in its realized worktree without changing 
       const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake!.id));
       expect(run).toMatchObject({ status: "succeeded", runtimeMode: "native", nativeIssueId: task.id,
         responsibleUserId: actor.userId, nativeProcessCleanupPending: false });
-      const [completedTask] = await db.select().from(issues).where(eq(issues.id, task.id));
-      expect(completedTask).toMatchObject({ status: "done", projectId: selected.projectId,
+      const [preReviewTask] = await db.select().from(issues).where(eq(issues.id, task.id));
+      expect(preReviewTask).toMatchObject({ projectId: selected.projectId,
         projectWorkspaceId: selected.projectWorkspaceId, executionWorkspaceId: realized?.id });
+      expect(preReviewTask?.status).not.toBe("done");
       const [finalization] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, wake!.id));
       expect(finalization).toMatchObject({ phase: "committed", leaseOwner: null, failureCode: null });
       const [result] = await db.select().from(nativeRunResults).where(eq(nativeRunResults.id, finalization!.resultId!));
@@ -155,8 +158,8 @@ it("runs a real capped Project Worker in its realized worktree without changing 
       const [decision] = await db.select().from(statusDecisions).where(eq(statusDecisions.id, finalization!.decisionId!));
       expect(result).toMatchObject({ runId: wake!.id, issueId: task.id, schemaStatus: "accepted" });
       expect(assessment).toMatchObject({ runId: wake!.id, issueId: task.id, resultId: result!.id });
-      expect(decision).toMatchObject({ assessmentId: assessment!.id, applicationState: "applied", toStatus: "done" });
-      expect(completedTask?.lastStatusDecisionId).toBe(decision!.id);
+      expect(decision).toMatchObject({ assessmentId: assessment!.id, applicationState: "applied", toStatus: preReviewTask!.status });
+      expect(preReviewTask?.lastStatusDecisionId).toBe(decision!.id);
       expect(run!.resultJson).toMatchObject({ finalizationPhase: "committed",
         assessmentId: assessment!.id, decisionId: decision!.id });
       const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.runId, wake!.id));
@@ -170,6 +173,31 @@ it("runs a real capped Project Worker in its realized worktree without changing 
         and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
         .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
       expect(outputs).toEqual([{ body: "A real managed Project worktree result." }]);
+      expect(git(selected.repositoryRoot, "branch", "--show-current")).toBe("main");
+      expect(git(selected.repositoryRoot, "rev-parse", "refs/heads/main")).toBe(baseMain);
+      const verifier = verificationService(db);
+      const packet = await verifier.packet(actor, companyId, plan.id);
+      expect(packet.planId).toBe(plan.id);
+      expect(packet.deterministicFailures).toEqual([]);
+      expect(packet.policy.workerSelfCertification).toBe(false);
+      const exactOutput = packet.evidence.filter(item => item.type === "task_document" &&
+        item.hash === nativeSha256("A real managed Project worktree result."));
+      expect(exactOutput).toHaveLength(1);
+      const evidenceRefs = exactOutput.map(item => item.ref);
+      const judgement = (_: unknown, index: number) => ({ index, satisfied: true, evidenceRefs });
+      const review = await verifier.review(actor, companyId, plan.id, {
+        expectedPlanVersion: packet.planVersion, expectedResultHash: packet.resultHash,
+        workerId: packet.workerId, result: "pass", objectiveSatisfied: true,
+        rationale: "The Human checked the exact retained Project workspace result and repository invariant.",
+        businessInvariants: packet.contract.businessInvariants.map(judgement),
+        evidenceRequirements: packet.contract.evidenceRequirements.map(judgement),
+        prohibitedOutcomes: packet.contract.prohibitedOutcomes.map(judgement),
+      });
+      expect(review).toMatchObject({ reviewerType: "human", reviewerId: actor.userId, result: "pass" });
+      expect(review.workerAttemptId).toBe(attempts[0]!.id);
+      const [completedTask] = await db.select().from(issues).where(eq(issues.id, task.id));
+      expect(completedTask).toMatchObject({ status: "done", projectId: selected.projectId,
+        projectWorkspaceId: selected.projectWorkspaceId, executionWorkspaceId: realized?.id });
       const leases = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
         eq(environmentLeases.heartbeatRunId, wake!.id)));
       expect(leases).toHaveLength(1);

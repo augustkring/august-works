@@ -1,18 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
-import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import request from "supertest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { activityLog, agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
-  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions } from "@paperclipai/db";
+import { activityLog, agents, agentRuntimeState, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
+  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions, executionWorkspaces, workspaceOperations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { projectRoutes } from "../routes/projects.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { aiConnectionService } from "../services/ai-connections.js";
@@ -49,6 +52,7 @@ import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 // This is the installed one-call text controller's software transport fixture,
 // copied from v7-worker-model-gateway's actual-heartbeat case. It does not
 // qualify OpenCode, an external provider, or a physical Sandbox Host.
+const execFileAsync = promisify(execFile);
 const sourceSha = "a".repeat(40);
 const credential = "fixture-private-worker-secret-12345";
 const support = await getEmbeddedPostgresTestSupport();
@@ -1263,11 +1267,14 @@ describe("dependency scheduling through the installed Native text draft controll
 
   // Same current-Human/Plan and installed HTTP/listener owners as the two
   // cases above. The new cases share only their identical local setup/proofs.
-  async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string, parentId?: string) {
+  async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string, parentId?: string,
+    project?: { projectId: string; projectWorkspaceId: string }) {
     const { f, human } = fixture;
     const tasks = issueService(db), plans = orchestrationService(db);
     const draft = await tasks.create(f.home, { title, description: "Retain one internal document for Human review; no interactive tools or external effects.",
-      status: "todo", workMode: "standard", responsibleUserId: f.userId, createdByUserId: f.userId, ...(parentId ? { parentId } : {}) }, db, undefined,
+      status: "todo", workMode: "standard", responsibleUserId: f.userId, createdByUserId: f.userId,
+      ...(project ? { projectId: project.projectId, projectWorkspaceId: project.projectWorkspaceId,
+        executionWorkspaceSettings: { mode: "isolated_workspace" } } : {}), ...(parentId ? { parentId } : {}) }, db, undefined,
       { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
     const task = await tasks.update(draft.id, { assigneeAgentId: f.presence.id, actorUserId: f.userId, privacyActor: human });
     if (!task) throw new Error("dependency_domain_draft_missing");
@@ -1316,6 +1323,135 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }
+
+  async function createCanonicalGitWorkspace(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>) {
+    const repoRoot = await mkdtemp(join(tmpdir(), "native-finalize-git-"));
+    await execFileAsync("git", ["init", "--initial-branch=main"], { cwd: repoRoot });
+    await execFileAsync("git", ["config", "user.email", "fixture@example.test"], { cwd: repoRoot });
+    await execFileAsync("git", ["config", "user.name", "Native Finalize Fixture"], { cwd: repoRoot });
+    await writeFile(join(repoRoot, "README.md"), "managed native workspace\n");
+    await execFileAsync("git", ["add", "README.md"], { cwd: repoRoot });
+    await execFileAsync("git", ["commit", "-m", "initial"], { cwd: repoRoot });
+    const app = express(); app.use(express.json());
+    app.use(((req, _res, next) => {
+      req.actor = { type: "board", source: "session", userId: fixture.f.userId,
+        sessionId: fixture.human.sessionId ?? undefined, companyIds: [fixture.f.home],
+        memberships: [{ companyId: fixture.f.home, membershipRole: "owner", status: "active" }] };
+      next();
+    }) as import("express").RequestHandler);
+    app.use("/api", projectRoutes(db)); app.use(errorHandler);
+    // The complete Human constructor captures the Project and its exact initial workspace together.
+    const response = await request(app).post(`/api/companies/${fixture.f.home}/projects`).send({
+      name: "Native Finalize Git Project", workspace: { name: "Primary", cwd: repoRoot, isPrimary: true } });
+    expect(response.status).toBe(201);
+    expect(response.body.workspaces).toHaveLength(1);
+    const workspaceId: unknown = response.body.workspaces[0]?.id;
+    if (typeof response.body.id !== "string" || typeof workspaceId !== "string")
+      throw new Error("canonical_human_git_project_workspace_missing");
+    return { projectId: response.body.id as string, projectWorkspaceId: workspaceId, repoRoot };
+  }
+
+  async function finalizeWorkspaceFixture(companyId: string, taskId: string) {
+    const [workspace] = await db.select().from(executionWorkspaces).where(and(eq(executionWorkspaces.companyId, companyId), eq(executionWorkspaces.sourceIssueId, taskId)));
+    if (!workspace?.cwd || !workspace.branchName) throw new Error("native_finalize_git_workspace_missing");
+    return workspace;
+  }
+
+  const branchFinalizeOutput = "Retain this bounded text result for Human review.";
+  function finalizeTransport(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, onDispatch: () => Promise<void>) {
+    return (async (url: Parameters<typeof guardedRemoteHttpFetch>[0], init: Parameters<typeof guardedRemoteHttpFetch>[1]) => {
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      expect(JSON.parse(String(init.body))).toMatchObject({ model: fixture.model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      await onDispatch();
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model: fixture.model, stop_reason: "end_turn",
+        content: [{ type: "text", text: branchFinalizeOutput }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof guardedRemoteHttpFetch;
+  }
+
+  async function runNativeBranchFinalize(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, transition: "repair" | "adopt" | "persist") {
+    const settings = instanceSettingsService(db), priorFeatures = await settings.getExperimental();
+    await settings.updateExperimental({ enableIsolatedWorkspaces: true });
+    try {
+      const { f } = fixture, git = await createCanonicalGitWorkspace(fixture);
+      let entry: Awaited<ReturnType<typeof createDraftPlan>>;
+      let workspaceId = "", originalBranch = "", calls = 0;
+      const fetch = finalizeTransport(fixture, async () => {
+        expect(++calls).toBe(1);
+        const workspace = await finalizeWorkspaceFixture(f.home, entry.task.id);
+        workspaceId = workspace.id; originalBranch = workspace.branchName!;
+        const branch = `publish-${entry.task.id.slice(0, 8)}`;
+        await execFileAsync("git", ["checkout", "-b", branch], { cwd: workspace.cwd! });
+        if (transition === "adopt") {
+          await writeFile(join(workspace.cwd!, "publish.txt"), "publish branch work\n");
+          await execFileAsync("git", ["add", "publish.txt"], { cwd: workspace.cwd! });
+          await execFileAsync("git", ["commit", "-m", "Add publish branch work"], { cwd: workspace.cwd! });
+        }
+        if (transition === "persist") await db.update(executionWorkspaces).set({ branchName: branch, updatedAt: new Date() }).where(eq(executionWorkspaces.id, workspace.id));
+      });
+      await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+        entry = await createDraftPlan(fixture, `Native finalization ${transition}`, undefined, git);
+        const wake = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system", reason: "issue_assigned",
+          requestedByActorType: "user", requestedByActorId: f.userId, payload: { issueId: entry.task.id },
+          contextSnapshot: { issueId: entry.task.id, projectId: git.projectId, wakeReason: "issue_assigned" } });
+        if (!wake) throw new Error("native_finalize_branch_wake_missing");
+        await heartbeat.drainActiveRunExecutions();
+        await assertCompletedDraft(fixture, entry, wake.id, branchFinalizeOutput);
+        expect(calls).toBe(1);
+        const [finishedRun] = await db.select({ errorCode: heartbeatRuns.errorCode }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, wake.id)));
+        expect(finishedRun?.errorCode).toBeNull();
+        const [runtimeState] = await db.select({ lastRunId: agentRuntimeState.lastRunId }).from(agentRuntimeState)
+          .where(and(eq(agentRuntimeState.companyId, f.home), eq(agentRuntimeState.agentId, f.presence.id)));
+        expect(runtimeState?.lastRunId).toBe(wake.id);
+        const ops = await db.select().from(workspaceOperations).where(and(eq(workspaceOperations.companyId, f.home), eq(workspaceOperations.heartbeatRunId, wake.id), eq(workspaceOperations.phase, "workspace_finalize")));
+        expect(ops).toHaveLength(1);
+        expect(ops[0]).toMatchObject({ status: "succeeded", executionWorkspaceId: workspaceId });
+        if (transition === "repair") {
+          expect(await execFileAsync("git", ["branch", "--show-current"], { cwd: (await finalizeWorkspaceFixture(f.home, entry.task.id)).cwd! })).toMatchObject({ stdout: `${originalBranch}\n` });
+          const publishBranch = `publish-${entry.task.id.slice(0, 8)}`;
+          const repairs = await db.select().from(workspaceOperations).where(and(eq(workspaceOperations.companyId, f.home),
+            eq(workspaceOperations.heartbeatRunId, wake.id), eq(workspaceOperations.phase, "worktree_prepare")));
+          expect(repairs).toEqual(expect.arrayContaining([expect.objectContaining({ command: `git checkout ${originalBranch}`,
+            status: "succeeded", executionWorkspaceId: workspaceId, metadata: expect.objectContaining({
+              branchIncoherenceRepair: true, expectedBranchName: originalBranch, actualBranchName: publishBranch,
+              executionWorkspaceId: workspaceId, sourceIssueId: entry.task.id }) })]));
+          expect(ops[0]!.metadata).toMatchObject({ managedGitWorktreeBranch: { executionWorkspaceId: workspaceId,
+            valid: true, reasonCode: null, expectedBranchName: originalBranch, actualBranchName: originalBranch },
+            managedGitWorktreeBranchRepair: { attempted: true, succeeded: true,
+              initial: expect.objectContaining({ valid: false, reasonCode: "branch_mismatch",
+                expectedBranchName: originalBranch, actualBranchName: publishBranch }) } });
+        } else if (transition === "adopt") {
+          expect(ops[0]!.metadata).toMatchObject({ managedGitWorktreeBranch: expect.objectContaining({ executionWorkspaceId: workspaceId, valid: true, reasonCode: null,
+            expectedBranchName: `publish-${entry.task.id.slice(0, 8)}`, actualBranchName: `publish-${entry.task.id.slice(0, 8)}` }),
+            managedGitWorktreeBranchRepair: expect.objectContaining({ attempted: true, succeeded: true }) });
+          expect((await db.select({ branchName: executionWorkspaces.branchName }).from(executionWorkspaces).where(eq(executionWorkspaces.id, workspaceId)))[0]?.branchName).toBe(originalBranch);
+          expect(originalBranch).not.toBe(`publish-${entry.task.id.slice(0, 8)}`);
+        } else {
+          const branch = `publish-${entry.task.id.slice(0, 8)}`;
+          expect((await db.select({ branchName: executionWorkspaces.branchName }).from(executionWorkspaces).where(eq(executionWorkspaces.id, workspaceId)))[0]?.branchName).toBe(branch);
+          expect(ops[0]!.metadata).toMatchObject({ managedGitWorktreeBranch: { executionWorkspaceId: workspaceId, valid: true, reasonCode: null, expectedBranchName: branch, actualBranchName: branch } });
+        }
+      });
+      await rm(git.repoRoot, { recursive: true, force: true });
+    } finally {
+      await settings.updateExperimental({ enableIsolatedWorkspaces: priorFeatures.enableIsolatedWorkspaces });
+    }
+  }
+
+  it("repairs clean Native Text branch drift before successful workspace finalization", async () => {
+    await runNativeBranchFinalize(await seedInstalledDraft(), "repair");
+  }, 60_000);
+
+  it("adopts a Native Text forward branch with commits without persisting the workspace branch", async () => {
+    await runNativeBranchFinalize(await seedInstalledDraft(), "adopt");
+  }, 60_000);
+
+  it("allows Native Text finalization after the branch transition is persisted", async () => {
+    await runNativeBranchFinalize(await seedInstalledDraft(), "persist");
+  }, 60_000);
 
   async function assertCompletedDraft(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>,
     entry: Awaited<ReturnType<typeof createDraftPlan>>, runId: string, body: string) {

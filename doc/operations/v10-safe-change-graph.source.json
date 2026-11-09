@@ -22,12 +22,12 @@
   ],
   "sourceInventoryBoundary": {
     "sourceDeltaPathCount": 1951,
-    "deletedSourcePathCount": 40,
+    "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13915,
+    "fullDiffPathCount": 13921,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -4501,7 +4501,6 @@
         "server/src/__tests__/heartbeat-task-drain.test.ts",
         "server/src/__tests__/heartbeat-workspace-branch-containment.test.ts",
         "server/src/__tests__/heartbeat-workspace-busy.test.ts",
-        "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts",
         "server/src/__tests__/heartbeat-worktree-suppression.test.ts",
         "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
         "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -4560,7 +4559,9 @@
         "server/src/services/tool-gateway.ts",
         "server/src/services/workflows/workflow-executor.ts"
       ],
-      "deletedSourcePaths": [],
+      "deletedSourcePaths": [
+        "server/src/__tests__/heartbeat-workspace-finalize-branch.test.ts"
+      ],
       "changedSourcePaths": [
         "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
         "packages/db/src/schema/resource_lifecycle_events.ts",
@@ -4685,6 +4686,7 @@
         "server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
         "server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
         "server/src/__tests__/heartbeat-context-summary.test.ts",
+        "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
         "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
         "server/src/__tests__/heartbeat-direct-adapter-native-isolation.test.ts",
         "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts",
@@ -4750,7 +4752,7 @@
       "hotspotSourcePin": {
         "registerPath": "doc/operations/production-hotspot-responsibilities.json",
         "registeredSha256": "2c8f93b6ee924cacbbf9f6fa8c1104b9989b533fd99f37d96bbe5ecbc95da612",
-        "currentAnchorSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55"
+        "currentAnchorSha256": "76e7e4756cfcb32b28962124053b47dbb5849bdbc23f1a5cb0eec6de5d37605b"
       }
     },
     {
@@ -7135,7 +7137,7 @@
       "hotspotSourcePin": {
         "registerPath": "doc/operations/production-hotspot-responsibilities.json",
         "registeredSha256": "9fde6c1ca4b69b6b2a7d8040864ad3d23818e57d55e37e6d87b578d69f3fe678",
-        "currentAnchorSha256": "ab995a34a8896082d5d2edd554ed00ee64ca9a5c8ed3097a3b8d893d17b2ddea"
+        "currentAnchorSha256": "71dcd72d72e49c3de8ce4d4b6b23c52c7702510bdd35287907a5c0ce15fb003f"
       }
     },
     {

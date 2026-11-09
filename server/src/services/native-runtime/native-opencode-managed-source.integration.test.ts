@@ -395,7 +395,10 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           .where(eq(documentRevisions.id, docB.latestRevisionId));
         const snapshotA = nativePayloadSourceSnapshotSchema.parse(revisionA?.snapshot);
         const snapshotB = nativePayloadSourceSnapshotSchema.parse(revisionB?.snapshot);
-        expect(snapshotA.inputs.some(source => source.kind === "context")).toBe(false);
+        // Automatic bootstrap Context is already consumed before the first
+        // document. The later explicit read must not be attributed backwards.
+        expect(snapshotA.inputs.filter(source => source.kind === "context"))
+          .toEqual(receipt.bootstrap.inputs.filter(source => source.kind === "context"));
         expect(snapshotA.policy.memoryIds).not.toContain(privateRootMemoryId);
         expect(snapshotB.inputs.some(source => source.kind === "context")).toBe(true);
         expect(snapshotB.policy.memoryIds).toContain(privateRootMemoryId);

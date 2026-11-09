@@ -1565,7 +1565,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
+      "sourceSha256": "76e7e4756cfcb32b28962124053b47dbb5849bdbc23f1a5cb0eec6de5d37605b",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "Fresh sessions discard incompatible prior checkpoints. Manual Human queue adoption retains exact original comment sources and current permissions. Same-run audited workspace binding preserves unchanged Context facts. The existing recovery actions and approval requirements remain accurate."
@@ -1581,7 +1581,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "0220b9cd83e0bcc208a7d334c1d29844fbc560e61a6a072d9ef4ce1a880eaa38",
+      "sourceSha256": "71dcd72d72e49c3de8ce4d4b6b23c52c7702510bdd35287907a5c0ce15fb003f",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "Internal runtime workspace binding now preserves the realized configuration and its source version. Human configuration edits still use the existing feature and access gates. Recovery actions and instructions to inspect the original Task and current run before retrying remain correct."
@@ -1669,7 +1669,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
+      "sourceSha256": "76e7e4756cfcb32b28962124053b47dbb5849bdbc23f1a5cb0eec6de5d37605b",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "Fresh sessions discard incompatible prior checkpoints. Manual Human queue adoption retains exact original comment sources and current permissions. Same-run audited workspace binding preserves unchanged Context facts. The existing recovery actions and approval requirements remain accurate."
@@ -1685,7 +1685,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "0220b9cd83e0bcc208a7d334c1d29844fbc560e61a6a072d9ef4ce1a880eaa38",
+      "sourceSha256": "71dcd72d72e49c3de8ce4d4b6b23c52c7702510bdd35287907a5c0ce15fb003f",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "Intern runtime-binding af arbejdsomr\u00e5det bevarer nu den realiserede konfiguration og dens kildeversion. Human-redigering bruger fortsat de eksisterende funktions- og adgangskrav. Gendannelseshandlinger og vejledningen om at kontrollere den oprindelige opgave og aktuelle k\u00f8rsel f\u00f8r Retry g\u00e6lder fortsat."
@@ -2053,7 +2053,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
+      "sourceSha256": "76e7e4756cfcb32b28962124053b47dbb5849bdbc23f1a5cb0eec6de5d37605b",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
       "rationale": "Source validation checks original comments, current Human access and audit lineage after manual queue adoption or workspace binding. These changes add no export or deletion interface and do not alter accepted erasure or Stop receipts."
@@ -2061,7 +2061,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
+      "sourceSha256": "76e7e4756cfcb32b28962124053b47dbb5849bdbc23f1a5cb0eec6de5d37605b",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
       "rationale": "Source validation checks original comments, current Human access and audit lineage after manual queue adoption or workspace binding. These changes add no export or deletion interface and do not alter accepted erasure or Stop receipts."

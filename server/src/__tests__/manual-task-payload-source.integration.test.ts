@@ -28,7 +28,7 @@ import { errorHandler } from "../middleware/error-handler.js";
 import { issueRoutes } from "../routes/issues.js";
 import { projectRoutes } from "../routes/projects.js";
 import type { AuthorizationActor } from "../services/authorization.js";
-import { issueService } from "../services/issues.js";
+import { issueService, isManualRelatedPayloadInput } from "../services/issues.js";
 import { environmentService } from "../services/environments.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertWorkspacePreparationBindingOwned, legacyControllerBootId } from "../services/legacy-controller-lease.js";
@@ -44,6 +44,19 @@ describe("manual Human Task payload source capture", () => {
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterAll(async () => { await database?.cleanup(); }, 30_000);
+
+  it("admits only literal workspace mode selection for original manual related text", () => {
+    const base = { title: "Literal Human task", projectId: randomUUID() };
+    for (const mode of ["isolated_workspace", "shared_workspace"]) {
+      expect(isManualRelatedPayloadInput({ ...base, executionWorkspaceSettings: { mode } })).toBe(true);
+      expect(isManualRelatedPayloadInput({ ...base, executionWorkspaceSettings: { mode }, executionWorkspaceId: randomUUID() })).toBe(false);
+      expect(isManualRelatedPayloadInput({ ...base, executionWorkspaceSettings: { mode }, executionWorkspacePreference: "reuse_existing" })).toBe(false);
+      expect(isManualRelatedPayloadInput({ ...base, executionWorkspaceSettings: { mode, workspaceStrategy: { type: "project_primary" } } })).toBe(false);
+      expect(isManualRelatedPayloadInput({ ...base, executionWorkspaceSettings: { mode, env: { TOKEN: "private-fixture-only" } } })).toBe(false);
+    }
+    expect(isManualRelatedPayloadInput(base)).toBe(true);
+    expect(isManualRelatedPayloadInput({ ...base, executionWorkspaceSettings: { mode: "unknown" } })).toBe(false);
+  });
 
   async function seed(role: "admin" | "member" | "viewer" = "member", membership = true) {
     const companyId = randomUUID();

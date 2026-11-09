@@ -102,6 +102,35 @@ describe("managed fixture assigned-Gateway result observer", () => {
     expect(callbacks).toBe(0);
   });
 
+  it("retains the exact scoped receiver for a delayed replay and records its denial", async () => {
+    const owner = fakeGateway("delayed-scoped");
+    const failure = Object.assign(new Error("private replay detail"), {
+      status: 403, reasonCode: "native_memory_capture_invalid",
+    });
+    let replay: (() => Promise<unknown>) | undefined;
+    let observed = 0;
+    const original = owner.executeTool;
+    owner.executeTool = async function (...args) {
+      if (owner.invocations.length) throw failure;
+      return original.apply(this, args);
+    };
+    const observation = createManagedAssignedGatewayResultObserver(async facts => {
+      observed += 1; replay = facts.replay;
+    });
+    cleanups.push(() => observation.cleanup());
+    observation.observe(owner as never, "scoped");
+    const scoped = { source: "exact-scoped-authority" };
+    await (owner.executeTool as (...args: unknown[]) => Promise<unknown>)({ tool: "fixture:observe" }, undefined, scoped);
+    await Promise.resolve();
+    expect(owner.invocations[0]).toMatchObject({ receiver: owner, args: [{ tool: "fixture:observe" }, undefined, scoped] });
+    await expect(replay!()).rejects.toBe(failure);
+    expect(observed).toBe(1);
+    expect(observation.facts().thrownFailureFacts).toEqual([{
+      errorClass: "Error", status: 403, code: "native_memory_capture_invalid", causeClass: "none",
+    }]);
+    expect(JSON.stringify(observation.facts())).not.toContain("private replay detail");
+  });
+
   it("shows root-only observation misses a scoped owner", async () => {
     const rootDb = {} as never, scopedDb = {} as never;
     const rootOwner = fakeGateway("root-only"), scopedOwner = fakeGateway("unobserved-scoped");

@@ -1095,12 +1095,18 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       eq(contextManifestItems.companyId, seeded.companyId), eq(contextManifestItems.manifestId, context.manifestIds[0]!.contextManifestId),
       eq(contextManifestItems.sourceRef, `issue://${task.id}`)));
     if (!manifest || !item) throw new Error("Captured Context Task manifest row is unavailable");
+    const retainedHumanRead = { actor: seeded.humanActor, companyId: seeded.companyId,
+      agentId: seeded.agent.id, issueId: task.id, manifest, item, consumption: "retained" as const };
+    await expect(assertNativeContextTaskSourceCurrent(db, retainedHumanRead)).resolves.toBe(true);
+    await expect(assertNativeContextTaskSourceCurrent(db, { ...retainedHumanRead, consumption: "bootstrap" })).resolves.toBe(false);
+    await expect(assertNativeContextTaskSourceCurrent(db, { ...retainedHumanRead, item: { ...item, contentHash: "" } })).resolves.toBe(false);
     await expect(assertNativeContextTaskSourceCurrent(db, { actor, companyId: seeded.companyId,
       agentId: seeded.agent.id, issueId: task.id, manifest: { id: manifest.id, companyId: manifest.companyId,
         agentId: manifest.agentId, runId: randomUUID(), issueId: manifest.issueId, createdAt: manifest.createdAt }, item })).resolves.toBe(false);
 
     await issueService(db).update(task.id, { status: "in_progress", actorUserId: seeded.userId, privacyActor: seeded.humanActor });
-    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).rejects.toMatchObject({ status: 403 });
+    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).resolves.toBeUndefined();
+    await expect(assertNativeContextTaskSourceCurrent(db, retainedHumanRead)).resolves.toBe(true);
     await expect(revalidateNativeBootstrapContextWitness(db, { witness: context.witness,
       companyId: seeded.companyId, runId: run!.id, agentId: seeded.agent.id, issueId: task.id,
       renderedMarkdown: context.markdown, manifestIds: context.manifestIds })).rejects.toMatchObject({ status: 403 });
@@ -1108,7 +1114,10 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
     await issueService(db).update(task.id, { priority: task.priority === "high" ? "low" : "high",
       actorUserId: seeded.userId, privacyActor: seeded.humanActor });
-    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).rejects.toMatchObject({ status: 403 });
+    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).resolves.toBeUndefined();
+    await expect(revalidateNativeBootstrapContextWitness(db, { witness: context.witness,
+      companyId: seeded.companyId, runId: run!.id, agentId: seeded.agent.id, issueId: task.id,
+      renderedMarkdown: context.markdown, manifestIds: context.manifestIds })).rejects.toMatchObject({ status: 403 });
     await issueService(db).update(task.id, { priority: task.priority, actorUserId: seeded.userId, privacyActor: seeded.humanActor });
 
     const [binding] = await db.select({ id: activityLog.id }).from(activityLog).where(and(
@@ -1126,6 +1135,11 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await issueService(db).update(task.id, { title: `${task.title} changed`, actorUserId: seeded.userId,
       privacyActor: seeded.humanActor });
     await expect(assertNativeContextReadSourceSetCurrent(db, reread)).rejects.toMatchObject({ status: 403 });
+    await expect(assertNativeContextTaskSourceCurrent(db, retainedHumanRead)).resolves.toBe(false);
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+      eq(companyMemberships.companyId, seeded.companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, seeded.userId)));
+    await expect(assertNativeContextTaskSourceCurrent(db, retainedHumanRead)).rejects.toMatchObject({ status: 403 });
   });
 
   it("preserves an original Human Task source across status changes and rejects it after a canonical body edit", async () => {

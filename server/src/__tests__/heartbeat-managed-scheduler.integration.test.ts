@@ -157,7 +157,7 @@ it("dispatches an ordinary scheduler-created capped Worker through current Sandb
 
 
 import { agentExecutionManifests, agentWakeupRequests, issueRelations, issues,
-  nativeRunResults, statusDecisions, statusDecisionEffects, workAssessments } from "@paperclipai/db";
+  nativeRunFinalizations, nativeRunResults, statusDecisions, statusDecisionEffects, workAssessments } from "@paperclipai/db";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { captureNativeBlockedHumanInteraction, assertNativeBlockedInteractionResult, assertNativePayloadSourceSetCurrent } from "../services/native-direct-input.js";
 import { assertV7Authorization } from "../services/v7-authorization.js";
@@ -202,6 +202,15 @@ async function assertDomainSdkResult(context: ManagedSchedulerContext, runId: st
   }, { timeout: remaining }).toBe(true);
   await context.heartbeat.drainActiveRunExecutions();
   const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+  if (run?.nativePhase !== "committed") {
+    const [finalization] = await db.select({ phase: nativeRunFinalizations.phase,
+      failureCode: nativeRunFinalizations.failureCode, failureDetail: nativeRunFinalizations.failureDetail })
+      .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, context.companyId),
+        eq(nativeRunFinalizations.runId, runId)));
+    // The finalizer owns this closed projection; omit its raw message/next action.
+    console.info("dependency_sdk_finalization_failure", JSON.stringify({ phase: finalization?.phase,
+      failureCode: finalization?.failureCode, safeCause: finalization?.failureDetail?.safeCause }));
+  }
   expect(run).toMatchObject({ companyId: context.companyId, agentId: context.agentId, nativeIssueId: issueId,
     responsibleUserId: context.actor.userId, status: "succeeded", runtimeMode: "native", nativePhase: "committed", nativeProcessCleanupPending: false });
   const results = await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, runId));

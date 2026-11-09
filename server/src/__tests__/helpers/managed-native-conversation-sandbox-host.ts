@@ -3635,6 +3635,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const admittedPromise = service.admit(actor, companyId, binding.id, { expectedVersion: 3, policySnapshotId: compiled.id });
     const admitted = await driveHost(admittedPromise);
     if (admitted.binding.status !== "running") throw new Error("conversation_software_host_workload_not_running");
+    preparationStage="admitted_lease";
     const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
       eq(environmentLeases.id, expectedLeaseId), eq(environmentLeases.heartbeatRunId, runId),
       eq(environmentLeases.environmentId, environment.id), eq(environmentLeases.status, "active"))).limit(1);
@@ -3645,8 +3646,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const expectDenied = async (work: Promise<unknown>) => {
       try { await work; return false; } catch { return true; }
     };
+    preparationStage="negative_run";
     const wrongRunDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId: randomUUID(), leaseId: lease.id,
       command: "true", cwd: taskRoot, timeoutMs: 1000 }));
+    preparationStage="negative_lease";
     const wrongLeaseDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: randomUUID(),
       command: "true", cwd: taskRoot, timeoutMs: 1000 }));
     // An existing child is valid for a generic Worker; a missing path would
@@ -3656,6 +3659,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     if (ordinaryWorkerMode && typeof input.controlledNativeSessionBackendFactory !== "function") {
       const allowedChild = mkdtempSync(join(taskRoot, ".native-cwd-child-"));
       try {
+        preparationStage="allowed_child_cwd";
         const acceptedChild = await runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
           command: "sh", args: ["-c", "true"], cwd: allowedChild, timeoutMs: 10_000 });
         if (!acceptedChild || acceptedChild.exitCode !== 0 || acceptedChild.timedOut) {
@@ -3679,6 +3683,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         });
       assert.equal(outsideAllowed, false, "negative_cwd_probe_must_be_outside_current_policy");
       try {
+        preparationStage="negative_cwd";
         await runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
           command: "true", cwd: outsideCwd, timeoutMs: 1000 });
       } catch (error) {
@@ -3689,9 +3694,11 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       }
     } finally { rmSync(outsideCwd, { recursive: true, force: true }); }
     const execCountBeforeStartProbes = execFacts.length;
+    preparationStage="negative_session_command";
     const wrongSessionStartCommandDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
       command: "sh", args: ["-c", "exit 0", "paperclip-not-runner-launch"], cwd: taskRoot, timeoutMs: 1000,
       nativePreparationPurpose: "native_session_start" }));
+    preparationStage="negative_session_root";
     const wrongSessionStartRootDenied = await expectDenied(runtime.executeSandboxTask({ companyId, runId, leaseId: lease.id,
       command: "sh", args: ["-c", "exit 0", "paperclip-runner-launch"], cwd: `${taskRoot}/outside`, timeoutMs: 1000,
       nativePreparationPurpose: "native_session_start" }));
@@ -3715,6 +3722,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     }
     negativeNativeSessionStartControls = { wrongCommandDenied: wrongSessionStartCommandDenied,
       wrongRootDenied: wrongSessionStartRootDenied, noExecution: !wrongSessionStartExecuted };
+    preparationStage="prepared";
   };
   prepareHostForRun = async (runId, leaseId) => {
     const existing = hostAdmissionByRun.get(runId);

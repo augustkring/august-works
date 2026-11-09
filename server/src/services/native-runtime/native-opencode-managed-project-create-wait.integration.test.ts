@@ -119,6 +119,10 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
     try {
       const locked = await Promise.race([
         taskLocked.promise,
+        runOutcome.then(outcome => {
+          if (outcome.error) throw outcome.error;
+          throw new Error("managed_project_wait_fixture_settled_before_hook");
+        }),
         new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("managed_project_wait_hook_not_reached")), 180_000)),
       ]);
       taskId = locked.taskId;

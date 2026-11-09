@@ -61,21 +61,23 @@ export function createManagedAssignedGatewayResultObserver(observer: ResultObser
       const wrapper: ToolGateway["executeTool"] = async function (this: ToolGateway, call, ...context) {
         const capturedCall = structuredClone(call);
         const replayCall = structuredClone(capturedCall);
-        let result: GatewayResult;
-        try { result = await original.apply(this, [call, ...context]); }
-        catch (error) {
-          resultCounts.thrown += 1;
-          try {
-            if (thrownFailureFacts.length < 8) thrownFailureFacts.push(thrownFailureFact(error));
-            else omittedThrownFailureFacts += 1;
-          } catch { omittedThrownFailureFacts += 1; }
-          throw error;
-        }
+        const invoke = async (exactCall: GatewayCall): Promise<GatewayResult> => {
+          try { return await original.apply(this, [exactCall, ...context]); }
+          catch (error) {
+            resultCounts.thrown += 1;
+            try {
+              if (thrownFailureFacts.length < 8) thrownFailureFacts.push(thrownFailureFact(error));
+              else omittedThrownFailureFacts += 1;
+            } catch { omittedThrownFailureFacts += 1; }
+            throw error;
+          }
+        };
+        const result = await invoke(call);
         if (result.status === "completed" || result.status === "replayed") {
           resultCounts[result.status] += 1;
           observerCallbackCount += 1;
           await observer({ call: capturedCall, result,
-            replay: () => original.apply(this, [structuredClone(replayCall), ...context]) });
+            replay: () => invoke(structuredClone(replayCall)) });
         } else resultCounts.other += 1;
         return result;
       };

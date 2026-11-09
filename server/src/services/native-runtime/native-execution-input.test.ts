@@ -30,6 +30,22 @@ describe("native bootstrap rendered-source closure", () => {
       runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false, ...overrides });
   };
 
+  it("identifies missing bootstrap witnesses using closed codes without admitting their input", () => {
+    const cases: Array<[Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]>, string]> = [
+      [{ references: null }, "rendered_source_missing"],
+      [{ renderedMarkdownDigest: null }, "rendered_digest_mismatch"],
+      [{ runtimeInputs: null }, "runtime_sources_missing"],
+      [{ contextManifestIds: [{ companyId, contextManifestId: randomUUID() }] }, "context_witness_missing"],
+      [{ rolePackInputs: [{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }] }, "role_pack_sources_invalid"],
+      [{ references: [{ kind: "task", id: issueId }, { kind: "unknown", id: issueId }] }, "unknown_rendered_source"],
+    ];
+    for (const [change, expected] of cases) {
+      const codes: string[] = [];
+      expect(input({ ...change, onDiagnostic: reason => codes.push(reason) })).toBeNull();
+      expect(codes).toEqual([expected]);
+    }
+  });
+
   it("keeps the complete Stage thread under a distinct persisted-owner trigger", () => {
     const humanId = "stage-responsible-human", wakeId = randomUUID(), intentId = randomUUID();
     const human = nativeContinuationCommentProjection({ id: randomUUID(), authorType: "user", authorUserId: "another-readable-human",

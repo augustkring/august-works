@@ -4786,35 +4786,40 @@ export function nativeTemporalContextContentHash(manifest: typeof contextManifes
   }), "utf8").digest("hex");
 }
 
-/** Reuse a Context Task item after this same Native run appends only its
- * audited workspace binding transform. Ordinary exact-version Context items
- * keep their original checks at each caller. */
+/** Bootstrap checks current rendered facts. Retained outputs keep their
+ * consumed facts under the current body/source/audit/reader checks. A changed
+ * snapshot must extend only the producing Run's audited workspace binding. */
 export async function assertNativeContextTaskSourceCurrent(db: Db | Transaction, input: {
   actor: AuthorizationActor; companyId: string; agentId: string; issueId: string;
   manifest: Pick<typeof contextManifests.$inferSelect, "id" | "companyId" | "agentId" | "runId" | "issueId" | "createdAt">;
   item: typeof contextManifestItems.$inferSelect;
+  consumption?: "bootstrap" | "retained";
 }): Promise<boolean> {
   return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, input.companyId, async scope => {
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
     const { manifest, item, issueId, companyId, agentId, actor } = input;
+    const retained = input.consumption === "retained";
     if (item.sourceProvider !== "august_works_tasks" || item.sourceRef !== `issue://${issueId}` ||
-        manifest.companyId !== companyId) return false;
+        manifest.companyId !== companyId || item.companyId !== companyId || item.manifestId !== manifest.id) return false;
     const [task] = await tx.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
       description: issues.description, status: issues.status, priority: issues.priority, updatedAt: issues.updatedAt,
       protocol: issues.payloadSourceProtocolVersion, snapshot: issues.payloadSourceSnapshot,
       invalidated: issues.payloadSourceSnapshotInvalidated,
       bodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))` })
       .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
-    if (!task || task.invalidated) return false;
-    const exactCurrent = task.updatedAt.toISOString() === item.sourceVersion &&
-      isDeepStrictEqual(task.snapshot, item.payloadSourceSnapshot);
+    if (!task || task.invalidated || !item.sourceVersion || !/^[a-f0-9]{64}$/i.test(item.contentHash)) return false;
+    const exactSnapshot = isDeepStrictEqual(task.snapshot, item.payloadSourceSnapshot);
+    // A retained output consumed the historical Context facts. Lifecycle
+    // metadata may advance; its original body/source closure and current ACLs may not.
+    if (retained && exactSnapshot) return true;
+    const exactCurrent = task.updatedAt.toISOString() === item.sourceVersion && exactSnapshot;
     if (exactCurrent)
       return Boolean(item.contentHash && nativeContextTaskEvidenceHash(nativeContextTaskEvidence(task)) === item.contentHash);
-    if (manifest.agentId !== agentId || manifest.issueId !== issueId || !manifest.runId || actor.type !== "agent" ||
-        actor.agentId !== agentId || actor.runId !== manifest.runId || actor.companyId !== companyId ||
+    if (manifest.agentId !== agentId || manifest.issueId !== issueId || !manifest.runId ||
+        !retained && (actor.type !== "agent" || actor.agentId !== agentId || actor.runId !== manifest.runId || actor.companyId !== companyId) ||
         task.protocol !== 1 || task.invalidated || !item.sourceVersion || !item.payloadSourceSnapshot ||
         !task.bodyHash || !item.contentHash ||
-        nativeContextTaskEvidenceHash(nativeContextTaskEvidence(task)) !== item.contentHash) return false;
+        !retained && nativeContextTaskEvidenceHash(nativeContextTaskEvidence(task)) !== item.contentHash) return false;
     const oldResult = nativePayloadSourceSnapshotSchema.safeParse(item.payloadSourceSnapshot);
     const currentResult = nativePayloadSourceSnapshotSchema.safeParse(task.snapshot);
     if (!oldResult.success || !currentResult.success || oldResult.data.owner.kind !== "issue" ||
@@ -4861,7 +4866,8 @@ export async function assertNativeContextTaskSourceCurrent(db: Db | Transaction,
       .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, manifest.runId)))
       .for("share");
     if (!run || run.agentId !== agentId || run.runtimeMode !== "native" ||
-        (run.nativeIssueId ?? run.issueId) !== issueId || run.responsibleUserId !== actor.onBehalfOfUserId) return false;
+        (run.nativeIssueId ?? run.issueId) !== issueId || !run.responsibleUserId ||
+        !retained && run.responsibleUserId !== actor.onBehalfOfUserId) return false;
     // This walks the complete current source/audit chain and rechecks source ACLs.
     await assertNativeTaskSnapshotOwnerCurrentInScope(tx, companyId, actor, issueId, scope);
     return true;
@@ -5426,7 +5432,7 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
         const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner?.payloadSourceSnapshot);
         const contextTaskCurrent = match && owner && snapshot.success
           ? await assertNativeContextTaskSourceCurrent(db, { actor, companyId, agentId: manifest.agentId,
-            issueId: match[1]!, manifest, item }) : false;
+            issueId: match[1]!, manifest, item, consumption: "retained" }) : false;
         if (!match || !owner || !ownerHash || owner.payloadSourceSnapshotInvalidated || !snapshot.success ||
           snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== companyId ||
           snapshot.data.owner.id !== match[1]! || snapshot.data.owner.contentHash !== ownerHash.hash ||
