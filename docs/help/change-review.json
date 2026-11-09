@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "638156f1125977702a57614592c67f4f984169b80d1e0b58d2463faead80252d",
+      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Ordinary plan metadata and Human-answered questions now retain their original canonical sources in Native context. Deleted noncausal comments are excluded from provider context; a deleted causal origin still refuses dispatch. These read profiles grant no approval or execution. Existing recovery guidance still requires the original Task, current access and the available recovery action."
+      "rationale": "Fresh sessions discard incompatible prior checkpoints. Manual Human queue adoption retains exact original comment sources and current permissions. Same-run audited workspace binding preserves unchanged Context facts. The existing recovery actions and approval requirements remain accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "638156f1125977702a57614592c67f4f984169b80d1e0b58d2463faead80252d",
+      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Ordinary plan metadata and Human-answered questions now retain their original canonical sources in Native context. Deleted noncausal comments are excluded from provider context; a deleted causal origin still refuses dispatch. These read profiles grant no approval or execution. Existing recovery guidance still requires the original Task, current access and the available recovery action."
+      "rationale": "Fresh sessions discard incompatible prior checkpoints. Manual Human queue adoption retains exact original comment sources and current permissions. Same-run audited workspace binding preserves unchanged Context facts. The existing recovery actions and approval requirements remain accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "638156f1125977702a57614592c67f4f984169b80d1e0b58d2463faead80252d",
+      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Plan metadata and Human-answer source captures preserve current company, Task, Run and reader privacy checks. Deleted comments are excluded from new Native provider context; original delivered sources remain subject to current erasure and access checks. Export scope, account/company deletion, Stop verification and managed storage erasure described here are unchanged."
+      "rationale": "Source validation checks original comments, current Human access and audit lineage after manual queue adoption or workspace binding. These changes add no export or deletion interface and do not alter accepted erasure or Stop receipts."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "638156f1125977702a57614592c67f4f984169b80d1e0b58d2463faead80252d",
+      "sourceSha256": "6f5026653246f41d0cea8ad2da7d15f76d87dcd73ea2c7184d4fed306c18c01a",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Plan metadata and Human-answer source captures preserve current company, Task, Run and reader privacy checks. Deleted comments are excluded from new Native provider context; original delivered sources remain subject to current erasure and access checks. Export scope, account/company deletion, Stop verification and managed storage erasure described here are unchanged."
+      "rationale": "Source validation checks original comments, current Human access and audit lineage after manual queue adoption or workspace binding. These changes add no export or deletion interface and do not alter accepted erasure or Stop receipts."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

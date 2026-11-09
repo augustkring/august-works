@@ -59,4 +59,22 @@ describe("Native execution failure log privacy", () => {
     expect(JSON.stringify(fields)).not.toContain(marker);
     expect(JSON.stringify(fields)).not.toContain("/tmp/");
   });
+  it("keeps generated workspace and summary refusal codes bounded without logging private error text", () => {
+    vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
+    const prefix = "native_bootstrap_source_closure_unavailable:workspaceCoordination;builder:unsupported_or_missing_witness;wake:wake_fields_invalid:";
+    const project = (message: string) => nativeExecutionFailureLogFields({ error: new Error(message),
+      runId: "00000000-0000-4000-8000-000000000001", failureCode: "adapter_failed" });
+    expect(project(prefix + "continuation+continuationSummary").nativeBootstrapSourceClosureDiagnostic).toEqual({
+      unsupported: ["workspaceCoordination"], builder: "unsupported_or_missing_witness",
+      wake: "wake_fields_invalid", wakeFields: ["continuation", "continuationSummary"],
+    });
+    const privateMarker = "private_refusal_marker";
+    const unknown = project(prefix + privateMarker);
+    expect(unknown.nativeBootstrapSourceClosureDiagnostic).toBeUndefined();
+    expect(JSON.stringify(unknown)).not.toContain(privateMarker);
+    const oversized = project(prefix + Array(200).fill("continuationSummary").join("+"));
+    expect(oversized.nativeBootstrapSourceClosureDiagnostic).toBeUndefined();
+    expect(JSON.stringify(oversized).length).toBeLessThan(2048);
+  });
+
 });

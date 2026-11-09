@@ -19,6 +19,7 @@ import { childReviewOutcomes } from "./native-runtime/child-review-outcomes.js";
 import { canActorReadHeartbeatRunPrivacy, type AuthorizationActor } from "./authorization.js";
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 import { nativeContinuationCommentProjection, nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds, nativeTaskWakeInteraction, nativeSha256 } from "./native-runtime/canonical.js";
+import { readNativeManualQueueAdoption } from "./native-runtime/manual-queue-adoption.js";
 import type { NativeCommentSourceCapture } from "./agent-conversations.js";
 
 /** A snapshot of the actual receiver and final redacted owner rendition; not
@@ -50,7 +51,8 @@ export type NativeTaskContinuationCapture = {
   answeredQuestions?: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[];
   acceptedPlanReview?: import("./native-runtime/accepted-plan-review-source.js").NativeAcceptedPlanReviewCapture;
   wake: { requestedByActorType: string | null; requestedByActorId: string | null; reason: string | null; originCommentIds: string[];
-    interaction?: NonNullable<ReturnType<typeof nativeTaskWakeInteraction>> };
+    interaction?: NonNullable<ReturnType<typeof nativeTaskWakeInteraction>>;
+    manualQueueAdoption?: import("./native-runtime/manual-queue-adoption.js").NativeManualQueueAdoption };
 };
 
 /** A low-trust summary of one actual finalized Native result. Its parent
@@ -598,9 +600,7 @@ export async function buildExecutionContinuation(input: {
   }
   if (input.onContinuationSourceCapture && receiver && outcomeReader.type === "agent" &&
     receiver.responsibleUserId && receiver.wakeupRequestId) {
-    const [wake] = await db.select({ id: agentWakeupRequests.id, payload: agentWakeupRequests.payload,
-      requestedByActorType: agentWakeupRequests.requestedByActorType, requestedByActorId: agentWakeupRequests.requestedByActorId,
-      reason: agentWakeupRequests.reason }).from(agentWakeupRequests).where(and(
+    const [wake] = await db.select().from(agentWakeupRequests).where(and(
       eq(agentWakeupRequests.id, receiver.wakeupRequestId), eq(agentWakeupRequests.companyId, companyId),
       eq(agentWakeupRequests.agentId, input.agentId), eq(agentWakeupRequests.runId, receiver.id),
     )).limit(1);
@@ -634,6 +634,8 @@ export async function buildExecutionContinuation(input: {
       }
     }
     const interaction = nativeTaskWakeInteraction(wake?.payload);
+    const manualQueueAdoption = wake && receiver ? await readNativeManualQueueAdoption(db, {
+      run: receiver, issueId, currentWake: wake }) : null;
     const summary = input.summaryDocument && input.summary === input.summaryDocument.value.body
       ? { source: input.summaryDocument.source, rawTrustHash: nativeSha256(input.summaryDocument.value.sourceTrust),
           rendition: await createRunSecretRedactionRegistry(db).redactForIssue(companyId, issueId, {
@@ -653,7 +655,7 @@ export async function buildExecutionContinuation(input: {
         messages: deliveredMessages as ExecutionContinuationEnvelope["messages"] } } : {}),
       wake: { requestedByActorType: wake.requestedByActorType, requestedByActorId: wake.requestedByActorId, reason: wake.reason,
         originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload),
-        ...(interaction ? { interaction } : {}) } }));
+        ...(interaction ? { interaction } : {}), ...(manualQueueAdoption ? { manualQueueAdoption } : {}) } }));
   }
   return envelope;
 }

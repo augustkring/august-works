@@ -27,6 +27,7 @@ import { accessService } from "../services/access.js";
 import { documentService } from "../services/documents.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
+import { verificationService } from "../services/supervision/verification-service.js";
 import { issueTreeControlService } from "../services/issue-tree-control.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { agentPauseService } from "../services/experience/agent-pause.js";
@@ -340,6 +341,59 @@ describe("dependency scheduling through the installed Native text draft controll
     await assertFirstBootstrapSourceCase(true);
   }, 60_000);
 
+  it("holds a completed Native Text result for canonical Human Plan verification", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    const output = "A retained Native Text result awaiting Human verification.";
+    let calls = 0;
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      expect(++calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      expect(String(init.body)).not.toContain(credential);
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const entry = await createDraftPlan(fixture, "Hold completed Native Text output for Human verification");
+      const wake = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: entry.task.id }, contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" } });
+      if (!wake) throw new Error("human_verification_native_text_wake_missing");
+      await heartbeat.drainActiveRunExecutions();
+      expect(calls).toBe(1);
+      await assertCompletedDraft(fixture, entry, wake.id, output);
+      const [awaitingHuman] = await db.select({ status: issues.status }).from(issues)
+        .where(and(eq(issues.companyId, f.home), eq(issues.id, entry.task.id)));
+      expect(awaitingHuman?.status).toBe("in_review");
+      const settings = instanceSettingsService(db), priorFeatures = await settings.getExperimental();
+      try {
+        await settings.updateExperimental({ supervision_v7: true, verifier_v7: true });
+        const verifier = verificationService(db), packet = await verifier.packet(fixture.human, f.home, entry.plan.id);
+        expect(packet.deterministicFailures).toEqual([]);
+        expect(packet.policy.workerSelfCertification).toBe(false);
+        const evidenceRefs = packet.evidence.map(item => item.ref);
+        const review = await verifier.review(fixture.human, f.home, entry.plan.id, {
+          expectedPlanVersion: packet.planVersion, workerId: packet.workerId, expectedResultHash: packet.resultHash,
+          result: "pass", rationale: "The Human reviewed the retained Native Text result against the current Plan contract.",
+          objectiveSatisfied: true,
+          businessInvariants: packet.contract.businessInvariants.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+          evidenceRequirements: packet.contract.evidenceRequirements.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+          prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+        });
+        expect(review).toMatchObject({ reviewerType: "human", result: "pass" });
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, entry.plan.id)))[0]?.status)
+          .toBe("completed");
+        expect((await db.select().from(issues).where(eq(issues.id, entry.task.id)))[0]?.status).toBe("done");
+      } finally {
+        await settings.updateExperimental({ supervision_v7: priorFeatures.supervision_v7, verifier_v7: priorFeatures.verifier_v7 });
+      }
+    });
+  }, 60_000);
+
   it("keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review", async () => {
     const { f, human, profile, model } = await seedInstalledDraft();
 
@@ -482,6 +536,122 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }, 60_000);
+  it.each(["manual", "forged_payload"] as const)("adopts another Human's retained comment queue only through the installed Native startup owner: %s", async mode => {
+    const fixture = await seedInstalledDraft();
+    const { f, human, model } = fixture;
+    const operatorId = `adopting-human-${randomUUID()}`;
+    const operator = await seedCurrentHumanSourceActor(db, [f.home], operatorId);
+    const tasks = issueService(db);
+    const task = await tasks.create(f.home, { title: "Retained Human comment queue",
+      description: "Retain one bounded internal draft for Human review.", status: "todo", workMode: "standard",
+      responsibleUserId: f.userId, createdByUserId: f.userId, assigneeAgentId: f.presence.id }, db, undefined,
+      { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+    const comment = await tasks.addComment(task.id, "Original Human input retained for the next admitted turn.",
+      { userId: f.userId }, { manualInputActor: human });
+    // This is the retained queue state exercised by the legacy adoption case.
+    // It grants no runtime, source, provider, or paid-dispatch qualification.
+    const [pending] = await db.insert(agentWakeupRequests).values({ companyId: f.home, agentId: f.presence.id,
+      source: "automation", reason: "issue_commented", status: "deferred_issue_execution",
+      requestedByActorType: "user", requestedByActorId: f.userId,
+      payload: { issueId: task.id, commentId: comment.id, _paperclipWakeContext: { wakeCommentIds: [comment.id] } },
+    }).returning();
+    let calls = 0, planId = "";
+    const output = "Original Human comment retained in an operator-authorized draft.";
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      expect(++calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      const body = String(init.body);
+      expect(JSON.parse(body)).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(body).tools).toBeUndefined();
+      expect(body).toContain("assignedRuntimeContext");
+      expect(body).not.toContain(credential);
+      const reservations = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, planId));
+      expect(reservations).toEqual([expect.objectContaining({ status: "dispatched", maximumMinor: 3,
+        principalUserId: operatorId })]);
+      init.signal?.throwIfAborted();
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const plans = orchestrationService(db);
+      const [currentTask] = await db.select({ updatedAt: issues.updatedAt }).from(issues)
+        .where(and(eq(issues.companyId, f.home), eq(issues.id, task.id)));
+      if (!currentTask) throw new Error("retained_queue_task_missing");
+      const plan = await plans.create(operator, f.home, { issueId: task.id, expectedIssueUpdatedAt: currentTask.updatedAt.toISOString(),
+        workload: "semantic", riskClass: "C0", completionContract: { objective: "Retain one internal queued-comment draft",
+          requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }] });
+      await plans.decide(operator, f.home, plan.id, { expectedVersion: plan.version, action: "start",
+        rationale: "Current Human adopts the saved comment input through the existing bounded draft owner" });
+      planId = plan.id;
+      const wake = await heartbeat.wakeup(f.presence.id, { ...(mode === "manual" ? { manualUserWake: true } : {}),
+        source: "on_demand", triggerDetail: "manual", reason: "issue_commented",
+        requestedByActorType: mode === "manual" ? "user" : "agent",
+        requestedByActorId: mode === "manual" ? operatorId : f.presence.id,
+        payload: { issueId: task.id, ...(mode === "forged_payload" ? { manualUserWake: true } : {}) },
+        contextSnapshot: { issueId: task.id, wakeReason: "issue_commented", responsibleUserId: operatorId } });
+      await heartbeat.drainActiveRunExecutions();
+      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      if (mode === "forged_payload") {
+        expect(calls).toBe(0);
+        expect(runs.some(run => run.responsibleUserId === operatorId)).toBe(false);
+        const requests = await db.select().from(agentWakeupRequests).where(and(
+          eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.requestedByActorType, "agent")));
+        expect(requests).not.toHaveLength(0);
+        expect(requests.every(row => row.payload?.manualUserWake === undefined)).toBe(true);
+        expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id)))
+          .toEqual([]);
+        expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.companyId, f.home))).toEqual([]);
+        expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
+        expect((await db.select().from(issueComments).where(eq(issueComments.id, comment.id)))[0]!.authorUserId).toBe(f.userId);
+        return;
+      }
+      expect(wake).not.toBeNull();
+      expect(runs.map(run => ({ id: run.id, status: run.status, runtimeMode: run.runtimeMode,
+        responsibleUserId: run.responsibleUserId, errorCode: run.errorCode }))).toEqual([
+        { id: wake!.id, status: "succeeded", runtimeMode: "native", responsibleUserId: operatorId, errorCode: null },
+      ]);
+      expect(runs[0]!.contextSnapshot?.wakeCommentIds).toEqual([comment.id]);
+      expect(runs[0]!.activeIdentityContextId).toBeTruthy();
+      expect(runs[0]!.contextSnapshot?.originIdentityContextId).toBeUndefined();
+      expect(runs[0]!.contextSnapshot?.retryOfRunId).toBeUndefined();
+      const receipt = nativeRunInputSourceReceiptSchema.parse(runs[0]!.runnerProfileJson?.nativeInputSourceReceipt);
+      expect(receipt.binding).toMatchObject({ runId: wake!.id, responsibleUserId: operatorId, issueId: task.id });
+      const [queue] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, pending!.id));
+      expect(queue).toMatchObject({ status: "coalesced", runId: wake!.id });
+      const [originalComment] = await db.select().from(issueComments).where(eq(issueComments.id, comment.id));
+      expect(originalComment!.authorUserId).toBe(f.userId);
+      expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]!.responsibleUserId).toBe(f.userId);
+      expect(plan.createdBy).toBe(operatorId);
+      const [attempt] = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plan.id));
+      expect(attempt).toMatchObject({ runId: wake!.id, agentId: f.presence.id });
+      const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.id, attempt!.executionManifestId!));
+      expect(manifest!.manifest).toMatchObject({ responsibleUserId: operatorId });
+      expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, wake!.id)))
+        .toEqual([expect.objectContaining({ schemaStatus: "accepted" })]);
+      const document = await documentService(db).getIssueDocumentByKey(task.id, "result");
+      expect(document).toMatchObject({ body: output });
+      if (!document?.latestRevisionId) throw new Error("adopted_queue_result_revision_missing");
+      const sourceRead = () => assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: f.home,
+        issueId: task.id, revisionId: document.latestRevisionId!, actor: operator });
+      await expect(sourceRead()).resolves.toBeUndefined();
+      expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]!.status).not.toBe("done");
+      // A replacement receipt with the same comments cannot become the original
+      // adoption Source. The retained output binds the exact saved queue ID.
+      await db.delete(agentWakeupRequests).where(eq(agentWakeupRequests.id, pending!.id));
+      await db.insert(agentWakeupRequests).values({ companyId: f.home, agentId: f.presence.id,
+        source: "automation", reason: "issue_commented", status: "coalesced", runId: wake!.id,
+        requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: task.id, commentId: comment.id, _paperclipWakeContext: { wakeCommentIds: [comment.id] } },
+      });
+      await expect(sourceRead()).rejects.toThrow("A Native task wake source changed");
+      expect(calls).toBe(1);
+    });
+  }, 60_000);
+
   it("keeps the Task owner as Native Run responsibility for a canonical automated wake requested by another Human", async () => {
     const fixture = await seedInstalledDraft();
     const { f, human, model } = fixture;

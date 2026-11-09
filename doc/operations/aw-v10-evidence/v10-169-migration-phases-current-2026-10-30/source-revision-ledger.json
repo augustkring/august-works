@@ -484,5 +484,16 @@
     "reason": "Use a parsed v4 internal text boundary with never-called backend descriptor/session sentinels so the actual PostgreSQL Source refusal is reached before provider startup. Keep all original Source refusal/event assertions. No production transport, Source policy or migration-phase change.",
     "qualificationBoundary": "63 privacy cases passed in disjoint controlled invocations; aggregate current-head CI and shared-database full-file execution remain separate. No migration apply, paid-provider or physical Host qualification.",
     "evidence": "doc/operations/aw-v10-evidence/security-entry-and-stop-20261109/qualification.tar.gz"
+  },
+  "nativeContextWorkspaceBindingReview20261109": {
+    "changes": [
+      {
+        "path": "server/src/services/context/context-manifest.ts",
+        "oldSha256": "31dd1f6a9c4c11c70e64b5e12959c02a80d7dd41fbcab26d9ddd734cf34bb0b9",
+        "newSha256": "6fae6520f135a4f828d9633b0a11f544e52e70801eb7245271797fed1c23686e"
+      }
+    ],
+    "reason": "Revalidate unchanged rendered Task evidence after only the current Native Run adds an audited workspace-binding transform. Keep exact ordinary sources, canonical original Human/source/audit/ACL checks and immutable Context manifests.",
+    "qualificationBoundary": "All 13 Context owner cases passed locally; the final current-fact cache pins and Human feature restoration passed the affected Context, Memory and Human review subset. No migration execution, phase-status promotion, actual SDK, hosted provider or Human acceptance claim."
   }
 }

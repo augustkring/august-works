@@ -55,10 +55,10 @@ import { seedNativePasskeySession } from "./helpers/native-authentication-fixtur
 import { runManagedNativeConversationFrame } from "./helpers/managed-native-conversation-frame.js";
 import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.generated.js";
 import { supportGuideKnowledgePin } from "../services/experience/support-assistant-grounding.js";
-import { enqueueCompanyManagedOpenCodeRuntimeErasure, managedOpenCodeRuntimeDirectory, nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
+import { enqueueCompanyManagedOpenCodeRuntimeErasure, isRemoteRuntimeAssetLocator, managedOpenCodeRuntimeDirectory, nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { PROCESS_IDENTITY_RECORDED, hasNativeLocalProcessStop, recordNativeLocalProcessStop } from "../services/native-local-process-stop.js";
-import { hasRemoteTerminationReceipt } from "../services/remote-execution-termination.js";
+import { hasRemoteTerminationReceipt, remoteExecutionHasStopped } from "../services/remote-execution-termination.js";
 import { appendHeartbeatRunEvent } from "../services/heartbeat-run-events.js";
 import { firstPartySupportModelGateway, supportAssistantPolicyRevision } from "../services/orchestration/first-party-support-model-gateway.js";
 import { anthropicReadOnlyCall } from "../services/orchestration/read-only-model-transport.js";
@@ -192,7 +192,10 @@ const support = await getEmbeddedPostgresTestSupport();
       lateProofEnabled: boolean,
       lateProofAccountMismatch: boolean;
     let cleanupOffboardingProviderFixture: (() => Promise<void>) | null = null;
+    let priorRuntimeLockDiagnostics: string | undefined;
     beforeEach(async () => {
+      priorRuntimeLockDiagnostics = process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS;
+      process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS = "1";
       // Global expiry and offboarding workers must not consume earlier tests’ companies.
       database = await startEmbeddedPostgresTestDatabase("aw-v7-model-budget-");
       db = createDb(database.connectionString, { maxConnections: 3 });
@@ -207,7 +210,11 @@ const support = await getEmbeddedPostgresTestSupport();
         try {
           await db?.$client.end({ timeout: 0 });
         } finally {
-          await database?.cleanup();
+          try { await database?.cleanup(); }
+          finally {
+            if (priorRuntimeLockDiagnostics === undefined) delete process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS;
+            else process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS = priorRuntimeLockDiagnostics;
+          }
         }
       }
     }, 30000);
@@ -402,6 +409,9 @@ const support = await getEmbeddedPostgresTestSupport();
         processPidPresent: run.processPid !== null,
         processGroupPresent: run.processGroupId !== null, controllerLeasePresent: run.controllerLeaseExpiresAt !== null,
         controllerBootIdPresent: run.controllerBootId !== null,
+        nativeProcessCleanupPending: run.nativeProcessCleanupPending,
+        hasNativeRemoteRuntimeAssetLocator: isRemoteRuntimeAssetLocator(run.runnerProfileJson?.nativeRemoteRuntimeAssetLocator, run),
+        nativeRemoteWorkloadStopped: await remoteExecutionHasStopped(db, facts.companyId, run.id),
         finalizationPhase: finalization?.phase ?? null, finalizationLeaseHeld: !!finalization?.leaseOwner || !!finalization?.leaseExpiresAt,
         nativeLocalStopReceipt: await hasNativeLocalProcessStop(db, facts.companyId, run.id),
         leases: leases.map(lease => ({ provider: lease.provider, status: lease.status,
@@ -521,11 +531,15 @@ const support = await getEmbeddedPostgresTestSupport();
     }
     async function assertConversationNativeStopBeforeErasure(facts: ConversationOffboardingFacts) {
       const stop = await nativeStopFacts(facts);
+      const localStopConfirmed = !stop.processPidPresent && stop.nativeLocalStopReceipt;
+      const remoteStopConfirmed = stop.hasNativeRemoteRuntimeAssetLocator &&
+        stop.nativeProcessCleanupPending === false && stop.nativeRemoteWorkloadStopped;
       if (!stop.runPresent || stop.runtimeMode !== "native" ||
           !["succeeded", "failed", "timed_out", "cancelled", "interrupted"].includes(stop.runStatus) ||
-          stop.processPidPresent || stop.processGroupPresent || stop.controllerLeasePresent || stop.controllerBootIdPresent ||
+          stop.processGroupPresent || stop.controllerLeasePresent || stop.controllerBootIdPresent ||
           stop.finalizationLeaseHeld ||
-          !["committed", "terminal_failure"].includes(stop.finalizationPhase ?? "") || !stop.nativeLocalStopReceipt)
+          !["committed", "terminal_failure"].includes(stop.finalizationPhase ?? "") ||
+          !(localStopConfirmed || remoteStopConfirmed))
         throw new Error(`conversation_native_stop_not_confirmed:${JSON.stringify(stop)}`);
     }
     function conversationReservationService(facts: ConversationFrameFacts) {

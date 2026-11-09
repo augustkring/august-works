@@ -10,6 +10,7 @@ import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { issueService } from "../services/issues.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { verificationService } from "../services/supervision/verification-service.js";
 import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
 import type { NativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
@@ -147,6 +148,48 @@ async function authorizeTask(input: { actor: import("../services/authorization.j
   });
   await orchestrationService(db).decide(input.actor, input.companyId, plan.id,
     { expectedVersion: plan.version, action: "start", rationale: "Authorize this bounded managed scheduler test" });
+  return plan;
+}
+
+async function verifyPlanAsCurrentHuman(input: {
+  actor: import("../services/authorization.js").AuthorizationActor;
+  companyId: string; planId: string;
+}) {
+  const verifier = verificationService(db);
+  const packet = await verifier.packet(input.actor, input.companyId, input.planId);
+  expect(packet.deterministicFailures).toEqual([]);
+  expect(packet.policy.workerSelfCertification).toBe(false);
+  const evidenceRefs = packet.evidence.map(item => item.ref);
+  const review = await verifier.review(input.actor, input.companyId, input.planId, {
+    expectedPlanVersion: packet.planVersion, workerId: packet.workerId, expectedResultHash: packet.resultHash,
+    result: "pass", rationale: "The current Human reviewed the retained managed result against its active Plan contract.",
+    objectiveSatisfied: true,
+    businessInvariants: packet.contract.businessInvariants.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+    evidenceRequirements: packet.contract.evidenceRequirements.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+    prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+  });
+  expect(review).toMatchObject({ reviewerType: "human", result: "pass" });
+}
+
+async function expectHumanVerifiedTaskDone(input: {
+  actor: import("../services/authorization.js").AuthorizationActor;
+  companyId: string; taskId: string; runId: string; planId: string;
+  drain: () => Promise<void>; providerCallCount: () => number;
+}) {
+  const [awaitingHuman] = await db.select({ status: issues.status, completedAt: issues.completedAt }).from(issues)
+    .where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.taskId)));
+  expect(awaitingHuman).toMatchObject({ status: "in_review", completedAt: null });
+  const callsBeforeReview = input.providerCallCount();
+  await verifyPlanAsCurrentHuman({ actor: input.actor, companyId: input.companyId, planId: input.planId });
+  await input.drain();
+  expect(input.providerCallCount()).toBe(callsBeforeReview);
+  expect(await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.nativeIssueId, input.taskId))))
+    .toHaveLength(1);
+  const [finishedTask] = await db.select({ status: issues.status, completedAt: issues.completedAt }).from(issues)
+    .where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.taskId)));
+  await expectTaskDoneWithSafeFinalizationDiagnostic({ companyId: input.companyId, taskId: input.taskId,
+    runId: input.runId, task: finishedTask });
 }
 
 async function expectTaskDoneWithSafeFinalizationDiagnostic(input: {
@@ -214,7 +257,7 @@ describe("heartbeat comment wake batching", () => {
           if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; }
           if (firstRunId && run.id !== firstRunId) throw new Error("empty_deferred_unexpected_second_run");
         },
-        driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun, humanApi }) => {
+        driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, facts, factsForRun, humanApi }) => {
           try {
             companyId = fixtureCompanyId; agentId = fixtureAgentId;
           const task = await createAssignedTask({ actor, companyId, agentId, title: "Discard deferred follow-up" });
@@ -222,7 +265,7 @@ describe("heartbeat comment wake batching", () => {
           const firstComment = await issueService(db).addComment(task.id, "First comment", { userId: actor.userId! },
             { manualInputActor: actor });
           const [currentTask] = await db.select({ updatedAt: issues.updatedAt }).from(issues).where(eq(issues.id, task.id));
-          await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: currentTask!.updatedAt,
+          const plan = await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: currentTask!.updatedAt,
             objective: "Finish without a queued follow-up", outputKey: "empty-deferred-document" });
           reviewDocument = () => acceptExactDocumentWorkProduct({ humanApi, companyId, taskId: task.id,
             runId: firstRunId, documentKey: "empty-deferred-document", userId: actor.userId! });
@@ -276,9 +319,8 @@ describe("heartbeat comment wake batching", () => {
             eq(agentWakeupRequests.status, "cancelled")));
           expect(cancelled).toHaveLength(1);
           expect(cancelled[0]?.id).toBe(deferredWake!.id);
-          const [finishedTask] = await db.select({ status: issues.status, completedAt: issues.completedAt })
-            .from(issues).where(eq(issues.id, taskId));
-          await expectTaskDoneWithSafeFinalizationDiagnostic({ companyId, taskId, runId: firstRunId, task: finishedTask });
+          await expectHumanVerifiedTaskDone({ actor, companyId, taskId, runId: firstRunId, planId: plan.id,
+            drain: () => heartbeat.drainActiveRunExecutions(), providerCallCount: () => facts().providerCallCount });
           } finally { releaseProvider(); }
         },
       });
@@ -335,10 +377,10 @@ describe("heartbeat comment wake batching", () => {
           }
           if (firstRunId && run.id !== firstRunId) throw new Error("self_comment_unexpected_second_run");
         },
-        driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun, humanApi }) => {
+        driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, facts, factsForRun, humanApi }) => {
           companyId = fixtureCompanyId; agentId = fixtureAgentId;
           const task = await createAssignedTask({ actor, companyId, agentId, title: "Self-comment must not reopen" });
-          await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: task.updatedAt,
+          const plan = await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: task.updatedAt,
             objective: "Close the task and ignore the run-authored comment wake", outputKey: "self-comment-document" });
           reviewDocument = () => acceptExactDocumentWorkProduct({ humanApi, companyId, taskId: task.id,
             runId: firstRunId, documentKey: "self-comment-document", userId: actor.userId! });
@@ -401,9 +443,8 @@ describe("heartbeat comment wake batching", () => {
           expect(runs[0]?.contextSnapshot).toMatchObject({ wakeReason: "issue_assigned",
             paperclipWake: expect.objectContaining({ reason: "issue_assigned" }) });
           expect((await factsForRun(firstRunId)).providerCallCount).toBeGreaterThan(0);
-          const [issueAfterPromotion] = await db.select({ status: issues.status, completedAt: issues.completedAt })
-            .from(issues).where(eq(issues.id, task.id));
-          await expectTaskDoneWithSafeFinalizationDiagnostic({ companyId, taskId: task.id, runId: firstRunId, task: issueAfterPromotion });
+          await expectHumanVerifiedTaskDone({ actor, companyId, taskId: task.id, runId: firstRunId, planId: plan.id,
+            drain: () => heartbeat.drainActiveRunExecutions(), providerCallCount: () => facts().providerCallCount });
         },
       });
     completedTests++;
@@ -438,11 +479,11 @@ describe("heartbeat comment wake batching", () => {
           if (firstProviderResponse) { firstProviderResponse = false; providerRunId = run.id; }
           if (firstRunId && run.id !== firstRunId) throw new Error("deleted_comment_unexpected_second_run");
         },
-        driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, factsForRun, humanApi }) => {
+        driveScheduler: async ({ actor, companyId: fixtureCompanyId, agentId: fixtureAgentId, heartbeat, facts, factsForRun, humanApi }) => {
           try {
             companyId = fixtureCompanyId; agentId = fixtureAgentId;
             const task = await createAssignedTask({ actor, companyId, agentId, title: "Deleted follow-up must not reopen" });
-            await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: task.updatedAt,
+            const plan = await authorizeTask({ actor, companyId, taskId: task.id, expectedIssueUpdatedAt: task.updatedAt,
               objective: "Complete the assigned task without promoting a deleted comment", outputKey: "deleted-before-promotion-document" });
           reviewDocument = () => acceptExactDocumentWorkProduct({ humanApi, companyId, taskId: task.id,
             runId: firstRunId, documentKey: "deleted-before-promotion-document", userId: actor.userId! });
@@ -498,9 +539,8 @@ describe("heartbeat comment wake batching", () => {
               eq(agentWakeupRequests.status, "cancelled")));
             expect(cancelled).toHaveLength(1);
             expect(cancelled[0]?.id).toBe(deferredWake!.id);
-            const [finishedTask] = await db.select({ status: issues.status, completedAt: issues.completedAt })
-              .from(issues).where(eq(issues.id, task.id));
-            await expectTaskDoneWithSafeFinalizationDiagnostic({ companyId, taskId: task.id, runId: firstRunId, task: finishedTask });
+            await expectHumanVerifiedTaskDone({ actor, companyId, taskId: task.id, runId: firstRunId, planId: plan.id,
+              drain: () => heartbeat.drainActiveRunExecutions(), providerCallCount: () => facts().providerCallCount });
           } finally { releaseProvider(); }
         },
       });

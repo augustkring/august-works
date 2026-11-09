@@ -920,10 +920,10 @@ export function nativeExecutionFailureLogFields(input: {
 }): Record<string, unknown> {
   const failureCode = /^[a-z][a-z0-9_]{0,63}$/.test(input.failureCode) ? input.failureCode : "adapter_failed";
   const fields: Record<string, unknown> = { runId: input.runId, failureCode };
-  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && input.error instanceof Error) {
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && input.error instanceof Error && input.error.message.length <= 2_048) {
     const match = /^native_bootstrap_source_closure_unavailable:([a-zA-Z,]+);builder:([a-z_]+);wake:([A-Za-z_:+]+)$/.exec(input.error.message);
     const unsupportedKeys = new Set(["review", "directPrompt", "previousRun", "persistedInput", "resume",
-      "initialGuidance", "continuation", "planning", "conversationHistory", "wake", "projectPaths", "projectWorkspaceSource",
+      "initialGuidance", "continuation", "planning", "conversationHistory", "wake", "workspaceCoordination", "projectPaths", "projectWorkspaceSource",
       "authoredContextManifests", "missingTask"]);
     const builderReasons = new Set(["interaction_sources", "unsupported_or_missing_witness", "ambiguous_reference",
       "reference_source_mismatch", "source_snapshot_invalid", "additional_inputs_unknown", "source_budget_exceeded", "unknown"]);
@@ -939,7 +939,7 @@ export function nativeExecutionFailureLogFields(input: {
         "checkboxSelection", "checkedOutByHarness", "externalChatExecutionBound", "simplifiedEnglishInteractions",
         "connectorSkillInstructions", "dependencyBlockedInteraction", "treeHoldInteraction", "activeTreeHold",
         "unresolvedBlockerIssueIds", "unresolvedBlockerSummaries", "executionStage", "taskWatchdog", "skillTest",
-        "commentIds", "latestCommentId", "comments", "annotationDeltas", "planReviewContext", "documentReviewContext",
+        "continuationSummary", "commentIds", "latestCommentId", "comments", "annotationDeltas", "planReviewContext", "documentReviewContext",
         "truncated", "fallbackFetchNeeded"]);
       const wakeFields = wakeFieldsText ? wakeFieldsText.split("+") : [];
       if (unsupported.every(key => unsupportedKeys.has(key)) && builderReasons.has(match[2]!) && wakeReasons.has(wakeReason!) &&
@@ -24519,7 +24519,7 @@ export function heartbeatService(
             const selectedMarkdown = selectedNativeTaskSourceMap ? selectedNativeTaskPrompt : "";
             const nativeBootstrapUnsupported = {
               review: Boolean(nativeReviewRequest), directPrompt: Boolean(directAgentPrompt),
-              previousRun: Boolean(previousNativeRun && !nativeBootstrapRetainedRunSource),
+              previousRun: Boolean(previousNativeRun && nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
               persistedInput: Boolean(persistedNativeExecutionInput),
               resume: Boolean(nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
               initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),

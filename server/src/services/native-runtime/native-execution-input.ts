@@ -232,7 +232,8 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   }
   if (!c || typeof c !== "object" || Array.isArray(c) || !c.trigger || typeof c.trigger !== "object" ||
     Array.isArray(c.trigger) || !c.coverage || typeof c.coverage !== "object" || Array.isArray(c.coverage) ||
-    !capture.wake || Object.keys(capture.wake).sort().join(",") !== ["originCommentIds", "reason", "requestedByActorId", "requestedByActorType", ...(capture.wake.interaction ? ["interaction"] : [])].sort().join(",") ||
+    !capture.wake || Object.keys(capture.wake).sort().join(",") !== ["originCommentIds", "reason", "requestedByActorId", "requestedByActorType", ...(capture.wake.interaction ? ["interaction"] : []),
+      ...(capture.wake.manualQueueAdoption ? ["manualQueueAdoption"] : [])].sort().join(",") ||
     !Array.isArray(capture.wake.originCommentIds) || !Array.isArray(capture.commentSources)) return null;
   const keys = ["version", "companyId", "issueId", "trigger", "originCommentIds", "objective", "messages", "humanResponses",
     "interactionOutcomes", "completedWork", "recoveryOutcomes", "unresolvedInteractionIds", "coverage", "completedActions", "resumeDelta"];
@@ -251,6 +252,17 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     capture.commentSources.length !== c.messages.length || capture.wake.reason !== input.wakeReason ||
     (!hasStageTrigger && (capture.wake.requestedByActorType !== "user" || !capture.wake.requestedByActorId))) return null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const adoption = capture.wake.manualQueueAdoption;
+  if (adoption && (Object.keys(adoption).sort().join(",") !==
+      "agentId,companyId,issueId,operatorUserId,originCommentIds,originQueueIds,runId,schema,wakeupRequestId" ||
+      adoption.schema !== "paperclip.native-manual-queue-adoption.v1" || adoption.companyId !== input.companyId ||
+      adoption.issueId !== input.issueId || adoption.agentId !== input.agentId || adoption.runId !== input.runId ||
+      adoption.wakeupRequestId !== input.wakeupRequestId || adoption.operatorUserId !== capture.wake.requestedByActorId ||
+      adoption.operatorUserId !== input.responsibleUserId || capture.wake.requestedByActorType !== "user" || !Array.isArray(adoption.originQueueIds) || !adoption.originQueueIds.length ||
+      !Array.isArray(adoption.originCommentIds) || adoption.originQueueIds.length > 256 ||
+      adoption.originCommentIds.length > 256 || adoption.originQueueIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
+      adoption.originQueueIds.some((id, index) => index > 0 && adoption.originQueueIds[index - 1]! >= id) ||
+      !isDeepStrictEqual(adoption.originCommentIds, [...new Set(capture.wake.originCommentIds)].sort()))) return null;
   if (![input.companyId, input.issueId, input.runId, input.agentId, input.wakeupRequestId].every(id => typeof id === "string" && uuid.test(id)) ||
     capture.wake.originCommentIds.length > 256 || capture.wake.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id)) ||
     c.originCommentIds.some(id => typeof id !== "string" || !uuid.test(id))) return null;
@@ -540,8 +552,8 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     if (origins.some(message => !message) || capture.wake.originCommentIds.some(id => !plan.originCommentIds.includes(id))) return null;
   } else if (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null) ||
     admittedWakeOrigins.length === 0 || admittedWakeOrigins.some(message => !message || message.authorType !== "user" ||
-      message.createdByRunId !== null || message.authorId !== capture.wake.requestedByActorId ||
-      !c.originCommentIds.includes(message.id))))) return null;
+      message.createdByRunId !== null || (!adoption && message.authorId !== capture.wake.requestedByActorId) ||
+      !c.originCommentIds.includes(message.id) || (adoption && !adoption.originCommentIds.includes(message.id)))))) return null;
   const latest = c.messages.findLast(message => message.authorType === "user" && message.createdByRunId === null && message.body.trim());
   if ((!latest && !hasStageTrigger && !hasAcceptedPlanReview) ||
     c.objective !== (latest?.body ?? (hasAcceptedPlanReview ? acceptedPlanReview!.taskObjective : stageTrigger?.taskObjective)) || Object.keys(c.coverage).sort().join(",") !==
@@ -799,9 +811,13 @@ export function captureNativeTaskWakeSource(input: {
   const coordination = input.workspaceCoordinationCapture
     ? exactNativeWorkspaceCoordination(input.workspaceCoordinationCapture, input) : null;
   if (input.workspaceCoordinationCapture && !coordination) return reject("wake_fields_invalid", ["workspaceCoordination"]);
+  const manualQueueAdoption = input.continuationCapture?.wake.manualQueueAdoption;
+  const content = manualQueueAdoption
+    ? (coordination ? { wake: payload, manualQueueAdoption, workspaceCoordination: coordination }
+      : { wake: payload, manualQueueAdoption })
+    : coordination ? { wake: payload, workspaceCoordination: coordination } : payload;
   return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId,
-    sourceVersion: input.sourceVersion, contentHash: nativeSha256(coordination
-      ? { wake: payload, workspaceCoordination: coordination } : payload) };
+    sourceVersion: input.sourceVersion, contentHash: nativeSha256(content) };
 }
 
 /** Resolve only references emitted by the real Markdown renderer. Missing,

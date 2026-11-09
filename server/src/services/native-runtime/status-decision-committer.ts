@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import type { CreateIssueThreadInteraction } from "@paperclipai/shared";
 import {
@@ -13,6 +13,8 @@ import {
   issues,
   nativeRunFinalizations,
   nativeRunResults,
+  orchestrationPlans,
+  orchestrationWorkers,
   statusDecisionEffects,
   statusDecisions,
   workAssessments,
@@ -1730,6 +1732,38 @@ export async function commitNativeStatusDecision(input: {
             effects: input.decision.effects.filter((effect) => effect.kind === "release_checkout"),
           },
         };
+      } else {
+        const requiresOrchestrationVerification = await tx
+          .select({ id: orchestrationPlans.id })
+          .from(orchestrationPlans)
+          .leftJoin(orchestrationWorkers, and(
+            eq(orchestrationWorkers.companyId, orchestrationPlans.companyId),
+            eq(orchestrationWorkers.planId, orchestrationPlans.id),
+            eq(orchestrationWorkers.issueId, input.issueId),
+          ))
+          .where(and(
+            eq(orchestrationPlans.companyId, input.companyId),
+            notInArray(orchestrationPlans.status, ["completed", "cancelled", "failed"]),
+            or(
+              eq(orchestrationPlans.issueId, input.issueId),
+              and(eq(orchestrationWorkers.issueId, input.issueId), notInArray(orchestrationWorkers.status, ["completed"])),
+            ),
+          ))
+          .limit(1)
+          .then((rows) => rows.length > 0);
+        if (requiresOrchestrationVerification && issue.status !== "done") {
+          input = {
+            ...input,
+            decision: {
+              ...input.decision,
+              statusAction: "in_review",
+              toStatus: "in_review",
+              reasonCode: "orchestration_verification_required",
+              unblockDescriptor: null,
+              effects: input.decision.effects.filter((effect) => effect.kind === "release_checkout"),
+            },
+          };
+        }
       }
       if (input.decision.reasonCode === null) throw new Error("native_status_reason_code_required");
       reasonCode = input.decision.reasonCode;

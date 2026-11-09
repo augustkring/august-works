@@ -472,7 +472,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
   };
   const runtimeConnection = await makeConnection("runtime", runtimeSecret.id);
   const [runtimeToolProfile]=await db.insert(toolProfiles).values({companyId,profileKey:`conversation-runtime-${randomUUID()}`,
-    name:"Conversation runtime broker fixture",defaultAction:"deny"}).returning();
+    name:`Conversation runtime broker fixture ${randomUUID()}`,defaultAction:"deny"}).returning();
   assert.ok(runtimeToolProfile);
   await db.insert(toolProfileBindings).values({companyId,profileId:runtimeToolProfile.id,targetType:"agent",targetId:agentId});
   await db.insert(toolProfileEntries).values({companyId,profileId:runtimeToolProfile.id,selectorType:"tool_name",effect:"include",toolName:runtimeConnection.toolName});
@@ -827,7 +827,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   // grants. Requalification creates a new canary without changing Agent tools.
   const { canary, canarySecretValue } = await createCanary();
   const [gatewayProfile]=await db.insert(toolProfiles).values({companyId,profileKey:`conversation-gateway-${randomUUID()}`,
-    name:"Conversation qualification gateway",defaultAction:"deny"}).returning();assert.ok(gatewayProfile);
+    name:`Conversation qualification gateway ${randomUUID()}`,defaultAction:"deny"}).returning();assert.ok(gatewayProfile);
   await db.insert(toolProfileEntries).values([canary,runtimeConnection].map(item=>({companyId,profileId:gatewayProfile.id,
     selectorType:"connection" as const,effect:"include" as const,connectionId:item.connection.id})));
   let qualificationCredentialFixture: NonNullable<SandboxCapabilitySnapshot["qualificationCredentialFixture"]>;
@@ -2443,17 +2443,44 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       throw error;
     }
   };
+  const driveHostObservation = { active: false, phase: "idle", currentAction: "none", lastAction: "none",
+    claimedCommands: 0, claimPolls: 0, startedAt: 0, lastCommandAt: 0, workSettled: false };
+  const safeDriveHostObservation = () => ({ active: driveHostObservation.active,
+    phase: ["idle", "claiming", "processing", "waiting", "settled", "rejected", "deadline"].includes(driveHostObservation.phase)
+      ? driveHostObservation.phase : "other",
+    currentAction: ["none", "capabilities", "prepare", "probe", "inspect", "apply", "start", "stop", "unknown"].includes(driveHostObservation.currentAction)
+      ? driveHostObservation.currentAction : "other",
+    lastAction: ["none", "capabilities", "prepare", "probe", "inspect", "apply", "start", "stop", "unknown"].includes(driveHostObservation.lastAction)
+      ? driveHostObservation.lastAction : "other",
+    claimedCommands: Math.min(1_000_000, driveHostObservation.claimedCommands),
+    claimPolls: Math.min(1_000_000, driveHostObservation.claimPolls),
+    elapsedMs: driveHostObservation.startedAt ? Math.min(600_000, Math.max(0, Date.now() - driveHostObservation.startedAt)) : 0,
+    lastCommandAgeMs: driveHostObservation.lastCommandAt ? Math.min(600_000, Math.max(0, Date.now() - driveHostObservation.lastCommandAt)) : null,
+    workSettled: driveHostObservation.workSettled });
   const driveHost = async <T>(work: Promise<T>): Promise<T> => {
     let settled = false;
-    const result = work.then(value => ({ value }), error => ({ error })).then(value => { settled = true; return value; });
+    driveHostObservation.active = true; driveHostObservation.phase = "claiming";
+    driveHostObservation.currentAction = "none"; driveHostObservation.lastAction = "none";
+    driveHostObservation.claimedCommands = 0; driveHostObservation.claimPolls = 0;
+    driveHostObservation.startedAt = Date.now(); driveHostObservation.lastCommandAt = 0; driveHostObservation.workSettled = false;
+    const result = work.then(value => ({ value }), error => ({ error })).then(value => {
+      settled = true; driveHostObservation.workSettled = true;
+      driveHostObservation.phase = "settled"; driveHostObservation.active = false; return value;
+    });
     const deadline = Date.now() + 30_000;
     while (!settled && Date.now() < deadline) {
+      driveHostObservation.phase = "claiming"; driveHostObservation.claimPolls++;
       const claim = await transport.claim(host.id);
       if (!claim) { await new Promise(resolve => setTimeout(resolve, 2)); continue; }
+      driveHostObservation.phase = "processing"; driveHostObservation.claimedCommands++;
+      driveHostObservation.lastCommandAt = Date.now();
       const secret = privateDecrypt({ key: hostKeys.privateKey, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: "sha256",
         oaepLabel: Buffer.from("aw-runtime-command-v6") }, Buffer.from(claim.envelope.encryptedKey, "base64url"));
       const command = unseal<Record<string, any>>(claim.envelope.ciphertext, secret.toString("hex"), `command:${claim.id}:${host.id}:1`);
       const action = command.action as string;
+      const observedAction = ["capabilities", "prepare", "probe", "inspect", "apply", "start", "stop"].includes(action)
+        ? action : "unknown";
+      driveHostObservation.currentAction = observedAction; driveHostObservation.lastAction = observedAction;
       const snapshot = capabilities();
       let reply: Record<string, any>;
       if (action === "capabilities") reply = { action, capabilities: snapshot };
@@ -2721,10 +2748,12 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       }
       await completeHostCommand(claim.id, { claimToken: command.claimToken, generation: command.scope.cellGeneration,
         success: true, reply, errorCode: null }, { action, ...(command.probe?.caseId ? { probeCaseId: command.probe.caseId } : {}) });
+      driveHostObservation.currentAction = "none"; driveHostObservation.phase = "waiting";
     }
-    if (!settled) throw new Error("conversation_software_host_command_timeout");
+    if (!settled) { driveHostObservation.phase = "deadline"; driveHostObservation.active = false;
+      throw new Error("conversation_software_host_command_timeout"); }
     const output = await result;
-    if ("error" in output) throw output.error;
+    if ("error" in output) { driveHostObservation.phase = "rejected"; driveHostObservation.active = false; throw output.error; }
     return output.value;
   };
   let qualificationEvidence:Record<string,unknown>|null=null;
@@ -3147,7 +3176,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const reservations = await db.select({status:orchestrationModelReservations.status,purpose:orchestrationModelReservations.purpose,
         responsePresent:sql<boolean>`${orchestrationModelReservations.providerResponseHash} is not null`})
         .from(orchestrationModelReservations).where(eq(orchestrationModelReservations.conversationRunId,expectedRunId));
-      const snapshot=JSON.stringify({stage:preparationStage,run,events,reservations});
+      const snapshot=JSON.stringify({stage:preparationStage,run,events,reservations,
+        hostAction:safeDriveHostObservation(),postgresLockSampleCount:postgresLockSnapshots.length,
+        postgresLockSnapshots:postgresLockSnapshots.slice(-4)});
       if(snapshot!==lastProgressSnapshot){lastProgressSnapshot=snapshot;console.info("conversation_software_host_progress",snapshot);}
     } catch {/* progress sampling never controls execution */}
   };
@@ -3706,7 +3737,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           failureClass:safeSandboxFailureClass(current),sourceFrames:safeErrorSourceFrames(current)});
         current=row.cause;
       }
-      const failure={phase:preparationStage,chain,
+      const failure={phase:preparationStage,chain,hostAction:safeDriveHostObservation(),
+        postgresLockSampleCount:postgresLockSnapshots.length,
         hostLifecycleObservations:hostLifecycleObservations.slice(-12)};sandboxExecutionFailures.push(failure);
       if(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")console.error("conversation_software_host_preparation_failed",JSON.stringify(failure));
       hostAdmissionByRun.delete(runId);
@@ -3880,6 +3912,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       hostHeartbeatFailed,
       hostCliOperations: [...hostCliOperations],
       postgresLockSnapshots,
+      hostAction:safeDriveHostObservation(),
       relayCommandOwners: [...relayCommandOwnerByRequestId.entries()]
         .map(([requestId, owner]) => ({ requestId, owner })).slice(-256),
       sandboxExecutionChecks,

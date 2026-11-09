@@ -28,11 +28,13 @@ import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 import { readNativeRuntimeAssetText } from "./native-runtime/runtime-context.js";
 import { assertAuthoredAgentSnapshotCurrent } from "./agents/authored-definition.js";
 import { readNativeBootstrapContextWitness } from "./context/native-bootstrap-context-witness.js";
+import { nativeContextTaskEvidence, nativeContextTaskEvidenceHash } from "./context/context-task-evidence.js";
 import { assertLearnedAssetAnalyticalSources } from "./learning/learning-analytical-sources.js";
 import { assertRetainedRuntimeSkillSourceCurrent } from "./learning/learning-assets.js";
 import { publicNativePayloadRow } from "./native-payload-public.js";
 import { projectService } from "./projects.js";
 import { skillResolverService } from "./skill-resolver.js";
+import { readNativeManualQueueAdoption } from "./native-runtime/manual-queue-adoption.js";
 import { nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds, nativeTaskWakeInteraction, nativeContinuationCommentProjection, nativeCommentProjectionHash, nativeSha256 } from "./native-runtime/canonical.js";
 import { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget } from "./native-runtime/native-session-resume.js";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, codexSemanticToolSpecs, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
@@ -1934,6 +1936,10 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   )).limit(1) : [];
   // Control wakes can coalesce into Run context; original wake authority is the exact admitted queue row.
   if (!admittedWake) throw forbidden("The original Native task wake is unavailable");
+  const manualQueueAdoption = run ? await readNativeManualQueueAdoption(db as Db, {
+    run, issueId: input.issueId, currentWake: admittedWake, readWork: () => nativeSourceReadWork(scope) }) : null;
+  // Queue receipts have no mutable-source checkpoint family. Re-read their owner.
+  if (nativeSourceRecord(admittedWake.payload).manualUserWake === true) markNativeSourceProofsIncompatible(scope);
   const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
   const answeredQuestions: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[] = [];
   const outcomes = nativeSourceRecord(continuation).interactionOutcomes;
@@ -2162,7 +2168,8 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       }),
       wake: { requestedByActorType: admittedWake.requestedByActorType, requestedByActorId: admittedWake.requestedByActorId,
         reason: admittedWake.reason, originCommentIds: nativeTaskWakeOriginCommentIds(admittedWake.payload),
-        ...(admittedInteraction ? { interaction: admittedInteraction } : {}) },
+        ...(admittedInteraction ? { interaction: admittedInteraction } : {}),
+        ...(manualQueueAdoption ? { manualQueueAdoption } : {}) },
     } : null;
   let ordinaryPlanRead: Parameters<typeof captureNativeTaskWakeSource>[0]["ordinaryPlanRead"];
   const planContext = nativeSourceRecord(wakeRecord?.planReviewContext);
@@ -4779,6 +4786,88 @@ export function nativeTemporalContextContentHash(manifest: typeof contextManifes
   }), "utf8").digest("hex");
 }
 
+/** Reuse a Context Task item after this same Native run appends only its
+ * audited workspace binding transform. Ordinary exact-version Context items
+ * keep their original checks at each caller. */
+export async function assertNativeContextTaskSourceCurrent(db: Db | Transaction, input: {
+  actor: AuthorizationActor; companyId: string; agentId: string; issueId: string;
+  manifest: Pick<typeof contextManifests.$inferSelect, "id" | "companyId" | "agentId" | "runId" | "issueId" | "createdAt">;
+  item: typeof contextManifestItems.$inferSelect;
+}): Promise<boolean> {
+  return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, input.companyId, async scope => {
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    const { manifest, item, issueId, companyId, agentId, actor } = input;
+    if (item.sourceProvider !== "august_works_tasks" || item.sourceRef !== `issue://${issueId}` ||
+        manifest.companyId !== companyId) return false;
+    const [task] = await tx.select({ id: issues.id, identifier: issues.identifier, title: issues.title,
+      description: issues.description, status: issues.status, priority: issues.priority, updatedAt: issues.updatedAt,
+      protocol: issues.payloadSourceProtocolVersion, snapshot: issues.payloadSourceSnapshot,
+      invalidated: issues.payloadSourceSnapshotInvalidated,
+      bodyHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))` })
+      .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
+    if (!task || task.invalidated) return false;
+    const exactCurrent = task.updatedAt.toISOString() === item.sourceVersion &&
+      isDeepStrictEqual(task.snapshot, item.payloadSourceSnapshot);
+    if (exactCurrent)
+      return Boolean(item.contentHash && nativeContextTaskEvidenceHash(nativeContextTaskEvidence(task)) === item.contentHash);
+    if (manifest.agentId !== agentId || manifest.issueId !== issueId || !manifest.runId || actor.type !== "agent" ||
+        actor.agentId !== agentId || actor.runId !== manifest.runId || actor.companyId !== companyId ||
+        task.protocol !== 1 || task.invalidated || !item.sourceVersion || !item.payloadSourceSnapshot ||
+        !task.bodyHash || !item.contentHash ||
+        nativeContextTaskEvidenceHash(nativeContextTaskEvidence(task)) !== item.contentHash) return false;
+    const oldResult = nativePayloadSourceSnapshotSchema.safeParse(item.payloadSourceSnapshot);
+    const currentResult = nativePayloadSourceSnapshotSchema.safeParse(task.snapshot);
+    if (!oldResult.success || !currentResult.success || oldResult.data.owner.kind !== "issue" ||
+        oldResult.data.owner.companyId !== companyId || oldResult.data.owner.id !== issueId ||
+        currentResult.data.owner.kind !== "issue" || currentResult.data.owner.companyId !== companyId ||
+        currentResult.data.owner.id !== issueId || currentResult.data.owner.contentHash !== task.bodyHash ||
+        !isDeepStrictEqual(oldResult.data.policy, currentResult.data.policy) ||
+        !isDeepStrictEqual(oldResult.data.inputs, currentResult.data.inputs)) return false;
+    const oldTransforms = oldResult.data.transforms ?? [];
+    const currentTransforms = currentResult.data.transforms ?? [];
+    if (currentTransforms.length <= oldTransforms.length ||
+        !isDeepStrictEqual(currentTransforms.slice(0, oldTransforms.length), oldTransforms) ||
+        !currentTransforms.slice(oldTransforms.length).every(step => step.kind === "workspace_binding" && step.runId === manifest.runId))
+      return false;
+    const firstSuffix = currentTransforms[oldTransforms.length];
+    if (firstSuffix?.kind !== "workspace_binding") return false;
+    const [firstSuffixAudit] = await tx.select({ createdAt: activityLog.createdAt }).from(activityLog).where(and(
+      eq(activityLog.companyId, companyId), eq(activityLog.id, firstSuffix.activityId),
+      eq(activityLog.entityType, "issue"), eq(activityLog.entityId, issueId),
+      eq(activityLog.action, "issue.payload_source_workspace_bound"))).limit(1);
+    if (!firstSuffixAudit ||
+        firstSuffixAudit.createdAt < manifest.createdAt) return false;
+    const baseContentHash = currentTransforms[0]?.previousOwnerContentHash ?? currentResult.data.owner.contentHash;
+    const base = { version: 1 as const, owner: { ...currentResult.data.owner, contentHash: baseContentHash },
+      policy: currentResult.data.policy, inputs: currentResult.data.inputs };
+    let prefixContentHash = baseContentHash;
+    let prefixDigest = await nativePayloadSourceDigest(tx, base);
+    let matchesPrefix = oldTransforms.length === 0 && isDeepStrictEqual(oldResult.data, { ...base, digest: prefixDigest });
+    for (let index = 0; index < oldTransforms.length; index += 1) {
+      const step = currentTransforms[index]!;
+      prefixContentHash = step.nextOwnerContentHash;
+      const prefix = currentTransforms.slice(0, index + 1);
+      prefixDigest = await nativePayloadSourceDigest(tx, { ...base,
+        owner: { ...base.owner, contentHash: prefixContentHash }, transforms: prefix });
+      if (index + 1 === oldTransforms.length) {
+        matchesPrefix = isDeepStrictEqual(oldResult.data, { ...base,
+          owner: { ...base.owner, contentHash: prefixContentHash }, transforms: prefix, digest: prefixDigest });
+      }
+    }
+    if (!matchesPrefix) return false;
+    const [run] = await tx.select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId,
+      nativeIssueId: heartbeatRuns.nativeIssueId, issueId: heartbeatRuns.issueId,
+      runtimeMode: heartbeatRuns.runtimeMode, responsibleUserId: heartbeatRuns.responsibleUserId })
+      .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, manifest.runId)))
+      .for("share");
+    if (!run || run.agentId !== agentId || run.runtimeMode !== "native" ||
+        (run.nativeIssueId ?? run.issueId) !== issueId || run.responsibleUserId !== actor.onBehalfOfUserId) return false;
+    // This walks the complete current source/audit chain and rechecks source ACLs.
+    await assertNativeTaskSnapshotOwnerCurrentInScope(tx, companyId, actor, issueId, scope);
+    return true;
+  }));
+}
+
 /** Machine metadata history is checked even for the original empty-policy
  * Human root. The original source closure is still read by its existing owner. */
 async function nativeStageTaskOriginalSnapshot(db: Db | Transaction, companyId: string, issueId: string,
@@ -5303,6 +5392,9 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
   });
   const taskIssueIds = [...new Set(taskIds)];
   const taskOwners = taskIssueIds.length ? await db.select({ id: issues.id,
+    // Pin the rendered Context facts before a graph-proof cache can skip its reader.
+    identifier: issues.identifier, title: issues.title, description: issues.description,
+    status: issues.status, priority: issues.priority, updatedAt: issues.updatedAt,
     payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
     payloadSourceSnapshot: issues.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
     conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId })
@@ -5332,12 +5424,14 @@ async function assertNativeContextInputOwnersCurrent(db: Db, companyId: string, 
         const owner = match ? taskOwnerById.get(match[1]!) : undefined;
         const ownerHash = match ? taskHashById.get(match[1]!) : undefined;
         const snapshot = nativePayloadSourceSnapshotSchema.safeParse(owner?.payloadSourceSnapshot);
+        const contextTaskCurrent = match && owner && snapshot.success
+          ? await assertNativeContextTaskSourceCurrent(db, { actor, companyId, agentId: manifest.agentId,
+            issueId: match[1]!, manifest, item }) : false;
         if (!match || !owner || !ownerHash || owner.payloadSourceSnapshotInvalidated || !snapshot.success ||
           snapshot.data.owner.kind !== "issue" || snapshot.data.owner.companyId !== companyId ||
           snapshot.data.owner.id !== match[1]! || snapshot.data.owner.contentHash !== ownerHash.hash ||
           owner.payloadSourceProtocolVersion === 1 && !ownerHash.snapshotDigestValid ||
-          !item.sourceVersion || !item.payloadSourceSnapshot ||
-          !isDeepStrictEqual(item.payloadSourceSnapshot, owner.payloadSourceSnapshot))
+          !item.sourceVersion || !contextTaskCurrent)
           throw forbidden("A Native Context Task source changed or was erased");
         if (owner.payloadSourceProtocolVersion === 1) {
           legacyTaskIssueIds.delete(match[1]!);

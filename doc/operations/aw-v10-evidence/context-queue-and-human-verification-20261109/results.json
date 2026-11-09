@@ -1,0 +1,87 @@
+{
+  "invocations": [
+    {
+      "invocation": "post-d95-native-text-a-r1",
+      "passed": 11,
+      "failed": 0,
+      "unselected": 10,
+      "seconds": 98.56904888799909,
+      "observedPeakOwnedDescendantRssBytes": 3150336000,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "post-d95-native-text-b-r2",
+      "passed": 11,
+      "failed": 0,
+      "unselected": 24,
+      "seconds": 88.6401500619977,
+      "observedPeakOwnedDescendantRssBytes": 3046555648,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "context-owner-full-and-human-review-r2",
+      "passed": 14,
+      "failed": 0,
+      "unselected": 21,
+      "seconds": 170.54273241099872,
+      "observedPeakOwnedDescendantRssBytes": 2803843072,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "context-current-pins-and-human-review-r3",
+      "passed": 3,
+      "failed": 0,
+      "unselected": 32,
+      "seconds": 72.92052473999502,
+      "observedPeakOwnedDescendantRssBytes": 2842005504,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "post-d95-source-owners-and-inputs-r1",
+      "passed": 74,
+      "failed": 0,
+      "unselected": 0,
+      "seconds": 68.55436307400669,
+      "observedPeakOwnedDescendantRssBytes": 3327475712,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    },
+    {
+      "invocation": "post-d95-final-context-and-queue-r1",
+      "passed": 8,
+      "failed": 0,
+      "unselected": 67,
+      "seconds": 55.62501827300002,
+      "observedPeakOwnedDescendantRssBytes": 2971537408,
+      "scope": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+    }
+  ],
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 92.24631813000451,
+        "peakGroupRssBytes": 6165299200,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "uniqueCases": 115,
+  "uniqueCaseBasis": "Source39 + queue owner4 + execution input28 + failure logging3 + Context13 + NativeText22 + manual-authority refusal1 + checkpoint/session5. Repeats are separately recorded and not added to this total.",
+  "limits": [
+    "The 22 Native Text cases are covered by disjoint A11, B10 and Human-review1 selections; group B also selects one forged manual-authority refusal.",
+    "The full Context13 pass precedes the current rendered-fact/version cache pins; the affected binding, Memory hydration and Human review subset passes afterward. Final type narrowing and route fixture actor fixes have a further explicit affected repeat.",
+    "The installed Text backend always proposes review. Its Human review case verifies that review path, not the model-done orchestration guard. The real managed-SDK serial/comment regressions exercise model-done and await CI.",
+    "An exploratory same-transaction Context cache test does not demonstrate a cache hit and remains private, uncounted.",
+    "One Native Text batch stopped at the global memory reserve while an isolated worker test overlapped. The complete bounded repeat passes. Typecheck attempts stopped at reserve or reported explicit type errors before correction; those diagnostics are retained.",
+    "Current-head managed SDK, legacy workspace fixtures, browser journeys and other full V10 acceptance gaps remain open. No migration status is promoted.",
+    "No live paid provider, physical Host, deployment, release or representative Human acceptance claim."
+  ]
+}

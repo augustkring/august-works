@@ -13,7 +13,11 @@ import {
   contextManifestItems,
   contextManifests,
   createDb,
+  activityLog,
   connectionGrants,
+  environmentLeases,
+  executionWorkspaces,
+  projectWorkspaces,
   orchestrationModelReservations,
   heartbeatRuns,
   externalObjectMentions,
@@ -47,10 +51,11 @@ import { captureNativeBootstrapContextWitness, readNativeBootstrapContextWitness
 import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
 import { errorHandler } from "../../middleware/index.js";
 import { issueRoutes } from "../../routes/issues.js";
+import { projectRoutes } from "../../routes/projects.js";
 import { buildPaperclipTaskMarkdown, getIssueExecutionContext } from "../heartbeat.js";
 import { buildNativeBootstrapSourceSet } from "../native-runtime/native-execution-input.js";
 import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent,
-  assertNativeTemporalContextInputsCurrent } from "../native-direct-input.js";
+  assertNativeTemporalContextInputsCurrent, assertNativeContextTaskSourceCurrent } from "../native-direct-input.js";
 import { createLocalAgentJwt, verifyLocalAgentJwt } from "../../agent-auth-jwt.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { createToolGatewayService } from "../tool-gateway.js";
@@ -1024,6 +1029,103 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
     await issueService(db).remove(task.id);
     await expect(revalidateNativeBootstrapContextWitness(db, witnessInput)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("revalidates a captured Context through only its same-Run audited workspace binding", async () => {
+    const seeded = await seedContextOwners();
+    const projectApp = express();
+    projectApp.use(express.json());
+    projectApp.use(((req, _res, next) => {
+      req.actor = { type: "board", source: "session", userId: seeded.userId,
+        sessionId: seeded.humanActor.sessionId ?? undefined, companyIds: [seeded.companyId] };
+      next();
+    }) as RequestHandler);
+    projectApp.use("/api", projectRoutes(db));
+    projectApp.use(errorHandler);
+    const projectResponse = await request(projectApp).post(`/api/companies/${seeded.companyId}/projects`)
+      .send({ name: `Context binding ${randomUUID()}` }).expect(201);
+    const projectId = projectResponse.body.id as string;
+    const task = await issueService(db).create(seeded.companyId, {
+      title: "Human Task bound after Context capture", description: "Exact current Context evidence.",
+      projectId, responsibleUserId: seeded.userId, createdByUserId: seeded.userId,
+      assigneeAgentId: seeded.agent.id,
+    }, db, undefined, { manualInputActor: seeded.humanActor, privacyActor: seeded.humanActor,
+      sourceAccessActor: seeded.humanActor });
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, issueId: task.id, nativeIssueId: task.id,
+      runtimeMode: "native", status: "running", startedAt: new Date() }).returning();
+    const actor = { type: "agent" as const, source: "none" as const, companyId: seeded.companyId,
+      agentId: seeded.agent.id, runId: run!.id, onBehalfOfUserId: seeded.userId };
+    const context = await assembleNativeContextRead(db, { companyId: seeded.companyId,
+      agentId: seeded.agent.id, runId: run!.id, issueId: task.id, projectId,
+      responsibleUserId: seeded.userId, actor, query: "Human Task bound after Context capture" });
+    const [captured] = await db.select().from(issues).where(and(eq(issues.companyId, seeded.companyId), eq(issues.id, task.id)));
+    if (!captured?.payloadSourceSnapshot) throw new Error("Human related Task source snapshot is unavailable");
+
+    const [projectWorkspace] = await db.insert(projectWorkspaces).values({
+      companyId: seeded.companyId, projectId, name: "Context binding workspace",
+      repoUrl: "https://example.test/context-binding.git", isPrimary: true,
+    }).returning();
+    const [workspace] = await db.insert(executionWorkspaces).values({
+      companyId: seeded.companyId, projectId, projectWorkspaceId: projectWorkspace!.id,
+      sourceIssueId: task.id, mode: "shared_workspace", strategyType: "project_primary",
+      name: "Context binding execution workspace", status: "active", cwd: `/tmp/${randomUUID()}`,
+      repoUrl: "https://example.test/context-binding.git", providerType: "local_fs",
+    }).returning();
+    await db.insert(environmentLeases).values({ companyId: seeded.companyId, executionWorkspaceId: workspace!.id,
+      issueId: task.id, heartbeatRunId: run!.id, status: "active", leasePolicy: "ephemeral", provider: "local",
+      expiresAt: new Date(Date.now() + 60 * 60_000) });
+    await issueService(db).update(task.id, { actorAgentId: seeded.agent.id, actorRunId: run!.id,
+      executionWorkspaceId: workspace!.id, projectWorkspaceId: projectWorkspace.id,
+      executionWorkspacePreference: "reuse_existing", executionWorkspaceSettings: { mode: "shared_workspace" },
+    }, db, undefined, undefined, { bindRuntimeSharedWorkspace: true,
+      workspaceBindingSourceTransform: { agentId: seeded.agent.id, runId: run!.id, workspaceId: workspace!.id,
+        expectedPreviousSnapshotDigest: captured.payloadSourceSnapshot.digest } });
+
+    const reread = { companyId: seeded.companyId, agentId: seeded.agent.id, runId: run!.id, issueId: task.id,
+      actor, sourceSet: context.sourceSet, manifestIds: context.manifestIds };
+    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).resolves.toBeUndefined();
+    await expect(revalidateNativeBootstrapContextWitness(db, { witness: context.witness,
+      companyId: seeded.companyId, runId: run!.id, agentId: seeded.agent.id, issueId: task.id,
+      renderedMarkdown: context.markdown, manifestIds: context.manifestIds })).resolves.toBeUndefined();
+
+    const [manifest] = await db.select().from(contextManifests).where(and(eq(contextManifests.companyId, seeded.companyId),
+      eq(contextManifests.id, context.manifestIds[0]!.contextManifestId)));
+    const [item] = await db.select().from(contextManifestItems).where(and(
+      eq(contextManifestItems.companyId, seeded.companyId), eq(contextManifestItems.manifestId, context.manifestIds[0]!.contextManifestId),
+      eq(contextManifestItems.sourceRef, `issue://${task.id}`)));
+    if (!manifest || !item) throw new Error("Captured Context Task manifest row is unavailable");
+    await expect(assertNativeContextTaskSourceCurrent(db, { actor, companyId: seeded.companyId,
+      agentId: seeded.agent.id, issueId: task.id, manifest: { id: manifest.id, companyId: manifest.companyId,
+        agentId: manifest.agentId, runId: randomUUID(), issueId: manifest.issueId, createdAt: manifest.createdAt }, item })).resolves.toBe(false);
+
+    await issueService(db).update(task.id, { status: "in_progress", actorUserId: seeded.userId, privacyActor: seeded.humanActor });
+    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).rejects.toMatchObject({ status: 403 });
+    await expect(revalidateNativeBootstrapContextWitness(db, { witness: context.witness,
+      companyId: seeded.companyId, runId: run!.id, agentId: seeded.agent.id, issueId: task.id,
+      renderedMarkdown: context.markdown, manifestIds: context.manifestIds })).rejects.toMatchObject({ status: 403 });
+    await issueService(db).update(task.id, { status: task.status, actorUserId: seeded.userId, privacyActor: seeded.humanActor });
+
+    await issueService(db).update(task.id, { priority: task.priority === "high" ? "low" : "high",
+      actorUserId: seeded.userId, privacyActor: seeded.humanActor });
+    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).rejects.toMatchObject({ status: 403 });
+    await issueService(db).update(task.id, { priority: task.priority, actorUserId: seeded.userId, privacyActor: seeded.humanActor });
+
+    const [binding] = await db.select({ id: activityLog.id }).from(activityLog).where(and(
+      eq(activityLog.companyId, seeded.companyId), eq(activityLog.entityId, task.id),
+      eq(activityLog.action, "issue.payload_source_workspace_bound")));
+    if (!binding) throw new Error("Workspace binding audit is unavailable");
+    const rollback = new Error("restore the workspace binding audit");
+    await expect(db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      await tx.delete(activityLog).where(eq(activityLog.id, binding.id));
+      await expect(assertNativeContextReadSourceSetCurrent(tx, reread)).rejects.toMatchObject({ status: 403 });
+      throw rollback;
+    })).rejects.toBe(rollback);
+
+    await issueService(db).update(task.id, { title: `${task.title} changed`, actorUserId: seeded.userId,
+      privacyActor: seeded.humanActor });
+    await expect(assertNativeContextReadSourceSetCurrent(db, reread)).rejects.toMatchObject({ status: 403 });
   });
 
   it("preserves an original Human Task source across status changes and rejects it after a canonical body edit", async () => {

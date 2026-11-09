@@ -338,7 +338,7 @@
     },
     {
       "path": "server/src/services/context/context-engine-integration.test.ts",
-      "sha256": "241b51eb2a611a8897b89e9fbc9f0bffb12c867923ad232a66bdc5182d467026"
+      "sha256": "0037f1d284804b418a147f36980e28a8fa535a0d3f0aadc161940119ff731d4a"
     },
     {
       "path": "server/src/services/decisions.ts",
@@ -370,11 +370,11 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "69278183d044ebe612a774e47df48f27542f332b7602adacc282be8a929ce658"
+      "sha256": "9f2982be7f8124019aae38c2f139a1aedfab9d880b86e959f04158f35dae0ee9"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-      "sha256": "662f59697b425cb855860a2c2f6b9c4c80106f2de6e6f9a2b7e3ee3854455d33"
+      "sha256": "7487de20b8401744e75a61befd6efbad639944d3f4717fc03b6cce8d09cfd19d"
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",

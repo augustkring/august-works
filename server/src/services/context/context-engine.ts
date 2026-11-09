@@ -25,6 +25,7 @@ import {
 } from "./context-authority.js";
 import { fitEvidenceToBudget } from "./context-budget.js";
 import { contextManifestService, type DelegatedContextExecutionBindingInput } from "./context-manifest.js";
+import { nativeContextTaskEvidence } from "./context-task-evidence.js";
 import type { NativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
 import {
   connectedKnowledgeContextProvider,
@@ -674,6 +675,7 @@ function taskProvider(db: Db, timeoutMs = DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS): 
         await refreshStatementBudget();
 
         const updatedAt = issue.updatedAt.toISOString();
+        const taskEvidence = nativeContextTaskEvidence(issue);
         return {
           evidence: [{
             id: `task:${issue.id}`,
@@ -682,14 +684,7 @@ function taskProvider(db: Db, timeoutMs = DEFAULT_CONTEXT_PROVIDER_TIMEOUT_MS): 
             sourceProvider: "august_works_tasks",
             sourceType: "issue",
             sourceRef: `issue://${issue.id}`,
-            title: issue.identifier ? `${issue.identifier}: ${issue.title}` : issue.title,
-            excerpt: (
-              [
-                `Status: ${issue.status}`,
-                `Priority: ${issue.priority}`,
-                issue.description?.trim() ? `Description: ${issue.description.trim()}` : null,
-              ].filter(Boolean).join("\n") || issue.title
-            ).slice(0, 60_000),
+            ...taskEvidence,
             sourceVersion: updatedAt,
             sourceUpdatedAt: updatedAt,
             observedAt: new Date().toISOString(),

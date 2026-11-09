@@ -35,6 +35,7 @@ import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePr
 import { crossCompanyEvidencePolicy } from "../cross-company-context-policy.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { captureNativeBootstrapContextWitness, readNativeBootstrapContextWitness, type NativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
+import { assertNativeContextTaskSourceCurrent } from "../native-direct-input.js";
 
 export interface DelegatedContextExecutionBindingInput {
   homeCompanyId: string;
@@ -126,8 +127,8 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
   // later in this transaction from deadlocking with a privacy writer.
   await lockIssuePrivacyTree(db as unknown as Parameters<typeof lockIssuePrivacyTree>[0], input.companyId, "read");
   markAnalyticalPrivacyReadLocked(db as object);
-  const [manifest] = await db.select({ id: contextManifests.id, agentId: contextManifests.agentId,
-    runId: contextManifests.runId, issueId: contextManifests.issueId }).from(contextManifests).where(and(
+  const [manifest] = await db.select({ id: contextManifests.id, companyId: contextManifests.companyId, agentId: contextManifests.agentId,
+    runId: contextManifests.runId, issueId: contextManifests.issueId, createdAt: contextManifests.createdAt }).from(contextManifests).where(and(
     eq(contextManifests.companyId, input.companyId), eq(contextManifests.id, input.manifestId))).limit(1);
   if (!manifest || manifest.agentId !== input.agentId || manifest.runId !== (input.runId ?? null))
     throw forbidden("Delegated Context manifest is unavailable");
@@ -161,8 +162,14 @@ export async function revalidateStoredContextManifestSources(db: Db, input: {
       const [current] = await db.select({ id: issues.id, updatedAt: issues.updatedAt,
         payloadSourceSnapshot: issues.payloadSourceSnapshot }).from(issues).where(and(
         eq(issues.companyId, input.companyId), eq(issues.id, ref[1]!))).for("share");
-      if (!current || current.updatedAt.toISOString() !== item.sourceVersion ||
-        hashContextPolicySnapshot(current.payloadSourceSnapshot) !== hashContextPolicySnapshot(item.payloadSourceSnapshot) ||
+      const exactCurrent = Boolean(current && current.updatedAt.toISOString() === item.sourceVersion &&
+        hashContextPolicySnapshot(current.payloadSourceSnapshot) === hashContextPolicySnapshot(item.payloadSourceSnapshot));
+      const sameNativeRun = Boolean(manifest.runId && input.actor.type === "agent" && input.actor.runId === manifest.runId &&
+        input.actor.agentId === input.agentId);
+      const taskSourceCurrent = current && sameNativeRun ? await assertNativeContextTaskSourceCurrent(db, {
+        actor: input.actor, companyId: input.companyId, agentId: input.agentId, issueId: ref[1]!, manifest, item,
+      }) : exactCurrent;
+      if (!current || !taskSourceCurrent ||
         !await canActorReadIssuePrivacy(db, input.actor, { companyId: input.companyId, id: current.id }))
         throw forbidden("Delegated Context Task source changed or is unavailable");
       await analyticalRead(current.id);

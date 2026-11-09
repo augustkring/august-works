@@ -41,6 +41,7 @@ const projectApiServers: Array<ReturnType<typeof createServer>> = [];
 beforeAll(async () => {
   if (!hasPinnedOpenCodeProfile()) return;
   vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
+  vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
   root = await mkdtemp(join(tmpdir(), "managed-opencode-source-scheduler-")); await chmod(root, 0o700);
   vi.stubEnv("PAPERCLIP_HOME", root);
   database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-scheduler-"); db = createDb(database.connectionString);
@@ -247,6 +248,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const result = await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 240,
       prepareNativeRuntimeContext: async ({ db: currentDb, actor, companyId, agentId }) => {
         if (!actor.userId) throw new Error("managed_source_human_missing");
+        await instanceSettingsService(currentDb).updateExperimental({ enableCollectiveMemoryV1: true });
         aliceUserId = actor.userId;
         aliceSessionId = actor.sessionId ?? "";
         humanMemoryActor = { principal: { type: "user", userId: actor.userId }, authorizationActor: actor };
@@ -454,6 +456,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const outcome = await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 180,
       prepareNativeRuntimeContext: async ({ db: currentDb, actor, companyId: currentCompanyId, agentId: currentAgentId }) => {
         if (!actor.userId) throw new Error("source_replay_human_missing");
+        await instanceSettingsService(currentDb).updateExperimental({ enableCollectiveMemoryV1: true });
         agentId = currentAgentId;
         companyId = currentCompanyId;
         await toolAccessPolicyService(currentDb).createPolicy(currentCompanyId, { name: `Managed replay Memory draft ${randomUUID()}`,
