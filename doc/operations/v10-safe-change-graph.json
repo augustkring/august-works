@@ -5438,7 +5438,7 @@
         },
         {
           "path": "server/src/services/adapter-process-stop.test.ts",
-          "sha256": "70944fc8dff181580503012efdbf9127f2b4da65a0114cd6a124d4fa3ce36382"
+          "sha256": "986882e11f2b9b5242394a40e492af63601212dd3131aa349915f91d843eb679"
         },
         {
           "path": "server/src/services/agent-runtime-owner-assignments.ts",
@@ -7189,11 +7189,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "7d325040601e9a1c9b40facf688eee400a0bc2b25669d3d2a4394d022aa95a04"
+          "sha256": "6b483942b414e6b5493b438082f5f5430e4685b6d19b18d48e3aa4e061393bce"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "3063cc758ab63d4989452da7b7b5ba4c99d2cfe5cb8f34e71068c4e40ba89ff6"
+          "sha256": "c8f01f4c555b3f95c799d659a15c6fa68a1369e1a947487fbb6685245e5348e1"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -8807,11 +8807,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "7d325040601e9a1c9b40facf688eee400a0bc2b25669d3d2a4394d022aa95a04"
+          "sha256": "6b483942b414e6b5493b438082f5f5430e4685b6d19b18d48e3aa4e061393bce"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "3063cc758ab63d4989452da7b7b5ba4c99d2cfe5cb8f34e71068c4e40ba89ff6"
+          "sha256": "c8f01f4c555b3f95c799d659a15c6fa68a1369e1a947487fbb6685245e5348e1"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -29719,7 +29719,7 @@
         },
         {
           "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-          "sha256": "51f4de040acbb09535ccfae7699eeee3b3c779b411c20e023bcc4b9d003a2b45"
+          "sha256": "bde9378ef62c5e912ad106e6dcb901a80e7f9ed347bd5041ef343717019ec907"
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
@@ -29751,7 +29751,7 @@
         },
         {
           "path": "scripts/__tests__/aw-v9-release-prerequisites.test.mjs",
-          "sha256": "ee61cabef634587c828099d776a862e370960cc290c971dfdf044f4e29f8da7c"
+          "sha256": "11983417b982c2c07054145242bc77f215bea70d985950c70360fb3f614940b9"
         },
         {
           "path": "scripts/__tests__/e2e-shard.test.mjs",
@@ -44695,7 +44695,7 @@
       "id": "source:server/src/services/adapter-process-stop.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/adapter-process-stop.test.ts",
-      "sha256": "70944fc8dff181580503012efdbf9127f2b4da65a0114cd6a124d4fa3ce36382",
+      "sha256": "986882e11f2b9b5242394a40e492af63601212dd3131aa349915f91d843eb679",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -46279,7 +46279,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-      "sha256": "7d325040601e9a1c9b40facf688eee400a0bc2b25669d3d2a4394d022aa95a04",
+      "sha256": "6b483942b414e6b5493b438082f5f5430e4685b6d19b18d48e3aa4e061393bce",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -46295,7 +46295,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "3063cc758ab63d4989452da7b7b5ba4c99d2cfe5cb8f34e71068c4e40ba89ff6",
+      "sha256": "c8f01f4c555b3f95c799d659a15c6fa68a1369e1a947487fbb6685245e5348e1",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -66724,7 +66724,7 @@
       "id": "source:doc/operations/agent-native-tool-alias-compatibility.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-      "sha256": "51f4de040acbb09535ccfae7699eeee3b3c779b411c20e023bcc4b9d003a2b45",
+      "sha256": "bde9378ef62c5e912ad106e6dcb901a80e7f9ed347bd5041ef343717019ec907",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -66844,7 +66844,7 @@
       "id": "source:scripts/__tests__/aw-v9-release-prerequisites.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/__tests__/aw-v9-release-prerequisites.test.mjs",
-      "sha256": "ee61cabef634587c828099d776a862e370960cc290c971dfdf044f4e29f8da7c",
+      "sha256": "11983417b982c2c07054145242bc77f215bea70d985950c70360fb3f614940b9",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],

@@ -30,6 +30,15 @@ function fixture(t) {
     }
   `);
   put("operation-failures.json", []);
+  // This fixture isolates inherited release prerequisites. The actual Platform
+  // Skill checker has its own suite; verify its failure propagation below.
+  put("scripts/platform-skill-operating-knowledge.mjs", `
+    import { readFileSync } from "node:fs";
+    export async function checkPlatformSkillOperatingKnowledge(root) {
+      return JSON.parse(readFileSync(root + "/platform-skill-failures.json", "utf8"));
+    }
+  `);
+  put("platform-skill-failures.json", []);
   const helper = "scripts/aw-v9-release-prerequisites.mjs";
   if (existsSync(join(root, helper))) copyFileSync(join(root, helper), join(dir, helper));
   const brief = "Synthetic brief", witness = "Synthetic evidence", artifactSha = "b".repeat(64);
@@ -75,6 +84,14 @@ test("closed inherited prerequisites still propagate V10 operation coverage fail
   const result = f.run();
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /Unreviewed mounted operation/);
+});
+
+test("closed inherited prerequisites still propagate Platform Skill operating knowledge failures", t => {
+  const f = fixture(t);
+  f.put("platform-skill-failures.json", ["Platform Skill operating knowledge is incomplete"]);
+  const result = f.run();
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /Platform Skill operating knowledge is incomplete/);
 });
 
 test("open V8 hosting gates and incomplete predecessor source prevent release coverage", t => {

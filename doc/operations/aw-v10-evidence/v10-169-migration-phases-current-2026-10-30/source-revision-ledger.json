@@ -459,5 +459,13 @@
       "receiptMember": "current-capture/receipt.json"
     },
     "result": "Both original generators, five positive guards and 34 original regression callbacks passed with actual per-command and durable orchestration exit0. No SDK/PG/application/rollout/Human acceptance or historical status promotion."
+  },
+  "compileRepairSourceReview20261109": {
+    "baseHead": "9872b00f1c35c76e9b333214bbe53e525f704542",
+    "path": "server/src/services/native-runtime/native-session-executor.ts",
+    "oldSha256": "3063cc758ab63d4989452da7b7b5ba4c99d2cfe5cb8f34e71068c4e40ba89ff6",
+    "newSha256": "c8f01f4c555b3f95c799d659a15c6fa68a1369e1a947487fbb6685245e5348e1",
+    "reason": "Only serialize an available sandbox runner; preserve the existing runner_transport_ineligible refusal and command-settlement ordering. Repairs actual TS2345 without an assertion cast or new authority. No phase, historical record, admission, owner or runtime qualification status changes.",
+    "qualificationBoundary": "Current reviewed source inventory; full build and integration checks remain separate."
   }
 }

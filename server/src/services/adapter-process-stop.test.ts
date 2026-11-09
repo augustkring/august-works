@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, it } from "vitest";
 import { execute } from "../adapters/process/execute.js";
-import type { AdapterExecutionResult, AdapterSpawnInfo } from "../adapters/types.js";
+import type { AdapterExecutionResult } from "../adapters/types.js";
+import type { AdapterSpawnInfo } from "@paperclipai/adapter-utils";
 import { runningProcesses } from "../adapters/utils.js";
 import { terminateLocalService } from "./local-service-supervisor.js";
 import {

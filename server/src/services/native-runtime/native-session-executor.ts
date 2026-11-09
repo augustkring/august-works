@@ -13525,7 +13525,7 @@ async function createRunnerdBackendWithinSessionClaim(
           spec: remoteTarget.spec,
           defaultCwd: remoteTarget.remoteCwd,
         })
-      : serializeNativeRemoteCommands(remoteTarget.runner)
+      : remoteTarget.runner ? serializeNativeRemoteCommands(remoteTarget.runner) : null
     : null;
   if (remoteTarget && !remoteCommandRunner) {
     throw new Error(

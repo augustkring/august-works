@@ -910,7 +910,7 @@ describe("remote runner process supervision", () => {
     let reject!: (error: Error) => void;
     const first = new Promise<void>((resolve, fail) => { settle = resolve; reject = fail; });
     let occupied = true;
-    const result = { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" };
+    const result = { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "", pid: null, startedAt: null };
     const execute = vi.fn(async (command: { command: string }) => {
       if (command.command === "first") { await first; occupied = false; return result; }
       // This controlled boundary models the ORIGINAL guard's continued
@@ -942,7 +942,7 @@ describe("remote runner process supervision", () => {
     try {
       let settle!: () => void;
       const gate = new Promise<void>(resolve => { settle = resolve; });
-      const result = { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" };
+      const result = { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "", pid: null, startedAt: null };
       const execute = vi.fn(async (command: { command: string; timeoutMs?: number }) => {
         if (command.command === "first") await gate;
         return result;
@@ -5004,6 +5004,38 @@ function leaseDb(
       operation(tx as unknown as Db),
   };
   return tx as unknown as Db;
+}
+
+function priorRunRecoveryFixtureDb(readRows: (table: unknown) => unknown[]) {
+  type Query = {
+    where: () => Query;
+    limit: () => Promise<unknown[]>;
+    for: () => Query;
+    then: (resolve: (value: unknown[]) => unknown, reject?: (error: unknown) => unknown) => Promise<unknown>;
+  };
+  const db: {
+    transaction: (operation: (tx: Db) => Promise<unknown>) => Promise<unknown>;
+    select: () => { from: (table: unknown) => Query };
+  } = {
+    transaction: async (operation: (tx: Db) => Promise<unknown>) =>
+      operation(db as unknown as Db),
+    select: () => ({
+      from: (table: unknown) => {
+        // Current-owner reads stay empty; only the legacy proof's limit() sees prior rows.
+        const currentRows = table === issues ? [{ status: "in_progress" }] : [];
+        let query: Query;
+        query = {
+          where: () => query,
+          limit: () => Promise.resolve(readRows(table)),
+          for: () => query,
+          then: (resolve: (value: unknown[]) => unknown, reject?: (error: unknown) => unknown) =>
+            Promise.resolve(currentRows).then(resolve, reject),
+        };
+        return query;
+      },
+    }),
+  };
+  return db as unknown as Db;
 }
 
 function cancellationDb(options?: {
@@ -9151,23 +9183,11 @@ describe("runnerd provider runtime wiring", () => {
         )
         .digest("hex"),
     );
-    const priorRunDb = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () =>
-              Promise.resolve([
-                {
-                  status: "succeeded",
-                  runnerProfileJson: {
-                    nativeExecutionInput: priorExecution,
-                  },
-                },
-              ]),
-          }),
-        }),
-      }),
-    } as unknown as Db;
+    const priorRunDb = priorRunRecoveryFixtureDb((table) =>
+      table === heartbeatRuns
+        ? [{ status: "succeeded", runnerProfileJson: { nativeExecutionInput: priorExecution } }]
+        : [],
+    );
     try {
       await mkdir(join(legacyRoot, "control-plane"), { recursive: true });
       await mkdir(join(legacyRoot, "runner"), { recursive: true });
@@ -9298,23 +9318,11 @@ describe("runnerd provider runtime wiring", () => {
           runId: "run-current-remote-scope",
         },
       } as NativeExecutionInputV1;
-      const priorRunDb = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () =>
-                Promise.resolve([
-                  {
-                    status: "succeeded",
-                    runnerProfileJson: {
-                      nativeExecutionInput: priorExecution,
-                    },
-                  },
-                ]),
-            }),
-          }),
-        }),
-      } as unknown as Db;
+      const priorRunDb = priorRunRecoveryFixtureDb((table) =>
+        table === heartbeatRuns
+          ? [{ status: "succeeded", runnerProfileJson: { nativeExecutionInput: priorExecution } }]
+          : [],
+      );
       const remoteTarget = {
         kind: "remote" as const,
         transport: "sandbox" as const,
@@ -9742,38 +9750,15 @@ describe("runnerd provider runtime wiring", () => {
         },
       };
       let recoveryReads = 0;
-      const db = {
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: () =>
-                Promise.resolve([
-                  {
-                    status:
-                      scenario === "active prior run" ? "running" : "succeeded",
-                    runnerProfileJson:
-                      ++recoveryReads === 2 &&
-                      scenario === "newer provider checkpoint"
-                        ? {
-                            ...profile,
-                            sessionCheckpoint: {
-                              ...profile.sessionCheckpoint,
-                              providerSessionId: "newer-thread",
-                            },
-                          }
-                        : profile,
-                    processPid:
-                      scenario === "missing process identity" ? null : 90000001,
-                    processGroupId: 90000001,
-                    contextSnapshot: {
-                      paperclipEnvironment: { driver: "local" },
-                    },
-                  },
-                ]),
-            }),
-          }),
-        }),
-      } as unknown as Db;
+      const db = priorRunRecoveryFixtureDb((table) => table === heartbeatRuns ? [{
+        status: scenario === "active prior run" ? "running" : "succeeded",
+        runnerProfileJson: ++recoveryReads === 2 && scenario === "newer provider checkpoint"
+          ? { ...profile, sessionCheckpoint: { ...profile.sessionCheckpoint, providerSessionId: "newer-thread" } }
+          : profile,
+        processPid: scenario === "missing process identity" ? null : 90000001,
+        processGroupId: 90000001,
+        contextSnapshot: { paperclipEnvironment: { driver: "local" } },
+      }] : []);
       try {
         state.createBackend.mockClear();
         state.createTransport.mockClear();
