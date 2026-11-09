@@ -40,8 +40,9 @@ import { createStorageService } from "../../storage/service.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
+import { createManagedAssignedGatewayResultObserver } from "./assigned-tool-gateway-result-observer.js";
 import { mcpGatewayProtocolRoutes } from "../../routes/tool-gateway.js";
-import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
+import { registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 
 /** Failure-only location hints. Arbitrary messages, function names and file
@@ -168,10 +169,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         await import("./managed-native-conversation-sandbox-host.js");
       if (input.schedulerMode === "serial") return configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
         preparedRegistration: registrationsByAgent.get(context.agentId),
+        observeAssignedToolGateway: (owner, kind) => assignedGatewayObserver?.observe(owner, kind),
         controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory,
         ...(input.ordinaryWorkerProject ? { ordinaryWorkerProject: input.ordinaryWorkerProject() } : {}),
         withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work) });
       return configureManagedConversationSandboxHost({ ...context, root: context.runHome, ordinaryWorker: true,
+        observeAssignedToolGateway: (owner, kind) => assignedGatewayObserver?.observe(owner, kind),
         controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory });
     }) };
   const { db } = input;
@@ -187,7 +190,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   await enableV5ForTest(db);
   await instanceSettingsService(db).updateExperimental({ enableAgentChat: true, enableNativeRunner: true,
     enableContextEngineV1: true, enableWorkflowsV1: true, readiness_engine_v7: true,
-    enablePrivateAgentMemoryV1: true, orchestration_v7: true, role_packs_v5: false, skill_resolver_v5: false });
+    enablePrivateAgentMemoryV1: true, orchestration_v7: true, supervision_v7: true, verifier_v7: true,
+    role_packs_v5: false, skill_resolver_v5: false });
   const keyPath = join(runHome, "broker-key.pem"), certPath = join(runHome, "broker-cert.pem");
   const caKeyPath = join(runHome, "broker-ca-key.pem"), caCertPath = join(runHome, "broker-ca-cert.pem");
   const csrPath = join(runHome, "broker.csr"), extensionsPath = join(runHome, "broker-extensions.cnf");
@@ -436,26 +440,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   // Heartbeat delivers a run-scoped MCP URL to the actual runner. Give the
   // fixture that URL's real protocol endpoint instead of pointing it at a
   // dummy base URL or suppressing managed MCP delivery.
+  const assignedGatewayObserver = input.afterSuccessfulAssignedToolResult
+    ? createManagedAssignedGatewayResultObserver(input.afterSuccessfulAssignedToolResult) : null;
   const assignedToolGateway = createToolGatewayService(db, { remoteHttpRequest: input.assignedToolGatewayHttpRequest });
-  const observedAssignedGateways = new WeakSet<ReturnType<typeof createToolGatewayService>>();
-  function observeAssignedGateway(owner: ReturnType<typeof createToolGatewayService>) {
-    if (!input.afterSuccessfulAssignedToolResult || observedAssignedGateways.has(owner)) return;
-    observedAssignedGateways.add(owner);
-    const executeAssignedTool = owner.executeTool.bind(owner);
-    owner.executeTool = async (call, workflowContext, scopedContext) => {
-      // Capture the exact plain request before the asynchronous owner call. The
-      // workflow and scoped contexts remain the original owner objects.
-      const capturedCall = structuredClone(call);
-      const replayCall = structuredClone(capturedCall);
-      const result = await executeAssignedTool(call, workflowContext, scopedContext);
-      const status = result && typeof result === "object" && !Array.isArray(result)
-        ? (result as Record<string, unknown>).status : null;
-      if (status === "completed" || status === "replayed") await input.afterSuccessfulAssignedToolResult!({ call: capturedCall, result,
-        replay: () => executeAssignedTool(structuredClone(replayCall), workflowContext, scopedContext) });
-      return result;
-    };
-  }
-  observeAssignedGateway(assignedToolGateway);
+  assignedGatewayObserver?.observe(assignedToolGateway, "fixture_root");
   registerAssignedMcpGateway(db, assignedToolGateway);
   brokerApp.use(mcpGatewayProtocolRoutes(assignedToolGateway));
   const brokerRequestByObject = new WeakMap<object, (typeof brokerRequestFacts)[number]>();
@@ -749,7 +737,6 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest,
       observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
     if (!host) throw new Error("scheduler_fixture_host_configuration_missing");
-    if (input.afterSuccessfulAssignedToolResult) observeAssignedGateway(getAssignedMcpGateway(db));
     const schedulerHost = host as ConfiguredHost;
     hostsByAgent.set(configuredAgentId, schedulerHost);
     return schedulerHost;
@@ -1056,7 +1043,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
             : runId === activeRunId ? sandboxHeartbeat?.facts?.() ?? null : null };
       } });
   } finally {
-    await heartbeat.drainActiveRunExecutions();
+    try { await heartbeat.drainActiveRunExecutions(); }
+    finally { assignedGatewayObserver?.cleanup(); }
     // Failure diagnostics read existing server events only. The pinned OpenCode
     // session.error schema has eight name literals and APIError.data.statusCode;
     // it declares no code field. Never print messages, bodies, paths or IDs.
@@ -1133,6 +1121,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
           providerCallCount: providerCalls.filter(call => call.runId === failedRun.id).length,
           modelIssuanceCount: issuerFacts.filter(fact => fact.runId === failedRun.id).length,
           fixtureTotalAuthenticatedModelTunnels: authenticatedModelTunnels,
+          assignedGatewayObservation: assignedGatewayObserver?.facts() ?? null,
           turnFailures: events.map(event => {
             const payload = record(event.payload), error = record(payload.error), data = record(error.data);
             return {

@@ -3,9 +3,9 @@ import request from "supertest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, agentWakeupRequests, createDb, heartbeatRuns, issueComments, issues, issueWorkProducts, activityLog, statusDecisions } from "@paperclipai/db";
+import { agents, agentWakeupRequests, createDb, heartbeatRuns, issueComments, issues, issueWorkProducts, activityLog, nativeRunFinalizations, statusDecisions, workAssessments } from "@paperclipai/db";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { issueService } from "../services/issues.js";
@@ -14,6 +14,7 @@ import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-hear
 import type { NativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { projectManagedNativeCompletionDiagnostic } from "./helpers/managed-native-completion-diagnostic.js";
 
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>;
@@ -148,6 +149,40 @@ async function authorizeTask(input: { actor: import("../services/authorization.j
     { expectedVersion: plan.version, action: "start", rationale: "Authorize this bounded managed scheduler test" });
 }
 
+async function expectTaskDoneWithSafeFinalizationDiagnostic(input: {
+  companyId: string; taskId: string; runId: string;
+  task: { status: string; completedAt: Date | null } | undefined;
+}) {
+  if (input.task?.status === "done" && input.task.completedAt !== null) {
+    expect(input.task).toMatchObject({ status: "done" });
+    expect(input.task.completedAt).not.toBeNull();
+    return;
+  }
+
+  // Query the persisted authority records only after the normal assertion would fail.
+  // The helper projects them to whitelisted enums, booleans and counts before display.
+  const [finalization] = await db.select({ phase: nativeRunFinalizations.phase,
+    failureCode: nativeRunFinalizations.failureCode, assessmentId: nativeRunFinalizations.assessmentId,
+    decisionId: nativeRunFinalizations.decisionId }).from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.taskId),
+      eq(nativeRunFinalizations.runId, input.runId))).limit(1);
+  const [decision] = await db.select({ reasonCode: statusDecisions.reasonCode, toStatus: statusDecisions.toStatus,
+    applicationState: statusDecisions.applicationState, assessmentId: statusDecisions.assessmentId })
+    .from(statusDecisions).where(and(eq(statusDecisions.companyId, input.companyId),
+      eq(statusDecisions.issueId, input.taskId), eq(statusDecisions.runId, input.runId)))
+    .orderBy(desc(statusDecisions.createdAt)).limit(1);
+  const assessmentId = finalization?.assessmentId ?? decision?.assessmentId;
+  const [assessment] = assessmentId ? await db.select({ assessmentJson: workAssessments.assessmentJson }).from(workAssessments).where(and(
+      eq(workAssessments.companyId, input.companyId), eq(workAssessments.issueId, input.taskId),
+      eq(workAssessments.runId, input.runId), eq(workAssessments.id, assessmentId))).limit(1) : [];
+  const diagnostic = projectManagedNativeCompletionDiagnostic({
+    finalization, decision, assessment: assessment?.assessmentJson,
+  });
+  expect({ status: input.task?.status ?? "missing", completedAtPresent: input.task?.completedAt != null },
+    `Safe native completion diagnostic: ${JSON.stringify(diagnostic)}`)
+    .toEqual({ status: "done", completedAtPresent: true });
+}
+
 describe("heartbeat comment wake batching", () => {
   it("cancels an empty deferred comment wake instead of promoting deleted input", async () => {
     let providerEntered = false;
@@ -243,8 +278,7 @@ describe("heartbeat comment wake batching", () => {
           expect(cancelled[0]?.id).toBe(deferredWake!.id);
           const [finishedTask] = await db.select({ status: issues.status, completedAt: issues.completedAt })
             .from(issues).where(eq(issues.id, taskId));
-          expect(finishedTask).toMatchObject({ status: "done" });
-          expect(finishedTask?.completedAt).not.toBeNull();
+          await expectTaskDoneWithSafeFinalizationDiagnostic({ companyId, taskId, runId: firstRunId, task: finishedTask });
           } finally { releaseProvider(); }
         },
       });
@@ -369,8 +403,7 @@ describe("heartbeat comment wake batching", () => {
           expect((await factsForRun(firstRunId)).providerCallCount).toBeGreaterThan(0);
           const [issueAfterPromotion] = await db.select({ status: issues.status, completedAt: issues.completedAt })
             .from(issues).where(eq(issues.id, task.id));
-          expect(issueAfterPromotion).toMatchObject({ status: "done" });
-          expect(issueAfterPromotion?.completedAt).not.toBeNull();
+          await expectTaskDoneWithSafeFinalizationDiagnostic({ companyId, taskId: task.id, runId: firstRunId, task: issueAfterPromotion });
         },
       });
     completedTests++;
@@ -467,8 +500,7 @@ describe("heartbeat comment wake batching", () => {
             expect(cancelled[0]?.id).toBe(deferredWake!.id);
             const [finishedTask] = await db.select({ status: issues.status, completedAt: issues.completedAt })
               .from(issues).where(eq(issues.id, task.id));
-            expect(finishedTask).toMatchObject({ status: "done" });
-            expect(finishedTask?.completedAt).not.toBeNull();
+            await expectTaskDoneWithSafeFinalizationDiagnostic({ companyId, taskId: task.id, runId: firstRunId, task: finishedTask });
           } finally { releaseProvider(); }
         },
       });

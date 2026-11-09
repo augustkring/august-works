@@ -8,7 +8,7 @@ const owner = vi.hoisted(() => ({ capture: vi.fn(), current: vi.fn(), redact: vi
 vi.mock("../native-direct-input.js", () => ({ captureNativeProjectSource: owner.capture,
   assertNativeProjectSourceCurrent: owner.current }));
 vi.mock("../run-secret-redaction.js", () => ({ createRunSecretRedactionRegistry: () => ({ redactForIssue: owner.redact }) }));
-import { formatNativeProjectRepositoryAppendix, prepareNativeProjectRepositoryPrompt } from "./native-project-repository-source.js";
+import { captureNativeSelectedProjectSource, formatNativeProjectRepositoryAppendix, prepareNativeProjectRepositoryPrompt } from "./native-project-repository-source.js";
 import { buildNativeBootstrapSourceSet } from "./native-execution-input.js";
 
 // These component tests mock current DB/source owners. They do not qualify
@@ -22,6 +22,7 @@ describe("Project repository renderer source components", () => {
   let input: Parameters<typeof prepareNativeProjectRepositoryPrompt>[0];
   let selection: Record<string, unknown>;
   let capture: Awaited<ReturnType<typeof import("../native-direct-input.js").captureNativeProjectSource>>;
+  let captureBaseline: typeof capture;
   beforeEach(async () => {
     vi.clearAllMocks();
     home = await realpath(await mkdtemp(path.join(tmpdir(), "native-project-source-component-")));
@@ -35,6 +36,7 @@ describe("Project repository renderer source components", () => {
       payloadSourceSnapshot: { version: 1, owner: { kind: "project", companyId, id: projectId, contentHash: "b".repeat(64) },
         policy, inputs: rows.map(row => ({ kind: "project_workspace", projectId, workspaceId: row.id,
           sourceVersion: row.updatedAt.toISOString(), contentHash: "c".repeat(64) })), digest: "d".repeat(64) }, workspaces: structuredClone(rows) };
+    captureBaseline = structuredClone(capture);
     selection = { projectId, projectWorkspaceId: selectedWorkspaceId, assigneeAgentId: agentId, executionRunId: runId,
       runAgentId: agentId, responsibleUserId, status: "running" };
     const db = { select: () => ({ from: () => ({ innerJoin: () => ({ where: () => ({ limit: async () => [selection] }) }) }) }) } as unknown as Db;
@@ -118,8 +120,59 @@ describe("Project repository renderer source components", () => {
   it("preserves current Project source owner rejection and final Task currentness", async () => {
     const failure = new Error("project_source_owner_changed"); owner.capture.mockRejectedValueOnce(failure);
     await expect(prepareNativeProjectRepositoryPrompt(input)).rejects.toBe(failure);
-    owner.current.mockImplementationOnce(async () => { selection.status = "failed"; });
+    owner.current.mockImplementation(async () => {
+      if (owner.current.mock.calls.length === 2) selection = { ...selection, status: "failed" };
+    });
     expect((await prepareNativeProjectRepositoryPrompt(input)).candidate).toBeNull();
+    expect(owner.current).toHaveBeenCalledTimes(2);
+  });
+  it("captures the selected Project once for an anchor-only Project workspace", async () => {
+    const result = await captureNativeSelectedProjectSource({ db: input.db, companyId, runId, agentId, responsibleUserId,
+      issueId, projectId, selectedWorkspaceId, repositoryRows: capture.workspaces });
+    expect(result?.input).toEqual(capture.input);
+    expect(result?.payloadSourceSnapshot.inputs).toContainEqual({ kind: "project_workspace", projectId, workspaceId: selectedWorkspaceId,
+      sourceVersion: capture.workspaces[0]!.updatedAt.toISOString(), contentHash: "c".repeat(64) });
+    expect(owner.capture).toHaveBeenCalledTimes(1);
+    expect(owner.current).toHaveBeenCalledTimes(1);
+  });
+  it("revalidates and reuses an existing appendix candidate without a second capture", async () => {
+    const appendix = await prepareNativeProjectRepositoryPrompt(input);
+    expect(appendix.candidate).not.toBeNull();
+    owner.capture.mockClear(); owner.current.mockClear();
+    const reused = await captureNativeSelectedProjectSource({ db: input.db, companyId, runId, agentId, responsibleUserId,
+      issueId, projectId, selectedWorkspaceId, repositoryRows: capture.workspaces, existingCandidate: appendix.candidate });
+    expect(reused).toEqual(appendix.candidate);
+    expect(owner.capture).not.toHaveBeenCalled();
+    expect(owner.current).toHaveBeenCalledTimes(1);
+  });
+  it("rejects changed Task selection before capture and reassignment during capture", async () => {
+    selection = { ...selection, assigneeAgentId: randomUUID() };
+    expect(await captureNativeSelectedProjectSource({ db: input.db, companyId, runId, agentId, responsibleUserId,
+      issueId, projectId, selectedWorkspaceId, repositoryRows: capture.workspaces })).toBeNull();
+    expect(owner.capture).not.toHaveBeenCalled();
+    selection = { projectId, projectWorkspaceId: selectedWorkspaceId, assigneeAgentId: agentId, executionRunId: runId,
+      runAgentId: agentId, responsibleUserId, status: "running" };
+    owner.capture.mockImplementationOnce(async () => { selection = { ...selection, responsibleUserId: randomUUID() }; return capture; });
+    expect(await captureNativeSelectedProjectSource({ db: input.db, companyId, runId, agentId, responsibleUserId,
+      issueId, projectId, selectedWorkspaceId, repositoryRows: capture.workspaces })).toBeNull();
+  });
+  it.each([
+    ["selected workspace row", (value: typeof capture) => { value.workspaces[0]!.projectId = randomUUID(); }],
+    ["sealed workspace pin", (value: typeof capture) => { value.payloadSourceSnapshot.inputs = []; }],
+    ["snapshot company", (value: typeof capture) => { value.payloadSourceSnapshot.owner.companyId = randomUUID(); }],
+  ])("rejects an independently malformed %s after a valid source capture", async (_label, mutate) => {
+    const malformed = structuredClone(captureBaseline);
+    mutate(malformed);
+    owner.capture.mockResolvedValue(malformed);
+    expect(await captureNativeSelectedProjectSource({ db: input.db, companyId, runId, agentId, responsibleUserId,
+      issueId, projectId, selectedWorkspaceId, repositoryRows: captureBaseline.workspaces })).toBeNull();
+    expect(owner.capture).toHaveBeenCalledTimes(1);
+    expect(owner.current).not.toHaveBeenCalled();
+  });
+  it("does not capture when the responsible Human is missing", async () => {
+    expect(await captureNativeSelectedProjectSource({ db: input.db, companyId, runId, agentId, responsibleUserId: null,
+      issueId, projectId, selectedWorkspaceId, repositoryRows: capture.workspaces })).toBeNull();
+    expect(owner.capture).not.toHaveBeenCalled();
   });
   it("the actual builder refuses missing or wrong Project snapshot owner/reference", async () => {
     const result = await prepareNativeProjectRepositoryPrompt(input); expect(compose(result)).not.toBeNull();

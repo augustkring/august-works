@@ -21,13 +21,13 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1939,
+    "sourceDeltaPathCount": 1945,
     "deletedSourcePathCount": 40,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13843,
+    "fullDiffPathCount": 13864,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -8665,6 +8665,18 @@
           "sha256": "1139f1ca36c1a5311b2401286f1b562e13a41edbb4ed6f401a3bc54f644e449a"
         },
         {
+          "path": "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "b8b9a52274f9b65bb22c297d38fb2f791dbedb200ab31255246b0d9553062db5"
+        },
+        {
           "path": "server/src/services/pipelines.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -8716,6 +8728,8 @@
         "server/src/services/issues.ts",
         "server/src/services/memory/memory-privacy.ts",
         "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.ts",
         "server/src/services/pipelines.ts",
         "server/src/services/routines.ts",
         "server/src/services/workflows/workflow-direct-agent.test.ts",
@@ -8739,6 +8753,8 @@
         "server/src/services/issues.ts",
         "server/src/services/memory/memory-privacy.ts",
         "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.ts",
         "server/src/services/pipelines.ts",
         "server/src/services/routines.ts",
         "server/src/services/workflows/workflow-direct-agent.test.ts",
@@ -8766,6 +8782,7 @@
         "server/src/services/automation-artifacts/automation-artifact-service.test.ts",
         "server/src/services/context/context-engine-integration.test.ts",
         "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
         "server/src/services/workflows/workflow-direct-agent.test.ts",
         "server/src/services/workflows/workflow-executor.test.ts"
       ],
@@ -9960,6 +9977,30 @@
           "sha256": "38b4421ebb2a67bc5dbd043b18d8faf0815118b952e017b163128bbabf8f2e86"
         },
         {
+          "path": "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -10260,6 +10301,10 @@
         "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-native-status-context.test.ts",
+        "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+        "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
         "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
@@ -10322,6 +10367,10 @@
         "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-native-status-context.test.ts",
+        "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+        "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
         "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
@@ -10374,6 +10423,8 @@
       "dependencyPaths": [],
       "characterizationTests": [
         "packages/shared/src/validators/routine.test.ts",
+        "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
         "server/src/__tests__/routine-pending-assignment.integration.test.ts",

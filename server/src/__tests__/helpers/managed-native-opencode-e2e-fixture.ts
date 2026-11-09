@@ -527,6 +527,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
   await enableV5ForTest(db);
   await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true,
     role_packs_v5: false, skill_resolver_v5: false, readiness_engine_v7: true, orchestration_v7: true,
+    supervision_v7: true, verifier_v7: true,
     enableContextEngineV1: true, enableCollectiveMemoryV1: true, enablePrivateAgentMemoryV1: true,
     ...(input.conversationRoot ? { enableAgentChat: true } : {}),
     ...(input.sandboxRelay ? { enableNativeRunner: true } : {}) });

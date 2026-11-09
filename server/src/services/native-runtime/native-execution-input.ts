@@ -1,4 +1,4 @@
-import type { NativeBlockedHumanInteraction } from "../native-direct-input.js";
+import type { NativeBlockedHumanInteraction, NativeTreeHoldInteractionSource } from "../native-direct-input.js";
 import { exactNativeWorkspaceCoordination, type NativeWorkspaceCoordinationCapture } from "./native-workspace-coordination-source.js";
 import { issueExecutionStateSchema } from "@paperclipai/shared";
 import { createHash } from "node:crypto";
@@ -542,6 +542,8 @@ export function captureNativeTaskWakeSource(input: {
   workspaceCoordinationCapture?: NativeWorkspaceCoordinationCapture | null;
   /** Independent current source-owner capture, never a wake flag. */
   blockedHumanInteraction?: NativeBlockedHumanInteraction | null;
+  /** Independently read original pause/comment owners; never a wake flag. */
+  treeHoldInteractionSource?: NativeTreeHoldInteractionSource | null;
   task: { id: string; identifier: string | null; title: string; description: string | null; status: string;
     priority: string; workMode: string };
   /** Read from the persisted heartbeat run, independently of the rendered
@@ -600,6 +602,18 @@ export function captureNativeTaskWakeSource(input: {
       [...new Set(blocked.commentSources.map(source => source.commentId))].sort()) &&
     blocked.commentSources.length > 0 && blocked.blockers.length > 0 &&
     isDeepStrictEqual([...blocked.unresolvedBlockerIssueIds].sort(), blocked.blockers.map(value => value.summary.id).sort());
+  const held = input.treeHoldInteractionSource;
+  const heldBinding = held && held.companyId === input.companyId && held.issueId === input.issueId &&
+    held.runId === input.runId && held.agentId === input.agentId && held.wakeupRequestId === input.wakeupRequestId &&
+    held.responsibleUserId === input.responsibleUserId &&
+    ["issue_commented", "issue_reopened_via_comment", "issue_comment_mentioned"].includes(input.persistedWakeReason ?? "") &&
+    closedContinuation?.wake.requestedByActorType === "user" && closedContinuation.wake.requestedByActorId === held.requestedByUserId &&
+    held.commentSources.length > 0 && isDeepStrictEqual([...closedContinuation.wake.originCommentIds].sort(),
+      [...new Set(held.commentSources.map(source => source.commentId))].sort()) &&
+    Object.keys(held.hold).sort().join(",") === "holdId,interaction,mode,rootIssueId" &&
+    uuid.test(held.hold.holdId) && uuid.test(held.hold.rootIssueId) && held.hold.mode === "pause" && held.hold.interaction === true &&
+    (held.hold.rootIssueId === input.issueId ? held.rootSource === null :
+      held.rootSource?.kind === "task" && held.rootSource.issueId === held.hold.rootIssueId);
   const checks: Record<string, boolean> = {
     reason: payload.reason === input.persistedWakeReason,
     executionWorkspace: !Object.hasOwn(payload, "executionWorkspace") || exactNativeTaskWakeWorkspaceHint({
@@ -652,6 +666,10 @@ export function captureNativeTaskWakeSource(input: {
       isDeepStrictEqual([...payload.unresolvedBlockerIssueIds].sort(), blocked.unresolvedBlockerIssueIds));
     checks.unresolvedBlockerSummaries = Boolean(blockedBinding &&
       isDeepStrictEqual(payload.unresolvedBlockerSummaries, blocked.blockers.map(value => value.summary)));
+  }
+  if (held) {
+    checks.treeHoldInteraction = Boolean(heldBinding && payload.treeHoldInteraction === true);
+    checks.activeTreeHold = Boolean(heldBinding && isDeepStrictEqual(payload.activeTreeHold, held.hold));
   }
   const failedChecks = Object.keys(checks).filter(key => !checks[key]);
   if (failedChecks.length) return reject("wake_fields_invalid", failedChecks);

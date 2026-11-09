@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
+      "sourceSha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Stop retains the original execution owner and unknown acknowledgements remain pending. Readonly dependency handling retains the original Task and role. The article still requires checking the current Task/run before Retry; Forget separately requires actual stop and storage removal."
+      "rationale": "Project-primary bootstrap now captures its actual Project source even without extra repositories. A paused Human comment uses its original canonical Hold provenance and current source access; release does not grant execution. Existing guidance still requires the original Task, current access and the available recovery action."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
+      "sourceSha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Stop bevarer den oprindelige ejer af kørslen, og ukendte bekræftelser forbliver afventende. Skrivebeskyttet håndtering af afhængigheder bevarer den oprindelige opgave og rolle. Artiklen kræver fortsat kontrol af den aktuelle opgave og kørsel før Retry; Forget kræver separat faktisk stop og fjernelse fra lageret."
+      "rationale": "Project-primary bootstrap now captures its actual Project source even without extra repositories. A paused Human comment uses its original canonical Hold provenance and current source access; release does not grant execution. Existing guidance still requires the original Task, current access and the available recovery action."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
+      "sourceSha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Stop retains the original execution owner and unknown acknowledgements remain pending. Readonly dependency handling retains the original Task and role. The article still requires checking the current Task/run before Retry; Forget separately requires actual stop and storage removal."
+      "rationale": "Project bootstrap and original pause-comment source capture preserve current company, Task, Run and reader privacy checks. Hold release grants no execution or source access. Export scope, account/company deletion, Stop verification and managed storage erasure behavior described here remain unchanged."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
+      "sourceSha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Stop bevarer den oprindelige ejer af kørslen, og ukendte bekræftelser forbliver afventende. Skrivebeskyttet håndtering af afhængigheder bevarer den oprindelige opgave og rolle. Artiklen kræver fortsat kontrol af den aktuelle opgave og kørsel før Retry; Forget kræver separat faktisk stop og fjernelse fra lageret."
+      "rationale": "Project bootstrap and original pause-comment source capture preserve current company, Task, Run and reader privacy checks. Hold release grants no execution or source access. Export scope, account/company deletion, Stop verification and managed storage erasure behavior described here remain unchanged."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

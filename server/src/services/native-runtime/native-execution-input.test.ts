@@ -349,6 +349,36 @@ describe("native bootstrap rendered-source closure", () => {
       responsibleUserId: humanId, wakeupRequestId: wakeId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
       payload: { ...commentWake, executionContinuation: capture.envelope }, commentSources: [commentSource], continuationCapture: capture });
     expect(captureInitial()).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const heldContinuation = structuredClone(initialCapture);
+    heldContinuation.envelope.trigger.reason = "issue_commented";
+    heldContinuation.wake.reason = "issue_commented";
+    const heldSource = { companyId, issueId, runId, agentId, responsibleUserId: humanId, wakeupRequestId: wakeId,
+      requestedByUserId: humanId, rootSource: null,
+      hold: { holdId: randomUUID(), rootIssueId: issueId, mode: "pause" as const, interaction: true as const },
+      commentSources: heldContinuation.commentSources.map(value => value.input) };
+    const heldInput: Parameters<typeof captureNativeTaskWakeSource>[0] = { companyId, runId, issueId, agentId,
+      responsibleUserId: humanId, wakeupRequestId: wakeId, sourceVersion: "1", persistedWakeReason: "issue_commented", task,
+      payload: { ...commentWake, reason: "issue_commented", executionContinuation: heldContinuation.envelope,
+        treeHoldInteraction: true, activeTreeHold: heldSource.hold },
+      commentSources: [commentSource], continuationCapture: heldContinuation, treeHoldInteractionSource: heldSource };
+    expect(captureNativeTaskWakeSource(heldInput)).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ ...heldInput, treeHoldInteractionSource: undefined })).toBeNull();
+    for (const key of ["companyId", "issueId", "runId", "agentId", "responsibleUserId", "wakeupRequestId", "requestedByUserId"] as const) {
+      expect(captureNativeTaskWakeSource({ ...heldInput,
+        treeHoldInteractionSource: { ...heldSource, [key]: randomUUID() } })).toBeNull();
+    }
+    for (const extra of [{ reason: "private ancestor reason" }, { releasePolicy: { strategy: "manual" } }]) {
+      expect(captureNativeTaskWakeSource({ ...heldInput, payload: { ...(heldInput.payload as object),
+        activeTreeHold: { ...heldSource.hold, ...extra } } })).toBeNull();
+    }
+    for (const change of [{ holdId: randomUUID() }, { rootIssueId: randomUUID() }, { mode: "cancel" }, { interaction: false }]) {
+      expect(captureNativeTaskWakeSource({ ...heldInput, payload: { ...(heldInput.payload as object),
+        activeTreeHold: { ...heldSource.hold, ...change } } })).toBeNull();
+    }
+    expect(captureNativeTaskWakeSource({ ...heldInput,
+      treeHoldInteractionSource: { ...heldSource, commentSources: [] } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ ...heldInput, treeHoldInteractionSource: { ...heldSource,
+      hold: { ...heldSource.hold, rootIssueId: randomUUID() } } })).toBeNull();
     const jsonbOrdered = structuredClone(initialCapture);
     Object.assign(jsonbOrdered.envelope, { messages: [Object.fromEntries(Object.entries(message).reverse())] });
     expect(captureInitial(jsonbOrdered)).toMatchObject({ kind: "native_task_wake", runId, issueId });

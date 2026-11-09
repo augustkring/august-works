@@ -1,0 +1,43 @@
+{
+  "observedUtc": "2026-11-09T14:29:59.975140+00:00",
+  "rootReportedInfrastructureCorrection": "Root identified and terminated four owned infinite-EOF Python log writers (46621,46629,46688,46668), about7.3GiB RSS; source owner notified to use streaming EOF handling",
+  "productionComparisonWithR1": {
+    "server/src/services/heartbeat.ts": {
+      "r1": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5",
+      "current": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5"
+    },
+    "server/src/services/native-direct-input.ts": {
+      "r1": "4ef4bf3b56bd7e061db5279a3a3bb004c4dd4b8316baac3fa4ea383f280ff49f",
+      "current": "4ef4bf3b56bd7e061db5279a3a3bb004c4dd4b8316baac3fa4ea383f280ff49f"
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "r1": "463c2b40bc5f16886ff70d72a3900fe26120b91ceb71308fb3e87f34d8493e37",
+      "current": "463c2b40bc5f16886ff70d72a3900fe26120b91ceb71308fb3e87f34d8493e37"
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "r1": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "current": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26"
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "r1": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "current": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7"
+    }
+  },
+  "allFiveProductionSourcesUnchangedFromR1": true,
+  "measuredBeforeLaunch": {
+    "memoryCurrentBytes": 6615855104,
+    "memoryMax": "17179869184",
+    "stat": {
+      "anon": 49684480,
+      "file": 2877755392,
+      "kernel": 3686322176,
+      "shmem": 21647360,
+      "inactive_file": 1377882112,
+      "active_file": 1478234112,
+      "slab": 3684266912
+    },
+    "events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "authorization": "ONE retry on a newly diagnosed corrected infrastructure cause; same pool3/heap768/4GiB/180s/original60s/FSfloors/global2GiBreserve/canonicalflock",
+  "r1Outcome": "global-memory-reserve stop, no Vitest summary or test-count outcome, all original source pins/log/receipt retained"
+}

@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd"
+      "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "e32b3a22d0bb5318a9861c113c52c1d14a03af4c0dd1d2e109b81127edc8a50f"
+      "sha256": "4ef4bf3b56bd7e061db5279a3a3bb004c4dd4b8316baac3fa4ea383f280ff49f"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",

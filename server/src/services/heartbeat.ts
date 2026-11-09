@@ -1,4 +1,4 @@
-import { captureNativeBlockedHumanInteraction, type NativeBlockedHumanInteraction } from "./native-direct-input.js";
+import { captureNativeBlockedHumanInteraction, captureNativeTreeHoldInteractionSource, type NativeBlockedHumanInteraction } from "./native-direct-input.js";
 import { formatNativeWorkspaceCoordination, recordNativeWorkspaceCoordination, exactNativeWorkspaceCoordination, composeNativeWorkspaceCoordinationMap,
   type NativeWorkspaceCoordinationCapture, type WorkspaceCoordinationReadDb } from "./native-runtime/native-workspace-coordination-source.js";
 import { isResourceAdmissionDeferred } from "./resource-governance.js";
@@ -16,7 +16,7 @@ import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from ".
 import { assertNativeAnalyticalRunPayloadAccess } from "./analytical-context-authority.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
 import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
-import type { ExecutionReconciliation, NativePayloadSourceInput } from "@paperclipai/shared";
+import type { ExecutionReconciliation, NativePayloadSourceInput, NativePayloadSourcePolicy } from "@paperclipai/shared";
 import { externalConversationStateSql, nonIdleSlackIssueCondition } from "./slack-conversation-state.js";
 import { settleSlackConversation } from "./slack-conversation-lifecycle.js";
 import { publicChatTaskUrl } from "./chat-task-url.js";
@@ -451,7 +451,7 @@ import {
 } from "./runner-goals.js";
 import { resolveChatRunPresentationAuthorizationReason } from "./chat-run-publications.js";
 import { projectService } from "./projects.js";
-import { formatNativeProjectRepositoryAppendix, prepareNativeProjectRepositoryPrompt } from "./native-runtime/native-project-repository-source.js";
+import { captureNativeSelectedProjectSource, formatNativeProjectRepositoryAppendix, prepareNativeProjectRepositoryPrompt } from "./native-runtime/native-project-repository-source.js";
 import {
   authorizationService,
   type AuthorizationActor,
@@ -923,7 +923,7 @@ export function nativeExecutionFailureLogFields(input: {
   if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && input.error instanceof Error) {
     const match = /^native_bootstrap_source_closure_unavailable:([a-zA-Z,]+);builder:([a-z_]+);wake:([A-Za-z_:+]+)$/.exec(input.error.message);
     const unsupportedKeys = new Set(["review", "directPrompt", "previousRun", "persistedInput", "resume",
-      "initialGuidance", "continuation", "planning", "conversationHistory", "wake", "projectPaths",
+      "initialGuidance", "continuation", "planning", "conversationHistory", "wake", "projectPaths", "projectWorkspaceSource",
       "authoredContextManifests", "missingTask"]);
     const builderReasons = new Set(["interaction_sources", "unsupported_or_missing_witness", "ambiguous_reference",
       "reference_source_mismatch", "source_snapshot_invalid", "additional_inputs_unknown", "source_budget_exceeded", "unknown"]);
@@ -8264,7 +8264,12 @@ export async function buildPaperclipWakePayload(input: {
     dependencyBlockedInteraction:
       input.contextSnapshot.dependencyBlockedInteraction === true,
     treeHoldInteraction: input.contextSnapshot.treeHoldInteraction === true,
-    activeTreeHold: parseObject(input.contextSnapshot.activeTreeHold),
+    activeTreeHold: input.contextSnapshot.treeHoldInteraction === true ? {
+      holdId: parseObject(input.contextSnapshot.activeTreeHold).holdId,
+      rootIssueId: parseObject(input.contextSnapshot.activeTreeHold).rootIssueId,
+      mode: parseObject(input.contextSnapshot.activeTreeHold).mode,
+      interaction: parseObject(input.contextSnapshot.activeTreeHold).interaction,
+    } : parseObject(input.contextSnapshot.activeTreeHold),
     unresolvedBlockerIssueIds: Array.isArray(
       input.contextSnapshot.unresolvedBlockerIssueIds,
     )
@@ -24281,6 +24286,27 @@ export function heartbeatService(
             ].filter(Boolean).join("\n\n");
             const selectedNativeTaskSourceMap = projectRepositoryPaths.length > 0
               ? nativeProjectRepositoryPrompt?.sourceMap ?? null : coordinatedBaseMap;
+            const selectedProjectId = resolvedProjectId;
+            const selectedProjectWorkspaceId = persistedExecutionWorkspace?.projectWorkspaceId ?? null;
+            const selectedProjectWorkspaceScope = Boolean(executionWorkspace.source === "project_primary" && selectedProjectId &&
+              executionWorkspace.projectId === selectedProjectId && persistedExecutionWorkspace?.projectId === selectedProjectId &&
+              selectedProjectWorkspaceId && executionWorkspace.workspaceId === selectedProjectWorkspaceId &&
+              issueRef?.projectId === selectedProjectId && (!issueRef.projectWorkspaceId ||
+                issueRef.projectWorkspaceId === selectedProjectWorkspaceId));
+            const promptProjectCandidate = nativeProjectRepositoryPrompt?.candidate ?? null;
+            const nativeProjectScopeCandidate = selectedProjectWorkspaceScope && selectedProjectId && selectedProjectWorkspaceId && issueRef
+              ? await captureNativeSelectedProjectSource({ db, companyId: agent.companyId, runId: run.id, agentId: agent.id,
+                responsibleUserId: run.responsibleUserId, issueId: issueRef.id, projectId: selectedProjectId,
+                selectedWorkspaceId: selectedProjectWorkspaceId, repositoryRows: nativeProjectRepositoryRows,
+                existingCandidate: promptProjectCandidate }) : null;
+            const nativeProjectAdditionalInputs: NativePayloadSourceInput[] =
+              nativeProjectScopeCandidate && !promptProjectCandidate
+                ? [nativeProjectScopeCandidate.input, ...nativeProjectScopeCandidate.payloadSourceSnapshot.inputs] : [];
+            const nativeProjectAdditionalPolicy: NativePayloadSourcePolicy | null =
+              nativeProjectScopeCandidate && !promptProjectCandidate ? {
+                ...nativeProjectScopeCandidate.payloadSourceSnapshot.policy,
+                projectIds: [...new Set([...nativeProjectScopeCandidate.payloadSourceSnapshot.policy.projectIds, selectedProjectId!])].sort(),
+              } : null;
             const nativeExecutionWithCheckpoint =
               buildNativeExecutionWithCheckpoint({
                 previousRun: previousNativeRun,
@@ -24418,12 +24444,20 @@ export function heartbeatService(
                   runId: run.id, agentId: agent.id }) : null;
             nativeBootstrapBlockedHumanInteraction = blockedHumanInteraction
               ? { capture: blockedHumanInteraction, wake: context.paperclipWake } : null;
+            const treeHoldInteractionSource = issueRef && parseObject(context.paperclipWake).treeHoldInteraction === true
+              ? await captureNativeTreeHoldInteractionSource(db, { companyId: agent.companyId, issueId: issueRef.id,
+                runId: run.id, agentId: agent.id, payload: context.paperclipWake,
+                sources: [...ancestorSourceCaptures.map(capture => capture.input),
+                  ...inlineWakeCommentSourceCaptures.map(capture => capture.input),
+                  ...(closedTaskContinuation?.commentSources.map(capture => capture.input) ?? [])] }) : null;
+            const treeHoldRootCapture = treeHoldInteractionSource?.rootSource
+              ? ancestorSourceCaptures.find(capture => isDeepStrictEqual(capture.input, treeHoldInteractionSource.rootSource)) : null;
             const nativeTaskWakeCapture: Parameters<typeof captureNativeTaskWakeSource>[0] | null =
               capturedTaskSource?.input.kind === "task" && issueRef ? {
                 companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion, agentId: agent.id,
                 workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
-                workspaceCoordinationCapture: originalCoordinationCapture, blockedHumanInteraction,
+                workspaceCoordinationCapture: originalCoordinationCapture, blockedHumanInteraction, treeHoldInteractionSource,
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
                 continuationCapture: closedTaskContinuation,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
@@ -24485,11 +24519,25 @@ export function heartbeatService(
               wake: Boolean(context.paperclipWake && !nativeTaskWakeSource),
               workspaceCoordination: Boolean(originalCoordinationCapture && !nativeTaskWakeSource),
               projectPaths: projectRepositoryPaths.length > 0 && !nativeProjectRepositoryPrompt?.candidate,
+              projectWorkspaceSource: executionWorkspace.source === "project_primary" && Boolean(executionWorkspace.projectId) &&
+                !nativeProjectScopeCandidate,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };
             const attachmentClosureExecution = nativeExecution;
             if (!attachmentClosureExecution) throw new Error("native_bootstrap_execution_input_unavailable");
             const nativeBootstrapSourceSetDiagnostics: string[] = [];
+            const retainedRunPolicy: NativePayloadSourcePolicy | null = nativeBootstrapRetainedRunSource
+              ? { issueIds: [], projectIds: [], runIds: [nativeBootstrapRetainedRunSource.source.runId],
+                  memoryIds: [], foundationRevisionIds: [] } : null;
+            const additionalPolicyParts = [retainedRunPolicy, nativeProjectAdditionalPolicy]
+              .filter((part): part is NativePayloadSourcePolicy => part !== null);
+            const additionalPolicy: NativePayloadSourcePolicy | null = additionalPolicyParts.length ? {
+              issueIds: [...new Set(additionalPolicyParts.flatMap(part => part.issueIds))].sort(),
+              projectIds: [...new Set(additionalPolicyParts.flatMap(part => part.projectIds))].sort(),
+              runIds: [...new Set(additionalPolicyParts.flatMap(part => part.runIds))].sort(),
+              memoryIds: [...new Set(additionalPolicyParts.flatMap(part => part.memoryIds))].sort(),
+              foundationRevisionIds: [...new Set(additionalPolicyParts.flatMap(part => part.foundationRevisionIds))].sort(),
+            } : null;
             const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = []) =>
               buildNativeBootstrapSourceSet({
                 companyId: agent.companyId,
@@ -24507,10 +24555,15 @@ export function heartbeatService(
                     revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : []),
                   ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : []),
                   ...(nativeBootstrapRetainedRunSource ? [nativeBootstrapRetainedRunSource.source] : []),
+                  ...nativeProjectAdditionalInputs,
                   nativeBootstrapWorkspaceSource,
                 ],
-                taskWakeDependencyCandidates: blockedHumanInteraction?.blockers.map(blocker => ({ kind: "task" as const,
-                  id: blocker.source.issueId, input: blocker.source, payloadSourceSnapshot: blocker.payloadSourceSnapshot })),
+                taskWakeDependencyCandidates: [
+                  ...(blockedHumanInteraction?.blockers.map(blocker => ({ kind: "task" as const,
+                    id: blocker.source.issueId, input: blocker.source, payloadSourceSnapshot: blocker.payloadSourceSnapshot })) ?? []),
+                  ...(treeHoldRootCapture ? [{ kind: "task" as const, id: treeHoldRootCapture.input.issueId,
+                    input: treeHoldRootCapture.input, payloadSourceSnapshot: treeHoldRootCapture.payloadSourceSnapshot }] : []),
+                ],
                 taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
                   ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
                       input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) : [],
@@ -24527,9 +24580,7 @@ export function heartbeatService(
                     ...(closedTaskContinuation.pendingInteractions?.map(capture => capture.source) ?? []),
                     ...(closedTaskContinuation.acceptedPlanReview ? [closedTaskContinuation.acceptedPlanReview.interactionSource] : []),
                     ...(closedTaskContinuation.delivery ? [closedTaskContinuation.delivery.source] : [])] : [],
-                additionalPolicy: nativeBootstrapRetainedRunSource
-                  ? { issueIds: [], projectIds: [], runIds: [nativeBootstrapRetainedRunSource.source.runId], memoryIds: [], foundationRevisionIds: [] }
-                  : null,
+                additionalPolicy,
                 interactionResponses: attachmentClosureExecution.interactionResponses,
                 interactionSources: nativeBootstrapInteractionSources,
                 contextManifestIds: nativeBootstrapContextManifests,

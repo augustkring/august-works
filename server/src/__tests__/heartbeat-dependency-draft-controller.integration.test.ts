@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import request from "supertest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
-  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds } from "@paperclipai/db";
+  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -24,6 +24,8 @@ import { registerNativeDraftGateway } from "../services/orchestration/native-dra
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { issueService } from "../services/issues.js";
 import { documentService } from "../services/documents.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
+import { issueTreeControlService } from "../services/issue-tree-control.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import {
   CHAT_CONTROL_RECOVERY_ADMISSION_KEY,
@@ -60,7 +62,7 @@ describe("dependency scheduling through the installed Native text draft controll
     vi.stubEnv("PAPERCLIP_INSTANCE_ID", "dependency-native-draft");
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", "private-fixture-signing-master-123456789");
     database = await startEmbeddedPostgresTestDatabase("dependency-native-draft-");
-    db = createDb(database.connectionString);
+    db = createDb(database.connectionString, { maxConnections: 3 });
     await instanceSettingsService(db).getExperimental();
     await enableV5ForTest(db);
     await instanceSettingsService(db).updateExperimental({ enableNativeRunner: true, enableWorkflowsV1: true,
@@ -440,6 +442,8 @@ describe("dependency scheduling through the installed Native text draft controll
     let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
     let calls = 0;
     const output = "The held Task has a bounded internal draft for Human review.";
+    const privateReason = "PRIVATE-ANCESTOR-HOLD-REASON-794318";
+    const privatePolicyNote = "PRIVATE-ANCESTOR-RELEASE-NOTE-294751";
     const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
       calls++;
       expect(calls).toBe(1);
@@ -450,6 +454,9 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(JSON.parse(body).tools).toBeUndefined();
       expect(body).toContain("assignedRuntimeContext");
       expect(body).not.toContain(credential);
+      expect(body).not.toContain(privateReason);
+      expect(body).not.toContain(privatePolicyNote);
+      expect(body).not.toContain("releasePolicy");
       if (!entry) throw new Error("paused_draft_plan_missing");
       const [reservation] = await db.select().from(orchestrationModelReservations)
         .where(eq(orchestrationModelReservations.planId, entry.plan.id));
@@ -459,11 +466,15 @@ describe("dependency scheduling through the installed Native text draft controll
       { status: 200, headers: { "content-type": "application/json" } });
     };
     await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
-      entry = await createDraftPlan(fixture, "Human comment interaction under a pause hold");
+      const ancestor = await issueService(db).create(f.home, { title: "Original pause ancestor",
+        description: "Original independently captured pause root.", status: "todo", workMode: "standard",
+        responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+        { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+      entry = await createDraftPlan(fixture, "Human comment interaction under a pause hold", ancestor.id);
       const [hold] = await db.insert(issueTreeHolds).values({
-        companyId: f.home, rootIssueId: entry.task.id, mode: "pause", status: "active",
-        reason: "Preserve the Human pause while allowing a genuine comment interaction.",
-        releasePolicy: { strategy: "manual" },
+        companyId: f.home, rootIssueId: ancestor.id, mode: "pause", status: "active",
+        reason: privateReason,
+        releasePolicy: { strategy: "manual", note: privatePolicyNote },
       }).returning();
       expect(hold).toBeDefined();
       const ordinary = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
@@ -500,7 +511,7 @@ describe("dependency scheduling through the installed Native text draft controll
       const [interactionRun] = await db.select().from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, interaction!.id)));
       expect(interactionRun?.contextSnapshot).toMatchObject({ treeHoldInteraction: true,
-        activeTreeHold: { holdId: hold!.id, rootIssueId: entry.task.id, mode: "pause", interaction: true } });
+        activeTreeHold: { holdId: hold!.id, rootIssueId: ancestor.id, mode: "pause", interaction: true, reason: privateReason } });
       await vi.waitFor(() => { expect(calls).toBe(1); }, { timeout: 20_000, interval: 25 });
       await heartbeat.drainActiveRunExecutions();
       expect(calls).toBe(1);
@@ -512,6 +523,56 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(runs).toHaveLength(1);
       expect(runs[0]).toMatchObject({ id: interaction!.id, nativeIssueId: entry.task.id,
         responsibleUserId: f.userId, runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
+      const receipt = nativeRunInputSourceReceiptSchema.parse(runs[0]!.runnerProfileJson?.nativeInputSourceReceipt);
+      expect(receipt.bootstrap.inputs).toContainEqual(expect.objectContaining({ kind: "task", issueId: ancestor.id }));
+      const wake = (runs[0]!.contextSnapshot as Record<string, unknown>).paperclipWake as Record<string, unknown>;
+      expect(wake.activeTreeHold).toEqual({ holdId: hold!.id, rootIssueId: ancestor.id, mode: "pause", interaction: true });
+      expect(JSON.stringify(wake)).not.toContain(privateReason);
+      expect(JSON.stringify(wake)).not.toContain(privatePolicyNote);
+      const [revision] = await db.select({ id: documentRevisions.id }).from(issueDocuments)
+        .innerJoin(documents, eq(documents.id, issueDocuments.documentId))
+        .innerJoin(documentRevisions, eq(documentRevisions.id, documents.latestRevisionId))
+        .where(and(eq(issueDocuments.issueId, entry.task.id), eq(issueDocuments.key, "result")));
+      if (!revision) throw new Error("pause_source_result_revision_missing");
+      const sourceRead = (sourceDb = db, actor = human, companyId = f.home) =>
+        assertNativeDocumentRevisionCurrentSourceAccess(sourceDb, { companyId, issueId: entry!.task.id, revisionId: revision.id, actor });
+      await expect(sourceRead()).resolves.toBeUndefined();
+      await issueTreeControlService(db).releaseHold(f.home, ancestor.id, hold!.id,
+        { actor: { actorType: "user", actorId: f.userId, userId: f.userId } });
+      await expect(sourceRead()).resolves.toBeUndefined();
+      expect(calls).toBe(1);
+      await expect(sourceRead(db, human, randomUUID())).rejects.toMatchObject({ status: 403 });
+      await expect(sourceRead(db, { type: "none", source: "none" })).rejects.toMatchObject({ status: 403 });
+      const viewer = await seedCurrentHumanSourceActor(db, [f.home], `pause-viewer-${randomUUID()}`);
+      await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(
+        eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, viewer.userId!)));
+      await expect(sourceRead(db, viewer)).resolves.toBeUndefined();
+      // Rollback each corruption so every refusal is independent and the
+      // final positive still uses the original sealed prefix and current ACL.
+      const rejectedMutation = (mutate: (tx: typeof db) => Promise<unknown>, actor = human) => db.transaction(async rawTx => {
+        const tx = rawTx as unknown as typeof db;
+        await tx.execute(sql`savepoint pause_source_negative`);
+        try { await mutate(tx); await expect(sourceRead(tx, actor)).rejects.toMatchObject({ status: 403 }); }
+        finally { await tx.execute(sql`rollback to savepoint pause_source_negative`); }
+      });
+      await rejectedMutation(tx => tx.update(issues).set({ visibility: "private" }).where(eq(issues.id, ancestor.id)), viewer);
+      await rejectedMutation(tx => tx.update(companyMemberships).set({ status: "suspended" }).where(and(
+        eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId))));
+      await rejectedMutation(tx => tx.update(issueComments).set({ deletedAt: new Date() }).where(eq(issueComments.id, comment.id)));
+      await rejectedMutation(tx => tx.update(agentWakeupRequests).set({ requestedByActorId: "forged-human" })
+        .where(eq(agentWakeupRequests.id, runs[0]!.wakeupRequestId!)));
+      await rejectedMutation(tx => tx.update(issueTreeHolds).set({ rootIssueId: entry!.task.id }).where(eq(issueTreeHolds.id, hold!.id)));
+      await rejectedMutation(tx => tx.update(heartbeatRuns).set({ contextSnapshot: { ...runs[0]!.contextSnapshot,
+        paperclipWake: { ...wake, activeTreeHold: { ...(wake.activeTreeHold as object), holdId: randomUUID() } } } })
+        .where(eq(heartbeatRuns.id, interaction!.id)));
+      // The original receipt trigger atomically refuses this statement before
+      // a reader can see a changed prefix. Keep that guard enabled.
+      await expect(db.update(heartbeatRuns).set({ runnerProfileJson: { ...runs[0]!.runnerProfileJson,
+        nativeInputSourceReceipt: { ...receipt, bootstrap: { ...receipt.bootstrap, inputs: receipt.bootstrap.inputs
+          .filter(source => !(source.kind === "task" && source.issueId === ancestor.id)) } } } })
+        .where(eq(heartbeatRuns.id, interaction!.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(sourceRead()).resolves.toBeUndefined();
+      expect(calls).toBe(1);
     });
   }, 60_000);
   it("runs unrelated assigned Native Text tasks concurrently under separate issue claims", async () => {
@@ -609,11 +670,11 @@ describe("dependency scheduling through the installed Native text draft controll
 
   // Same current-Human/Plan and installed HTTP/listener owners as the two
   // cases above. The new cases share only their identical local setup/proofs.
-  async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string) {
+  async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string, parentId?: string) {
     const { f, human } = fixture;
     const tasks = issueService(db), plans = orchestrationService(db);
     const draft = await tasks.create(f.home, { title, description: "Retain one internal document for Human review; no interactive tools or external effects.",
-      status: "todo", workMode: "standard", responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+      status: "todo", workMode: "standard", responsibleUserId: f.userId, createdByUserId: f.userId, ...(parentId ? { parentId } : {}) }, db, undefined,
       { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
     const task = await tasks.update(draft.id, { assigneeAgentId: f.presence.id, actorUserId: f.userId, privacyActor: human });
     if (!task) throw new Error("dependency_domain_draft_missing");

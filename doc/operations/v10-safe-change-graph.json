@@ -11,13 +11,13 @@
   },
   "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1939,
+    "sourceDeltaPathCount": 1945,
     "deletedSourcePathCount": 40,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13843,
+    "fullDiffPathCount": 13864,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
@@ -4033,13 +4033,13 @@
         "identity": "full master base supplied by current build task"
       },
       "sourceInventoryBoundary": {
-        "sourceDeltaPathCount": 1939,
+        "sourceDeltaPathCount": 1945,
         "deletedSourcePathCount": 40,
         "untrackedSourceCandidateCount": 0,
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 13843,
+        "fullDiffPathCount": 13864,
         "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
       },
       "sourceAfterGeneration": "Private exact reviewed composed overlay anchored at b1; no final runtime, release or capability qualification."
@@ -5246,7 +5246,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
-          "sha256": "d947a55f7e7d798f2748fab18e3e9ff26dd3bd648875f148723e8a672a572cd0"
+          "sha256": "4c2455ad4d2e935b9b01a78637743ccdaeef2b4aa7f9d7d38e9d297d45de6680"
         },
         {
           "path": "server/src/__tests__/heartbeat-direct-adapter-native-isolation.test.ts",
@@ -5338,7 +5338,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd"
+          "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb"
         },
         {
           "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
@@ -5474,7 +5474,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55"
+          "sha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5"
         },
         {
           "path": "server/src/services/issues.ts",
@@ -5954,7 +5954,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55"
+          "sha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.ts",
@@ -6646,7 +6646,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd"
+          "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb"
         },
         {
           "path": "server/src/__tests__/helpers/paperclip-semantic-conformance.ts",
@@ -7137,7 +7137,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd"
+          "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb"
         },
         {
           "path": "server/src/__tests__/issue-queued-comments-routes.test.ts",
@@ -8475,7 +8475,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd"
+          "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb"
         },
         {
           "path": "server/src/__tests__/issue-closed-workspace-routes.test.ts",
@@ -8731,7 +8731,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55"
+          "sha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5"
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
@@ -8751,7 +8751,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "e32b3a22d0bb5318a9861c113c52c1d14a03af4c0dd1d2e109b81127edc8a50f"
+          "sha256": "4ef4bf3b56bd7e061db5279a3a3bb004c4dd4b8316baac3fa4ea383f280ff49f"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -9568,7 +9568,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd"
+          "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb"
         },
         {
           "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
@@ -9736,7 +9736,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55"
+          "sha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5"
         },
         {
           "path": "server/src/services/learning/learning-assets.ts",
@@ -9987,7 +9987,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55"
+          "sha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5"
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
@@ -10848,7 +10848,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55"
+          "sha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5"
         },
         {
           "path": "server/src/services/native-runtime/create-skill.integration.test.ts",
@@ -10998,6 +10998,18 @@
           "sha256": "1139f1ca36c1a5311b2401286f1b562e13a41edbb4ed6f401a3bc54f644e449a"
         },
         {
+          "path": "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "b8b9a52274f9b65bb22c297d38fb2f791dbedb200ab31255246b0d9553062db5"
+        },
+        {
           "path": "server/src/services/pipelines.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -11049,6 +11061,8 @@
         "server/src/services/issues.ts",
         "server/src/services/memory/memory-privacy.ts",
         "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.ts",
         "server/src/services/pipelines.ts",
         "server/src/services/routines.ts",
         "server/src/services/workflows/workflow-direct-agent.test.ts",
@@ -11072,6 +11086,8 @@
         "server/src/services/issues.ts",
         "server/src/services/memory/memory-privacy.ts",
         "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.ts",
         "server/src/services/pipelines.ts",
         "server/src/services/routines.ts",
         "server/src/services/workflows/workflow-direct-agent.test.ts",
@@ -11099,6 +11115,7 @@
         "server/src/services/automation-artifacts/automation-artifact-service.test.ts",
         "server/src/services/context/context-engine-integration.test.ts",
         "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
+        "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
         "server/src/services/workflows/workflow-direct-agent.test.ts",
         "server/src/services/workflows/workflow-executor.test.ts"
       ],
@@ -11175,6 +11192,14 @@
         {
           "path": "server/src/services/optimizer/optimizer-evaluation.integration.test.ts",
           "sha256": "6903bfe5656fa9979e57c0bd01c5104ac48a62f8d00250e9d808cf459207c80d"
+        },
+        {
+          "path": "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+          "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b"
+        },
+        {
+          "path": "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+          "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7"
         },
         {
           "path": "server/src/services/pipelines.ts",
@@ -12636,6 +12661,30 @@
           "sha256": "38b4421ebb2a67bc5dbd043b18d8faf0815118b952e017b163128bbabf8f2e86"
         },
         {
+          "path": "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -12936,6 +12985,10 @@
         "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-native-status-context.test.ts",
+        "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+        "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
         "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
@@ -12998,6 +13051,10 @@
         "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
         "server/src/__tests__/heartbeat-native-status-context.test.ts",
+        "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+        "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
         "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
@@ -13050,6 +13107,8 @@
       "dependencyPaths": [],
       "characterizationTests": [
         "packages/shared/src/validators/routine.test.ts",
+        "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+        "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
         "server/src/__tests__/routine-pending-assignment.integration.test.ts",
@@ -13119,11 +13178,11 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
-          "sha256": "35836eebec8a4c249f41229258c9d2ffdeaf0b8c96341489f08c38b2c5bc4c75"
+          "sha256": "625704a96e39e7b46e529acaf60033ef50f81947016cb066be4c5d021cff83a9"
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-          "sha256": "487bf60cf252e0e8352f16c31459f78a7d30201650bc18109f7cfc5813ac6f60"
+          "sha256": "aa7394df06453082fc3acd882f61d474a3abab607843f1d01dabe9da8494fa7e"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
@@ -13138,8 +13197,24 @@
           "sha256": "ee7ea3d33c49bfed9e05158c85e330ded59287ec3976d8074f5f5d74392e85ef"
         },
         {
+          "path": "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+          "sha256": "06307bca13069e9d686a9352db6ec55485c6c1d7385c1f533613aaf3eac58eab"
+        },
+        {
+          "path": "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+          "sha256": "7858421b2880de9727b48b524f258dd1d53fa3e92dc44f07aeea15835f54db93"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+          "sha256": "6c2e9f0207ba8e8bf014bb17300a25eb8c2bab32b8a6f4f82deb1a43e040b93e"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
+          "sha256": "9e71dc49ef083624bce49bcabcabfaeacef29985755512f5d38445459045a90d"
+        },
+        {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "fd72bda57a5fc43bdb3f35d05ed72404043694f16c53e8afceb966639e189e01"
+          "sha256": "1e6cf3e375f760b8837b496f3ee2380c3c1542decf4c40f9ffa7526d7f752183"
         },
         {
           "path": "server/src/__tests__/plugin-managed-routines.test.ts",
@@ -21395,11 +21470,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-project-repository-source.test.ts",
-          "sha256": "0ade7bdddb259ba75db438657f938a55a63fbcf0bdf506bb27eff73e32cd7cd0"
+          "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711"
         },
         {
           "path": "server/src/services/native-runtime/native-project-repository-source.ts",
-          "sha256": "187172d6acd4effc74d094dbf2e18207e92b31b73d3699a6eac8262f1dd695a7"
+          "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26"
         },
         {
           "path": "server/src/services/project-control.ts",
@@ -23299,11 +23374,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-execution-input.test.ts",
-          "sha256": "11a16def2d129c9145b3763cdccfabd00208d45fa0f126c2d99afa59eb119cb6"
+          "sha256": "87702a2d60bc8c2c02ada25a16b8171a86f964d1468f4cd09e72846eefc86652"
         },
         {
           "path": "server/src/services/native-runtime/native-execution-input.ts",
-          "sha256": "073e2183d08da71fa40ae62e41c007ab733bfd3a22ee39e797632b4be19bceb4"
+          "sha256": "463c2b40bc5f16886ff70d72a3900fe26120b91ceb71308fb3e87f34d8493e37"
         },
         {
           "path": "server/src/services/native-runtime/native-finalization-reconciler.ts",
@@ -29148,7 +29223,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "f33515b08da95d8c3b7aae312d3bc68479e079ef3030e93f50a6f8d2dd9cedd2"
+          "sha256": "972c05f1b3b10dd319ba6a2d4f4c6c20ca5ad3a4ecde9e5d28d598fcc8eebefa"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -29719,7 +29794,7 @@
         },
         {
           "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-          "sha256": "bde9378ef62c5e912ad106e6dcb901a80e7f9ed347bd5041ef343717019ec907"
+          "sha256": "dfd172afa851081f83f676928912957cf683f571386706429c100bae2b8219cc"
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
@@ -43954,7 +44029,7 @@
       "id": "source:server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
-      "sha256": "d947a55f7e7d798f2748fab18e3e9ff26dd3bd648875f148723e8a672a572cd0",
+      "sha256": "4c2455ad4d2e935b9b01a78637743ccdaeef2b4aa7f9d7d38e9d297d45de6680",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -44308,7 +44383,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "d524bffde9bae7009f5b9c56e2196ad1cdf4abfea63779afc50bdae5a407c3fd",
+      "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -44839,7 +44914,7 @@
       "id": "source:server/src/services/heartbeat.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/heartbeat.ts",
-      "sha256": "d2faa141cb5247b60ed4724b2454e6156fec785e48855f0a52518a67ca399e55",
+      "sha256": "e99b141e4770eb2c0dd372eaafd60ac2fa654ec3508c09a0c0495356a8183af5",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-03",
@@ -47243,7 +47318,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "e32b3a22d0bb5318a9861c113c52c1d14a03af4c0dd1d2e109b81127edc8a50f",
+      "sha256": "4ef4bf3b56bd7e061db5279a3a3bb004c4dd4b8316baac3fa4ea383f280ff49f",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -48429,6 +48504,36 @@
       }
     },
     {
+      "id": "source:server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "changeIds": [
+        "SCR-V10-HOTSPOT-12"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/services/optimizer/optimizer-workflow-runtime.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "changeIds": [
+        "SCR-V10-HOTSPOT-12"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "b8b9a52274f9b65bb22c297d38fb2f791dbedb200ab31255246b0d9553062db5"
+      }
+    },
+    {
       "id": "source:server/src/services/workflows/workflow-service.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/workflows/workflow-service.ts",
@@ -49039,7 +49144,7 @@
       "id": "source:server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
-      "sha256": "35836eebec8a4c249f41229258c9d2ffdeaf0b8c96341489f08c38b2c5bc4c75",
+      "sha256": "625704a96e39e7b46e529acaf60033ef50f81947016cb066be4c5d021cff83a9",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49054,7 +49159,7 @@
       "id": "source:server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-      "sha256": "487bf60cf252e0e8352f16c31459f78a7d30201650bc18109f7cfc5813ac6f60",
+      "sha256": "aa7394df06453082fc3acd882f61d474a3abab607843f1d01dabe9da8494fa7e",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49111,10 +49216,70 @@
       }
     },
     {
+      "id": "source:server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+      "sha256": "06307bca13069e9d686a9352db6ec55485c6c1d7385c1f533613aaf3eac58eab",
+      "changeIds": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+      "sha256": "7858421b2880de9727b48b524f258dd1d53fa3e92dc44f07aeea15835f54db93",
+      "changeIds": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+      "sha256": "6c2e9f0207ba8e8bf014bb17300a25eb8c2bab32b8a6f4f82deb1a43e040b93e",
+      "changeIds": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
+      "sha256": "9e71dc49ef083624bce49bcabcabfaeacef29985755512f5d38445459045a90d",
+      "changeIds": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "fd72bda57a5fc43bdb3f35d05ed72404043694f16c53e8afceb966639e189e01",
+      "sha256": "1e6cf3e375f760b8837b496f3ee2380c3c1542decf4c40f9ffa7526d7f752183",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -57484,7 +57649,7 @@
       "id": "source:server/src/services/native-runtime/native-project-repository-source.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-project-repository-source.test.ts",
-      "sha256": "0ade7bdddb259ba75db438657f938a55a63fbcf0bdf506bb27eff73e32cd7cd0",
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
       "changeIds": [
         "SCR-V10-PROJECT-REPOSITORY-SOURCE"
       ],
@@ -57499,7 +57664,7 @@
       "id": "source:server/src/services/native-runtime/native-project-repository-source.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-project-repository-source.ts",
-      "sha256": "187172d6acd4effc74d094dbf2e18207e92b31b73d3699a6eac8262f1dd695a7",
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
       "changeIds": [
         "SCR-V10-PROJECT-REPOSITORY-SOURCE"
       ],
@@ -59314,7 +59479,7 @@
       "id": "source:server/src/services/native-runtime/native-execution-input.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-execution-input.test.ts",
-      "sha256": "11a16def2d129c9145b3763cdccfabd00208d45fa0f126c2d99afa59eb119cb6",
+      "sha256": "87702a2d60bc8c2c02ada25a16b8171a86f964d1468f4cd09e72846eefc86652",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -59329,7 +59494,7 @@
       "id": "source:server/src/services/native-runtime/native-execution-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-execution-input.ts",
-      "sha256": "073e2183d08da71fa40ae62e41c007ab733bfd3a22ee39e797632b4be19bceb4",
+      "sha256": "463c2b40bc5f16886ff70d72a3900fe26120b91ceb71308fb3e87f34d8493e37",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -66139,7 +66304,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "f33515b08da95d8c3b7aae312d3bc68479e079ef3030e93f50a6f8d2dd9cedd2",
+      "sha256": "972c05f1b3b10dd319ba6a2d4f4c6c20ca5ad3a4ecde9e5d28d598fcc8eebefa",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -66724,7 +66889,7 @@
       "id": "source:doc/operations/agent-native-tool-alias-compatibility.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-      "sha256": "bde9378ef62c5e912ad106e6dcb901a80e7f9ed347bd5041ef343717019ec907",
+      "sha256": "dfd172afa851081f83f676928912957cf683f571386706429c100bae2b8219cc",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -79240,6 +79405,16 @@
     },
     {
       "from": "SCR-V10-HOTSPOT-12",
+      "to": "source:server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-HOTSPOT-12",
+      "to": "source:server/src/services/optimizer/optimizer-workflow-runtime.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-HOTSPOT-12",
       "to": "source:server/src/services/pipelines.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
@@ -79566,6 +79741,26 @@
     {
       "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
       "to": "source:server/src/__tests__/heartbeat-native-status-context.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
+      "to": "source:server/src/__tests__/helpers/assigned-mcp-tools-observer.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
+      "to": "source:server/src/__tests__/helpers/assigned-tool-gateway-result-observer.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
+      "to": "source:server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
+      "to": "source:server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {

@@ -182,6 +182,8 @@ type ManagedSandboxHostInput = {
   brokerOrigin: string;
   observeModelOriginDenials?: true;
   assignedToolGatewayHttpRequest?: NonNullable<Parameters<typeof createToolGatewayService>[1]>["remoteHttpRequest"];
+  /** Fixture-only observer applied to each registered Gateway owner, including scoped DB owners. */
+  observeAssignedToolGateway?: (owner: ReturnType<typeof createToolGatewayService>, kind: "host_root" | "scoped") => void;
   brokerProxyOrigin: string | null;
   certBundlePath: string;
   setBrokerToken: (token: string) => void;
@@ -846,7 +848,12 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       return new Response(JSON.stringify(response.body),{status:response.status,headers:{"content-type":"application/json"}});
     }};
   const qualificationGateway=createToolGatewayService(db,gatewayOptions);
-  registerAssignedMcpGateway(db,qualificationGateway,scopedDb=>createToolGatewayService(scopedDb,gatewayOptions));
+  input.observeAssignedToolGateway?.(qualificationGateway, "host_root");
+  registerAssignedMcpGateway(db,qualificationGateway,scopedDb => {
+    const scopedGateway=createToolGatewayService(scopedDb,gatewayOptions);
+    input.observeAssignedToolGateway?.(scopedGateway, "scoped");
+    return scopedGateway;
+  });
   qualificationGateway.setSandboxBrokerAuthority(runtime.authorizeSandboxBrokerCapability, brokerOrigin);
   const namedGateway=await qualificationGateway.createNamedGateway({companyId,body:{name:"Conversation qualification and runtime gateway",profileId:gatewayProfile.id}});
   const qualificationProviderProfile={id:"paperclip-qualification",
