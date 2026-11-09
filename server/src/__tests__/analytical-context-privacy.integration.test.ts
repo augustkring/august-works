@@ -57,7 +57,8 @@ import {PaperclipControlPlanePort} from "../services/native-runtime/paperclip-co
 import type {PrpEvent} from "../vendor/paperclip-runner/index.js";
 import {executePaperclipNativeSession} from "../services/native-runtime/native-session-executor.js";
 import {prepareNativeHeartbeatRun} from "../services/native-runtime/prepare-native-run.js";
-import type {NativeExecutionInputV1} from "@paperclipai/paperclip-runner";
+import {parseNativeExecutionInput,type NativeExecutionInputV4} from "@paperclipai/paperclip-runner";
+import {nativeRuntimeContextFixture} from "../services/native-runtime/runtime-context.test-fixture.js";
 import {completionContracts} from "@paperclipai/db";
 import {nativeCompletionContractInput} from "../services/native-runtime/completion-contracts.js";
 import {nativeManagementToolsAvailable} from "../services/native-runtime/management-analytical-tools.js";
@@ -802,9 +803,16 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   const prepared=await prepareNativeHeartbeatRun({db,run:run!,issue:issue!,environmentLeaseId:randomUUID()});
   const [contract]=await db.select().from(completionContracts).where(eq(completionContracts.issueId,issueId));
   const f=await fixture();await f.capture();
-  const execution:NativeExecutionInputV1={schema:"paperclip.native-execution-input.v1",binding:{companyId,issueId,runId,agentId,executionWorkspaceId:runId},provider:{kind:"codex",model:"gpt-5.6-luna"},task:{identifier:issueId,title:issue!.title,description:null,prompt:"Synthetic analytical context",workMode:"standard"},workspace:{cwd:"/tmp",repoUrl:null,repoRef:null,branchName:null},session:{normalizedSessionId:prepared.normalizedSessionId,driverKind:"codex_app_server",protocolVersion:1,lifecyclePolicy:{mode:"per_turn",idleTimeoutMs:null}},completionContract:{id:contract!.id,sha256:contract!.canonicalSha256,schemaVersion:"paperclip.completion-contract.v1",contract:nativeCompletionContractInput(contract!.contractJson)},interactionResponses:[],credentialBindings:[]};
+  const execution:NativeExecutionInputV4={schema:"paperclip.native-execution-input.v4",executionMode:"default",planningContext:null,runtimeContext:nativeRuntimeContextFixture(),binding:{companyId,issueId,runId,agentId,executionWorkspaceId:runId},provider:{kind:"aw_text_only",model:"source-entry-negative",profileId:randomUUID(),maxOutputTokens:1024},task:{identifier:issueId,title:issue!.title,description:null,prompt:"Synthetic analytical context",workMode:"standard"},workspace:{cwd:"/tmp",repoUrl:null,repoRef:null,branchName:null},session:{normalizedSessionId:prepared.normalizedSessionId,driverKind:"aw_text_messages",protocolVersion:1,lifecyclePolicy:{mode:"per_turn",idleTimeoutMs:null}},completionContract:{id:contract!.id,sha256:contract!.canonicalSha256,schemaVersion:"paperclip.completion-contract.v1",contract:nativeCompletionContractInput(contract!.contractJson)},interactionResponses:[],credentialBindings:[]};
+  parseNativeExecutionInput(execution);
+  // Select the admitted internal boundary so the actual Source guard is
+  // reached. Neither a provider descriptor nor a session may be opened.
+  const descriptor=vi.fn(async()=>{throw new Error("source_denied_descriptor_started");});
+  const openSession=vi.fn(async()=>{throw new Error("source_denied_provider_started");});
   await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
-  await expect(executePaperclipNativeSession({db,execution,runnerInstanceId:prepared.runnerInstanceId})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+  await expect(executePaperclipNativeSession({db,execution,runnerInstanceId:prepared.runnerInstanceId,
+   adapterType:"paperclip_runner",backend:{descriptor,openSession}})).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
+  expect(descriptor).not.toHaveBeenCalled();expect(openSession).not.toHaveBeenCalled();
   expect(await db.select().from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId,runId))).toHaveLength(0);
  });
  it("requires an actual current reader and explicit source rollout without erasing original canonical facts",async()=>{const f=await fixture();await f.capture();await expect(assertAnalyticalContextPayloadAccess(db,companyId,undefined,{issueId})).rejects.toMatchObject({status:403});await instanceSettingsService(db).updateExperimental({management_chat_tools_v8:false,management_reviews_v8:false,business_metrics_v8:false});await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).rejects.toMatchObject({status:404});expect(await db.select().from(businessMetricObservations).where(eq(businessMetricObservations.companyId,companyId))).toHaveLength(1);});

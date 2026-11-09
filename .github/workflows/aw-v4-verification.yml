@@ -185,7 +185,7 @@ jobs:
           pnpm run preflight:workspace-links
           execution_report="$(mktemp --suffix=.json "${RUNNER_TEMP}/v10-security-vitest-XXXXXX")"
           trap 'rm -f "${execution_report}"' EXIT
-          pnpm exec vitest run "${selected_tests[@]}" --maxWorkers=1 --no-file-parallelism --reporter=json --outputFile "${execution_report}"
+          pnpm exec vitest run "${selected_tests[@]}" --maxWorkers=1 --no-file-parallelism --reporter=default --reporter=json --outputFile "${execution_report}"
           node scripts/check-v10-security-regression-execution.mjs "${execution_report}" "${selected_tests[@]}"
 
       - name: Prepare generated-code sandbox

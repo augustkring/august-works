@@ -346,8 +346,10 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     expect(mockAdapterExecute).toHaveBeenCalledTimes(runs.length);
   });
 
+  // Seed ownership survives unsupported-transport refusal. This does not
+  // admit a Native wake whose requester differs from its persisted author.
   it.each(["issue_commented", "issue_comment_mentioned"])(
-    "uses the persisted message author for %s without changing issue ownership",
+    "keeps the persisted comment author as responsible user and refuses unsupported legacy dispatch for %s",
     async (wakeReason) => {
       const { companyId, agentId } = await seedCompany();
       const issueResponsibleUserId = `issue-owner-${randomUUID()}`;
@@ -385,14 +387,19 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
 
       expect(run).not.toBeNull();
       const completed = await waitForRun(db, run!.id);
-      expect(completed?.status).toBe("succeeded");
-      expect(completed?.responsibleUserId).toBe(commenterUserId);
+      expect(completed).toMatchObject({ status: "failed", responsibleUserId: commenterUserId,
+        errorCode: "configuration_incomplete", resultJson: {
+          configurationIncomplete: { reason: "paid_transport_unqualified", owner: "Managed model gateway owner",
+            provider: "codex_local" },
+          executionRecovery: { kind: "bootstrap", providerWorkStarted: false },
+        } });
       const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
       expect(issue?.responsibleUserId).toBe(issueResponsibleUserId);
       await drainHeartbeatRunsToQuiescence(db, heartbeat);
       const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId));
-      expect(runs.every(row => row.responsibleUserId === commenterUserId)).toBe(true);
-      expect(mockAdapterExecute).toHaveBeenCalledTimes(runs.length);
+      expect(runs).toHaveLength(1);
+      expect(runs.map(row => row.responsibleUserId)).toEqual([commenterUserId]);
+      expect(mockAdapterExecute).not.toHaveBeenCalled();
     },
   );
 

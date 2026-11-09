@@ -17,7 +17,7 @@
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13891,
+    "fullDiffPathCount": 13896,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
@@ -4039,7 +4039,7 @@
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 13891,
+        "fullDiffPathCount": 13896,
         "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
       },
       "sourceAfterGeneration": "Private exact reviewed composed overlay anchored at b1; no final runtime, release or capability qualification."
@@ -5227,7 +5227,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c"
+          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
@@ -5303,7 +5303,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts",
-          "sha256": "158a169340aa538400061e65cff6aade0118761c54622f28e507e9e1cc148350"
+          "sha256": "f68d5fa4880202ec8b978a8be5189e65baba4a039ba5332c0613e8e187e8592c"
         },
         {
           "path": "server/src/__tests__/heartbeat-retry-scheduling.test.ts",
@@ -6615,7 +6615,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c"
+          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
         },
         {
           "path": "server/src/__tests__/artifact-review-document-routes.test.ts",
@@ -7138,7 +7138,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c"
+          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
         },
         {
           "path": "server/src/__tests__/environment-runtime.test.ts",
@@ -8428,7 +8428,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c"
+          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
         },
         {
           "path": "server/src/__tests__/business-events.integration.test.ts",
@@ -10781,7 +10781,7 @@
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-          "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c"
+          "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7"
         },
         {
           "path": "server/src/__tests__/company-skills-service.test.ts",
@@ -13167,7 +13167,7 @@
       "sources": [
         {
           "path": ".github/workflows/aw-v4-verification.yml",
-          "sha256": "ea77a5fde892cca8e693f65c0114207b467b99b0400125bcc8a77d0dda98fba1"
+          "sha256": "77e8d8734970e424ebacbd749b039a4b8caacc0c55c373f970435103f4940bb4"
         },
         {
           "path": ".github/workflows/aw-v9-coverage.yml",
@@ -13195,7 +13195,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-          "sha256": "6546596080c85959fb85490105725d867f041539a824e57b96115b50729fdaeb"
+          "sha256": "14a9bbc8db13edc64269681349fe51f7a2780debb6e410a3fb42d763bbb2dbcd"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
@@ -43959,7 +43959,7 @@
       "id": "source:server/src/__tests__/analytical-context-privacy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
-      "sha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c",
+      "sha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -44240,7 +44240,7 @@
       "id": "source:server/src/__tests__/heartbeat-responsible-user-invariant.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts",
-      "sha256": "158a169340aa538400061e65cff6aade0118761c54622f28e507e9e1cc148350",
+      "sha256": "f68d5fa4880202ec8b978a8be5189e65baba4a039ba5332c0613e8e187e8592c",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -49095,7 +49095,7 @@
       "id": "source:.github/workflows/aw-v4-verification.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/aw-v4-verification.yml",
-      "sha256": "ea77a5fde892cca8e693f65c0114207b467b99b0400125bcc8a77d0dda98fba1",
+      "sha256": "77e8d8734970e424ebacbd749b039a4b8caacc0c55c373f970435103f4940bb4",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49200,7 +49200,7 @@
       "id": "source:server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-      "sha256": "6546596080c85959fb85490105725d867f041539a824e57b96115b50729fdaeb",
+      "sha256": "14a9bbc8db13edc64269681349fe51f7a2780debb6e410a3fb42d763bbb2dbcd",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],

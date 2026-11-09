@@ -1340,7 +1340,7 @@ describe("dependency scheduling through the installed Native text draft controll
 
   // These are genuine scheduler/Plan/current-Human cancellation fences, not a
   // provider backend mock. Both intentionally stop before the HTTP controller.
-  it.each(["before_selection", "after_selection"] as const)(
+  it.each(["before_selection", "after_selection", "before_selection_row_lock"] as const)(
     "cancels a real installed-controller Run at %s without dispatching its model",
     async phase => {
       const fixture = await seedInstalledDraft(), {f} = fixture;
@@ -1349,6 +1349,12 @@ describe("dependency scheduling through the installed Native text draft controll
       let selectedRunId: string | null = null;
       let selectionReached = false, dispatchReached = false, calls = 0;
       let cancellation: Promise<unknown> | undefined, cancellationError: unknown;
+      let blockerPid: number | undefined;
+      let rowLockRelease: (() => void) | undefined;
+      let rowLockTransaction: Promise<void> | undefined;
+      let readRowLockWaiters: (() => Promise<{stopBlocked:number;selectionBlocked:number;runStatus:string;runtimeMode:string;coordinatorCount:number;waiterFacts:unknown}>) | undefined;
+      let rowLockError: unknown;
+      let blockedUpdateObserved = false;
       const fetch: typeof guardedRemoteHttpFetch = async () => {
         calls++;
         throw new Error("Cancellation fence must precede actual controlled model HTTP");
@@ -1361,6 +1367,55 @@ describe("dependency scheduling through the installed Native text draft controll
           runtimeMode:"legacy",runtimeModeResolvedAt:null,nativeSessionId:null});
         expect(calls).toBe(0);
         if (phase === "before_selection") await heartbeatOwner.cancelRun(runId,"Cancel before Native selection");
+        if (phase === "before_selection_row_lock") {
+          let releaseLock!: () => void;
+          const lockGate = new Promise<void>(resolve => { releaseLock=resolve; });
+          rowLockRelease = releaseLock;
+          rowLockTransaction = db.transaction(async tx => {
+            await tx.select({id:heartbeatRuns.id}).from(heartbeatRuns).where(eq(heartbeatRuns.id,runId)).for("update");
+            const [identity] = await tx.execute<{pid:number}>(sql`select pg_backend_pid() as pid`);
+            blockerPid=identity!.pid;
+            readRowLockWaiters = async () => {
+              // Activity text can truncate the selected table and FOR UPDATE.
+              // A top-level SELECT blocked by this Run's Stop identifies selection.
+              await tx.execute(sql`select pg_stat_clear_snapshot()`);
+              const [blocked] = await tx.execute<{stop_blocked:number;selection_blocked:number;waiter_facts:unknown}>(sql`
+                with waiters as (
+                  select pid,query,state,wait_event_type,pg_blocking_pids(pid) as blockers
+                  from pg_stat_activity where datname=current_database()
+                ), stops as (
+                  select pid from waiters
+                  where ${blockerPid}=any(blockers) and query ilike '%update%heartbeat_runs%'
+                )
+                select jsonb_agg(jsonb_build_object('holder',pid=${blockerPid},'state',state,'waitType',wait_event_type,
+                    'blockerCount',cardinality(blockers),'runRow',query ilike '%heartbeat_runs%',
+                    'issueRow',query ilike '%issues%','rowSelection',query ilike '%for update%',
+                    'stopUpdate',query ilike '%update%heartbeat_runs%')) as waiter_facts,
+                  (select count(*)::int from stops) as stop_blocked,
+                  count(*) filter (where query ilike 'select %'
+                    and (${blockerPid}=any(blockers) or exists (
+                      select 1 from stops where stops.pid=any(waiters.blockers)
+                    )))::int as selection_blocked
+                from waiters
+              `);
+              const [current] = await tx.select({status:heartbeatRuns.status,runtimeMode:heartbeatRuns.runtimeMode})
+                .from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));
+              const coordinators = await tx.select({runId:nativeRunFinalizations.runId})
+                .from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId,runId));
+              return {stopBlocked:blocked!.stop_blocked,selectionBlocked:blocked!.selection_blocked,
+                runStatus:current!.status,runtimeMode:current!.runtimeMode,coordinatorCount:coordinators.length,waiterFacts:blocked!.waiter_facts};
+            };
+            await lockGate;
+          }).catch(error => { rowLockError=error; });
+          await vi.waitFor(() => expect(blockerPid).toEqual(expect.any(Number)),{timeout:5_000,interval:25});
+          cancellation = heartbeatOwner.cancelRun(runId,"Cancel while Native selection row is locked")
+            .catch(error=>{cancellationError=error;});
+          await vi.waitFor(async () => {
+            const snapshot=await readRowLockWaiters!();
+            expect(snapshot.stopBlocked).toBeGreaterThan(0);
+          },{timeout:5_000,interval:25});
+          blockedUpdateObserved=true;
+        }
       };
       const beforeDispatch = async ({runId,issueId,stage}: {runId:string;issueId:string;stage:"claim"|"dispatch"}) => {
         if (stage !== "dispatch" || phase !== "after_selection") return;
@@ -1380,6 +1435,7 @@ describe("dependency scheduling through the installed Native text draft controll
       };
       await withInstalledDraftTransport(fixture,fetch,async heartbeat => {
         heartbeatOwner=heartbeat;
+        try {
         // The helper installed this exact profile/gateway before Plan admission.
         entry=await createDraftPlan(fixture,`Cancellation fence ${phase}`);
         const wake=await heartbeat.wakeup(f.presence.id,{source:"automation",triggerDetail:"system",reason:"issue_assigned",
@@ -1387,7 +1443,29 @@ describe("dependency scheduling through the installed Native text draft controll
           contextSnapshot:{issueId:entry.task.id,wakeReason:"issue_assigned"}});
         expect(wake).not.toBeNull();
         if (!wake) throw new Error("cancellation_fence_run_missing");
-        await heartbeat.drainActiveRunExecutions();
+        if (phase === "before_selection_row_lock") {
+          const drain = heartbeat.drainActiveRunExecutions();
+          try {
+            await vi.waitFor(()=>expect(blockedUpdateObserved).toBe(true),{timeout:5_000,interval:25});
+            await vi.waitFor(async () => {
+              const snapshot=await readRowLockWaiters!();
+              expect(snapshot.selectionBlocked,JSON.stringify(snapshot)).toBeGreaterThan(0);
+              expect(snapshot.stopBlocked).toBeGreaterThan(0);
+              expect(snapshot.runStatus).toBe("running");
+              expect(snapshot.runtimeMode).toBe("legacy");
+              expect(snapshot.coordinatorCount).toBe(0);
+            },{timeout:5_000,interval:25});
+            expect(calls).toBe(0);
+          } finally {
+            rowLockRelease?.();
+            await rowLockTransaction;
+          }
+          if (rowLockError) throw rowLockError;
+          await drain;
+          expect(blockedUpdateObserved).toBe(true);
+        } else {
+          await heartbeat.drainActiveRunExecutions();
+        }
         await cancellation;
         expect(cancellationError).toBeUndefined();
         expect(selectionReached).toBe(true);expect(selectedRunId).toBe(wake.id);
@@ -1396,10 +1474,10 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(runs).toHaveLength(1);
         const run=runs[0]!;
         expect(run).toMatchObject({id:wake.id,companyId:f.home,agentId:f.presence.id,responsibleUserId:f.userId,
-          status:"cancelled",runtimeMode:phase==="before_selection"?"legacy":"native",
+          status:"cancelled",runtimeMode:phase==="after_selection"?"native":"legacy",
           resultJson:{startupPreparationSettledAt:expect.any(String)}});
         const coordinators=await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId,wake.id));
-        if (phase==="before_selection") {
+        if (phase!=="after_selection") {
           expect(run).toMatchObject({runtimeModeResolvedAt:null,nativeSessionId:null,
             resultJson:{startupCancellation:{beforeNativeSelection:true}}});
           expect(coordinators).toEqual([]);
@@ -1421,6 +1499,10 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId,wake.id))).toEqual([]);
         expect(await documentService(db).getIssueDocumentByKey(entry.task.id,"result")).toBeNull();
         expect(calls).toBe(0);
+        } finally {
+          rowLockRelease?.();
+          await rowLockTransaction;
+        }
       },beforeDispatch,beforeSelection);
     },60_000,
   );

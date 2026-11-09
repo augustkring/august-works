@@ -475,5 +475,14 @@
     "newSha256": "5d14633538b52cb177c3133445dbe7da3eeb4933ebf05af75ad5b8a4b4c877b3",
     "reason": "Classify ordinary historical question context through canonical current Source owners and original prefix membership. Preserve exact direct-response matching and provider-session lifecycle gates; context Sources retain sealed origin metadata and current Source privacy. No migration-phase or historical qualification promotion.",
     "qualificationBoundary": "Reviewed current-source inventory only. Component, PostgreSQL, build and SDK results are recorded separately; no migration apply, external provider or physical Host qualification is implied."
+  },
+  "sourceEntryFixtureReview20261109": {
+    "baseHead": "91b83f4697523dc38ac51dd3f9f8a6e60fd1eac0",
+    "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
+    "oldSha256": "f7e95a244152365bcea01f5dcd18fed42255830027e51cbd6e1ba4055554c81c",
+    "newSha256": "e10d5663ae82aded528b571b2a2f06eabc5a9281d78051a692e34d67f9f7ffa7",
+    "reason": "Use a parsed v4 internal text boundary with never-called backend descriptor/session sentinels so the actual PostgreSQL Source refusal is reached before provider startup. Keep all original Source refusal/event assertions. No production transport, Source policy or migration-phase change.",
+    "qualificationBoundary": "63 privacy cases passed in disjoint controlled invocations; aggregate current-head CI and shared-database full-file execution remain separate. No migration apply, paid-provider or physical Host qualification.",
+    "evidence": "doc/operations/aw-v10-evidence/security-entry-and-stop-20261109/qualification.tar.gz"
   }
 }
