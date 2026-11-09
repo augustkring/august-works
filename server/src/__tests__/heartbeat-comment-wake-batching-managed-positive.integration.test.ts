@@ -162,7 +162,7 @@ async function expectTaskDoneWithSafeFinalizationDiagnostic(input: {
   // Query the persisted authority records only after the normal assertion would fail.
   // The helper projects them to whitelisted enums, booleans and counts before display.
   const [finalization] = await db.select({ phase: nativeRunFinalizations.phase,
-    failureCode: nativeRunFinalizations.failureCode, assessmentId: nativeRunFinalizations.assessmentId,
+    failureCode: nativeRunFinalizations.failureCode, failureDetail: nativeRunFinalizations.failureDetail, assessmentId: nativeRunFinalizations.assessmentId,
     decisionId: nativeRunFinalizations.decisionId }).from(nativeRunFinalizations).where(and(
       eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.taskId),
       eq(nativeRunFinalizations.runId, input.runId))).limit(1);

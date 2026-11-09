@@ -14,8 +14,8 @@ import { runManagedNativeConversationFrame } from "../../__tests__/helpers/manag
 import { documentService } from "../documents.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { canActorReadIssuePrivacy } from "../authorization.js";
-import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
+import { issueService } from "../issues.js";
+import { purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
 
 function hasPinnedOpenCodeProfile(): boolean {
   if (process.platform !== "linux") return false;
@@ -56,7 +56,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
     }
   }, 30_000);
 
-  it("binds an actual conversation dispatch to its created Task and scrubs that Task when the producing Run is erased", async () => {
+  it("binds an actual conversation dispatch to its created Task and erases that copy through the conversation retirement owner", async () => {
     const binary = qualifiedOpenCodeBinary();
     if (!binary) throw new Error("qualified_opencode_binary_unavailable");
     const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
@@ -115,13 +115,34 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
         expect(edges).not.toContainEqual({ sourceKind: "run", sourceId: runId });
         expect(await canActorReadIssuePrivacy(db, aliceActor, { id: child.id, companyId })).toBe(true);
 
-        await db.transaction(async tx => {
-          await lockAnalyticalCompany(tx as unknown as typeof db, companyId);
-          await lockMemoryPrivacy(tx as unknown as typeof db, companyId);
-          await purgeDerivedWorkflowMemory(tx as unknown as typeof db, companyId, [], new Date(), {
+        await db.transaction(async rawTx => {
+          const tx = rawTx as unknown as typeof db;
+          // Exercise the server retirement owner with the fixture Human.
+          // Public chat-recovery route admission is a separate contract.
+          // Retirement makes the producing Run a source-erasure candidate.
+          await issueService(db).create(companyId, {
+            privateWorkAdmission: "closed",
+            title: "Conversation recovery fixture",
+            status: "in_review",
+            assigneeAgentId: agentId,
+            createdByUserId: aliceActor.userId!,
+            conversationAgentId: agentId,
+            conversationUserId: aliceActor.userId!,
+            conversationState: "waiting",
+            payloadSourceProtocolVersion: 1,
+            retireConversationId: issueId,
+          }, tx, undefined, {
+            manualInputActor: aliceActor,
+            privacyActor: aliceActor,
+            sourceAccessActor: aliceActor,
+          });
+          await purgeDerivedWorkflowMemory(tx, companyId, [], new Date(), {
             workflowRevisionIds: [], artifactVersionIds: [], runIds: [runId],
           });
         });
+        const [retiredConversation] = await db.select().from(issues)
+          .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId)));
+        expect(retiredConversation).toMatchObject({ conversationState: "retired", status: "cancelled", hiddenAt: expect.any(Date) });
         const [erasedTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, child.id)));
         expect(erasedTask).toMatchObject({ title: "Erased workflow task", description: null,
           payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });

@@ -982,7 +982,7 @@ describe("native model input dispatch intent", () => {
     await db.insert(issueThreadInteractions).values({ id: interactionId, companyId, issueId: createdIssue.id,
       kind: "request_item_verdicts", status: "pending", createdByAgentId: agentId, sourceRunId: seeded.runId,
       payload: { version: 1, prompt: "Review the requested items", items: [
-        { id: "one", label: "First item" }, { id: "two", label: "Second item" },
+        { id: "one", label: "First item" }, { id: "two", label: "Second item" }, { id: "three", label: "Third item" },
       ] } });
     const interactionService = issueThreadInteractionService(db);
     await interactionService.submitItemVerdicts({ id: createdIssue.id, companyId, status: "in_progress" }, interactionId,
@@ -1034,6 +1034,12 @@ describe("native model input dispatch intent", () => {
       .rejects.toThrow("The Native source prefix is not in its original receipt");
     await interactionService.submitItemVerdicts({ id: createdIssue.id, companyId, status: "in_progress" }, interactionId,
       { verdicts: [{ id: "two", verdict: "reject", reason: "Needs revision" }] }, { userId });
+    const [partlyAnswered] = await db.select({ status: issueThreadInteractions.status }).from(issueThreadInteractions)
+      .where(eq(issueThreadInteractions.id, interactionId));
+    expect(partlyAnswered?.status).toBe("pending");
+    await expect(checkCurrent()).rejects.toThrow("A Native source Interaction changed or was erased");
+    await interactionService.submitItemVerdicts({ id: createdIssue.id, companyId, status: "in_progress" }, interactionId,
+      { verdicts: [{ id: "three", verdict: "approve" }] }, { userId });
     await expect(checkCurrent()).rejects.toThrow("A Native source Interaction changed or was erased");
   });
 

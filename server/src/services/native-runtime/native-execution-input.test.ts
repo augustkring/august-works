@@ -5,7 +5,7 @@ import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, exactNativeInitialTaskContinuation, exactNativeTaskContinuation } from "./native-execution-input.js";
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, nativeAnsweredQuestionContinuationSource, exactNativeInitialTaskContinuation, exactNativeTaskContinuation } from "./native-execution-input.js";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
@@ -349,6 +349,125 @@ describe("native bootstrap rendered-source closure", () => {
       responsibleUserId: humanId, wakeupRequestId: wakeId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
       payload: { ...commentWake, executionContinuation: capture.envelope }, commentSources: [commentSource], continuationCapture: capture });
     expect(captureInitial()).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    // These are two independent read profiles; neither is a plan approval or a
+    // governed tool-action response. Production reconstructs every owner.
+    const questionId = randomUUID();
+    const questionCapture = structuredClone(initialCapture);
+    questionCapture.wake.reason = "issue_commented";
+    questionCapture.envelope.trigger = { reason: "issue_commented", interactionId: questionId, sourceRunId: null };
+    questionCapture.wake.interaction = { interactionId: questionId, interactionKind: "ask_user_questions", interactionStatus: "answered", sourceRunId: null };
+    const result = { version: 1 as const, answers: [{ questionId: "direction", optionIds: ["continue"], otherText: "Continue safely" }] };
+    const nativeResponse = { interactionId: questionId, kind: "ask_user_questions" as const,
+      response: { status: "answered", result: { ...result, summaryMarkdown: "Continue safely" } } };
+    const humanResponse = { id: questionId, kind: "ask_user_questions" as const, status: "answered" as const,
+      resolvedByUserId: "another-authorized-human", resolvedAt: "2026-10-01T00:00:00.000Z", result: { answers: result.answers } };
+    const interactionOutcome = { id: questionId, kind: "ask_user_questions" as const, status: "answered" as const, result };
+    questionCapture.envelope.humanResponses = [humanResponse];
+    questionCapture.envelope.interactionOutcomes = [interactionOutcome];
+    const questionSourceCapture = { companyId, issueId, runId, agentId, nativeResponse,
+      nativeSource: { kind: "interaction" as const, issueId, interactionId: questionId, sourceVersion: "1760000000.123456", contentHash: nativeSha256(nativeResponse) },
+      owner: { sourceRunId: null, sourceCommentId: null, originCommentIds: [], continuationPolicy: "wake_assignee",
+        resolvedByUserId: humanResponse.resolvedByUserId, resolvedAt: humanResponse.resolvedAt }, humanResponse, interactionOutcome };
+    questionCapture.answeredQuestions = [{ ...questionSourceCapture,
+      continuationSource: nativeAnsweredQuestionContinuationSource(questionSourceCapture) }];
+    expect(questionCapture.answeredQuestions[0]!.continuationSource.contentHash).not.toBe(questionSourceCapture.nativeSource.contentHash);
+    expect(questionCapture.answeredQuestions[0]!.continuationSource).toEqual({ ...questionSourceCapture.nativeSource,
+      contentHash: nativeSha256({ rendition: "native_answered_question_continuation_v1", projection: {
+        version: 1, companyId, issueId, interactionId: questionId, sourceVersion: questionSourceCapture.nativeSource.sourceVersion,
+        nativeResponseDigest: questionSourceCapture.nativeSource.contentHash, owner: questionSourceCapture.owner,
+        humanResponse, interactionOutcome,
+      } }) });
+    const checkQuestion = (capture = questionCapture) => exactNativeTaskContinuation({ companyId, issueId, runId, agentId,
+      responsibleUserId: humanId, wakeupRequestId: wakeId, wakeReason: "issue_commented", value: capture.envelope, capture });
+    expect(checkQuestion()).toBe(questionCapture);
+    expect(exactNativeInitialTaskContinuation({ companyId, issueId, runId, agentId, responsibleUserId: humanId,
+      wakeupRequestId: wakeId, wakeReason: "issue_commented", value: questionCapture.envelope, capture: questionCapture })).toBeNull();
+    const historicalQuestion = structuredClone(questionCapture);
+    delete historicalQuestion.wake.interaction;
+    historicalQuestion.envelope.trigger = { reason: "issue_commented", interactionId: null, sourceRunId: null };
+    expect(checkQuestion(historicalQuestion)).toBe(historicalQuestion);
+    const sourcedHistory = structuredClone(historicalQuestion);
+    sourcedHistory.answeredQuestions![0]!.owner.sourceRunId = randomUUID();
+    sourcedHistory.answeredQuestions![0]!.owner.sourceCommentId = commentId;
+    sourcedHistory.answeredQuestions![0]!.owner.originCommentIds = [commentId];
+    sourcedHistory.answeredQuestions![0]!.continuationSource = nativeAnsweredQuestionContinuationSource(sourcedHistory.answeredQuestions![0]!);
+    expect(checkQuestion(sourcedHistory)).toBe(sourcedHistory);
+    for (const mutate of [
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.owner.sourceRunId = null; },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.owner.sourceCommentId = null; },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.owner.originCommentIds = []; },
+      (c: NativeTaskContinuationCapture) => { Reflect.deleteProperty(c.answeredQuestions![0]!, "continuationSource"); },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.continuationSource = c.answeredQuestions![0]!.nativeSource; },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.continuationSource.contentHash = "e".repeat(64); },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.continuationSource.sourceVersion = "1760000000.123457"; },
+    ]) { const changed = structuredClone(sourcedHistory); mutate(changed); expect(checkQuestion(changed)).toBeNull(); }
+    const noFreeText = structuredClone(questionCapture);
+    for (const rendition of [noFreeText.envelope.humanResponses![0]!.result, noFreeText.envelope.interactionOutcomes[0]!.result,
+      noFreeText.answeredQuestions![0]!.humanResponse.result, noFreeText.answeredQuestions![0]!.interactionOutcome.result,
+      noFreeText.answeredQuestions![0]!.nativeResponse.response.result]) {
+      const answers = (rendition as { answers: { otherText?: string }[] }).answers;
+      for (const answer of answers) delete answer.otherText;
+    }
+    noFreeText.answeredQuestions![0]!.nativeSource.contentHash = nativeSha256(noFreeText.answeredQuestions![0]!.nativeResponse);
+    noFreeText.answeredQuestions![0]!.continuationSource = nativeAnsweredQuestionContinuationSource(noFreeText.answeredQuestions![0]!);
+    expect(checkQuestion(noFreeText)).toBe(noFreeText);
+    const persistedNoFreeText = JSON.parse(JSON.stringify(noFreeText)) as NativeTaskContinuationCapture;
+    expect(checkQuestion(persistedNoFreeText)).toBe(persistedNoFreeText);
+    for (const mutate of [
+      (c: NativeTaskContinuationCapture) => { delete c.answeredQuestions; },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions = []; },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.companyId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.runId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.agentId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.nativeSource.issueId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.owner.resolvedByUserId = "forged-human"; },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.owner.resolvedAt = "not-a-date"; },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.owner.sourceRunId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { c.answeredQuestions![0]!.nativeSource.contentHash = "f".repeat(64); },
+      (c: NativeTaskContinuationCapture) => { Reflect.set(c.answeredQuestions![0]!.interactionOutcome.result as object, "cancelled", true); },
+      (c: NativeTaskContinuationCapture) => { c.envelope.messages[0]!.deleted = true; c.envelope.messages[0]!.body = ""; },
+      (c: NativeTaskContinuationCapture) => { c.envelope.messages[0]!.deleted = true; c.envelope.messages[0]!.body = ""; c.commentSources = []; },
+      (c: NativeTaskContinuationCapture) => { c.envelope.humanResponses = []; },
+      (c: NativeTaskContinuationCapture) => { c.envelope.interactionOutcomes = []; },
+      (c: NativeTaskContinuationCapture) => { c.wake.interaction!.interactionId = randomUUID(); },
+      (c: NativeTaskContinuationCapture) => { Reflect.set(c.wake.interaction!, "approved", true); },
+      (c: NativeTaskContinuationCapture) => { c.governedInteractions = []; },
+    ]) { const changed = structuredClone(questionCapture); mutate(changed); expect(checkQuestion(changed)).toBeNull(); }
+    const planSource = { kind: "document_revision" as const, issueId, documentId: randomUUID(), revisionId: randomUUID(), contentHash: hash };
+    const ordinaryPlanRead = { companyId, issueId, runId, agentId, responsibleUserId: humanId, wakeupRequestId: wakeId, source: planSource, revisionNumber: 3 };
+    const planContext = { documentKey: "plan", issueId, latestRevisionId: planSource.revisionId, latestRevisionNumber: 3,
+      threads: [], interaction: null, totals: { openThreadCount: 0, includedThreadCount: 0, omittedThreadCount: 0,
+        commentCount: 0, includedCommentCount: 0, omittedCommentCount: 0 },
+      limits: { maxThreads: 20, maxComments: 80, maxBodyChars: 1200, maxTotalBodyChars: 12000, maxAnchorTextChars: 500 }, truncated: false };
+    const ordinaryWakeInput = { companyId, runId, issueId, agentId, responsibleUserId: humanId, wakeupRequestId: wakeId,
+      sourceVersion: "1", persistedWakeReason: "issue_commented", task, commentSources: [commentSource], continuationCapture: questionCapture,
+      ordinaryPlanRead, payload: { ...commentWake, reason: "issue_commented", executionContinuation: questionCapture.envelope,
+        interactionId: questionId, interactionKind: "ask_user_questions", interactionStatus: "answered", sourceRunId: null, planReviewContext: planContext } };
+    expect(captureNativeTaskWakeSource(ordinaryWakeInput)).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ ...ordinaryWakeInput, continuationCapture: initialCapture, persistedWakeReason: "on_demand",
+      payload: { ...commentWake, executionContinuation: initialCapture.envelope, planReviewContext: planContext } })).toMatchObject({ kind: "native_task_wake" });
+    // Read profiles never upgrade an unknown historical source snapshot.
+    expect(input({ additionalInputs: [{ kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: hash }],
+      taskWakeDocumentCandidates: [{ kind: "document_revision", id: planSource.revisionId, input: planSource, payloadSourceSnapshot: null }] })).toBeNull();
+    expect(captureNativeTaskWakeSource({ ...ordinaryWakeInput, ordinaryPlanRead: null })).toBeNull();
+    expect(captureNativeTaskWakeSource({ ...ordinaryWakeInput, payload: { ...ordinaryWakeInput.payload, planReviewContext: null } })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ ...ordinaryWakeInput, continuationCapture: historicalQuestion,
+      payload: { ...ordinaryWakeInput.payload, executionContinuation: historicalQuestion.envelope, interactionId: null,
+        interactionKind: null, interactionStatus: null } })).toMatchObject({ kind: "native_task_wake" });
+    for (const mutate of [
+      (v: typeof ordinaryWakeInput) => { v.ordinaryPlanRead.companyId = randomUUID(); },
+      (v: typeof ordinaryWakeInput) => { v.ordinaryPlanRead.issueId = randomUUID(); },
+      (v: typeof ordinaryWakeInput) => { v.ordinaryPlanRead.agentId = randomUUID(); },
+      (v: typeof ordinaryWakeInput) => { v.ordinaryPlanRead.wakeupRequestId = randomUUID(); },
+      (v: typeof ordinaryWakeInput) => { v.ordinaryPlanRead.source.revisionId = randomUUID(); },
+      (v: typeof ordinaryWakeInput) => { v.payload.planReviewContext.latestRevisionNumber++; },
+      (v: typeof ordinaryWakeInput) => { v.payload.planReviewContext.totals.openThreadCount++; },
+      (v: typeof ordinaryWakeInput) => { v.payload.planReviewContext.limits.maxThreads++; },
+      (v: typeof ordinaryWakeInput) => { v.payload.planReviewContext.truncated = true; },
+      (v: typeof ordinaryWakeInput) => { Reflect.set(v.payload.planReviewContext, "approved", true); },
+      (v: typeof ordinaryWakeInput) => { Reflect.set(v.payload.planReviewContext, "interaction", { status: "accepted" }); },
+      (v: typeof ordinaryWakeInput) => { Reflect.set(v.payload.planReviewContext, "threads", [{ body: "unsourced annotation" }]); },
+    ]) { const changed = structuredClone(ordinaryWakeInput); mutate(changed); expect(captureNativeTaskWakeSource(changed)).toBeNull(); }
     const heldContinuation = structuredClone(initialCapture);
     heldContinuation.envelope.trigger.reason = "issue_commented";
     heldContinuation.wake.reason = "issue_commented";

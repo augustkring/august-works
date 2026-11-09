@@ -7,6 +7,35 @@ import {
 } from "../services/heartbeat.js";
 
 describe("buildPaperclipTaskMarkdown", () => {
+  it("does not invent a markdown source for ordinary answered questions rendered only in the wake", () => {
+    const base = { issue: { id: "task", identifier: null, title: "Draft", description: "Prepare an internal draft.", workMode: "standard" },
+      taskPlan: { documentId: "plan-document", revisionId: "plan-revision", revisionNumber: 1, body: "Follow the bounded plan." },
+      wakeComment: { id: "comment", body: "Continue with the current request." } };
+    const answered = { kind: "ask_user_questions", status: "answered" };
+    for (const includeDescription of [true, false]) {
+      const baselineReferences: Array<{ kind: string; id: string }> = [];
+      const baseline = buildPaperclipTaskMarkdown({ ...base, includeDescription },
+        { onRenderedSource: reference => { baselineReferences.push(reference); } });
+      const actualReferences: Array<{ kind: string; id: string }> = [];
+      const actual = buildPaperclipTaskMarkdown({ ...base, includeDescription, interaction: answered },
+        { onRenderedSource: reference => { actualReferences.push(reference); } });
+      expect(actual).toBe(baseline);
+      expect(actualReferences).toEqual(baselineReferences);
+      expect(actualReferences).toEqual([{ kind: "task", id: "task" }, { kind: "document_revision", id: "plan-revision" },
+        { kind: "comment", id: "comment" }]);
+    }
+    for (const extra of [
+      { interaction: { kind: "ask_user_questions", status: "pending" } },
+      { interaction: { kind: "request_confirmation", status: "accepted" } },
+      { interaction: answered, planReview: { status: "rejected", reason: "Revise the plan." } },
+      { interaction: answered, externalChatProvider: "slack" },
+      { interaction: answered, acceptedPlanContinuation: true },
+    ]) {
+      const references: Array<{ kind: string; id: string }> = [];
+      buildPaperclipTaskMarkdown({ ...base, ...extra }, { onRenderedSource: reference => { references.push(reference); } });
+      expect(references).toContainEqual({ kind: "unknown", id: "task" });
+    }
+  });
   it.each(["standard", "planning", "ask"])("selects directives only from explicit %s mode, even when a plan is requested", (workMode) => {
     for (const prose of [
       { title: "Prepare rollout steps", description: "Describe the steps." },

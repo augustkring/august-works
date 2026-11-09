@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { projectNativeFinalizationError } from "./native-finalization-error-diagnostic.js";
 import { captureNativeBlockedHumanInteraction } from "../native-direct-input.js";
 import { nativeStageTaskBodyResultProjection } from "../native-stage-task-body-source.js";
 import { settleSlackConversation } from "../slack-conversation-lifecycle.js";
@@ -271,6 +272,7 @@ async function recordRetryableFailure(input: {
   projectRunStatus?: boolean;
   failureScope?: "provider" | "workspace";
   permanent?: boolean;
+  safeCause?: ReturnType<typeof projectNativeFinalizationError>;
 }) {
   const now = new Date();
   const nextAttemptAt = new Date(now.getTime() + 30_000);
@@ -375,6 +377,7 @@ async function recordRetryableFailure(input: {
         failureDetail: {
           message: input.message.slice(0, 2_000),
           originalFailureCode: input.failureCode,
+          ...(input.safeCause ? { safeCause: input.safeCause } : {}),
           ...(workspaceFinalizeAttempt === null
             ? {}
             : { workspaceFinalizeAttempt }),
@@ -1414,6 +1417,7 @@ export async function finalizeNativeRun(input: {
             ? "status_cas_exhausted"
             : "side_effect_planning_failed",
         message: error instanceof Error ? error.message : String(error),
+        safeCause: projectNativeFinalizationError(error),
         nextAction:
           error instanceof NativeStatusRaceError
             ? "Reassess against the latest authoritative issue status version."

@@ -62,9 +62,44 @@ describe("managed fixture assigned-Gateway result observer", () => {
     expect(rootOwner.invocations[1]?.receiver).toBe(rootOwner);
     expect(rootOwner.invocations[1]?.args.slice(1)).toEqual([workflowContext, scopedContext]);
     expect(observation.facts()).toEqual({ ownerCounts: { fixture_root: 1, host_root: 1, scoped: 1 },
-      resultCounts: { completed: 1, replayed: 1, other: 3, thrown: 0 }, observerCallbackCount: 2 });
+      resultCounts: { completed: 1, replayed: 1, other: 3, thrown: 0 },
+      thrownFailureFacts: [], omittedThrownFailureFacts: 0, observerCallbackCount: 2 });
     observation.cleanup();
     expect(rootOwner.executeTool).toBe(originalRootExecute);
+  });
+
+  it("projects a thrown scoped-Gateway failure without exposing arbitrary error fields or replacing the throw", async () => {
+    const rootDb = {} as never, scopedDb = {} as never;
+    const sentinel = "PRIVATE-SENTINEL-message-token-params";
+    const thrown = Object.assign(new Error(sentinel), {
+      status: 403, reasonCode: sentinel, code: sentinel, details: { code: sentinel, body: sentinel },
+      parameters: sentinel, cause: Object.assign(new Error(sentinel), { name: "TypeError" }),
+    });
+    const rootOwner = fakeGateway("root");
+    const scopedOwner = fakeGateway("scoped");
+    scopedOwner.executeTool = async () => { throw thrown; };
+    let callbacks = 0;
+    const observation = createManagedAssignedGatewayResultObserver(async () => { callbacks += 1; });
+    cleanups.push(() => observation.cleanup());
+    observation.observe(rootOwner as never, "host_root");
+    registerAssignedMcpGateway(rootDb, rootOwner as never, () => {
+      observation.observe(scopedOwner as never, "scoped");
+      return scopedOwner as never;
+    });
+    await expect(getAssignedMcpGateway(rootDb, scopedDb).executeTool({ tool: "fixture:observe" } as never))
+      .rejects.toBe(thrown);
+    expect(callbacks).toBe(0);
+    const facts = observation.facts();
+    expect(facts).toEqual({ ownerCounts: { fixture_root: 0, host_root: 1, scoped: 1 },
+      resultCounts: { completed: 0, replayed: 0, other: 0, thrown: 1 },
+      thrownFailureFacts: [{ errorClass: "Error", status: 403, code: "other", causeClass: "TypeError" }],
+      omittedThrownFailureFacts: 0, observerCallbackCount: 0 });
+    expect(JSON.stringify(facts)).not.toContain(sentinel);
+    thrown.reasonCode = "native_memory_capture_required";
+    await expect(getAssignedMcpGateway(rootDb, scopedDb).executeTool({ tool: "fixture:observe" } as never))
+      .rejects.toBe(thrown);
+    expect(observation.facts().thrownFailureFacts.at(-1)?.code).toBe("native_memory_capture_required");
+    expect(callbacks).toBe(0);
   });
 
   it("shows root-only observation misses a scoped owner", async () => {

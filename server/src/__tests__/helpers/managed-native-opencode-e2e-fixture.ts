@@ -402,7 +402,9 @@ export async function claimManagedNativeFixtureRun(db: ReturnType<typeof createD
           and w.status in ('queued','claimed','deferred','deferred_issue_execution'))`,
         sql`not exists(select 1 from ${heartbeatRuns} h where h.company_id=${input.companyId}::uuid and h.agent_id=${input.agentId}::uuid and
           (h.status in ('queued','running','scheduled_retry','retry_wait') or public.aw_v10_has_pending_run_cleanup(h.company_id,h.id)
-            or (h.id<>${proof.runId}::uuid and h.created_at>=${previousRun.createdAt})))`,
+            or (h.id<>${proof.runId}::uuid and h.created_at>=(select predecessor.created_at from ${heartbeatRuns} predecessor
+              where predecessor.company_id=${input.companyId}::uuid and predecessor.agent_id=${input.agentId}::uuid
+                and predecessor.id=${proof.runId}::uuid))))`,
       )).returning({id:agents.id});
       if (!claimedAgent) throw new Error("managed_fixture_verified_predecessor_claim_changed");
     } else {

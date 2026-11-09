@@ -170,7 +170,7 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, assertNativeManagedConsumedSourceSetCurrent, assertNativeMemorySourceInputCurrent,
   nativeMemoryReviewTransitionStateHash, assertNativeProjectSourceCurrent,
-  assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent, assertNativeWorkspaceMetadataSourcesCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
+  readNativeTaskWakeQuestionSourcesCurrent, assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent, assertNativeWorkspaceMetadataSourcesCurrent, type NativeContextReadBinding } from "../native-direct-input.js";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, managedNativeProjectArgumentsJsonSchema,
   managedNativeProjectArgumentsSchema, managedNativeProjectApiBodyJsonSchema, managedNativeProjectApiCallSchema,
@@ -7706,8 +7706,29 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   if (frame.planningContext !== null) return no("envelope_planning_context");
   const interactionSources = closure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "interaction" }> =>
     source.kind === "interaction");
+  const directDigests = new Map(parsedExecution.interactionResponses.map(response => [response.interactionId, nativeSha256(response)]));
+  const directSources = interactionSources.filter(source => directDigests.get(source.interactionId) === source.contentHash);
   if (!exactNativeInteractionSourceInputs({ issueId: run.nativeIssueId ?? "", responses: parsedExecution.interactionResponses,
-    sources: interactionSources })) return no("interaction_sources");
+    sources: directSources })) return no("interaction_sources");
+  const directIdentities = new Set(directSources.map(source => nativeSha256(source)));
+  const historicalSources = interactionSources.filter(source => !directIdentities.has(nativeSha256(source)));
+  const wakeOutcomes = record(record(record(run.contextSnapshot).paperclipWake).executionContinuation).interactionOutcomes;
+  const hasQuestionContext = Array.isArray(wakeOutcomes) && wakeOutcomes.some(value =>
+    record(value).kind === "ask_user_questions" && record(value).status === "answered");
+  if (hasQuestionContext || historicalSources.length) {
+    if (new Set(historicalSources.map(source => nativeSha256(source))).size !== historicalSources.length)
+      return no("interaction_sources");
+    try {
+      const current = (await readNativeTaskWakeQuestionSourcesCurrent(tx as unknown as Db, { companyId: run.companyId,
+        issueId: run.nativeIssueId!, runId: run.id, actor: sourceActor, sourceSet: closure.sourceSet, identity }))
+        .filter(source => !directIdentities.has(nativeSha256(source)));
+      if (current.length !== historicalSources.length || historicalSources.some(source => !current.some(value => isDeepStrictEqual(value, source))))
+        return no("interaction_sources");
+    } catch (error) {
+      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return no("interaction_sources");
+      throw error;
+    }
+  }
   if (parsedExecution.binding.companyId !== run.companyId) return no("envelope_company");
   if (parsedExecution.binding.runId !== run.id) return no("envelope_run");
   if (parsedExecution.binding.agentId !== run.agentId) return no("envelope_agent");

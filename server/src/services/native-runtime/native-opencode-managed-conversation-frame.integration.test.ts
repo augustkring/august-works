@@ -1505,15 +1505,15 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
         },
         driveConversation: async context => {
           wire.cookie = context.humanCookie;
-          const opened = await request(context.app).post(context.chatPath)
+          const opened = await request(context.origin).post(context.chatPath)
             .set("cookie", context.humanCookie).set("origin", context.origin);
           expect(opened.status).toBe(200);
           if (typeof opened.body.id !== "string") throw new Error("Actual conversation Task was not created");
           context.onConversationOpened(opened.body.id);
-          const changed = await request(context.app).patch(`/api/issues/${opened.body.id}`)
+          const changed = await request(context.origin).patch(`/api/issues/${opened.body.id}`)
             .set("cookie", context.humanCookie).set("origin", context.origin).send({ workMode: "standard" });
           expect(changed.status).toBe(200);
-          const sent = await request(context.app).post(`/api/issues/${opened.body.id}/comments`)
+          const sent = await request(context.origin).post(`/api/issues/${opened.body.id}/comments`)
             .set("cookie", context.humanCookie).set("origin", context.origin)
             .send({ body: context.prompt, clientRequestId: randomUUID() });
           expect(sent.status).toBe(201);

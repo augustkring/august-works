@@ -47,6 +47,7 @@ export type NativeTaskContinuationCapture = {
   stageActions?: import("./native-stage-wake-source.js").NativeFinalizedStageConsumption[];
   pendingInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   governedInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[];
+  answeredQuestions?: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[];
   acceptedPlanReview?: import("./native-runtime/accepted-plan-review-source.js").NativeAcceptedPlanReviewCapture;
   wake: { requestedByActorType: string | null; requestedByActorId: string | null; reason: string | null; originCommentIds: string[];
     interaction?: NonNullable<ReturnType<typeof nativeTaskWakeInteraction>> };
@@ -186,7 +187,8 @@ export function projectHumanInteractionResponse(row: {
   if (row.kind === "ask_user_questions" && row.status === "answered" && Array.isArray(result.answers)) {
     response = { answers: result.answers.map(value => {
       const answer = object(value);
-      return { questionId: answer.questionId, optionIds: answer.optionIds, otherText: answer.otherText };
+      return { questionId: answer.questionId, optionIds: answer.optionIds,
+        ...(answer.otherText !== undefined ? { otherText: answer.otherText } : {}) };
     }) };
   } else if (["request_confirmation", "request_checkbox_confirmation"].includes(row.kind)
     && ["accepted", "rejected"].includes(row.status) && result.outcome === row.status) {
@@ -303,6 +305,8 @@ export async function buildExecutionContinuation(input: {
       and(
         eq(issueComments.companyId, companyId),
         eq(issueComments.issueId, issueId),
+        // Native provider context admits live, source-backed messages only.
+        input.onContinuationSourceCapture ? isNull(issueComments.deletedAt) : undefined,
       ),
     )
     .orderBy(asc(issueComments.createdAt), asc(issueComments.id));
@@ -601,13 +605,15 @@ export async function buildExecutionContinuation(input: {
       eq(agentWakeupRequests.agentId, input.agentId), eq(agentWakeupRequests.runId, receiver.id),
     )).limit(1);
     const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
+    const answeredQuestions: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[] = [];
     if (wake && envelope.interactionOutcomes.length > 0) {
       const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
       // Every included historical outcome is selected through its actual
       // authoritative owner, not only the triggering row.
       await materializeNativeInteractionResponses({ db, companyId, issueId, runId: receiver.id, agentId: input.agentId,
         interactionIds: envelope.interactionOutcomes.map(outcome => outcome.id),
-        onContinuationSourceCapture: capture => { governedInteractions.push(capture); } });
+        onContinuationSourceCapture: capture => { governedInteractions.push(capture); },
+        onAnsweredQuestionCapture: capture => { answeredQuestions.push(capture); } });
     }
     const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
     const pendingInteractions = wake && envelope.unresolvedInteractionIds.length
@@ -637,6 +643,7 @@ export async function buildExecutionContinuation(input: {
     if (wake) input.onContinuationSourceCapture(structuredClone({ companyId, issueId, agentId: input.agentId, runId: receiver.id,
       responsibleUserId: receiver.responsibleUserId, wakeupRequestId: wake.id, envelope, commentSources: finalCommentSources,
       ...(governedInteractions.length ? { governedInteractions } : {}),
+      ...(answeredQuestions.length ? { answeredQuestions } : {}),
       ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),
       ...(pendingInteractions.length ? { pendingInteractions } : {}),

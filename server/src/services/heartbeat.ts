@@ -8801,8 +8801,11 @@ export function buildPaperclipTaskMarkdown(input: {
     (input.acceptedPlan?.revisionId || input.acceptedPlanContinuation),
   );
   if (!issue && effectiveWakeComments.length === 0) return null;
-  if (input.interaction?.kind || input.interaction?.status || input.planReview?.status || input.externalChatProvider ||
-    input.acceptedPlanContinuation || input.acceptedPlan?.revisionId) {
+  // Ordinary answers render in the wake DTO, not this task markdown. Their
+  // presence alone cannot create a source reference for bytes not rendered.
+  if (((input.interaction?.kind || input.interaction?.status) &&
+      !(input.interaction?.kind === "ask_user_questions" && input.interaction.status === "answered")) ||
+    input.planReview?.status || input.externalChatProvider || input.acceptedPlanContinuation || input.acceptedPlan?.revisionId) {
     options.onRenderedSource?.({ kind: input.acceptedPlan?.revisionId ? "document_revision" : "unknown",
       id: input.acceptedPlan?.revisionId ?? issue?.id ?? "unbound-task-markdown-source" });
   }
@@ -24433,6 +24436,17 @@ export function heartbeatService(
                 documentSources: nativeBootstrapTaskPlanSources ?? [] });
               if (acceptedPlanReview) continuationCaptureForWake = { ...continuationCaptureForWake, acceptedPlanReview };
             }
+            const ordinaryPlanSources = (nativeBootstrapTaskPlanSources ?? []).filter(capture =>
+              taskPlan && capture.input.documentId === taskPlan.documentId && capture.input.revisionId === taskPlan.revisionId &&
+              capture.input.contentHash === createHash("sha256").update(taskPlan.body, "utf8").digest("hex"));
+            const ordinaryPlanRead = paperclipWakePayload?.planReviewContext?.interaction === null &&
+              continuationCaptureForWake && !continuationCaptureForWake.acceptedPlanReview &&
+              taskPlan && ordinaryPlanSources.length === 1 ? {
+                companyId: continuationCaptureForWake.companyId, issueId: continuationCaptureForWake.issueId,
+                runId: continuationCaptureForWake.runId, agentId: continuationCaptureForWake.agentId,
+                responsibleUserId: continuationCaptureForWake.responsibleUserId, wakeupRequestId: continuationCaptureForWake.wakeupRequestId,
+                source: ordinaryPlanSources[0]!.input, revisionNumber: taskPlan.revisionNumber,
+              } : null;
             let closedTaskContinuation = issueRef ? exactNativeTaskContinuation({ value: parseObject(context.paperclipWake).executionContinuation,
               companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
               responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
@@ -24459,7 +24473,7 @@ export function heartbeatService(
                 workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
                 workspaceCoordinationCapture: originalCoordinationCapture, blockedHumanInteraction, treeHoldInteractionSource,
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
-                continuationCapture: closedTaskContinuation,
+                continuationCapture: closedTaskContinuation, ordinaryPlanRead,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
                 checkoutRunId: issueContext?.checkoutRunId ?? null,
                 task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
@@ -24529,7 +24543,11 @@ export function heartbeatService(
             const retainedRunPolicy: NativePayloadSourcePolicy | null = nativeBootstrapRetainedRunSource
               ? { issueIds: [], projectIds: [], runIds: [nativeBootstrapRetainedRunSource.source.runId],
                   memoryIds: [], foundationRevisionIds: [] } : null;
-            const additionalPolicyParts = [retainedRunPolicy, nativeProjectAdditionalPolicy]
+            const questionSourceRunIds = [...new Set(closedTaskContinuation?.answeredQuestions
+              ?.flatMap(capture => capture.owner.sourceRunId ? [capture.owner.sourceRunId] : []) ?? [])];
+            const questionRunPolicy: NativePayloadSourcePolicy | null = questionSourceRunIds.length
+              ? { issueIds: [], projectIds: [], runIds: questionSourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
+            const additionalPolicyParts = [retainedRunPolicy, nativeProjectAdditionalPolicy, questionRunPolicy]
               .filter((part): part is NativePayloadSourcePolicy => part !== null);
             const additionalPolicy: NativePayloadSourcePolicy | null = additionalPolicyParts.length ? {
               issueIds: [...new Set(additionalPolicyParts.flatMap(part => part.issueIds))].sort(),
@@ -24572,11 +24590,15 @@ export function heartbeatService(
                   ...(nativeTaskWakeSource ? blockedHumanInteraction.commentSourceSnapshots : []),
                 ].map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
                   input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) } : {}),
-                taskWakeDocumentCandidates: nativeTaskWakeSource && closedTaskContinuation?.summary
-                  ? [{ kind: "document_revision" as const, id: closedTaskContinuation.summary.source.input.revisionId,
-                    input: closedTaskContinuation.summary.source.input, payloadSourceSnapshot: closedTaskContinuation.summary.source.payloadSourceSnapshot }] : [],
+                taskWakeDocumentCandidates: nativeTaskWakeSource ? [
+                  ...(closedTaskContinuation?.summary ? [{ kind: "document_revision" as const, id: closedTaskContinuation.summary.source.input.revisionId,
+                    input: closedTaskContinuation.summary.source.input, payloadSourceSnapshot: closedTaskContinuation.summary.source.payloadSourceSnapshot }] : []),
+                  ...(ordinaryPlanRead ? ordinaryPlanSources.map(capture => ({ kind: "document_revision" as const,
+                    id: capture.input.revisionId, input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) : []),
+                ] : [],
                 taskWakeInteractionSources: nativeTaskWakeSource && closedTaskContinuation
                   ? [...(closedTaskContinuation.governedInteractions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
+                    ...(closedTaskContinuation.answeredQuestions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
                     ...(closedTaskContinuation.pendingInteractions?.map(capture => capture.source) ?? []),
                     ...(closedTaskContinuation.acceptedPlanReview ? [closedTaskContinuation.acceptedPlanReview.interactionSource] : []),
                     ...(closedTaskContinuation.delivery ? [closedTaskContinuation.delivery.source] : [])] : [],

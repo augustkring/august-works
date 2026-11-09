@@ -19,11 +19,24 @@ const identityFailurePhases = ["pid_invalid", "status_read", "status_shape", "ui
 const identityObservationRoles = ["runner", "socket_ancestry", "ancestry_recheck"] as const;
 const identityFailures = new WeakMap<object, { phase: typeof identityFailurePhases[number];
   role: typeof identityObservationRoles[number] }>();
+const socketOwnerObserverStages = ["table_open", "table_read", "tuple", "proc_list", "process_directory_stat", "process_state_read",
+  "fd_directory_list", "fd_readlink", "owner_count", "memory_bound"] as const;
+const socketOwnerFailurePhases = ["input_endpoint", "self_image", "helpers_before", "invoke", "response_status", "response_decode",
+  "response_shape", "observer_incomplete", "complete_shape", "helpers_after", "socket_recheck"] as const;
+const socketOwnerObserverFailures = new WeakMap<object, { phase: typeof socketOwnerFailurePhases[number];
+  stage?: typeof socketOwnerObserverStages[number]; deadlineExpired: boolean }>();
 function modelIdentityFailureFacts(error: unknown) {
-  const failure = error && typeof error === "object" ? identityFailures.get(error) : undefined;
-  return failure && identityFailurePhases.some(value => value === failure.phase) &&
-    identityObservationRoles.some(value => value === failure.role)
-    ? { identityFailurePhase: failure.phase, identityObservationRole: failure.role } : {};
+  const identityFailure = error && typeof error === "object" ? identityFailures.get(error) : undefined;
+  const observerFailure = error && typeof error === "object" ? socketOwnerObserverFailures.get(error) : undefined;
+  return {
+    ...(identityFailure && identityFailurePhases.some(value => value === identityFailure.phase) &&
+      identityObservationRoles.some(value => value === identityFailure.role)
+      ? { identityFailurePhase: identityFailure.phase, identityObservationRole: identityFailure.role } : {}),
+    ...(observerFailure && socketOwnerFailurePhases.some(value => value === observerFailure.phase)
+      ? { socketOwnerFailurePhase: observerFailure.phase, socketOwnerDeadlineExpired: observerFailure.deadlineExpired,
+        ...(observerFailure.stage && socketOwnerObserverStages.some(value => value === observerFailure.stage)
+          ? { socketOwnerObserverStage: observerFailure.stage } : {}) } : {}),
+  };
 }
 /** /proc directory ownership can change with dumpability. Credential UID
  * fields remain the authority; all four must match the current observer. */
@@ -71,12 +84,16 @@ function endpoint(address: string | undefined, port: number | undefined) {
 }
 // CI-only fixed operation; a live model origin is still authorized by observation() below.
 function privilegedSocketOwner(client: Socket, until: number) {
+  let phase: typeof socketOwnerFailurePhases[number] = "input_endpoint";
+  let observerStage: typeof socketOwnerObserverStages[number] | undefined;
+  try {
   const launcher = "/usr/local/libexec/paperclip-fixture-observers/native-model-socket-v1";
   const scanner = `${launcher}.mjs`;
   const node = "/usr/local/libexec/paperclip-erasure-test-node/node";
   const observerUid = process.getuid?.();
   checked(!client.destroyed && Number.isSafeInteger(observerUid) && (observerUid ?? 0) > 0 && Date.now() < until);
   const local = endpoint(client.remoteAddress, client.remotePort), remote = endpoint(client.localAddress, client.localPort);
+  phase = "self_image";
   const fileHash = (file: string, limit: number) => {
     const fd = openSync(file, "r");
     try {
@@ -120,33 +137,45 @@ function privilegedSocketOwner(client: Socket, until: number) {
     }
     return JSON.stringify(identities);
   };
+  phase = "helpers_before";
   const before = qualification();
+  phase = "invoke";
   const request = JSON.stringify({ schema: "paperclip.fixture.native-model-socket.v1", observerUid,
     localPort: client.remotePort, remotePort: client.localPort, deadlineAt: until });
   checked(Buffer.byteLength(request) <= 4096 && !client.destroyed && Date.now() < until);
   const result = spawnSync("/usr/bin/sudo", ["-n", "--", launcher], { input: request, encoding: "utf8", cwd: "/",
     env: { PATH: "/usr/bin:/bin" }, timeout: Math.max(1, until - Date.now()), maxBuffer: 8192 });
+  phase = "response_status";
   checked(!result.error && !result.signal && result.status === 0 && result.stderr === "" &&
     typeof result.stdout === "string" && Buffer.byteLength(result.stdout) <= 8192 && Date.now() < until);
+  phase = "response_decode";
   const response: unknown = JSON.parse(result.stdout);
+  phase = "response_shape";
   checked(response && typeof response === "object" && !Array.isArray(response));
   const value = response as Record<string, unknown>;
   checked(Number.isSafeInteger(value.observerMaxRssBytes) && (value.observerMaxRssBytes as number) > 0 &&
     (value.observerMaxRssBytes as number) <= 80 * 1024 * 1024);
   if (value.complete === false) {
-    const stages = ["table_open", "table_read", "tuple", "proc_list", "process_directory_stat", "process_state_read",
-      "fd_directory_list", "fd_readlink", "owner_count", "memory_bound"];
+    phase = "observer_incomplete";
     const errnos = ["ENOENT", "ESRCH", "EACCES", "EPERM", "EBADF", "EIO", "ENOTDIR", "ELOOP", "EMFILE", "ENFILE", "EINVAL", "OTHER"];
-    checked(Object.keys(value).sort().join(",") === "complete,errno,observerMaxRssBytes,stage" && typeof value.stage === "string" && stages.includes(value.stage) &&
+    checked(Object.keys(value).sort().join(",") === "complete,errno,observerMaxRssBytes,stage" && typeof value.stage === "string" && socketOwnerObserverStages.includes(value.stage as typeof socketOwnerObserverStages[number]) &&
       (value.errno === null || typeof value.errno === "string" && errnos.includes(value.errno)));
+    observerStage = value.stage as typeof socketOwnerObserverStages[number];
     throw Object.assign(new Error("model_channel_observation_unavailable"), { code: value.errno ?? "OTHER" });
   }
+  phase = "complete_shape";
   checked(value.complete === true && Object.keys(value).sort().join(",") === "complete,inode,local,observerMaxRssBytes,pid,remote" &&
     Number.isSafeInteger(value.pid) && (value.pid as number) > 0 && typeof value.inode === "string" && /^[1-9]\d*$/.test(value.inode) &&
     value.local === local && value.remote === remote);
-  checked(qualification() === before && !client.destroyed && Date.now() < until &&
-    endpoint(client.remoteAddress, client.remotePort) === local && endpoint(client.localAddress, client.localPort) === remote);
+  phase = "helpers_after";
+  checked(qualification() === before && !client.destroyed && Date.now() < until);
+  phase = "socket_recheck";
+  checked(endpoint(client.remoteAddress, client.remotePort) === local && endpoint(client.localAddress, client.localPort) === remote);
   return { pid: value.pid as number, inode: value.inode as string, local, remote };
+  } catch (error) {
+    if (error && typeof error === "object") socketOwnerObserverFailures.set(error, { phase, deadlineExpired: Date.now() >= until, ...(observerStage ? { stage: observerStage } : {}) });
+    throw error;
+  }
 }
 
 function socketOwner(client: Socket, until: number) {

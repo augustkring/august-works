@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "sourceParentHead": "d8c89488f54a6de1c39cc8da56c68612da55c9e2",
+  "legacyPath": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+  "legacyBeforeSha256": "4f22e661d48eb88138f31b7154302b7e6a2a4c1d4f65df799e62f65e36dab109",
+  "legacyAfterSha256": "86bf9c63543097531fb0fd85f36eca6504e481158e767e7b00580c8c0a632ee7",
+  "removedExpandedCases": 2,
+  "retirementPatchSha256": "88130f0e910a05cc33e8780b48cdf3ace95774d9a4eaa0fb109c47972b7ba45b",
+  "replacementModule": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+  "replacementFullModulePassed": 14,
+  "otherLegacyCodePreserved": true,
+  "scope": "One exact deletion hunk; no guard, denial expectation, skip or other legacy assertion change."
+}

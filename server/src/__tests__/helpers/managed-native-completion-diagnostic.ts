@@ -27,6 +27,12 @@ const assessmentReasons = [
   "criterion_evidence_accepted", "verification_reported_failed", "verification_not_run",
   "verification_has_no_durable_reference", "verification_evidence_accepted",
 ] as const;
+const safeErrorClasses = ["TypeError", "RangeError", "ReferenceError", "SyntaxError", "PostgresError", "DatabaseError", "Error"] as const;
+const safeErrorCodes = ["ERR_INVALID_ARG_TYPE", "ERR_INVALID_ARG_VALUE", "ERR_OUT_OF_RANGE"] as const;
+const safeSqlStates = ["22007", "22008", "22P02", "23502", "23503", "23505", "23514", "40001", "40P01", "57014"] as const;
+const safeOwnerPrefixes = ["native_checkout_not_released", "native_status_decision_not_persisted",
+  "native_finalization_coordinator_missing", "native_continuation_cancellation_run_missing",
+  "native_pending_effect_target_missing", "native_pending_effect_target_unimplemented", "native_status_reason_code_required"] as const;
 const finalizationFailures = ["native_finalization_superseded", "native_finalization_retry_exhausted",
   "native_workspace_sync_out_retry_exhausted", "status_cas_exhausted", "side_effect_planning_failed"] as const;
 const verificationReasons = ["environment_unavailable", "tool_unavailable", "dependency_missing", "permission_denied",
@@ -41,6 +47,10 @@ function record(value: unknown): Record<string, unknown> {
 }
 function list(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
 function flag(value: unknown): boolean | null { return typeof value === "boolean" ? value : null; }
+function safeSqlState(value: unknown): Closed<typeof safeSqlStates> {
+  if (typeof value !== "string" || !/^[0-9A-Z]{5}$/.test(value)) return "missing";
+  return closed(value, safeSqlStates);
+}
 function ref(value: unknown) {
   const item = record(value);
   return { kind: closed(item.kind, kinds), outcome: closed(item.outcome, outcomes),
@@ -54,9 +64,17 @@ export function projectManagedNativeCompletionDiagnostic(input: {
   const f = record(input.finalization), d = record(input.decision), a = record(input.assessment);
   const criteria = list(a.criterionAssessments);
   const verifications = list(a.verificationAssessments);
+  const safeFailure = record(record(f.failureDetail).safeCause);
+  const causes = list(safeFailure.causes);
   return {
     finalization: { present: input.finalization != null, phase: closed(f.phase, finalizationPhases),
-      failureCode: closed(f.failureCode, finalizationFailures) },
+      failureCode: closed(f.failureCode, finalizationFailures),
+      safeFailurePhase: closed(safeFailure.phase, ["status_decision_commit"] as const),
+      safeCauses: causes.slice(0, 3).map(value => { const c = record(value); return {
+        errorClass: closed(c.errorClass, safeErrorClasses), code: closed(c.code, safeErrorCodes),
+        sqlState: safeSqlState(c.sqlState), ownerErrorPrefix: closed(c.ownerErrorPrefix, safeOwnerPrefixes),
+      }; }), safeCauseCount: Math.min(causes.length, 3),
+    },
     decision: { present: input.decision != null, reasonCode: closed(d.reasonCode, decisionReasons),
       toStatus: closed(d.toStatus, issueStatuses), applicationState: closed(d.applicationState, applicationStates) },
     assessment: {

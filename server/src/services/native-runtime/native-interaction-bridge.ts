@@ -15,10 +15,11 @@ import {
   statusDecisions,
   workAssessments,
 } from "@paperclipai/db";
-import { getAgentWorkEligibility, requestConfirmationResultSchema, type ExecutionContinuationEnvelope, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { getAgentWorkEligibility, askUserQuestionsPayloadSchema, askUserQuestionsResultSchema, requestConfirmationResultSchema, type ExecutionContinuationEnvelope, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { nativeSha256 } from "./canonical.js";
+import { nativeAnsweredQuestionContinuationSource } from "./native-execution-input.js";
 import { recordNativeAttentionAssessment } from "./work-assessments.js";
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
@@ -46,6 +47,18 @@ export type NativeGovernedInteractionContinuationCapture = {
     humanResponse: NonNullable<ExecutionContinuationEnvelope["humanResponses"]>[number];
     interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number];
   };
+};
+
+/** Ordinary Human answers are read context, never a governed action owner. */
+export type NativeAnsweredQuestionContinuationCapture = {
+  companyId: string; issueId: string; runId: string; agentId: string;
+  nativeSource: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  continuationSource: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  nativeResponse: NativeInteractionResponseEnvelope;
+  owner: { sourceRunId: string | null; sourceCommentId: string | null; originCommentIds: string[];
+    continuationPolicy: string; resolvedByUserId: string; resolvedAt: string };
+  humanResponse: NonNullable<ExecutionContinuationEnvelope["humanResponses"]>[number];
+  interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number];
 };
 
 export type NativeGovernedPendingInteractionCapture = {
@@ -407,12 +420,13 @@ export async function materializeNativeInteractionResponses(input: {
   interactionIds: string[];
   onSourceCapture?: (source: Extract<NativePayloadSourceInput, { kind: "interaction" }>) => void;
   onContinuationSourceCapture?: (capture: NativeGovernedInteractionContinuationCapture) => void;
+  onAnsweredQuestionCapture?: (capture: NativeAnsweredQuestionContinuationCapture) => void;
 }): Promise<NativeInteractionResponseEnvelope[]> {
   const requestedIds = new Set(input.interactionIds.filter(Boolean));
   if (requestedIds.size === 0) return [];
   const selectedVersions = new Map<string, string>();
   const [interactions, issue] = await Promise.all([
-    issueThreadInteractionService(input.db).listForIssue(input.issueId, (input.onSourceCapture || input.onContinuationSourceCapture) ? {
+    issueThreadInteractionService(input.db).listForIssue(input.issueId, (input.onSourceCapture || input.onContinuationSourceCapture || input.onAnsweredQuestionCapture) ? {
       onSourceVersionSelected: (id, version) => { selectedVersions.set(id, version); },
     } : undefined),
     input.db.select({ status: issues.status }).from(issues).where(and(
@@ -675,7 +689,7 @@ export async function materializeNativeInteractionResponses(input: {
     input.issueId,
     responses.sort((left, right) => left.interactionId.localeCompare(right.interactionId)),
   );
-  if (input.onSourceCapture || input.onContinuationSourceCapture) {
+  if (input.onSourceCapture || input.onContinuationSourceCapture || input.onAnsweredQuestionCapture) {
     for (const response of redacted) {
       const sourceVersion = selectedVersions.get(response.interactionId);
       if (!sourceVersion) throw new NativeInteractionBridgeError(
@@ -686,6 +700,31 @@ export async function materializeNativeInteractionResponses(input: {
       input.onSourceCapture?.(nativeSource);
       const owner = governedOwners.get(response.interactionId);
       const selected = interactions.find(row => row.id === response.interactionId);
+      if (input.onAnsweredQuestionCapture && selected?.kind === "ask_user_questions") {
+        const { projectHumanInteractionResponse } = await import("../execution-continuation.js");
+        const [raw] = await input.db.select({ row: issueThreadInteractions,
+          version: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` }).from(issueThreadInteractions)
+          .where(and(eq(issueThreadInteractions.id, selected.id), eq(issueThreadInteractions.companyId, input.companyId),
+            eq(issueThreadInteractions.issueId, input.issueId))).for("share");
+        const result = askUserQuestionsResultSchema.safeParse(raw?.row.result);
+        const payload = askUserQuestionsPayloadSchema.safeParse(raw?.row.payload);
+        const humanResponse = raw && projectHumanInteractionResponse(raw.row);
+        if (!raw || raw.version !== sourceVersion || raw.row.kind !== "ask_user_questions" || raw.row.status !== "answered" ||
+          !payload.success || !isDeepStrictEqual(selected.payload, payload.data) || selected.title !== raw.row.title ||
+          !result.success || !isDeepStrictEqual(selected.result, result.data) || result.data.cancelled ||
+          !isDeepStrictEqual(raw.row.result, result.data) || !humanResponse)
+          throw new NativeInteractionBridgeError("native_interaction_question_result_mismatch", "Human question rendition changed");
+        const projection = await createRunSecretRedactionRegistry(input.db).redactForIssue(input.companyId, input.issueId, {
+          owner: { sourceRunId: raw.row.sourceRunId, sourceCommentId: raw.row.sourceCommentId,
+            originCommentIds: raw.row.originCommentIds ?? [], continuationPolicy: raw.row.continuationPolicy,
+            resolvedByUserId: raw.row.resolvedByUserId!, resolvedAt: raw.row.resolvedAt!.toISOString() },
+          humanResponse, interactionOutcome: { id: raw.row.id, kind: raw.row.kind, status: raw.row.status, result: raw.row.result },
+        });
+        const capture = { companyId: input.companyId, issueId: input.issueId,
+          runId: input.runId, agentId: input.agentId, nativeSource, nativeResponse: response, ...projection };
+        input.onAnsweredQuestionCapture(structuredClone({ ...capture,
+          continuationSource: nativeAnsweredQuestionContinuationSource(capture) }));
+      }
       if (input.onContinuationSourceCapture && owner && selected) {
         const { projectHumanInteractionResponse } = await import("../execution-continuation.js");
         const [raw] = await input.db.select({row:issueThreadInteractions,

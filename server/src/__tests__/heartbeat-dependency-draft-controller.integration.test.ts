@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { chmod, lstat, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,8 +8,8 @@ import request from "supertest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
-  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships } from "@paperclipai/db";
-import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
+  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions } from "@paperclipai/db";
+import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
@@ -24,6 +24,7 @@ import { registerNativeDraftGateway } from "../services/orchestration/native-dra
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { issueService } from "../services/issues.js";
 import { documentService } from "../services/documents.js";
+import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
 import { issueTreeControlService } from "../services/issue-tree-control.js";
 import { heartbeatService } from "../services/heartbeat.js";
@@ -36,6 +37,10 @@ import {
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
 import { errorHandler } from "../middleware/index.js";
+import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
+import { REDACTED_EVENT_VALUE } from "../redaction.js";
+import { nativeCommentProjectionHash, nativeSha256 } from "../services/native-runtime/canonical.js";
+import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 
 // This is the installed one-call text controller's software transport fixture,
 // copied from v7-worker-model-gateway's actual-heartbeat case. It does not
@@ -122,6 +127,215 @@ describe("dependency scheduling through the installed Native text draft controll
 
     return { f, human, profile, model };
   }
+
+  async function assertFirstBootstrapSourceCase(redactSecret: boolean) {
+    const fixture = await seedInstalledDraft();
+    const { f } = fixture;
+    let taskId = "", planId = "", planDocumentId = "", planRevisionId = "", questionId = "", commentId = "", deletedCommentId = "";
+    let questionVersion = "", commentCreatedAt = "", commentUpdatedAt = "";
+    const secret = "fixture-inline-secret-value";
+    const commentBody = `Original native inline wake comment${redactSecret ? ` ${secret}` : ""}`;
+    const answerText = `Continue with the current request${redactSecret ? ` ${secret}` : ""}`;
+    const delivered = (value: string) => redactSecret ? value.replace(secret, REDACTED_EVENT_VALUE) : value;
+    let providerFetchCalls = 0;
+    let reachedDispatch = false;
+    let cancellation: Promise<unknown> | null = null;
+    let cancellationError: unknown;
+    let sourceAssertionError: unknown;
+    const observedDispatch: { value: { profile: Record<string, unknown>; taskVersion: string; taskOwnerHash: string;
+      taskPayloadSourceSnapshot: unknown; taskPayloadSourceSnapshotDigestValid: boolean | null;
+      planPayloadSourceSnapshot: unknown; commentPayloadSourceSnapshot: unknown; commentVersion: string } | null } = { value: null };
+    let releaseDispatch!: () => void;
+    const dispatchGate = new Promise<void>(resolve => { releaseDispatch = resolve; });
+    const nativeFetch: typeof guardedRemoteHttpFetch = async () => {
+      providerFetchCalls++;
+      throw new Error("First-bootstrap source test must stop before provider HTTP dispatch");
+    };
+
+    await withInstalledDraftTransport(fixture, nativeFetch, async heartbeat => {
+      try {
+        const { task, plan } = await createDraftPlan(fixture, "First-bootstrap source capture");
+        taskId = task.id; planId = plan.id;
+        const planDocument = await documentService(db).upsertIssueDocument({ issueId: taskId, key: "plan",
+          format: "markdown", body: "Original native bootstrap plan", createdByUserId: f.userId, manualInputActor: fixture.human });
+        if (!planDocument.document.latestRevisionId) throw new Error("first_bootstrap_plan_revision_missing");
+        planDocumentId = planDocument.document.id; planRevisionId = planDocument.document.latestRevisionId;
+        const interactionService = issueThreadInteractionService(db);
+        const pending = await interactionService.create({ id: taskId, companyId: f.home }, {
+          kind: "ask_user_questions", continuationPolicy: "wake_assignee",
+          payload: { version: 1, questions: [{ id: "direction", prompt: "Which direction?", selectionMode: "single",
+            options: [{ id: "continue", label: "Continue", freeText: true }] }] },
+        }, { userId: f.userId, requestActor: fixture.human });
+        const interaction = await interactionService.answerQuestions({ id: taskId, companyId: f.home, status: task.status }, pending.id,
+          { answers: [{ questionId: "direction", optionIds: ["continue"], otherText: answerText }] },
+          { userId: f.userId, requestActor: fixture.human });
+        questionId = interaction.id;
+        questionVersion = await db.select({ version: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` })
+          .from(issueThreadInteractions).where(eq(issueThreadInteractions.id, questionId)).then(rows => rows[0]!.version);
+        const deletedBody = "Deleted continuation body must stay absent";
+        const [deletedComment] = await db.insert(issueComments).values({ companyId: f.home, issueId: taskId, body: deletedBody,
+          authorUserId: f.userId, deletedAt: new Date() }).returning({ id: issueComments.id });
+        deletedCommentId = deletedComment!.id;
+        const comment = await issueService(db).addComment(taskId, commentBody, { userId: f.userId },
+          { authorType: "user", manualInputActor: fixture.human, clientRequestId: randomUUID() });
+        commentId = comment.id;
+        commentCreatedAt = comment.createdAt.toISOString(); commentUpdatedAt = comment.updatedAt.toISOString();
+        const runId = (await heartbeat.wakeup(f.presence.id, { source: "automation", triggerDetail: "system",
+          reason: "issue_commented", requestedByActorType: "user", requestedByActorId: f.userId,
+          payload: { issueId: taskId, commentId, mutation: "interaction", interactionId: questionId,
+            interactionKind: "ask_user_questions", interactionStatus: "answered", sourceCommentId: null, sourceRunId: null },
+          idempotencyKey: `interaction:${questionId}:answered`, allowRunCoalescing: false,
+          contextSnapshot: { issueId: taskId, taskId,
+            wakeReason: "issue_commented", wakeCommentId: commentId, wakeCommentIds: [commentId],
+            interactionId: questionId, interactionKind: "ask_user_questions", interactionStatus: "answered" } }))?.id;
+        if (!runId) throw new Error("first_bootstrap_wake_missing");
+        try {
+          await vi.waitFor(() => { expect(observedDispatch.value).not.toBeNull(); }, { timeout: 60_000, interval: 25 });
+        } catch {
+          throw new Error("first_bootstrap_dispatch_gate_not_reached");
+        }
+        const capturedDispatch = observedDispatch.value;
+        if (!capturedDispatch) throw new Error("first_bootstrap_dispatch_capture_missing");
+        try {
+          const profile = capturedDispatch.profile;
+          const selectedInput = parseNativeExecutionInput(profile.nativeExecutionInput);
+          const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+          expect(run).toMatchObject({ id: runId, status: "running", runtimeMode: "native", nativeIssueId: taskId,
+            responsibleUserId: f.userId });
+          expect(run!.wakeupRequestId).toBeTruthy();
+          const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, planId));
+          expect(attempts).toHaveLength(1);
+          expect(attempts[0]).toMatchObject({ runId, agentId: f.presence.id, planId });
+          expect(attempts[0]!.executionManifestId).toBeTruthy();
+          const manifests = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId));
+          expect(manifests).toHaveLength(1);
+          expect(attempts[0]!.executionManifestId).toBe(manifests[0]!.id);
+          expect(profile.nativeBootstrapAuthoredSources).toEqual({ inputs: [
+            { kind: "runtime_instructions", agentId: f.presence.id,
+              bundleDigest: selectedInput.runtimeContext.instructions.bundle.digest,
+              manifestDigest: selectedInput.runtimeContext.instructions.bundle.manifestDigest },
+            ...selectedInput.runtimeContext.skills.map(skill => ({ kind: "runtime_skill" as const,
+              key: skill.key, versionId: skill.versionId, bundleDigest: skill.bundle.digest,
+              manifestDigest: skill.bundle.manifestDigest })),
+          ], contextManifests: [] });
+          expect(profile.nativeBootstrapRolePackSources).toEqual([]);
+          const taskPayloadSourceSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedDispatch.taskPayloadSourceSnapshot);
+          expect(taskPayloadSourceSnapshot.owner).toMatchObject({ kind: "issue", companyId: f.home,
+            id: taskId, contentHash: capturedDispatch.taskOwnerHash });
+          expect(taskPayloadSourceSnapshot.digest).toMatch(/^[a-f0-9]{64}$/);
+          expect(capturedDispatch.taskPayloadSourceSnapshotDigestValid).toBe(true);
+          expect(profile.nativeBootstrapTaskSource).toEqual({ input: { kind: "task", issueId: taskId,
+            sourceVersion: capturedDispatch.taskVersion, contentHash: capturedDispatch.taskOwnerHash },
+            payloadSourceSnapshot: taskPayloadSourceSnapshot });
+          const planPayloadSourceSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedDispatch.planPayloadSourceSnapshot);
+          expect(planPayloadSourceSnapshot.owner).toMatchObject({ kind: "document_revision", companyId: f.home, id: planRevisionId });
+          expect(profile.nativeBootstrapTaskPlanSources).toEqual([{ input: { kind: "document_revision", documentId: planDocumentId,
+            revisionId: planRevisionId, issueId: taskId,
+            contentHash: createHash("sha256").update("Original native bootstrap plan").digest("hex") }, payloadSourceSnapshot: planPayloadSourceSnapshot }]);
+          expect(profile.nativeBootstrapPlanningSources).toEqual([]);
+          const commentPayloadSourceSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedDispatch.commentPayloadSourceSnapshot);
+          expect(commentPayloadSourceSnapshot.owner).toMatchObject({ kind: "comment", companyId: f.home, id: commentId });
+          const expectedCommentSource = { input: { kind: "comment", issueId: taskId, commentId: commentId,
+            sourceVersion: capturedDispatch.commentVersion,
+            contentHash: nativeCommentProjectionHash({ body: delivered(commentBody), presentation: null, metadata: null }) },
+            payloadSourceSnapshot: commentPayloadSourceSnapshot };
+          expect(profile.nativeBootstrapInlineWakeCommentSources).toEqual([expectedCommentSource]);
+          expect(profile.nativeBootstrapWakeCommentSources).toEqual({ request: expectedCommentSource, context: expectedCommentSource });
+          expect(profile.nativeBootstrapContinuationCommentSources).toEqual([{
+            ...expectedCommentSource,
+            input: { ...expectedCommentSource.input, contentHash: nativeSha256({
+              id: commentId, authorType: "user", authorId: f.userId, createdByRunId: null,
+              body: delivered(commentBody), createdAt: commentCreatedAt,
+              updatedAt: commentUpdatedAt, deleted: false, sourceTrust: null,
+            }) },
+          }]);
+          expect(selectedInput).toMatchObject({ interactionResponses: [{ interactionId: questionId,
+            kind: "ask_user_questions", response: { status: "answered", result: { answers: [{ questionId: "direction",
+              optionIds: ["continue"], otherText: delivered(answerText) }] } } }] });
+          expect(profile.nativeBootstrapInteractionSources).toEqual([{ kind: "interaction", issueId: taskId,
+            interactionId: questionId, sourceVersion: questionVersion,
+            contentHash: nativeSha256(selectedInput.interactionResponses[0]) }]);
+          expect(JSON.stringify(selectedInput)).not.toContain(deletedBody);
+          expect(JSON.stringify(selectedInput)).not.toContain(deletedCommentId);
+          expect(JSON.stringify(selectedInput)).toContain(delivered(commentBody));
+          if (redactSecret) expect(JSON.stringify(selectedInput)).not.toContain(secret);
+          expect(JSON.stringify(selectedInput)).toContain("Original native bootstrap plan");
+        } catch (error) {
+          sourceAssertionError = error;
+        }
+
+        let requested = false;
+        try {
+          cancellation = heartbeat.cancelRun(runId).catch(error => { cancellationError = error; });
+          requested = await vi.waitFor(async () => {
+            const [current] = await db.select({ resultJson: heartbeatRuns.resultJson })
+              .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+            const result = current?.resultJson as Record<string, unknown> | null | undefined;
+            const state = (result?.executionCancellation as Record<string, unknown> | undefined)?.state;
+            const startupRequestedAt = (result?.startupCancellation as Record<string, unknown> | undefined)?.requestedAt;
+            if (state === "requested" || typeof startupRequestedAt === "string") return true;
+            throw new Error("first_bootstrap_cancellation_not_requested");
+          }, { timeout: 10_000, interval: 25 });
+          if (requested) {
+            await issueService(db).update(taskId, { title: "Later Task title", actorUserId: f.userId,
+              privacyActor: fixture.human, companyGuard: f.home });
+            await documentService(db).upsertIssueDocument({ issueId: taskId, key: "plan", format: "markdown",
+              body: "Later plan revision", baseRevisionId: planRevisionId });
+            await issueService(db).tombstoneComment(commentId, { actorType: "user", userId: f.userId });
+            await db.update(issueThreadInteractions).set({ title: "Later question title", updatedAt: new Date() })
+              .where(eq(issueThreadInteractions.id, questionId));
+          }
+          const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+          expect(after!.runnerProfileJson).toEqual(capturedDispatch.profile);
+        } finally {
+          releaseDispatch();
+        }
+        await heartbeat.drainActiveRunExecutions();
+        await cancellation;
+        expect(cancellationError).toBeUndefined();
+        expect(requested).toBe(true);
+        expect(reachedDispatch).toBe(true);
+        expect(providerFetchCalls).toBe(0);
+        const finalRun = await heartbeat.getRun(runId);
+        expect({ status: finalRun?.status, runtimeMode: finalRun?.runtimeMode })
+          .toMatchObject({ status: "cancelled", runtimeMode: "native" });
+        expect((finalRun?.resultJson as Record<string, unknown> | null)?.startupPreparationSettledAt).toEqual(expect.any(String));
+        if (sourceAssertionError) throw sourceAssertionError;
+      } finally { releaseDispatch(); }
+    }, async ({ runId, issueId, stage }) => {
+      if (stage === "claim" && redactSecret)
+        await createRunSecretRedactionRegistry(db).register(f.home, runId, secret);
+      if (stage !== "dispatch") return;
+      reachedDispatch = true;
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+      const [taskVersion] = await db.execute<{ version: string; ownerHash: string; snapshot: unknown; digestValid: boolean | null }>(sql`select
+        extract(epoch from i.updated_at)::text as version,
+        public.aw_native_payload_body_hash('issue',to_jsonb(i)) as "ownerHash",
+        i.payload_source_snapshot as snapshot,
+        (i.payload_source_snapshot->>'digest') = encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as "digestValid"
+        from issues i where i.id=${issueId}::uuid`);
+      const [planOwner] = await db.select({ payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot })
+        .from(documentRevisions).where(eq(documentRevisions.id, planRevisionId));
+      const [commentVersion] = await db.execute<{ version: string; snapshot: unknown }>(sql`select
+        extract(epoch from updated_at)::text as version, payload_source_snapshot as snapshot
+        from issue_comments where id=${commentId}::uuid`);
+      observedDispatch.value = { profile: structuredClone(run!.runnerProfileJson as Record<string, unknown>),
+        taskVersion: taskVersion!.version, taskOwnerHash: taskVersion!.ownerHash,
+        taskPayloadSourceSnapshot: taskVersion!.snapshot, taskPayloadSourceSnapshotDigestValid: taskVersion!.digestValid,
+        planPayloadSourceSnapshot: planOwner!.payloadSourceSnapshot, commentPayloadSourceSnapshot: commentVersion!.snapshot,
+        commentVersion: commentVersion!.version };
+      await dispatchGate;
+    });
+    expect(providerFetchCalls).toBe(0);
+  }
+
+  it("captures first-bootstrap Task, plan, and wake sources without secret redaction before provider dispatch", async () => {
+    await assertFirstBootstrapSourceCase(false);
+  }, 60_000);
+
+  it("captures first-bootstrap Task, plan, and wake sources with secret redaction before provider dispatch", async () => {
+    await assertFirstBootstrapSourceCase(true);
+  }, 60_000);
 
   it("keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review", async () => {
     const { f, human, profile, model } = await seedInstalledDraft();
@@ -436,13 +650,14 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }, 60_000);
-  it("keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment", async () => {
+  it.each([false, true])("keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: %s)", async triggerQuestion => {
     const fixture = await seedInstalledDraft();
     const { f, human, model } = fixture;
     let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
     let calls = 0;
     const output = "The held Task has a bounded internal draft for Human review.";
     const privateReason = "PRIVATE-ANCESTOR-HOLD-REASON-794318";
+    const inlineSecret = "PRIVATE-INLINE-COMMENT-SECRET-519274";
     const privatePolicyNote = "PRIVATE-ANCESTOR-RELEASE-NOTE-294751";
     const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
       calls++;
@@ -454,6 +669,8 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(JSON.parse(body).tools).toBeUndefined();
       expect(body).toContain("assignedRuntimeContext");
       expect(body).not.toContain(credential);
+      expect(body).not.toContain(inlineSecret);
+      expect(body).toContain(REDACTED_EVENT_VALUE);
       expect(body).not.toContain(privateReason);
       expect(body).not.toContain(privatePolicyNote);
       expect(body).not.toContain("releasePolicy");
@@ -471,6 +688,17 @@ describe("dependency scheduling through the installed Native text draft controll
         responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
         { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
       entry = await createDraftPlan(fixture, "Human comment interaction under a pause hold", ancestor.id);
+      const originalPlanBody = "Original plan retained with the delivered internal draft.";
+      const originalPlan = await documentService(db).upsertIssueDocument({ issueId: entry.task.id, key: "plan", format: "markdown",
+        body: originalPlanBody, createdByUserId: f.userId, manualInputActor: human });
+      const originalPlanRevisionId = originalPlan.document.latestRevisionId!;
+      const questionService = issueThreadInteractionService(db);
+      const pendingQuestion = await questionService.create({ id: entry.task.id, companyId: f.home }, {
+        kind: "ask_user_questions", payload: { version: 1, questions: [{ id: "direction", prompt: "Which direction?",
+          selectionMode: "single", options: [{ id: "internal", label: "Prepare the internal draft" }] }] },
+      }, { userId: f.userId, requestActor: human });
+      const answeredQuestion = await questionService.answerQuestions({ id: entry.task.id, companyId: f.home, status: entry.task.status },
+        pendingQuestion.id, { answers: [{ questionId: "direction", optionIds: ["internal"] }] }, { userId: f.userId, requestActor: human });
       const [hold] = await db.insert(issueTreeHolds).values({
         companyId: f.home, rootIssueId: ancestor.id, mode: "pause", status: "active",
         reason: privateReason,
@@ -490,7 +718,7 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(calls).toBe(0);
 
       const comment = await issueService(db).addComment(entry.task.id,
-        "Please prepare a short internal draft while preserving the pause.", { userId: f.userId },
+        `Please prepare a short internal draft while preserving the pause. ${inlineSecret}`, { userId: f.userId },
         { authorType: "user", manualInputActor: human });
       expect(comment).toMatchObject({ issueId: entry.task.id, authorType: "user", authorUserId: f.userId });
       const forged = await heartbeat.wakeup(f.presence.id, { source: "on_demand", triggerDetail: "manual",
@@ -503,10 +731,14 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(calls).toBe(0);
 
       const interaction = await heartbeat.wakeup(f.presence.id, { source: "automation", triggerDetail: "system",
-        reason: "issue_commented", payload: { issueId: entry.task.id, commentId: comment.id },
+        reason: "issue_commented", payload: { issueId: entry.task.id, commentId: comment.id,
+          ...(triggerQuestion ? { mutation: "interaction", interactionId: answeredQuestion.id,
+            interactionKind: "ask_user_questions", interactionStatus: "answered", sourceCommentId: null, sourceRunId: null } : {}) },
+        ...(triggerQuestion ? { idempotencyKey: `interaction:${answeredQuestion.id}:answered`, allowRunCoalescing: false } : {}),
         requestedByActorType: "user", requestedByActorId: f.userId,
         contextSnapshot: { issueId: entry.task.id, commentId: comment.id, wakeCommentId: comment.id,
-          wakeReason: "issue_commented", source: "issue.comment" } });
+          wakeReason: "issue_commented", source: "issue.comment",
+          ...(triggerQuestion ? { interactionId: answeredQuestion.id, interactionKind: "ask_user_questions", interactionStatus: "answered" } : {}) } });
       expect(interaction).not.toBeNull();
       const [interactionRun] = await db.select().from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, interaction!.id)));
@@ -524,9 +756,19 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(runs[0]).toMatchObject({ id: interaction!.id, nativeIssueId: entry.task.id,
         responsibleUserId: f.userId, runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
       const receipt = nativeRunInputSourceReceiptSchema.parse(runs[0]!.runnerProfileJson?.nativeInputSourceReceipt);
+      // Historical read context cannot activate direct-response session recovery.
+      const directResponses = parseNativeExecutionInput(runs[0]!.runnerProfileJson?.nativeExecutionInput).interactionResponses;
+      if (triggerQuestion) expect(directResponses.map(response => response.interactionId)).toEqual([answeredQuestion.id]);
+      else expect(directResponses).toEqual([]);
       expect(receipt.bootstrap.inputs).toContainEqual(expect.objectContaining({ kind: "task", issueId: ancestor.id }));
       const wake = (runs[0]!.contextSnapshot as Record<string, unknown>).paperclipWake as Record<string, unknown>;
       expect(wake.activeTreeHold).toEqual({ holdId: hold!.id, rootIssueId: ancestor.id, mode: "pause", interaction: true });
+      expect(wake.planReviewContext).toMatchObject({ documentKey: "plan", latestRevisionId: originalPlanRevisionId, interaction: null });
+      expect(receipt.bootstrap.inputs).toContainEqual(expect.objectContaining({ kind: "document_revision", revisionId: originalPlanRevisionId }));
+      const questionSources = receipt.bootstrap.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "interaction" }> =>
+        source.kind === "interaction" && source.interactionId === answeredQuestion.id);
+      expect(questionSources).toHaveLength(2);
+      expect(new Set(questionSources.map(source => source.contentHash)).size).toBe(2);
       expect(JSON.stringify(wake)).not.toContain(privateReason);
       expect(JSON.stringify(wake)).not.toContain(privatePolicyNote);
       const [revision] = await db.select({ id: documentRevisions.id }).from(issueDocuments)
@@ -540,6 +782,11 @@ describe("dependency scheduling through the installed Native text draft controll
       await issueTreeControlService(db).releaseHold(f.home, ancestor.id, hold!.id,
         { actor: { actorType: "user", actorId: f.userId, userId: f.userId } });
       await expect(sourceRead()).resolves.toBeUndefined();
+      // The delivered rendition depends on the original plan, not forever on
+      // its latest pointer. The original revision and current ACL still apply.
+      await documentService(db).upsertIssueDocument({ issueId: entry.task.id, key: "plan", format: "markdown",
+        body: "A later plan must not replace the delivered original rendition.", baseRevisionId: originalPlanRevisionId });
+      await expect(sourceRead()).resolves.toBeUndefined();
       expect(calls).toBe(1);
       await expect(sourceRead(db, human, randomUUID())).rejects.toMatchObject({ status: 403 });
       await expect(sourceRead(db, { type: "none", source: "none" })).rejects.toMatchObject({ status: 403 });
@@ -549,16 +796,38 @@ describe("dependency scheduling through the installed Native text draft controll
       await expect(sourceRead(db, viewer)).resolves.toBeUndefined();
       // Rollback each corruption so every refusal is independent and the
       // final positive still uses the original sealed prefix and current ACL.
+      let mutationIndex = 0;
+      const unexpectedSourceAcceptances: number[] = [];
       const rejectedMutation = (mutate: (tx: typeof db) => Promise<unknown>, actor = human) => db.transaction(async rawTx => {
+        const index = ++mutationIndex;
         const tx = rawTx as unknown as typeof db;
         await tx.execute(sql`savepoint pause_source_negative`);
-        try { await mutate(tx); await expect(sourceRead(tx, actor)).rejects.toMatchObject({ status: 403 }); }
-        finally { await tx.execute(sql`rollback to savepoint pause_source_negative`); }
+        try {
+          await mutate(tx);
+          await sourceRead(tx, actor).then(() => { unexpectedSourceAcceptances.push(index); },
+            error => { expect(error).toMatchObject({ status: 403 }); });
+        } finally { await tx.execute(sql`rollback to savepoint pause_source_negative`); }
       });
       await rejectedMutation(tx => tx.update(issues).set({ visibility: "private" }).where(eq(issues.id, ancestor.id)), viewer);
       await rejectedMutation(tx => tx.update(companyMemberships).set({ status: "suspended" }).where(and(
         eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId))));
       await rejectedMutation(tx => tx.update(issueComments).set({ deletedAt: new Date() }).where(eq(issueComments.id, comment.id)));
+      await rejectedMutation(async tx => {
+        const [withdrawn] = await tx.update(documentRevisions).set({ payloadSourceSnapshot: null })
+          .where(eq(documentRevisions.id, originalPlanRevisionId))
+          .returning({ invalidated: documentRevisions.payloadSourceSnapshotInvalidated });
+        expect(withdrawn?.invalidated).toBe(true);
+      });
+      await rejectedMutation(tx => tx.update(issueDocuments).set({ key: "former-plan" })
+        .where(and(eq(issueDocuments.issueId, entry!.task.id), eq(issueDocuments.key, "plan"))));
+      await rejectedMutation(tx => tx.update(issueThreadInteractions).set({ resolvedByUserId: "forged-question-human" })
+        .where(eq(issueThreadInteractions.id, answeredQuestion.id)));
+      await rejectedMutation(tx => tx.update(issueThreadInteractions).set({ resolvedByAgentId: f.presence.id })
+        .where(eq(issueThreadInteractions.id, answeredQuestion.id)));
+      await rejectedMutation(tx => tx.update(issueThreadInteractions).set({ sourceRunId: interaction!.id })
+        .where(eq(issueThreadInteractions.id, answeredQuestion.id)));
+      await rejectedMutation(tx => tx.update(issueThreadInteractions).set({ updatedAt: new Date() })
+        .where(eq(issueThreadInteractions.id, answeredQuestion.id)));
       await rejectedMutation(tx => tx.update(agentWakeupRequests).set({ requestedByActorId: "forged-human" })
         .where(eq(agentWakeupRequests.id, runs[0]!.wakeupRequestId!)));
       await rejectedMutation(tx => tx.update(issueTreeHolds).set({ rootIssueId: entry!.task.id }).where(eq(issueTreeHolds.id, hold!.id)));
@@ -573,6 +842,9 @@ describe("dependency scheduling through the installed Native text draft controll
         .where(eq(heartbeatRuns.id, interaction!.id))).rejects.toMatchObject({ cause: { code: "23514" } });
       await expect(sourceRead()).resolves.toBeUndefined();
       expect(calls).toBe(1);
+      expect(unexpectedSourceAcceptances).toEqual([]);
+    }, async ({ stage, runId }) => {
+      if (stage === "claim") await createRunSecretRedactionRegistry(db).register(f.home, runId, inlineSecret);
     });
   }, 60_000);
   it("runs unrelated assigned Native Text tasks concurrently under separate issue claims", async () => {

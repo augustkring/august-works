@@ -1,3 +1,4 @@
+import { PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
 import { readNativeWorkspaceCoordination } from "./native-runtime/native-workspace-coordination-source.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
@@ -7,7 +8,7 @@ import { PgTransaction } from "drizzle-orm/pg-core";
 import { activityLog, agents, issues, projects, projectWorkspaces, issueRelations, issueComments, documentRevisions, issueDocuments, issueAttachments, assets,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, memoryRecords,
   memoryDeletionMarkers,
-  completionContracts, heartbeatRuns, orchestrationModelReservations, agentExecutionManifests, executionWorkspaces, foundationDocuments,
+  completionContracts, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, agentExecutionManifests, executionWorkspaces, foundationDocuments,
   nativeRunResults, nativeRunFinalizations, workAssessments, statusDecisions, statusDecisionEffects, documents, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems,
   agentRolePackAssignments, issueThreadInteractions, agentWakeupRequests, issueTreeHolds, type Db } from "@paperclipai/db";
 import { toolInvocations } from "@paperclipai/db";
@@ -1174,8 +1175,18 @@ export async function assertNativeWorkspaceMetadataSourcesCurrent(db: Db | Trans
         .from(executionWorkspaces).where(and(eq(executionWorkspaces.companyId, companyId),
           eq(executionWorkspaces.id, source.executionWorkspaceId))).for("share");
       if (!current || source.executionWorkspaceId === run.id || current.updatedAt.toISOString() !== source.sourceVersion ||
-        !isDeepStrictEqual({ cwd: current.cwd, repoUrl: current.repoUrl, repoRef: current.repoRef, branchName: current.branchName }, tuple))
+        !isDeepStrictEqual({ cwd: current.cwd, repoUrl: current.repoUrl, repoRef: current.repoRef, branchName: current.branchName }, tuple)) {
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+          console.info("native_execution_workspace_currentness", JSON.stringify({
+            executionWorkspaceRowPresent: Boolean(current),
+            sourceIdIsRunId: source.executionWorkspaceId === run.id,
+            sourceVersionMatches: current?.updatedAt.toISOString() === source.sourceVersion,
+            tupleMatches: current !== undefined && isDeepStrictEqual({ cwd: current.cwd, repoUrl: current.repoUrl,
+              repoRef: current.repoRef, branchName: current.branchName }, tuple),
+          }));
+        }
         throw forbidden("A Native source execution workspace changed");
+      }
       continue;
     }
     throw forbidden("A Native source workspace origin is unsupported");
@@ -1886,7 +1897,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   inputs: NativePayloadSourceInput[];
   bootstrapInputs: NativeRunInputSourceReceipt["bootstrap"]["inputs"];
   historicalTransition?: NativeHistoricalPendingTransitionContext;
-}): Promise<void> {
+}): Promise<Extract<NativePayloadSourceInput, { kind: "interaction" }>[]> {
   const taskSources = input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "task" }> =>
     value.kind === "task" && value.issueId === input.issueId);
   const [taskSource] = taskSources;
@@ -1924,7 +1935,29 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   // Control wakes can coalesce into Run context; original wake authority is the exact admitted queue row.
   if (!admittedWake) throw forbidden("The original Native task wake is unavailable");
   const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
+  const answeredQuestions: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[] = [];
   const outcomes = nativeSourceRecord(continuation).interactionOutcomes;
+  if (run && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
+    outcomes.every(value => { const row = nativeSourceRecord(value); return typeof row.id === "string" &&
+      row.kind === "ask_user_questions" && row.status === "answered"; })) {
+    // These resolver/origin facts have no reusable graph proof family.
+    disableNativeSourceGraphCheckpoints(scope);
+    const { materializeNativeInteractionResponses, NativeInteractionBridgeError } = await import("./native-runtime/native-interaction-bridge.js");
+    await prepareNativeSourceEffectBoundary(scope);
+    try {
+      await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
+        runId: input.runId, agentId: run.agentId, interactionIds: outcomes.map(value => String(nativeSourceRecord(value).id)),
+        onAnsweredQuestionCapture: value => { answeredQuestions.push(value); } });
+    } catch (error) {
+      if (error instanceof NativeInteractionBridgeError) throw forbidden("An answered question source changed or was erased");
+      throw error;
+    }
+    if (answeredQuestions.length !== outcomes.length || answeredQuestions.some(value =>
+      [value.nativeSource, value.continuationSource].some(expected =>
+        !input.bootstrapInputs.some(source => isDeepStrictEqual(source, expected)) ||
+        !input.inputs.some(source => isDeepStrictEqual(source, expected)))))
+      throw forbidden("An answered question source is missing");
+  }
   if (run && admittedWake && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
     outcomes.every(value => { const row = nativeSourceRecord(value); return typeof row.id === "string" &&
       row.kind === "request_confirmation" && ["accepted", "rejected"].includes(String(row.status)); })) {
@@ -2111,6 +2144,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       responsibleUserId: run.responsibleUserId, wakeupRequestId: admittedWake.id,
       envelope: continuation as NativeTaskContinuationCapture["envelope"],
       ...(governedInteractions.length ? { governedInteractions } : {}),
+      ...(answeredQuestions.length ? { answeredQuestions } : {}),
       ...(acceptedPlanReview ? { acceptedPlanReview } : {}),
       ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),
@@ -2130,6 +2164,29 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
         reason: admittedWake.reason, originCommentIds: nativeTaskWakeOriginCommentIds(admittedWake.payload),
         ...(admittedInteraction ? { interaction: admittedInteraction } : {}) },
     } : null;
+  let ordinaryPlanRead: Parameters<typeof captureNativeTaskWakeSource>[0]["ordinaryPlanRead"];
+  const planContext = nativeSourceRecord(wakeRecord?.planReviewContext);
+  if (run && run.responsibleUserId && planContext.interaction === null && typeof planContext.latestRevisionId === "string") {
+    disableNativeSourceGraphCheckpoints(scope);
+    const planSources = input.bootstrapInputs.filter((source): source is Extract<NativePayloadSourceInput, {kind:"document_revision"}> =>
+      source.kind === "document_revision" && source.issueId === input.issueId && source.revisionId === planContext.latestRevisionId);
+    const source = planSources[0];
+    if (planSources.length !== 1 || !source || !input.inputs.some(value => isDeepStrictEqual(value, source)))
+      throw forbidden("The original Native plan source prefix changed");
+    // Read the original selected revision, not today's latest pointer and not an
+    // invented approved revision. Its ordinary source roots/ACL are checked below.
+    const [owner] = await db.select({ revision: documentRevisions, sourceTrust: documents.sourceTrust })
+      .from(issueDocuments).innerJoin(documents, and(eq(documents.id, issueDocuments.documentId), eq(documents.companyId, input.companyId)))
+      .innerJoin(documentRevisions, and(eq(documentRevisions.documentId, documents.id), eq(documentRevisions.companyId, input.companyId)))
+      .where(and(eq(issueDocuments.companyId, input.companyId), eq(issueDocuments.issueId, input.issueId), eq(issueDocuments.key, "plan"),
+        eq(documents.id, source.documentId), eq(documentRevisions.id, source.revisionId))).for("share");
+    if (!owner || owner.revision.payloadSourceSnapshotInvalidated ||
+      ![owner.revision.body, redactQuarantinedBodyForHigherTrust({ body: owner.revision.body, sourceTrust: owner.sourceTrust }).body]
+        .some(body => createHash("sha256").update(body, "utf8").digest("hex") === source.contentHash))
+      throw forbidden("The original Native plan rendition changed or was erased");
+    ordinaryPlanRead = { companyId: input.companyId, issueId: input.issueId, runId: input.runId, agentId: run.agentId,
+      responsibleUserId: run.responsibleUserId, wakeupRequestId: admittedWake.id, source, revisionNumber: owner.revision.revisionNumber };
+  }
   let workspaceCapture: Parameters<typeof captureNativeTaskWakeSource>[0]["workspaceCapture"];
   if (wakeRecord && Object.hasOwn(wakeRecord, "executionWorkspace")) {
     const metadata = input.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
@@ -2177,7 +2234,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     ? captureNativeTaskWakeSource({ companyId: input.companyId, runId: input.runId, issueId: input.issueId,
       sourceVersion: taskSource.sourceVersion, agentId: run.agentId, responsibleUserId: run.responsibleUserId,
       workspaceCapture, workspaceCoordinationCapture, blockedHumanInteraction, treeHoldInteractionSource,
-      wakeupRequestId: run.wakeupRequestId, continuationCapture,
+      wakeupRequestId: run.wakeupRequestId, continuationCapture, ordinaryPlanRead,
       historicalPendingSources: input.historicalTransition ? pendingInteractions : undefined, persistedWakeReason: admittedWake.reason,
       task: wakeTask, checkoutRunId: context?.paperclipHarnessCheckedOut === true ? input.runId : null,
       commentSources: input.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "comment" }> =>
@@ -2199,6 +2256,106 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       value.issueId === input.issueId).length !== 1 ||
     !input.bootstrapInputs.some(value => value.kind === "native_task_wake" && isDeepStrictEqual(value, input.source)))
     throw forbidden("A Native task wake source changed");
+  return answeredQuestions.flatMap(value => [value.nativeSource, value.continuationSource]);
+}
+
+/** Both Run and delivered-document source walkers consume this same rendition. */
+async function readNativeQuestionContinuationSource(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string; kind: string | undefined;
+  source: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  normal: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[];
+}): Promise<Extract<NativePayloadSourceInput, { kind: "interaction" }>[]> {
+  if (input.kind !== "ask_user_questions" || input.normal.length !== 1 || isDeepStrictEqual(input.normal[0], input.source)) return [];
+  const { materializeNativeInteractionResponses, NativeInteractionBridgeError } = await import("./native-runtime/native-interaction-bridge.js");
+  const sources: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
+  try {
+    await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, agentId: input.agentId, interactionIds: [input.source.interactionId],
+      onAnsweredQuestionCapture: value => { sources.push(value.continuationSource); } });
+  } catch (error) {
+    if (error instanceof NativeInteractionBridgeError) throw forbidden("A Native question continuation source changed or was erased");
+    throw error;
+  }
+  return sources;
+}
+
+/** Source classification only: ordinary historical answers cannot become
+ * direct interaction responses or change provider-session recovery authority. */
+export async function readNativeTaskWakeQuestionSourcesCurrent(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; actor: AuthorizationActor; sourceSet: NativePayloadSourceSet;
+  identity: { eventSeq: number; attempt: number };
+}): Promise<Extract<NativePayloadSourceInput, { kind: "interaction" }>[]> {
+  const policy = nativePayloadSourcePolicySchema.safeParse(input.sourceSet?.policy);
+  const inputs = nativePayloadSourceInputSchema.array().max(256).safeParse(input.sourceSet?.inputs);
+  if (!policy.success || !inputs.success) throw forbidden("The Native historical question prefix is unavailable");
+  return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, input.companyId, async scope => {
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    disableNativeSourceGraphCheckpoints(scope);
+    const run = await nativeSourceReadRun(tx, input.companyId, input.runId, scope);
+    if (!run || run.runtimeMode !== "native" || run.status !== "running" || run.nativeIssueId !== input.issueId ||
+      !run.responsibleUserId || !run.wakeupRequestId || input.actor.type !== "agent" || input.actor.companyId !== input.companyId ||
+      input.actor.agentId !== run.agentId || input.actor.runId !== run.id || input.actor.onBehalfOfUserId !== run.responsibleUserId)
+      throw forbidden("The Native historical question reader changed");
+    const profile = nativeSourceRecord(run.runnerProfileJson);
+    const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    let bootstrapInputs: NativePayloadSourceInput[];
+    if (run.nativeInputSourceProtocolVersion === 1 && receipt.success &&
+      receipt.data.binding.companyId === input.companyId && receipt.data.binding.issueId === input.issueId &&
+      receipt.data.binding.runId === run.id && receipt.data.binding.agentId === run.agentId &&
+      receipt.data.binding.responsibleUserId === run.responsibleUserId) {
+      bootstrapInputs = receipt.data.bootstrap.inputs;
+      // Only already sealed constructor prefixes qualify this branch. New
+      // outer additions still pass the ordinary frame/admission source checks.
+      await assertNativePayloadSourceSetCurrentInScope(tx, { ...input, policy: receipt.data.bootstrap.policy,
+        inputs: bootstrapInputs }, scope);
+    } else if (run.nativeInputSourceProtocolVersion === 0 && profile.nativeInputSourceReceipt === undefined &&
+      profile.nativeExecutionInput !== undefined &&
+      [profile.nativeModelInputDispatchIntents, profile.nativeToolCallDispatchAssociations,
+        profile.nativeToolResultSourceCaptures].every(value => value === undefined ||
+          Array.isArray(value) && value.length === 0)) {
+      // This is the exact first constructor closure, before a receipt can be
+      // sealed. It is not a historical-reader fallback or an output witness.
+      if (!Number.isSafeInteger(input.identity.eventSeq) || input.identity.eventSeq < 0 ||
+        !Number.isSafeInteger(input.identity.attempt) || input.identity.attempt < 1)
+        throw forbidden("The Native historical question launch is unavailable");
+      const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+        eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, run.id),
+        eq(heartbeatRunEvents.agentId, run.agentId), eq(heartbeatRunEvents.seq, input.identity.eventSeq),
+        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED))).for("share");
+      if (!launch) throw forbidden("The Native historical question launch is unavailable");
+      bootstrapInputs = inputs.data;
+      for (const source of inputs.data) {
+        if (source.kind === "task") await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, source, scope);
+        else if (source.kind === "comment") await assertConversationCommentSourceCurrent(tx, {
+          companyId: input.companyId, actor: input.actor, source, policy: policy.data, inputs: inputs.data }, scope);
+        else if (source.kind === "document_revision") {
+          if (!source.issueId) throw forbidden("The Native historical question document is unavailable");
+          await assertNativeDocumentRevisionCurrentSourceAccessInScope(tx as unknown as Db, { companyId: input.companyId,
+            issueId: source.issueId, revisionId: source.revisionId, actor: input.actor, requireLatest: false }, scope, 0);
+        }
+      }
+    } else throw forbidden("The Native historical question receipt is unavailable");
+    const wakes = bootstrapInputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+      source.kind === "native_task_wake");
+    if (wakes.length !== 1 || wakes[0]!.runId !== run.id || wakes[0]!.issueId !== input.issueId ||
+      !inputs.data.some(source => isDeepStrictEqual(source, wakes[0])))
+      throw forbidden("The Native historical question wake changed");
+    const [queue] = await tx.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, input.companyId),
+      eq(agentWakeupRequests.id, run.wakeupRequestId), eq(agentWakeupRequests.agentId, run.agentId),
+      eq(agentWakeupRequests.runId, run.id))).for("share");
+    if (!queue || queue.requestedByActorType !== "user" || !queue.requestedByActorId)
+      throw forbidden("The Native historical question Human is unavailable");
+    const readers: AuthorizationActor[] = [input.actor,
+      { type: "board", source: "session", userId: run.responsibleUserId },
+      { type: "board", source: "session", userId: queue.requestedByActorId }];
+    for (const actor of [...new Map(readers.map(actor => [nativeSha256(actor), actor])).values()]) {
+      await assertNativeSourceSetsReaderAccessCurrent(tx, { companyId: input.companyId, actor,
+        sets: [{ runId: run.id, policy: policy.data, inputs: inputs.data }] }, scope);
+      deferNativeSourceReaderCheck(scope, { companyId: input.companyId, runId: run.id, actor, policy: policy.data, inputs: inputs.data });
+    }
+    return assertNativeTaskWakeSourceCurrentInScope(tx, scope, { companyId: input.companyId, issueId: input.issueId,
+      runId: run.id, actor: input.actor, source: wakes[0]!, inputs: inputs.data, bootstrapInputs });
+  }));
 }
 
 /** Qualify only the exact null-invocation create_task result produced by an
@@ -3968,7 +4125,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       continue;
     }
     if (source.kind === "interaction") {
-      const [pendingOwner] = await db.select({ status: issueThreadInteractions.status }).from(issueThreadInteractions).where(and(
+      const [pendingOwner] = await db.select({ status: issueThreadInteractions.status, kind: issueThreadInteractions.kind }).from(issueThreadInteractions).where(and(
         eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, source.issueId),
         eq(issueThreadInteractions.id, source.interactionId))).limit(1);
       if (pendingOwner?.status === "pending") {
@@ -3980,11 +4137,14 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           if (!original) throw forbidden("A historical pending Native interaction source changed");
           continue;
         }
-        const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
-        const pending = await captureNativeGovernedPendingInteractions({ db: db as Db, companyId: input.companyId,
-          issueId: source.issueId, runId: input.runId, agentId: run.agentId, interactionIds: [source.interactionId], reader: input.actor });
-        if (pending.length !== 1 || !isDeepStrictEqual(pending[0]!.source, source)) throw forbidden("A pending Native interaction source changed");
-        continue;
+        // Item verdicts can contain a current partial Human response while pending.
+        if (pendingOwner.kind !== "request_item_verdicts") {
+          const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
+          const pending = await captureNativeGovernedPendingInteractions({ db: db as Db, companyId: input.companyId,
+            issueId: source.issueId, runId: input.runId, agentId: run.agentId, interactionIds: [source.interactionId], reader: input.actor });
+          if (pending.length !== 1 || !isDeepStrictEqual(pending[0]!.source, source)) throw forbidden("A pending Native interaction source changed");
+          continue;
+        }
       }
       const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
       const current: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
@@ -3993,6 +4153,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: source.issueId,
         runId: input.runId, agentId: run.agentId, interactionIds: [source.interactionId], onSourceCapture: value => { current.push(value); },
         onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); } });
+      continuationCurrent.push(...await readNativeQuestionContinuationSource(db, { companyId: input.companyId,
+        issueId: source.issueId, runId: input.runId, agentId: run.agentId, kind: pendingOwner?.kind, source, normal: current }));
       let deliveryCurrent: Extract<NativePayloadSourceInput, { kind: "interaction" }> | undefined;
       if (current.length === 1 && !isDeepStrictEqual(current[0], source) && !continuationCurrent.some(value => isDeepStrictEqual(value, source))) {
         const consumer = await nativeSourceReadRun(db, input.companyId, input.runId, scope);
@@ -4897,13 +5059,23 @@ async function assertConversationCommentSourceCurrent(db: Db | Transaction, inpu
   if (!ordinaryHashes.includes(input.source.contentHash)) {
     const continuationHashes: string[] = [];
     const redactions = createRunSecretRedactionRegistry(db as Db);
+    const redactedInlineHashes: string[] = [];
+    for (const value of [
+      { body: comment.body, presentation: comment.rawPresentation, metadata: comment.rawMetadata },
+      { body: projection.body, presentation: projection.presentation, metadata: projection.metadata },
+      sanitizeQuarantinedCommentForHigherTrust({ body: comment.body, presentation: comment.rawPresentation,
+        metadata: comment.rawMetadata, sourceTrust: comment.sourceTrust }),
+    ]) {
+      const redacted = await redactions.redactForIssue(input.companyId, input.source.issueId, value);
+      redactedInlineHashes.push(nativeCommentProjectionHash(redacted));
+    }
     for (const body of [...new Set([comment.body, sanitizeQuarantinedCommentForHigherTrust({ body: comment.body,
       presentation: comment.rawPresentation, metadata: comment.rawMetadata, sourceTrust: comment.sourceTrust }).body])]) {
       const projection = nativeContinuationCommentProjection({ ...comment, id: input.source.commentId, body, deletedAt: null });
       const redacted = await redactions.redactForIssue(input.companyId, input.source.issueId, projection);
       continuationHashes.push(nativeContinuationMessageHash(redacted));
     }
-    if (!continuationHashes.includes(input.source.contentHash)) reject();
+    if (!continuationHashes.includes(input.source.contentHash) && !redactedInlineHashes.includes(input.source.contentHash)) reject();
   }
 
   // Comment and every other source input are still validated against this
@@ -5776,7 +5948,7 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
       const [run] = sourceDispatch ? await db.select({ agentId: heartbeatRuns.agentId }).from(heartbeatRuns)
         .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, sourceDispatch.runId))) : [];
       if (!run) throw forbidden("A Native document interaction source is unavailable");
-      const [pendingOwner] = await db.select({ status: issueThreadInteractions.status }).from(issueThreadInteractions).where(and(
+      const [pendingOwner] = await db.select({ status: issueThreadInteractions.status, kind: issueThreadInteractions.kind }).from(issueThreadInteractions).where(and(
         eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, source.issueId),
         eq(issueThreadInteractions.id, source.interactionId))).limit(1);
       if (pendingOwner?.status === "pending") {
@@ -5794,6 +5966,8 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
         runId: sourceDispatch!.runId, agentId: run.agentId, interactionIds: [source.interactionId],
         onSourceCapture: value => { current.push(value); },
         onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); } });
+      continuationCurrent.push(...await readNativeQuestionContinuationSource(db, { companyId: input.companyId,
+        issueId: source.issueId, runId: sourceDispatch!.runId, agentId: run.agentId, kind: pendingOwner?.kind, source, normal: current }));
       let deliveryCurrent: Extract<NativePayloadSourceInput, { kind: "interaction" }> | undefined;
       if (current.length === 1 && !isDeepStrictEqual(current[0], source) && !continuationCurrent.some(value => isDeepStrictEqual(value, source))) {
         const consumer = await nativeSourceReadRun(db, input.companyId, sourceDispatch!.runId, scope);

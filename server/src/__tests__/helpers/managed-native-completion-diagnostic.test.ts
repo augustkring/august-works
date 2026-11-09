@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { projectManagedNativeCompletionDiagnostic } from "./managed-native-completion-diagnostic.js";
+import { projectNativeFinalizationError } from "../../services/native-runtime/native-finalization-error-diagnostic.js";
 
 describe("managed native completion failure projection", () => {
   it("keeps only closed enums, booleans and counts from persisted model/evidence fields", () => {
@@ -36,6 +37,43 @@ describe("managed native completion failure projection", () => {
       },
       decision: { reasonCode: "completion_evidence_incomplete", toStatus: "in_progress", applicationState: "applied" },
     });
+  });
+
+  it("bounds and sanitizes a real nested TypeError and PostgreSQL error", () => {
+    const secret = "private-statement-parameters-date-value-9a2c";
+    const deepest = Object.assign(new Error(secret), { code: secret });
+    const postgres = Object.assign(new Error(`native_checkout_not_released: ${secret}`), { code: "23514", cause: deepest });
+    const root = Object.assign(new TypeError(`The string parameter received a Date ${secret}`), {
+      code: "ERR_INVALID_ARG_TYPE", cause: postgres,
+    });
+    const diagnostic = projectNativeFinalizationError(root);
+    expect(JSON.stringify(diagnostic)).not.toContain(secret);
+    expect(diagnostic).toEqual({ phase: "status_decision_commit", causes: [
+      { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", ownerErrorPrefix: "other" },
+      { errorClass: "Error", code: "other", sqlState: "23514", ownerErrorPrefix: "native_checkout_not_released" },
+      { errorClass: "Error", code: "other", sqlState: "missing", ownerErrorPrefix: "other" },
+    ] });
+  });
+
+  it("projects only closed cause facts from a persisted finalization failure", () => {
+    const secret = "private-sql-and-date-parameter-8c9e";
+    const diagnostic = projectManagedNativeCompletionDiagnostic({
+      finalization: { phase: "retryable_failure", failureCode: "side_effect_planning_failed", failureDetail: {
+        safeCause: { phase: "status_decision_commit", causes: [
+          { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", ownerErrorPrefix: "other" },
+          { errorClass: "PostgresError", code: "other", sqlState: "23514", ownerErrorPrefix: "native_checkout_not_released" },
+          { errorClass: "Error", code: "other", sqlState: "other", ownerErrorPrefix: "other", message: secret, sql: secret },
+          { errorClass: "Error", code: secret, sqlState: secret, ownerErrorPrefix: secret },
+        ], message: secret, params: [secret] }, message: secret, sql: secret, params: [secret],
+      } }, decision: null, assessment: null,
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain(secret);
+    expect(diagnostic.finalization).toMatchObject({ safeFailurePhase: "status_decision_commit", safeCauseCount: 3,
+      safeCauses: [
+        { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", ownerErrorPrefix: "other" },
+        { errorClass: "PostgresError", code: "other", sqlState: "23514", ownerErrorPrefix: "native_checkout_not_released" },
+        { errorClass: "Error", code: "other", sqlState: "missing", ownerErrorPrefix: "other" },
+      ] });
   });
 
   it("reduces unknown future values to other and missing fields to missing", () => {

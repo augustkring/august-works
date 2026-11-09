@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "a5baef87c30d7ee4ede5c2c873baa992398e107689030095f8d734c03a11c3fb"
+      "sha256": "6c902714ab68225dff7738541cd74932fb43300231ec2f1489f70a0baddae539"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "4ef4bf3b56bd7e061db5279a3a3bb004c4dd4b8316baac3fa4ea383f280ff49f"
+      "sha256": "69278183d044ebe612a774e47df48f27542f332b7602adacc282be8a929ce658"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -378,7 +378,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "c8f01f4c555b3f95c799d659a15c6fa68a1369e1a947487fbb6685245e5348e1"
+      "sha256": "5d14633538b52cb177c3133445dbe7da3eeb4933ebf05af75ad5b8a4b4c877b3"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
