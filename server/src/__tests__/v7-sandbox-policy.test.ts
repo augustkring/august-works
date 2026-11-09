@@ -135,7 +135,7 @@ describe("V7 policy subset proofs, distinct from physical boundary qualification
     const result = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: brokerCaps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: resolved, sourcePolicyRefs: ["fixture-only"], now });
     expect(result.proverResult).toBe("pass");
     expect(result.compiledPolicy.network.destinations).toEqual([{ hostname: "paperclip.example.test", port: 443, methods: ["POST"], pathPrefixes: ["/mcp/gateways/gateway_1"] }]);
-    const projected = projectOpenShellPolicy(result.compiledPolicy);
+    const projected = projectOpenShellPolicy(result.compiledPolicy, result.modelBrokerEndpoint, result.credentialBrokerEndpoints);
     expect(projected.document.network_policies.aw_0?.endpoints[0]?.rules).toEqual([{ allow: { method: "POST", path: "/mcp/gateways/gateway_1" } }]);
     const wrongDestination = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: brokerCaps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, destination: { ...resolved[0]!.destination, hostname: "other-provider.example.test" } }], sourcePolicyRefs: ["fixture-only"], now });
     expect(wrongDestination.failedBoundaries).toContain("credential_broker_binding_resolution_mismatch");
@@ -153,13 +153,14 @@ describe("V7 policy subset proofs, distinct from physical boundary qualification
       sourcePolicyRefs: ["fixture-only"], now });
     expect(result.proverResult).toBe("pass");
     expect(result.compiledPolicy.credentials.bindings).toEqual([]);
-    expect(result.modelBrokerEndpoint).toEqual({ hostname: "paperclip.example.test", port: 443, path: "/runtime-tools/model/v1/messages" });
+    expect(result.modelBrokerEndpoint).toEqual({ hostname: "paperclip.example.test", port: 443, path: "/runtime-tools/model/v1/messages", binaries: ["/usr/bin/node"] });
     expect(result.compiledPolicy.network.destinations).toEqual([{ hostname: "paperclip.example.test", port: 443,
       methods: ["POST"], pathPrefixes: ["/runtime-tools/model/v1/messages"] }]);
     const projection = projectOpenShellPolicy(result.compiledPolicy, result.modelBrokerEndpoint);
     expect(projection.document.network_policies.aw_0?.endpoints[0]?.rules).toEqual([
       { allow: { method: "POST", path: "/runtime-tools/model/v1/messages" } },
     ]);
+    expect(projection.document.network_policies.aw_0?.binaries).toEqual([{ path: "/usr/bin/node" }]);
     const predeclared = structuredClone(p);
     predeclared.network.destinations = [{ hostname: "paperclip.example.test", port: 443, methods: ["POST"], pathPrefixes: ["/runtime-tools/model/v1/messages"] }];
     expect(compileSandboxPolicy({ boundary: predeclared, candidate: predeclared, capabilities: capability, authorizedConnectionGrantHashes: {},

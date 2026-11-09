@@ -42,17 +42,41 @@ describe("managed native completion failure projection", () => {
   it("bounds and sanitizes a real nested TypeError and PostgreSQL error", () => {
     const secret = "private-statement-parameters-date-value-9a2c";
     const deepest = Object.assign(new Error(secret), { code: secret });
-    const postgres = Object.assign(new Error(`native_checkout_not_released: ${secret}`), { code: "23514", cause: deepest });
+    const postgres = Object.assign(new Error(`native_checkout_not_released: ${secret}`), {
+      name: "PostgresError", code: "23514", constraint_name: "native_assessment_objective_check",
+      where: `PL/pgSQL function aw_validate_status_decision() line 42 at RAISE\nSQL statement UPDATE private_table SET body='${secret}'`,
+      sql: `UPDATE private_table SET value='${secret}'`, parameters: [secret], cause: deepest,
+    });
     const root = Object.assign(new TypeError(`The string parameter received a Date ${secret}`), {
       code: "ERR_INVALID_ARG_TYPE", cause: postgres,
     });
     const diagnostic = projectNativeFinalizationError(root);
     expect(JSON.stringify(diagnostic)).not.toContain(secret);
     expect(diagnostic).toEqual({ phase: "status_decision_commit", causes: [
-      { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", ownerErrorPrefix: "other" },
-      { errorClass: "Error", code: "other", sqlState: "23514", ownerErrorPrefix: "native_checkout_not_released" },
-      { errorClass: "Error", code: "other", sqlState: "missing", ownerErrorPrefix: "other" },
+      { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", constraint: "missing", ownerFunction: "missing", ownerLine: "missing", ownerErrorPrefix: "other" },
+      { errorClass: "PostgresError", code: "other", sqlState: "23514", constraint: "native_assessment_objective_check",
+        ownerFunction: "aw_validate_status_decision", ownerLine: 42, ownerErrorPrefix: "native_checkout_not_released" },
+      { errorClass: "Error", code: "other", sqlState: "missing", constraint: "missing", ownerFunction: "missing", ownerLine: "missing", ownerErrorPrefix: "other" },
     ] });
+  });
+
+  it("closes missing and invalid PostgreSQL owner fields", () => {
+    const secret = "private-where-sentinel-7d21";
+    const invalid = projectNativeFinalizationError(Object.assign(new Error(secret), {
+      code: "23514", constraint_name: "bad constraint name",
+      where: "PL/pgSQL function invalid-owner() line 42 at RAISE",
+    }));
+    const missing = projectNativeFinalizationError(Object.assign(new Error(secret), { code: "23514" }));
+    const outOfRange = projectNativeFinalizationError(Object.assign(new Error(secret), {
+      code: "23514", where: "PL/pgSQL function safe_owner() line 1000001 at RAISE",
+    }));
+    expect(invalid.causes[0]).toMatchObject({ sqlState: "23514", constraint: "other",
+      ownerFunction: "missing", ownerLine: "missing" });
+    expect(outOfRange.causes[0]).toMatchObject({ sqlState: "23514", constraint: "missing",
+      ownerFunction: "safe_owner", ownerLine: "other" });
+    expect(missing.causes[0]).toMatchObject({ sqlState: "23514", constraint: "missing",
+      ownerFunction: "missing", ownerLine: "missing" });
+    expect(JSON.stringify({ invalid, outOfRange, missing })).not.toContain(secret);
   });
 
   it("projects only closed cause facts from a persisted finalization failure", () => {
@@ -60,29 +84,31 @@ describe("managed native completion failure projection", () => {
     const diagnostic = projectManagedNativeCompletionDiagnostic({
       finalization: { phase: "retryable_failure", failureCode: "side_effect_planning_failed", failureDetail: {
         safeCause: { phase: "status_decision_commit", causes: [
-          { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", ownerErrorPrefix: "other" },
-          { errorClass: "PostgresError", code: "other", sqlState: "23514", ownerErrorPrefix: "native_checkout_not_released" },
-          { errorClass: "Error", code: "other", sqlState: "other", ownerErrorPrefix: "other", message: secret, sql: secret },
-          { errorClass: "Error", code: secret, sqlState: secret, ownerErrorPrefix: secret },
+          { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", constraint: "missing", ownerFunction: "missing", ownerLine: "missing", ownerErrorPrefix: "other" },
+          { errorClass: "PostgresError", code: "other", sqlState: "23514", constraint: "native_assessment_objective_check",
+            ownerFunction: "aw_validate_status_decision", ownerLine: 42, ownerErrorPrefix: "native_checkout_not_released" },
+          { errorClass: "Error", code: "other", sqlState: "other", constraint: secret, ownerFunction: secret, ownerLine: 999999999, ownerErrorPrefix: "other", message: secret, sql: secret },
+          { errorClass: "Error", code: secret, sqlState: secret, constraint: secret, ownerFunction: secret, ownerLine: 999999999, ownerErrorPrefix: secret },
         ], message: secret, params: [secret] }, message: secret, sql: secret, params: [secret],
       } }, decision: null, assessment: null,
     });
     expect(JSON.stringify(diagnostic)).not.toContain(secret);
     expect(diagnostic.finalization).toMatchObject({ safeFailurePhase: "status_decision_commit", safeCauseCount: 3,
       safeCauses: [
-        { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", ownerErrorPrefix: "other" },
-        { errorClass: "PostgresError", code: "other", sqlState: "23514", ownerErrorPrefix: "native_checkout_not_released" },
-        { errorClass: "Error", code: "other", sqlState: "missing", ownerErrorPrefix: "other" },
+        { errorClass: "TypeError", code: "ERR_INVALID_ARG_TYPE", sqlState: "missing", constraint: "missing", ownerFunction: "missing", ownerLine: "missing", ownerErrorPrefix: "other" },
+        { errorClass: "PostgresError", code: "other", sqlState: "23514", constraint: "native_assessment_objective_check",
+          ownerFunction: "aw_validate_status_decision", ownerLine: 42, ownerErrorPrefix: "native_checkout_not_released" },
+        { errorClass: "Error", code: "other", sqlState: "missing", constraint: "other", ownerFunction: "other", ownerLine: "other", ownerErrorPrefix: "other" },
       ] });
   });
 
   it("reduces unknown future values to other and missing fields to missing", () => {
     const diagnostic = projectManagedNativeCompletionDiagnostic({
-      finalization: { phase: "private phrase" }, decision: { reasonCode: "private phrase" },
+      finalization: { phase: "private phrase", failureDetail: { safeCause: { causes: [{ constraint: "private phrase", ownerFunction: "private function", ownerLine: 1_000_001 }] } } }, decision: { reasonCode: "private phrase" },
       assessment: { reportedDisposition: "private phrase", criterionAssessments: [{ outcome: "private phrase", reasonCode: "private phrase" }] },
     });
     expect(diagnostic).toMatchObject({
-      finalization: { phase: "other", failureCode: "missing" },
+      finalization: { phase: "other", failureCode: "missing", safeCauses: [{ constraint: "other", ownerFunction: "other", ownerLine: "other" }] },
       assessment: { reportedDisposition: "other", criteria: [{ outcome: "other", reasonCode: "other" }] },
       decision: { reasonCode: "other", toStatus: "missing", applicationState: "missing" },
     });

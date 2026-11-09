@@ -7,7 +7,7 @@ import express from "express";
 import request from "supertest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
+import { activityLog, agents, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
   nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -29,6 +29,7 @@ import { issueThreadInteractionService } from "../services/issue-thread-interact
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
 import { issueTreeControlService } from "../services/issue-tree-control.js";
 import { heartbeatService } from "../services/heartbeat.js";
+import { agentPauseService } from "../services/experience/agent-pause.js";
 import {
   CHAT_CONTROL_RECOVERY_ADMISSION_KEY,
   CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE,
@@ -37,6 +38,7 @@ import {
 } from "../services/chat-control-recovery-stop.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { mcpGatewayProtocolRoutes } from "../routes/tool-gateway.js";
+import { issueRoutes } from "../routes/issues.js";
 import { errorHandler } from "../middleware/index.js";
 import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
 import { REDACTED_EVENT_VALUE } from "../redaction.js";
@@ -480,6 +482,103 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }, 60_000);
+  it("keeps the Task owner as Native Run responsibility for a canonical automated wake requested by another Human", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, human, model } = fixture;
+    const requesterId = `automated-wake-requester-${randomUUID()}`;
+    const requester = await seedCurrentHumanSourceActor(db, [f.home], requesterId);
+    const tasks = issueService(db);
+    const blocker = await tasks.create(f.home, { title: "Human-resolved dependency", description: "A current Human resolves this blocker.",
+      status: "todo", responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+      { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+    const draft = await tasks.create(f.home, { title: "Task-owner draft after automated dependency wake",
+      description: "Retain one internal text document for Human review; no tools or external side effects.",
+      status: "todo", workMode: "standard", responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
+      { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+    const task = await tasks.update(draft.id, { assigneeAgentId: f.presence.id, blockedByIssueIds: [blocker.id],
+      actorUserId: f.userId, privacyActor: human });
+    if (!task) throw new Error("automated_wake_native_task_missing");
+    expect(task.responsibleUserId).toBe(f.userId);
+    expect(nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot).success).toBe(true);
+
+    let calls = 0, planId = "";
+    const output = "Task-owner draft retained for Human review after the dependency resolves.";
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      expect(++calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      const body = String(init.body);
+      expect(JSON.parse(body)).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(body).tools).toBeUndefined();
+      expect(body).toContain("assignedRuntimeContext");
+      expect(body).not.toContain(credential);
+      const reservations = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, planId));
+      expect(reservations).toHaveLength(1);
+      expect(reservations[0]).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const plans = orchestrationService(db);
+      const plan = await plans.create(human, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+        workload: "semantic", riskClass: "C0", completionContract: {
+          objective: "Retain one internal draft after its dependency resolves",
+          requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"],
+        }, budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }] });
+      await plans.decide(human, f.home, plan.id, { expectedVersion: plan.version, action: "start",
+        rationale: "Start the existing bounded text controller only after canonical dependency readiness" });
+      planId = plan.id;
+      const routeApp = express();
+      routeApp.use(express.json());
+      if (requester.type !== "board" || requester.source !== "session" || !requester.sessionId)
+        throw new Error("automated_wake_requires_second_current_human_session");
+      routeApp.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId: requesterId,
+          sessionId: requester.sessionId, companyIds: requester.companyIds };
+        next();
+      });
+      routeApp.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      routeApp.use(errorHandler);
+
+      expect(calls).toBe(0);
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toHaveLength(0);
+      // The canonical PATCH producer uses the second seeded current Human. Do not
+      // synthesize a heartbeat request or set manualUserWake in this case.
+      await request(routeApp).patch(`/api/issues/${blocker.id}`).send({ status: "done" }).expect(200);
+      let wake: typeof agentWakeupRequests.$inferSelect | undefined;
+      await vi.waitFor(async () => {
+        const rows = await db.select().from(agentWakeupRequests).where(and(
+          eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.agentId, f.presence.id),
+          eq(agentWakeupRequests.reason, "issue_blockers_resolved")));
+        expect(rows).toHaveLength(1);
+        wake = rows[0];
+        expect(wake?.runId).toBeTruthy();
+      }, { timeout: 20_000, interval: 25 });
+      expect(wake).toMatchObject({ source: "automation", triggerDetail: "system", reason: "issue_blockers_resolved",
+        requestedByActorType: "user", requestedByActorId: requesterId,
+        payload: { issueId: task.id, resolvedBlockerIssueId: blocker.id, blockerIssueIds: [blocker.id], mutation: "blocker_done" } });
+      expect(plan.createdBy).toBe(f.userId);
+      expect(task.responsibleUserId).toBe(f.userId);
+      await heartbeat.drainActiveRunExecutions();
+      await assertCompletedDraft(fixture, { task, plan }, wake!.runId!, output);
+      const [completed] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake!.runId!));
+      const receipt = nativeRunInputSourceReceiptSchema.parse(completed!.runnerProfileJson?.nativeInputSourceReceipt);
+      expect(receipt.binding.responsibleUserId).toBe(f.userId);
+      const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, wake!.runId!));
+      expect(manifest!.manifest).toMatchObject({ responsibleUserId: f.userId });
+      const [reservation] = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id));
+      expect(reservation!.principalUserId).toBe(f.userId);
+      expect(calls).toBe(1);
+      expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]?.responsibleUserId).toBe(f.userId);
+      const linkedResult = await db.select().from(issueDocuments).where(and(
+        eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+      expect(linkedResult).toHaveLength(1);
+    });
+  }, 60_000);
+
   it.each([false, true])("contains a queued second Human Run after canonical membership withdrawal (withdraw: %s)", async revokeSecondHuman => {
     const { f, human, profile, model } = await seedInstalledDraft();
     const secondHumanId = `capacity-second-human-${randomUUID()}`;
@@ -1272,6 +1371,7 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(reservations).toHaveLength(1);
         expect(reservations[0]).toMatchObject({ status: "dispatched", maximumMinor: 3 });
         if (call === 1) await firstResponse;
+        init.signal?.throwIfAborted();
         return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
           content: [{ type: "text", text: `Marker ${call} internal draft retained for Human review.` }],
           usage: { input_tokens: 10, output_tokens: 20 } }),
@@ -1389,6 +1489,78 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     },
   );
+
+  it("pauses an installed Native Text Run through the canonical Human Agent-pause owner before selection", async () => {
+    const previousFlags = await instanceSettingsService(db).getExperimental();
+    await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, progressive_shell_v9: true });
+    try {
+    const fixture = await seedInstalledDraft(), { f, human } = fixture;
+    let heartbeatOwner: ReturnType<typeof heartbeatService> | undefined;
+    let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
+    let pausePromise: Promise<void> | undefined;
+    let pauseError: unknown, selectedRunId = "", selectionReached = false, calls = 0;
+    const pauseRequestId = randomUUID();
+    const fetch: typeof guardedRemoteHttpFetch = async () => { calls++; throw new Error("Pause must precede controlled model HTTP"); };
+    const beforeSelection = async (runId: string) => {
+      if (!heartbeatOwner || !entry) throw new Error("canonical_pause_fixture_owner_missing");
+      selectionReached = true; selectedRunId = runId;
+      expect(await heartbeatOwner.getRun(runId)).toMatchObject({ companyId: f.home, agentId: f.presence.id,
+        responsibleUserId: human.userId, status: "running", runtimeMode: "legacy", runtimeModeResolvedAt: null,
+        nativeSessionId: null });
+      expect(calls).toBe(0);
+      const pauseOwner = agentPauseService(db);
+      const review = await pauseOwner.review(human, f.home, f.presence.id);
+      expect(review).toMatchObject({ companyId: f.home, agentId: f.presence.id, canPause: true });
+      // Start canonical pause while selection is held, but let the hook unwind
+      // before awaiting its stop owner to avoid coupling cancellation to the gate.
+      pausePromise = pauseOwner.pause(human, f.home, f.presence.id, { requestId: pauseRequestId,
+        expectedSourceToken: review.sourceToken, pendingWork: "cancel", confirmPause: true })
+        .then(() => undefined, error => { pauseError = error; });
+      await vi.waitFor(async () => {
+        expect((await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0]?.status).toBe("paused");
+        const current = await heartbeatOwner!.getRun(runId);
+        const result = current?.resultJson as Record<string, unknown> | null;
+        expect(current?.status === "cancelled" ||
+          typeof (result?.startupCancellation as Record<string, unknown> | undefined)?.requestedAt === "string" ||
+          (result?.executionCancellation as Record<string, unknown> | undefined)?.state === "requested").toBe(true);
+      }, { timeout: 5_000, interval: 25 });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      heartbeatOwner = heartbeat;
+      entry = await createDraftPlan(fixture, "Canonical Agent pause before Native selection");
+      const wake = await heartbeat.wakeup(f.presence.id, { source: "automation", triggerDetail: "system", reason: "issue_assigned",
+        requestedByActorType: "user", requestedByActorId: human.userId!, payload: { issueId: entry.task.id },
+        contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" } });
+      expect(wake).not.toBeNull();
+      if (!wake) throw new Error("canonical_pause_run_missing");
+      await heartbeat.drainActiveRunExecutions();
+      expect(pausePromise).toBeDefined();
+      await pausePromise;
+      expect(pauseError).toBeUndefined();
+      expect(selectionReached).toBe(true); expect(selectedRunId).toBe(wake.id);
+      const receipt = await agentPauseService(db).receipt(human, f.home, f.presence.id, pauseRequestId);
+      expect(receipt).toMatchObject({ companyId: f.home, agentId: f.presence.id, requestId: pauseRequestId,
+        pendingWork: "cancel", admissionClosedAtAcceptance: true, workSettled: false });
+      expect((await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0]).toMatchObject({ status: "paused", pauseReason: "manual" });
+      const [audit] = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+        eq(activityLog.action, "agent.paused"), eq(activityLog.entityId, f.presence.id)));
+      expect(audit).toMatchObject({ actorType: "user", actorId: human.userId, details: { pauseRequestId, pendingWork: "cancel" } });
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
+      expect(run).toMatchObject({ status: "cancelled", runtimeMode: "legacy", runtimeModeResolvedAt: null, nativeSessionId: null });
+      expect(await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, wake.id))).toEqual([]);
+      const [task] = await db.select().from(issues).where(eq(issues.id, entry!.task.id));
+      expect(task).toMatchObject({ executionRunId: null, executionAgentNameKey: null, executionLockedAt: null });
+      expect(task?.status).not.toBe("done");
+      expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id))).toEqual([]);
+      expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, wake.id))).toEqual([]);
+      expect(await documentService(db).getIssueDocumentByKey(entry.task.id, "result")).toBeNull();
+      expect(calls).toBe(0);
+    }, undefined, beforeSelection);
+    } finally {
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: previousFlags.experience_projection_v9,
+        progressive_shell_v9: previousFlags.progressive_shell_v9 });
+    }
+  }, 60_000);
 
   // These are genuine scheduler/Plan/current-Human cancellation fences, not a
   // provider backend mock. Both intentionally stop before the HTTP controller.
@@ -1558,5 +1730,103 @@ describe("dependency scheduling through the installed Native text draft controll
       },beforeDispatch,beforeSelection);
     },60_000,
   );
+
+  it("aborts the dispatched Native text HTTP call on canonical Run cancellation and retains its unknown charge", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
+    let calls = 0;
+    const observed: { signal?: AbortSignal; dispatched: boolean; aborted: boolean; rejectConsumer?: (error: Error) => void } = { dispatched: false, aborted: false };
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      calls++;
+      expect(calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      const body = String(init.body);
+      expect(JSON.parse(body)).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(body).tools).toBeUndefined();
+      expect(body).toContain("assignedRuntimeContext");
+      expect(body).not.toContain(credential);
+      const signal = init.signal;
+      if (!(signal instanceof AbortSignal)) throw new Error("native_text_http_abort_signal_missing");
+      observed.signal = signal;
+      if (!entry) throw new Error("native_text_http_plan_missing");
+      const [reservation] = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+      expect(reservation).toMatchObject({ status: "dispatched", maximumMinor: 3, workerAttemptId: expect.any(String) });
+      if (!reservation?.providerWireReceipt) throw new Error("native_text_wire_receipt_missing");
+      observed.dispatched = true;
+      await new Promise<never>((_resolve, reject) => {
+        observed.rejectConsumer = reject;
+        const onAbort = () => {
+          observed.aborted = true;
+          const error = new Error("Controlled HTTP consumer observed cancellation");
+          error.name = "AbortError";
+          reject(error);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        if (signal.aborted) onAbort();
+      });
+    };
+
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      entry = await createDraftPlan(fixture, "Cancel the in-flight installed Native text request");
+      try {
+      const wake = await heartbeat.wakeup(f.presence.id, {
+        source: "automation", triggerDetail: "system", reason: "issue_assigned",
+        requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: entry.task.id },
+        contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" },
+      });
+      if (!wake) throw new Error("native_text_abort_run_missing");
+      await vi.waitFor(() => expect(observed.dispatched).toBe(true), { timeout: 20_000, interval: 25 });
+      const [running] = await db.select().from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, wake.id)));
+      expect(running).toMatchObject({ runtimeMode: "native", driverKind: "aw_text_messages", status: "running",
+        nativeIssueId: entry.task.id, responsibleUserId: f.userId });
+      expect(observed.signal?.aborted).toBe(false);
+
+      const cancellation = heartbeat.cancelRun(wake.id, "Cancel while controlled Native text HTTP is in flight");
+      await vi.waitFor(() => expect(observed.aborted).toBe(true), { timeout: 10_000, interval: 25 });
+      expect(observed.signal?.aborted).toBe(true);
+      const cancelled = await cancellation;
+      expect(cancelled).toMatchObject({ id: wake.id, status: "cancelled", runtimeMode: "native" });
+      await heartbeat.drainActiveRunExecutions();
+
+      const [run] = await db.select().from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, wake.id)));
+      expect(run).toMatchObject({ id: wake.id, status: "cancelled", runtimeMode: "native",
+        driverKind: "aw_text_messages", nativeIssueId: entry.task.id, responsibleUserId: f.userId });
+      const coordinators = await db.select().from(nativeRunFinalizations)
+        .where(eq(nativeRunFinalizations.runId, wake.id));
+      expect(coordinators).toHaveLength(1);
+      expect(coordinators[0]).toMatchObject({ runId: wake.id, issueId: entry.task.id,
+        leaseOwner: null, leaseExpiresAt: null });
+      const attempts = await db.select().from(orchestrationWorkerAttempts)
+        .where(eq(orchestrationWorkerAttempts.planId, entry.plan.id));
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0]).toMatchObject({ runId: wake.id, agentId: f.presence.id });
+      const [reservation] = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+      expect(reservation).toMatchObject({ status: "unknown", maximumMinor: 3,
+        workerAttemptId: attempts[0]!.id, providerResponseHash: null, usage: null,
+        dispatchedAt: expect.any(Date), providerWireReceipt: expect.any(Object) });
+      const [plan] = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, entry.plan.id));
+      expect(plan?.modelCostReserved).toBe(3);
+      expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, wake.id))).toEqual([]);
+      expect(await documentService(db).getIssueDocumentByKey(entry.task.id, "result")).toBeNull();
+      const [task] = await db.select().from(issues).where(eq(issues.id, entry.task.id));
+      expect(task?.status).not.toBe("done");
+      expect(task).toMatchObject({ executionRunId: null,
+        executionAgentNameKey: null, executionLockedAt: null });
+      expect(nativePayloadSourceSnapshotSchema.parse(task?.payloadSourceSnapshot))
+        .toEqual(nativePayloadSourceSnapshotSchema.parse(entry.task.payloadSourceSnapshot));
+      expect(calls).toBe(1);
+      } finally {
+        // Failure cleanup only: never turn a missing abort into successful HTTP or passing evidence.
+        if (!observed.aborted) observed.rejectConsumer?.(new Error("Owned HTTP fixture cleanup after an abort assertion failure"));
+      }
+    });
+  }, 60_000);
 
 });

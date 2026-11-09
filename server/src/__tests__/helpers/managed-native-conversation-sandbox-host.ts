@@ -448,7 +448,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
   });
   const makeConnection=async(kind:"canary"|"runtime",secretId:string)=>{
     const applicationKey=`conversation-${kind}-${randomUUID().replace(/-/g,"")}`;
-    const [application]=await db.insert(toolApplications).values({companyId,applicationKey,name:`Conversation ${kind} fixture`,type:"mcp_http",status:"active"}).returning();
+    const [application]=await db.insert(toolApplications).values({companyId,applicationKey,name:`Conversation ${kind} fixture ${applicationKey}`,type:"mcp_http",status:"active"}).returning();
     assert.ok(application);
     const url=kind === "canary" ? `${brokerOrigin}/mcp/qualification/credential-echo` : "https://provider.example.test/mcp";
     const credentialSecretRefs=[{secretId,versionSelector:"latest" as const,configPath:"credentials.authorization",required:true,label:`${kind} fixture credential`}];

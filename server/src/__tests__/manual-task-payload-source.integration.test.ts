@@ -30,6 +30,7 @@ import { projectRoutes } from "../routes/projects.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { environmentService } from "../services/environments.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertWorkspacePreparationBindingOwned, legacyControllerBootId } from "../services/legacy-controller-lease.js";
 import { assertNativeTaskSourceOwnerCurrent } from "../services/native-direct-input.js";
 
@@ -603,7 +604,11 @@ describe("manual Human Task payload source capture", () => {
 
   it.each(["native", "preparing"] as const)("retains an originally null workspace across two real %s bindings and keeps purge fail-closed", async (ownerMode) => {
     const f = await seed("admin"), http = request(appFor(f.actor));
+    const preparationIdentity = ownerMode === "preparing"
+      ? (await db.insert(agentIdentities).values({ name: "Preparation binder", homeCompanyId: f.companyId }).returning())[0]
+      : null;
     const [agent] = await db.insert(agents).values({ companyId: f.companyId, name: "Workspace binder",
+      agentIdentityId: preparationIdentity?.id ?? null,
       adapterType: "paperclip_runner", status: "active" }).returning();
     const projectResponse = await http.post(`/api/companies/${f.companyId}/projects`).send({
       name: "Source transform Project",
@@ -645,7 +650,41 @@ describe("manual Human Task payload source capture", () => {
     expect(neighborBefore.row.payloadSourceSnapshot).not.toBeNull();
 
     const environment = await environmentService(db).ensureLocalEnvironment();
+    const preparingRunId = ownerMode === "preparing" ? randomUUID() : undefined;
+    if (ownerMode === "preparing") {
+      // Migration 0326 creates the provider and presence rows from the Agent
+      // insert. Reuse those unqualified rows; the STOPPED cell below is only
+      // commercial fixture state and grants no runtime or paid-capacity proof.
+      const identity = preparationIdentity;
+      if (!identity) throw new Error("preparation_identity_fixture_missing");
+      const [provider] = await db.select().from(agentProviderBindings).where(and(
+        eq(agentProviderBindings.id, agent!.id), eq(agentProviderBindings.agentIdentityId, identity.id)));
+      const [presence] = await db.select().from(agentPresenceRuntimeBindings).where(and(
+        eq(agentPresenceRuntimeBindings.companyId, f.companyId), eq(agentPresenceRuntimeBindings.agentId, agent!.id)));
+      expect(provider).toMatchObject({ id: agent!.id, agentIdentityId: identity.id, status: "unqualified" });
+      expect(presence).toMatchObject({ agentIdentityId: identity.id, providerBindingId: provider!.id });
+      const [account] = await db.insert(billingAccounts).values({displayName:"Workspace policy fixture",payerUserId:f.userId}).returning();
+      await db.insert(billingAccountCompanies).values({billingAccountId:account!.id,companyId:f.companyId});
+      const capacity=`preparing-${randomUUID()}`,image=`fixture.invalid/preparing-${randomUUID()}@sha256:${"a".repeat(64)}`;
+      await db.insert(runtimeCapacityProfiles).values({key:capacity,cpuMillis:100,memoryBytes:16777216n,diskBytes:1048576n,pidsLimit:16});
+      await db.insert(runtimeVersionCatalog).values({imageDigest:image,providerVersion:"fixture",stateFormat:"fixture",hostAgentMinimumVersion:"fixture",conformance:{}});
+      const [cell] = await db.insert(runtimeCells).values({companyId:f.companyId,billingAccountId:account!.id,
+        providerBindingId:provider!.id,runtimeProvider:"paperclip_runner",capacityProfile:capacity,
+        isolationMode:"company_cell",status:"STOPPED",desiredImageDigest:image}).returning();
+      // Set the commercial profile before the heartbeat Run exists. Its
+      // namespace is predictable because the Run ID was allocated above.
+      await db.update(agentPresenceRuntimeBindings).set({
+        providerProfileRef:`aw:cell:${cell!.id}:generation:${cell!.generation}`,
+        providerSessionNamespace:`preparing-${preparingRunId}`,
+      }).where(eq(agentPresenceRuntimeBindings.id, presence!.id));
+      const [preparedPresence] = await db.select().from(agentPresenceRuntimeBindings)
+        .where(eq(agentPresenceRuntimeBindings.id, presence!.id));
+      expect(preparedPresence).toMatchObject({ providerBindingId: provider!.id,
+        providerProfileRef: `aw:cell:${cell!.id}:generation:${cell!.generation}`,
+        providerSessionNamespace: `preparing-${preparingRunId}` });
+    }
     const [run] = await db.insert(heartbeatRuns).values({
+      ...(preparingRunId ? { id: preparingRunId } : {}),
       companyId: f.companyId, agentId: agent!.id,
       ...(ownerMode === "native" ? {scopeKind:"issue" as const,issueId:task.id,nativeIssueId:task.id} : {}),
       responsibleUserId: f.userId, status: "running", runtimeMode: ownerMode === "native" ? "native" : "legacy",
@@ -659,23 +698,8 @@ describe("manual Human Task payload source capture", () => {
       // Match the real heartbeat insert: context only; 0503 derives scope/issue.
       expect(run).toMatchObject({scopeKind:"issue",issueId:task.id,nativeIssueId:null});
       await db.update(issues).set({executionRunId:run!.id}).where(eq(issues.id,task.id));
-      // Commercial fixture only: STOPPED must still deny ordinary writes. This
-      // metadata binding is neither runtime-start nor paid-capacity authority.
-      const [identity] = await db.insert(agentIdentities).values({name:"Preparation binder",homeCompanyId:f.companyId}).returning();
-      await db.update(agents).set({agentIdentityId:identity!.id}).where(eq(agents.id,agent!.id));
-      const [provider] = await db.insert(agentProviderBindings).values({agentIdentityId:identity!.id,
-        providerType:"paperclip_runner",providerAgentRef:agent!.id}).returning();
-      const [account] = await db.insert(billingAccounts).values({displayName:"Workspace policy fixture",payerUserId:f.userId}).returning();
-      await db.insert(billingAccountCompanies).values({billingAccountId:account!.id,companyId:f.companyId});
-      const capacity=`preparing-${randomUUID()}`,image=`fixture.invalid/preparing-${randomUUID()}@sha256:${"a".repeat(64)}`;
-      await db.insert(runtimeCapacityProfiles).values({key:capacity,cpuMillis:100,memoryBytes:16777216n,diskBytes:1048576n,pidsLimit:16});
-      await db.insert(runtimeVersionCatalog).values({imageDigest:image,providerVersion:"fixture",stateFormat:"fixture",hostAgentMinimumVersion:"fixture",conformance:{}});
-      const [cell] = await db.insert(runtimeCells).values({companyId:f.companyId,billingAccountId:account!.id,
-        providerBindingId:provider!.id,runtimeProvider:"paperclip_runner",capacityProfile:capacity,
-        isolationMode:"company_cell",status:"STOPPED",desiredImageDigest:image}).returning();
-      await db.insert(agentPresenceRuntimeBindings).values({companyId:f.companyId,agentId:agent!.id,agentIdentityId:identity!.id,
-        providerBindingId:provider!.id,providerProfileRef:`aw:cell:${cell!.id}:generation:${cell!.generation}`,
-        providerSessionNamespace:`preparing-${run!.id}`,status:"active"});
+      // STOPPED must still deny ordinary writes. The preceding metadata update
+      // was not runtime-start or paid-capacity authority.
       await expect(issueService(db).update(task.id,{priority:"high",actorAgentId:agent!.id,actorRunId:run!.id}))
         .rejects.toMatchObject({status:403});
     }
@@ -685,6 +709,7 @@ describe("manual Human Task payload source capture", () => {
         companyId: f.companyId, projectId, projectWorkspaceId, sourceIssueId: task.id,
         mode: "shared_workspace", strategyType: "project_primary", name, status: "active",
         cwd: `/tmp/${randomUUID()}`, repoUrl: "https://example.test/source-transform.git", providerType: "local_fs",
+        metadata: { config: { environmentId: environment!.id, runtimeProvisionCommand: "node --version" } },
       }).returning();
       await db.insert(environmentLeases).values({
         companyId: f.companyId, environmentId: environment!.id, executionWorkspaceId: workspace!.id,
@@ -697,6 +722,8 @@ describe("manual Human Task payload source capture", () => {
     const secondExecutionWorkspace = await createExecutionWorkspace(secondProjectWorkspace!.id, "Second bound workspace");
 
     async function bind(workspaceId: string, projectWorkspaceId: string) {
+      const [workspaceBefore] = await db.select().from(executionWorkspaces).where(and(
+        eq(executionWorkspaces.companyId, f.companyId), eq(executionWorkspaces.id, workspaceId)));
       const before = await readOwner(task.id);
       const snapshot = before.row.payloadSourceSnapshot!;
       await issueService(db).update(task.id, {
@@ -709,6 +736,10 @@ describe("manual Human Task payload source capture", () => {
           expectedPreviousSnapshotDigest: snapshot.digest,
           ...(ownerMode === "preparing" ? {preparingControllerBootId:legacyControllerBootId} : {}) },
       });
+      const [workspaceAfter] = await db.select().from(executionWorkspaces).where(and(
+        eq(executionWorkspaces.companyId, f.companyId), eq(executionWorkspaces.id, workspaceId)));
+      expect(workspaceAfter!.metadata).toEqual(workspaceBefore!.metadata);
+      expect(workspaceAfter!.updatedAt).toEqual(workspaceBefore!.updatedAt);
       const after = await readOwner(task.id);
       expect(after.proof.digestValid).toBe(true);
       expect(after.row.payloadSourceSnapshot?.owner.contentHash).toBe(after.proof.bodyHash);
@@ -819,6 +850,23 @@ describe("manual Human Task payload source capture", () => {
       source: { kind: "task", issueId: neighbor.id, sourceVersion: "snapshot-owner-current", contentHash: neighborAfter.proof.bodyHash } })).resolves.toBeUndefined();
     expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
       eq(activityLog.entityId, neighbor.id), eq(activityLog.action, "issue.payload_source_captured")))).toHaveLength(1);
+    const settings = instanceSettingsService(db);
+    const previousExperimental = await settings.getExperimental();
+    try {
+      await settings.updateExperimental({ enableIsolatedWorkspaces: true });
+      const [beforeExplicitEdit] = await db.select().from(executionWorkspaces)
+        .where(eq(executionWorkspaces.id, secondExecutionWorkspace.id));
+      await issueService(db).update(task.id, { actorUserId: f.userId, privacyActor: f.actor,
+        executionWorkspaceSettings: { mode: "shared_workspace",
+          workspaceStrategy: { type: "project_primary", runtimeProvisionCommand: "node --help" } } });
+      const [afterExplicitEdit] = await db.select().from(executionWorkspaces)
+        .where(eq(executionWorkspaces.id, secondExecutionWorkspace.id));
+      expect(afterExplicitEdit!.metadata?.config).toMatchObject({ environmentId: null,
+        runtimeProvisionCommand: "node --help" });
+      expect(afterExplicitEdit!.updatedAt.getTime()).toBeGreaterThan(beforeExplicitEdit!.updatedAt.getTime());
+    } finally {
+      await settings.updateExperimental({ enableIsolatedWorkspaces: previousExperimental.enableIsolatedWorkspaces });
+    }
   });
 
 });

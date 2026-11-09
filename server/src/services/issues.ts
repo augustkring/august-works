@@ -12643,10 +12643,13 @@ export function issueService(db: Db) {
             tx,
           );
         }
+        // Runtime binding records an already-realized workspace. Reapplying the
+        // Task settings would clear inherited config and stale its source version.
         if (
           issueData.executionWorkspaceSettings !== undefined &&
           nextExecutionWorkspaceId &&
-          nextExecutionWorkspacePreference === "reuse_existing"
+          nextExecutionWorkspacePreference === "reuse_existing" &&
+          !options.workspaceBindingSourceTransform
         ) {
           const workspace = await tx
             .select({

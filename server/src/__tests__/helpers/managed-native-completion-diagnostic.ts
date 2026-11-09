@@ -47,6 +47,20 @@ function record(value: unknown): Record<string, unknown> {
 }
 function list(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
 function flag(value: unknown): boolean | null { return typeof value === "boolean" ? value : null; }
+function safeConstraint(value: unknown): string | "other" | "missing" {
+  if (typeof value !== "string") return "missing";
+  return /^[A-Za-z0-9_]{1,96}$/.test(value) ? value : "other";
+}
+function safeOwnerFunction(value: unknown): string | "other" | "missing" {
+  if (value === "other" || value === "missing") return value;
+  if (typeof value !== "string") return "missing";
+  return /^[A-Za-z_][A-Za-z0-9_]{0,95}$/.test(value) ? value : "other";
+}
+function safeOwnerLine(value: unknown): number | "other" | "missing" {
+  if (value === "other" || value === "missing") return value;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= 1_000_000
+    ? value : "other";
+}
 function safeSqlState(value: unknown): Closed<typeof safeSqlStates> {
   if (typeof value !== "string" || !/^[0-9A-Z]{5}$/.test(value)) return "missing";
   return closed(value, safeSqlStates);
@@ -72,7 +86,9 @@ export function projectManagedNativeCompletionDiagnostic(input: {
       safeFailurePhase: closed(safeFailure.phase, ["status_decision_commit"] as const),
       safeCauses: causes.slice(0, 3).map(value => { const c = record(value); return {
         errorClass: closed(c.errorClass, safeErrorClasses), code: closed(c.code, safeErrorCodes),
-        sqlState: safeSqlState(c.sqlState), ownerErrorPrefix: closed(c.ownerErrorPrefix, safeOwnerPrefixes),
+        sqlState: safeSqlState(c.sqlState), constraint: safeConstraint(c.constraint),
+        ownerFunction: safeOwnerFunction(c.ownerFunction), ownerLine: safeOwnerLine(c.ownerLine),
+        ownerErrorPrefix: closed(c.ownerErrorPrefix, safeOwnerPrefixes),
       }; }), safeCauseCount: Math.min(causes.length, 3),
     },
     decision: { present: input.decision != null, reasonCode: closed(d.reasonCode, decisionReasons),

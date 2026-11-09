@@ -280,14 +280,23 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
     expect(await db.select().from(heartbeatRuns)).toHaveLength(0);
   });
 
-  it("does not accept a caller-supplied manual-wake authority marker", async () => {
+  it("strips caller-supplied manual authority before refusing an unsupported legacy transport", async () => {
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const run = await heartbeat.wakeup(agentId, { source: "on_demand", triggerDetail: "manual",
       requestedByActorType: "agent", requestedByActorId: agentId, payload: { manualUserWake: true },
       contextSnapshot: { responsibleUserId: ownerUserId } });
-    expect((await waitForRun(db, run!.id))?.status).toBe("succeeded");
+    const completed = await waitForRun(db, run!.id);
+    expect(completed).toMatchObject({ status: "failed", responsibleUserId: ownerUserId,
+      errorCode: "configuration_incomplete", resultJson: {
+        configurationIncomplete: { reason: "paid_transport_unqualified", owner: "Managed model gateway owner",
+          provider: "codex_local" },
+        executionRecovery: { kind: "bootstrap", providerWorkStarted: false },
+      } });
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
     const [wake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, run!.wakeupRequestId!));
     expect(wake.payload?.manualUserWake).toBeUndefined();
+    expect(wake.requestedByActorType).toBe("agent");
+    expect(await db.select().from(heartbeatRuns)).toHaveLength(1);
   });
 
   it("uses the issue responsible user for automated dependency wakes without a message context", async () => {

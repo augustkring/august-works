@@ -18,6 +18,7 @@ import { managedNativeProjectWorkspaceFixture } from "../../__tests__/helpers/ma
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 import { memoryService, type MemoryMutationActor } from "../memory/memory-service.js";
 import { issueService } from "../issues.js";
+import { toolAccessPolicyService } from "../tool-access-policy.js";
 import { verificationService } from "../supervision/verification-service.js";
 import { orchestrationService } from "../orchestration/orchestration-service.js";
 import { actorMiddleware } from "../../middleware/auth.js";
@@ -249,6 +250,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         aliceUserId = actor.userId;
         aliceSessionId = actor.sessionId ?? "";
         humanMemoryActor = { principal: { type: "user", userId: actor.userId }, authorizationActor: actor };
+        await toolAccessPolicyService(currentDb).createPolicy(companyId, { name: `Managed source Memory draft ${randomUUID()}`,
+          policyType: "allow", priority: 100, enabled: true, selectors: { actorType: "agent", agentId, toolName: "paperclip-self:remember" } });
         const bobFixture = await seedV5Companies(currentDb);
         await currentDb.insert(companyMemberships).values({ companyId, principalType: "user", principalId: bobFixture.userId,
           status: "active", membershipRole: "operator" });
@@ -453,6 +456,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
         if (!actor.userId) throw new Error("source_replay_human_missing");
         agentId = currentAgentId;
         companyId = currentCompanyId;
+        await toolAccessPolicyService(currentDb).createPolicy(currentCompanyId, { name: `Managed replay Memory draft ${randomUUID()}`,
+          policyType: "allow", priority: 100, enabled: true, selectors: { actorType: "agent", agentId: currentAgentId, toolName: "paperclip-self:remember" } });
         bindingKey = `managed-replay-${randomUUID()}`;
         humanMemoryActor = { principal: { type: "user", userId: actor.userId }, authorizationActor: actor };
         const binding = await memoryService(currentDb).createCompanyBinding(currentCompanyId, { key: bindingKey,

@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "ab995a34a8896082d5d2edd554ed00ee64ca9a5c8ed3097a3b8d893d17b2ddea",
+      "sourceSha256": "0220b9cd83e0bcc208a7d334c1d29844fbc560e61a6a072d9ef4ce1a880eaa38",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Workspace source hashing now binds the same value with an explicit PostgreSQL text type. Recovery actions and permissions are unchanged; guidance to inspect the current original Task and run before Retry remains correct."
+      "rationale": "Internal runtime workspace binding now preserves the realized configuration and its source version. Human configuration edits still use the existing feature and access gates. Recovery actions and instructions to inspect the original Task and current run before retrying remain correct."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "ab995a34a8896082d5d2edd554ed00ee64ca9a5c8ed3097a3b8d893d17b2ddea",
+      "sourceSha256": "0220b9cd83e0bcc208a7d334c1d29844fbc560e61a6a072d9ef4ce1a880eaa38",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Hashning af arbejdsomr\u00e5dets kilde binder nu den samme v\u00e6rdi med en eksplicit PostgreSQL-teksttype. Handlinger til gendannelse og tilladelser er u\u00e6ndrede; vejledningen om at kontrollere den aktuelle oprindelige opgave og k\u00f8rsel f\u00f8r Retry g\u00e6lder fortsat."
+      "rationale": "Intern runtime-binding af arbejdsomr\u00e5det bevarer nu den realiserede konfiguration og dens kildeversion. Human-redigering bruger fortsat de eksisterende funktions- og adgangskrav. Gendannelseshandlinger og vejledningen om at kontrollere den oprindelige opgave og aktuelle k\u00f8rsel f\u00f8r Retry g\u00e6lder fortsat."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",

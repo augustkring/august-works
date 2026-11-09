@@ -1256,7 +1256,7 @@
     },
     {
       "path": "server/src/__tests__/v7-sandbox-policy.test.ts",
-      "sha256": "2e38c1288b7ca97818ec8f36f71f78db82d320f97a220c4cc5ba2ae112a42c01"
+      "sha256": "4f5874fdadaea377b0603b86a306453ab3a61a743f6d5260b3f44594947035a4"
     },
     {
       "path": "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
