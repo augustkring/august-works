@@ -3,54 +3,36 @@ import { createHash, randomUUID } from "node:crypto";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  activityLog,
-  workflows,
   workflowStepRuns,
   agents,
-  authUsers,
   authSessions,
   companies,
   companyMemberships,
   contextManifestItems,
   contextManifests,
-  completionContracts,
   createDb,
-  documentRevisions,
-  documents,
-  foundationChangeProposals,
-  foundationDocuments,
-  foundationSections,
-  companySecrets, companySecretBindings, connectionGrants, toolConnections,
-  orchestrationModelReservations, orchestrationPlans, orchestrationToolCharges,
-  supervisionSignals, supervisionInterventions, verificationRuns, agentExecutionManifests,
+  connectionGrants,
+  orchestrationModelReservations,
   heartbeatRuns,
-  heartbeatRunEvents,
   externalObjectMentions,
   externalObjects,
   issues,
   issuePrivacySources,
-  projects,
-  instanceSettings,
   memoryBindings,
   memoryBindingTargets,
-  memoryEvidence,
   memoryRecords,
-  memoryJobs,
   principalPermissionGrants,
   toolPolicies,
-  nativeRunFinalizations,
-  nativeRunResults,
-  agentRuntimeState,
-  agentWakeupRequests,
-  companySkills,
-  companySkillVersions,
+  toolActionRequests,
+  toolInvocations,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
+import { memoryAgentToolsService } from "../memory/memory-agent-tools.js";
 import { memoryService } from "../memory/memory-service.js";
 import { assertMemorySourcesRetained, canActorReadMemorySources, expireMemoryPayloads } from "../memory/memory-privacy.js";
 import { issueService, lockIssuePrivacyTree, type NativeTaskSourceCapture } from "../issues.js";
@@ -92,104 +74,27 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
 describeEmbeddedPostgres("Context Engine integration", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
-  const ownedContextSetupCompanies = new Set<string>();
-  const ownedContextConnections: Array<{ companyId: string; connectionId: string; grantId: string;
-    userId: string; secretIds: string[] }> = [];
-  const ownedContextPlans: Array<{ companyId: string; planId: string }> = [];
   const activeNativeMemoryRunDrains: Array<{ release: () => void; drain: () => Promise<void> }> = [];
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-context-engine-");
-    db = createDb(tempDb.connectionString);
+    db = createDb(tempDb.connectionString, { maxConnections: 3 });
   }, 20_000);
 
   afterEach(async () => {
     const activeDrains = activeNativeMemoryRunDrains.splice(0);
     for (const active of activeDrains) active.release();
-    for (const active of activeDrains) await active.drain();
+    const drainResults = await Promise.allSettled(activeDrains.map((active) => active.drain()));
     registerNativeDraftGateway(db, undefined);
-    for (const owned of ownedContextConnections) {
-      if (!ownedContextSetupCompanies.has(owned.companyId))
-        throw new Error("Context credential cleanup lost its original setup company");
-      await db.transaction(async tx => {
-        const [grant] = await tx.select().from(connectionGrants).where(and(
-          eq(connectionGrants.companyId, owned.companyId), eq(connectionGrants.id, owned.grantId),
-          eq(connectionGrants.connectionId, owned.connectionId))).for("update");
-        const refs = grant?.credentialSecretRefs;
-        if (!refs || refs.length !== 1 || refs[0]!.configPath !== "ai.credential" || !refs[0]!.secretId ||
-          owned.secretIds.length > 0 && (owned.secretIds.length !== 1 || owned.secretIds[0] !== refs[0]!.secretId))
-          throw new Error("Context credential cleanup lacks its exact original grant reference");
-        const secretId = refs[0]!.secretId;
-        const [secret] = await tx.select({ id: companySecrets.id, name: companySecrets.name,
-          scope: companySecrets.scope, createdByUserId: companySecrets.createdByUserId }).from(companySecrets).where(and(
-          eq(companySecrets.companyId, owned.companyId), eq(companySecrets.id, secretId))).for("update");
-        if (!secret || secret.name !== `ai-${owned.grantId}` || secret.scope !== "company" || secret.createdByUserId !== owned.userId)
-          throw new Error("Context credential cleanup does not own the saved private slot");
-        await tx.delete(toolConnections).where(and(eq(toolConnections.companyId, owned.companyId), eq(toolConnections.id, owned.connectionId)));
-        await tx.delete(companySecretBindings).where(and(eq(companySecretBindings.companyId, owned.companyId),
-          eq(companySecretBindings.secretId, secretId), eq(companySecretBindings.targetType, "tool_connection"),
-          eq(companySecretBindings.targetId, owned.connectionId)));
-        const remaining = await tx.select({ id: companySecretBindings.id }).from(companySecretBindings)
-          .where(eq(companySecretBindings.secretId, secretId)).limit(1);
-        if (remaining.length) throw new Error("Context credential still has another consumer");
-        await tx.delete(companySecrets).where(and(eq(companySecrets.companyId, owned.companyId), eq(companySecrets.id, secretId)));
-      });
+    try {
+      await db.$client.end({ timeout: 0 });
+    } finally {
+      await tempDb?.cleanup();
+      tempDb = null;
     }
-    ownedContextConnections.splice(0);
-    ownedContextSetupCompanies.clear();
-    const closedPlans = ownedContextPlans.splice(0);
-    for (const { companyId, planId } of closedPlans) {
-      // FK-dependent software-fixture ledger cleanup follows owned Run drain;
-      // no active Plan or output is removed during a business assertion.
-      await db.delete(supervisionInterventions).where(and(eq(supervisionInterventions.companyId, companyId), eq(supervisionInterventions.planId, planId)));
-      await db.delete(supervisionSignals).where(and(eq(supervisionSignals.companyId, companyId), eq(supervisionSignals.planId, planId)));
-      await db.delete(verificationRuns).where(and(eq(verificationRuns.companyId, companyId), eq(verificationRuns.planId, planId)));
-      await db.delete(orchestrationToolCharges).where(and(eq(orchestrationToolCharges.companyId, companyId), eq(orchestrationToolCharges.planId, planId)));
-      await db.delete(orchestrationModelReservations).where(and(eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.planId, planId)));
-      await db.delete(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, planId)));
-    }
-    for (const companyId of new Set(closedPlans.map(plan => plan.companyId)))
-      await db.delete(agentExecutionManifests).where(eq(agentExecutionManifests.companyId, companyId));
-    await db.delete(activityLog);
-    await db.delete(agentRuntimeState);
-    await db.delete(companySkills);
-    await db.delete(companySkillVersions);
-    await db.delete(workflows);
-    await db.delete(contextManifestItems);
-    await db.delete(memoryEvidence);
-    await db.delete(memoryRecords);
-    await db.delete(memoryBindingTargets);
-    await db.delete(memoryBindings);
-    // The original run deletion owner enqueues its runtime-asset erasure job.
-    await db.delete(memoryJobs);
-    await db.delete(nativeRunFinalizations);
-    await db.delete(nativeRunResults);
-    await db.delete(heartbeatRunEvents);
-    await db.delete(contextManifests);
-    await db.delete(completionContracts);
-    await db.delete(heartbeatRuns);
-    await db.delete(foundationChangeProposals);
-    await db.delete(foundationSections);
-    await db.delete(foundationDocuments);
-    await db.delete(documentRevisions);
-    await db.delete(documents);
-    await db.delete(externalObjectMentions);
-    await db.delete(externalObjects);
-    await db.delete(issues);
-    await db.delete(projects);
-    await db.delete(principalPermissionGrants);
-    await db.delete(toolPolicies);
-    await db.delete(agentWakeupRequests);
-    await db.delete(companyMemberships);
-    await db.delete(agents);
-    await db.delete(authUsers);
-    await db.delete(companies);
-    await db.delete(instanceSettings);
-  });
-
-  afterAll(async () => {
-    await tempDb?.cleanup();
-  });
+    const failedDrain = drainResults.find((result) => result.status === "rejected");
+    if (failedDrain?.status === "rejected") throw failedDrain.reason;
+  }, 30_000);
 
   async function createContextPresence(companyId: string, human: AuthorizationActor, name: string, status: "idle" | "running" = "idle") {
     // Only the installed controller's actual predecessor gates. Memory enablement
@@ -326,7 +231,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       content: "Native append-only privacy capture Memory with a Human source Task.", humanActor: seeded.humanActor,
       privateSourceTask: true });
     await instanceSettingsService(db).updateExperimental({ enableContextEngineV1: true, enableFoundationV1: false,
-      enableCollectiveMemoryV1: true });
+      enableCollectiveMemoryV1: true, readiness_engine_v7: false, orchestration_v7: false, supervision_v7: false });
     const actor = { type: "agent" as const, source: "none" as const, companyId: seeded.companyId,
       agentId: seeded.agent.id, runId: nativeRun!.id, onBehalfOfUserId: seeded.userId };
     let releaseReader!: () => void;
@@ -399,7 +304,6 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     onNativeRun?: (run: { id: string; actor: AuthorizationActor; issueId: string }) => void;
     human: AuthorizationActor;
   }) {
-    ownedContextSetupCompanies.add(input.companyId);
     const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
     const previousApiUrl = process.env.PAPERCLIP_API_URL;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = randomUUID();
@@ -443,16 +347,11 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       const connection = await aiConnectionService(db).save(input.companyId, input.userId, {
         provider: "anthropic", method: "api_key", ownership: "shared", name: "Context Memory text fixture",
         apiKey: "fixture", allAgents: false, agentIds: [input.agentId] }, credential);
-      // save is atomic. Record its exact returned IDs before any subsequent
-      // profile/Plan work, including failures while reading saved references.
-      const ownedConnection = { companyId: input.companyId, ...connection, userId: input.userId, secretIds: [] as string[] };
-      ownedContextConnections.push(ownedConnection);
       const [savedGrant] = await db.select({ refs: connectionGrants.credentialSecretRefs }).from(connectionGrants).where(and(
         eq(connectionGrants.companyId, input.companyId), eq(connectionGrants.id, connection.grantId),
         eq(connectionGrants.connectionId, connection.connectionId)));
       if (!savedGrant || savedGrant.refs.length !== 1 || savedGrant.refs[0]!.configPath !== "ai.credential")
         throw new Error("Context saved connection lacks its exact credential reference");
-      ownedConnection.secretIds = [savedGrant.refs[0]!.secretId];
       const profile: WorkerModelProfile = { id: profileId, companyId: input.companyId, workerAgentId: input.agentId,
         providerBindingId: qualified.provider.id, providerSnapshotHash: qualified.provider.capabilitySnapshotHash,
         providerProfileRef: qualified.runtime.providerProfileRef, qualifiedConfigurationHash: qualified.runtime.qualifiedConfigurationHash,
@@ -504,7 +403,6 @@ describeEmbeddedPostgres("Context Engine integration", () => {
           businessInvariants: ["The Context assertions and private Memory remain owner scoped"] },
         budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "context-memory-writer", issueId: task.id }] });
       planId = plan.id;
-      ownedContextPlans.push({ companyId: input.companyId, planId });
       await plans.decide(input.human, input.companyId, plan.id, { expectedVersion: plan.version, action: "start",
         rationale: "Admit the installed bounded text controller for the actual Context Memory producer Task" });
       const run = await heartbeat.invoke(input.agentId, "on_demand", { issueId: input.issueId }, "manual",
@@ -554,17 +452,29 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         keyScope: claims.key_scope ?? { kind: "standard" }, onBehalfOfMemberships: memberships,
       };
       input.onNativeRun?.({ id: run.id, actor, issueId: input.issueId });
-      await db.insert(toolPolicies).values({ companyId: input.companyId, name: `Allow native Memory ${randomUUID()}`,
-        policyType: "allow", selectors: { toolName: "paperclip-self:remember" } });
-      const gateway = createToolGatewayService(db);
+      await db.insert(toolPolicies).values({ companyId: input.companyId, name: `Review native Memory ${randomUUID()}`,
+        policyType: "require_approval", selectors: { toolName: "paperclip-self:remember" } });
+      const gateway = createToolGatewayService(db, { toolActionSigningSecret: randomUUID() });
       const session = await gateway.createSession({ companyId: input.companyId, agentId: input.agentId, runId: run.id,
         issueId: input.issueId, authorizationActor: actor });
-      const result = await gateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:remember",
-        parameters: { scope: "private", memoryType: "lesson", content: input.content,
-          bindingKey: input.bindingKey,
-          observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
-          idempotencyKey: randomUUID() } });
-      if (result.status !== "completed" || !result.result || typeof result.result !== "object" ||
+      const parameters = { scope: "private", memoryType: "lesson", content: input.content,
+        bindingKey: input.bindingKey,
+        observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
+        idempotencyKey: randomUUID() };
+      const call = { sessionToken: session.token, tool: "paperclip-self:remember", parameters };
+      await expect(gateway.executeTool(call)).rejects.toMatchObject({ reasonCode: "approval_required" });
+      expect(await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
+        eq(memoryRecords.content, input.content)))).toHaveLength(0);
+      const reviews = await db.select().from(toolActionRequests).where(and(
+        eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.issueId, input.issueId),
+        eq(toolActionRequests.status, "pending")));
+      expect(reviews).toHaveLength(1);
+      await gateway.approveActionRequest({ companyId: input.companyId, issueId: input.issueId,
+        actionRequestId: reviews[0]!.id, interactionId: reviews[0]!.interactionId!, actor: { userId: input.userId } });
+      const [executedReview] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.id, reviews[0]!.id));
+      expect(executedReview?.status).toBe("executed");
+      const result = await gateway.executeTool(call);
+      if (result.status !== "replayed" || !result.result || typeof result.result !== "object" ||
         !("data" in result.result) || typeof (result.result as { data?: unknown }).data !== "object" ||
         !("record" in ((result.result as { data: Record<string, unknown> }).data)) ||
         !((result.result as { data: { record?: { id?: string } } }).data.record?.id))
@@ -578,6 +488,22 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       const [record] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
         eq(memoryRecords.id, recordId)));
       if (!record) throw new Error("The real Tool Gateway Memory producer record was not persisted");
+      await expect(memoryAgentToolsService(db).remember({ companyId: input.companyId, agentId: input.agentId,
+        runId: run.id, issueId: input.issueId, projectId: task.projectId, responsibleUserId: input.userId,
+        authorizationActor: actor, allowShared: true, allowPrivate: true },
+      { ...parameters, idempotencyKey: randomUUID() }, true)).rejects.toMatchObject({
+        details: { code: "memory_operation_record_unavailable" },
+      });
+      const wrongSigner = createToolGatewayService(db, { toolActionSigningSecret: randomUUID() });
+      const otherSession = await wrongSigner.createSession({ companyId: input.companyId, agentId: input.agentId,
+        runId: run.id, issueId: input.issueId, authorizationActor: actor });
+      await expect(wrongSigner.executeTool({ ...call, sessionToken: otherSession.token })).rejects.toMatchObject({
+        reasonCode: "tool_policy_denied",
+      });
+      const reviewsBeforeRestart = await db.select({ id: toolActionRequests.id }).from(toolActionRequests)
+        .where(eq(toolActionRequests.companyId, input.companyId));
+      const invocationsBeforeRestart = await db.select({ id: toolInvocations.id }).from(toolInvocations)
+        .where(eq(toolInvocations.companyId, input.companyId));
       const restartedGateway = createToolGatewayService(db);
       await expect(restartedGateway.executeTool({ sessionToken: session.token, tool: "paperclip-self:remember",
         parameters: { scope: "private", memoryType: "lesson", content: input.content, bindingKey: input.bindingKey,
@@ -585,9 +511,29 @@ describeEmbeddedPostgres("Context Engine integration", () => {
           idempotencyKey: randomUUID() } })).rejects.toMatchObject({
         reasonCode: "memory_agent_authority_unavailable",
       });
+      expect(await db.select({ id: toolActionRequests.id }).from(toolActionRequests)
+        .where(eq(toolActionRequests.companyId, input.companyId))).toEqual(reviewsBeforeRestart);
+      expect(await db.select({ id: toolInvocations.id }).from(toolInvocations)
+        .where(eq(toolInvocations.companyId, input.companyId))).toEqual(invocationsBeforeRestart);
       const persistedAfterRestart = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
         eq(memoryRecords.id, recordId)));
       expect(persistedAfterRestart).toHaveLength(1);
+      const withdrawn = await gateway.createSession({ companyId: input.companyId, agentId: input.agentId,
+        runId: run.id, issueId: input.issueId, authorizationActor: actor });
+      await expect(gateway.executeTool({ sessionToken: withdrawn.token, tool: call.tool,
+        parameters: { ...parameters, idempotencyKey: randomUUID() } })).rejects.toMatchObject({ reasonCode: "approval_required" });
+      const [withdrawnReview] = await db.select().from(toolActionRequests).where(and(
+        eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.issueId, input.issueId),
+        eq(toolActionRequests.status, "pending")));
+      expect(withdrawnReview).toBeDefined();
+      await gateway.revokeSession({ companyId: input.companyId, sessionId: withdrawn.id,
+        actor: { actorType: "user", actorId: input.userId } });
+      await gateway.approveActionRequest({ companyId: input.companyId, issueId: input.issueId,
+        actionRequestId: withdrawnReview!.id, interactionId: withdrawnReview!.interactionId!, actor: { userId: input.userId } });
+      const [refusedInvocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, withdrawnReview!.invocationId));
+      expect(refusedInvocation).toMatchObject({ status: "failed", errorCode: "memory_agent_authority_unavailable" });
+      expect(await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
+        eq(memoryRecords.content, input.content)))).toHaveLength(1);
       retainedForContextRead = true;
       const retainedHeartbeat = heartbeat;
       activeNativeMemoryRunDrains.push({ release: releaseTurn, drain: () => retainedHeartbeat.drainActiveRunExecutions() });
@@ -702,17 +648,12 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       }
       return record;
     }
-    const app=express(); app.use(express.json());
-    app.use(((req,_res,next)=>{req.actor={type:"board",source:"session",userId:human.userId!,sessionId:human.sessionId??undefined,
-      ...(typeof human.authenticatedCredentialExpiresAt==="number"?{authenticatedCredentialExpiresAt:human.authenticatedCredentialExpiresAt}:{}),
-      companyIds:[input.companyId],memberships:[{companyId:input.companyId,membershipRole:"owner",status:"active"}]};next();}) as RequestHandler);
-    app.use("/api",issueRoutes(db,{} as never)); app.use(errorHandler);
-    const createdSourceIssue=await request(app).post(`/api/companies/${input.companyId}/issues`)
-      .send({title:`Actual Memory producer Task ${randomUUID()}`,status:"todo",description:input.sourceTaskBody??"Human-authored source for a native Memory candidate."});
-    if(createdSourceIssue.status!==201)throw new Error(`Canonical source Task creation returned ${createdSourceIssue.status}: ${JSON.stringify(createdSourceIssue.body)}`);
-    const sourceIssueId=createdSourceIssue.body.id as string;
-    await request(app).patch(`/api/issues/${sourceIssueId}`).send({assigneeAgentId:input.agentId}).expect(200);
-    const [sourceIssue] = await db.select().from(issues).where(and(eq(issues.companyId,input.companyId),eq(issues.id,sourceIssueId)));
+    const sourceIssue=await issueService(db).create(input.companyId,{
+      title:`Actual Memory producer Task ${randomUUID()}`,status:"todo",assigneeAgentId:input.agentId,
+      description:input.sourceTaskBody??"Human-authored source for a native Memory candidate.",
+      createdByUserId:userId,responsibleUserId:userId,
+    },db,undefined,{manualInputActor:human,privacyActor:human,sourceAccessActor:human});
+    const sourceIssueId=sourceIssue.id;
     if(!sourceIssue?.payloadSourceSnapshot)throw new Error("Memory source fixture Task lacks its original Human payload capture");
     await db.insert(principalPermissionGrants).values({companyId:input.companyId,principalType:"agent",principalId:input.agentId,
       permissionKey:"company_scope:read"}).onConflictDoNothing();

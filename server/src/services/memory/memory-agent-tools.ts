@@ -499,7 +499,7 @@ export function memoryAgentToolsService(db: Db) {
       return { records };
     },
 
-    remember: async (context: MemoryAgentToolContext, rawInput: unknown) => {
+    remember: async (context: MemoryAgentToolContext, rawInput: unknown, replayOnly = false) => {
       const parsed = memoryAgentRememberInputSchema.safeParse(rawInput);
       if (!parsed.success) {
         throw unprocessable("Invalid Memory remember input", parsed.error.issues);
@@ -576,6 +576,10 @@ export function memoryAgentToolsService(db: Db) {
         fingerprint,
       );
       if (replay) return memoryResult(replay, "duplicate");
+      // Returning a reviewed result must never create a replacement candidate.
+      if (replayOnly) throw conflict("Existing memory operation record is unavailable", {
+        code: "memory_operation_record_unavailable",
+      });
 
       const candidate = {
         bindingId: binding.id,

@@ -23,6 +23,7 @@ import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { issueService } from "../services/issues.js";
+import { accessService } from "../services/access.js";
 import { documentService } from "../services/documents.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
@@ -479,8 +480,10 @@ describe("dependency scheduling through the installed Native text draft controll
       }
     }
   }, 60_000);
-  it("keeps a second one-document Plan queued until the first scheduler Run releases capacity", async () => {
+  it.each([false, true])("contains a queued second Human Run after canonical membership withdrawal (withdraw: %s)", async revokeSecondHuman => {
     const { f, human, profile, model } = await seedInstalledDraft();
+    const secondHumanId = `capacity-second-human-${randomUUID()}`;
+    const secondHuman = await seedCurrentHumanSourceActor(db, [f.home], secondHumanId);
     const tasks = issueService(db);
     const plans = orchestrationService(db);
     const taskPlans: { task: Awaited<ReturnType<typeof tasks.create>>; plan: Awaited<ReturnType<typeof plans.create>> }[] = [];
@@ -534,18 +537,18 @@ describe("dependency scheduling through the installed Native text draft controll
           { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
         const task = await tasks.update(draft.id, { assigneeAgentId: f.presence.id, actorUserId: f.userId, privacyActor: human });
         if (!task) throw new Error("capacity_draft_task_missing");
-        const plan = await plans.create(human, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+        const planOwner = ordinal === 1 ? human : secondHuman;
+        const plan = await plans.create(planOwner, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
           workload: "semantic", riskClass: "C0", completionContract: { objective: `Retain internal draft ${ordinal} for Human review`,
             requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"] },
           budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }] });
-        await plans.decide(human, f.home, plan.id, { expectedVersion: plan.version, action: "start",
+        await plans.decide(planOwner, f.home, plan.id, { expectedVersion: plan.version, action: "start",
           rationale: "Admit the existing one-call document controller subject to actual scheduler capacity" });
         taskPlans.push({ task, plan });
       }
-      const wake = (issueId: string) => heartbeat!.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+      const first = await heartbeat!.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
         reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
-        payload: { issueId }, contextSnapshot: { issueId, wakeReason: "issue_assigned" } });
-      const first = await wake(taskPlans[0]!.task.id);
+        payload: { issueId: taskPlans[0]!.task.id }, contextSnapshot: { issueId: taskPlans[0]!.task.id, wakeReason: "issue_assigned" } });
       expect(first).not.toBeNull();
       try {
         await vi.waitFor(() => {
@@ -565,16 +568,49 @@ describe("dependency scheduling through the installed Native text draft controll
       const activeRun = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, first!.id)))[0];
       expect(activeRun).toMatchObject({ status: "running", errorCode: null });
       expect(activeRun?.wakeupRequestId).toBeTruthy();
-      const second = await wake(taskPlans[1]!.task.id);
+      const second = await heartbeat!.wakeup(f.presence.id, { manualUserWake: true, source: "on_demand", triggerDetail: "manual",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: secondHumanId,
+        payload: { issueId: taskPlans[1]!.task.id }, contextSnapshot: { issueId: taskPlans[1]!.task.id, wakeReason: "issue_assigned" } });
       expect(second).not.toBeNull();
       expect(second!.id).not.toBe(first!.id);
       const queued = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, second!.id));
-      expect(queued[0]).toMatchObject({ status: "queued", contextSnapshot: { issueId: taskPlans[1]!.task.id } });
+      expect(queued[0]).toMatchObject({ status: "queued", responsibleUserId: secondHumanId,
+        contextSnapshot: { issueId: taskPlans[1]!.task.id } });
+      const [secondWake] = await db.select().from(agentWakeupRequests)
+        .where(eq(agentWakeupRequests.id, queued[0]!.wakeupRequestId!));
+      expect(secondWake).toMatchObject({ companyId: f.home, agentId: f.presence.id, runId: second!.id,
+        requestedByActorType: "user", requestedByActorId: secondHumanId,
+        payload: { manualUserWake: true, issueId: taskPlans[1]!.task.id } });
+      expect(taskPlans[1]!.plan.createdBy).toBe(secondHumanId);
+      expect(taskPlans[1]!.task.responsibleUserId).toBe(f.userId);
       expect(calls).toBe(1);
       expect(dispatchedPlanIds).toEqual([taskPlans[0]!.plan.id]);
       expect(await db.select().from(orchestrationModelReservations)
         .where(eq(orchestrationModelReservations.planId, taskPlans[1]!.plan.id))).toEqual([]);
       expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, second!.id))).toEqual([]);
+      if (revokeSecondHuman) {
+        const [membership] = await db.select().from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, secondHumanId), eq(companyMemberships.status, "active")));
+        expect(membership).toBeTruthy();
+        const updatedMembership = await accessService(db).updateMember(f.home, membership!.id, { status: "suspended" }, f.userId);
+        expect(updatedMembership).toMatchObject({ id: membership!.id, principalId: secondHumanId, status: "suspended" });
+        // This is the same responsibility-withdrawal owner called by the access route.
+        const cancellation = await heartbeat!.cancelRunsForResponsibleHuman(f.home, secondHumanId,
+          "Cancelled because the responsible Human's company access was withdrawn");
+        expect(cancellation).toEqual({ scanned: 1, cancelled: 1 });
+        const cancelledRun = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, second!.id)))[0];
+        expect(cancelledRun).toMatchObject({ id: second!.id, status: "cancelled",
+          responsibleUserId: secondHumanId, errorCode: "responsible_user_access_withdrawn" });
+        const [cancelledWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, secondWake!.id));
+        expect(cancelledWake).toMatchObject({ status: "cancelled", runId: second!.id });
+        expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, taskPlans[1]!.plan.id))).toEqual([]);
+        expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, taskPlans[1]!.plan.id))).toEqual([]);
+        expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, second!.id))).toEqual([]);
+        expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, second!.id))).toEqual([]);
+        expect(await documentService(db).getIssueDocumentByKey(taskPlans[1]!.task.id, "result")).toBeNull();
+        expect((await db.select().from(issues).where(eq(issues.id, taskPlans[1]!.task.id)))[0]?.responsibleUserId).toBe(f.userId);
+      }
       // The first real Native text-controller HTTP request is still held above.
       // Age its actual Run row, then ask a second service instance to reap it.
       // The module-shared activeRunExecutions ownership guard must retain the
@@ -594,12 +630,25 @@ describe("dependency scheduling through the installed Native text draft controll
       await heartbeat.drainActiveRunExecutions();
       const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
       expect(runs).toHaveLength(2);
-      expect(dispatchedPlanIds).toEqual(taskPlans.map(({ plan }) => plan.id));
-      expect(calls).toBe(2);
+      expect(dispatchedPlanIds).toEqual(revokeSecondHuman ? [taskPlans[0]!.plan.id] : taskPlans.map(({ plan }) => plan.id));
+      expect(calls).toBe(revokeSecondHuman ? 1 : 2);
       for (const [index, { task, plan }] of taskPlans.entries()) {
         const runId = index === 0 ? first!.id : second!.id;
         const run = runs.find(candidate => candidate.id === runId);
-        expect(run).toMatchObject({ nativeIssueId: task.id, responsibleUserId: f.userId,
+        const expectedResponsibleUserId = index === 0 ? f.userId : secondHumanId;
+        if (index === 1 && revokeSecondHuman) {
+          expect(run).toMatchObject({ nativeIssueId: null, runtimeMode: "legacy", runtimeModeResolvedAt: null,
+            contextSnapshot: { issueId: task.id }, responsibleUserId: secondHumanId,
+            status: "cancelled", errorCode: "responsible_user_access_withdrawn" });
+          expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plan.id))).toEqual([]);
+          expect(await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId))).toEqual([]);
+          expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id))).toEqual([]);
+          expect(await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, runId))).toEqual([]);
+          expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
+          expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]?.responsibleUserId).toBe(f.userId);
+          continue;
+        }
+        expect(run).toMatchObject({ nativeIssueId: task.id, responsibleUserId: expectedResponsibleUserId,
           runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
         const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plan.id));
         expect(attempts).toHaveLength(1);
@@ -607,6 +656,7 @@ describe("dependency scheduling through the installed Native text draft controll
         const manifests = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, runId));
         expect(manifests).toHaveLength(1);
         expect(attempts[0]!.executionManifestId).toBe(manifests[0]!.id);
+        expect(manifests[0]!.manifest).toMatchObject({ responsibleUserId: expectedResponsibleUserId });
         const reservations = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id));
         expect(reservations).toHaveLength(1);
         expect(reservations[0]).toMatchObject({ workerAttemptId: attempts[0]!.id, status: "completed", maximumMinor: 3,
@@ -635,7 +685,9 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(intent.wireBodyHash).toMatch(/^[a-f0-9]{64}$/);
         expect(source.inputs).toContainEqual(expect.objectContaining({ kind: "worker_model_dispatch", runId,
           reservationId: reservations[0]!.id, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash }));
-        expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]!.status).not.toBe("done");
+        const completedTask = (await db.select().from(issues).where(eq(issues.id, task.id)))[0];
+        expect(completedTask?.status).not.toBe("done");
+        expect(completedTask?.responsibleUserId).toBe(f.userId);
       }
       expect(substitution).not.toHaveBeenCalled();
     } finally {

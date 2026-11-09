@@ -142,7 +142,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
         });
         const [retiredConversation] = await db.select().from(issues)
           .where(and(eq(issues.companyId, companyId), eq(issues.id, issueId)));
-        expect(retiredConversation).toMatchObject({ conversationState: "retired", status: "cancelled", hiddenAt: expect.any(Date) });
+        expect(retiredConversation).toMatchObject({ conversationState: null, conversationRetiredAt: expect.any(Date),
+          conversationAgentId: null, conversationUserId: null, status: "cancelled", hiddenAt: expect.any(Date) });
         const [erasedTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, child.id)));
         expect(erasedTask).toMatchObject({ title: "Erased workflow task", description: null,
           payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });

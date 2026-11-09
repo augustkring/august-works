@@ -338,7 +338,7 @@
     },
     {
       "path": "server/src/services/context/context-engine-integration.test.ts",
-      "sha256": "6cc44dce14adc366e57b3112ec5d78e94596ca8d77619fb445902f3ea7275f73"
+      "sha256": "241b51eb2a611a8897b89e9fbc9f0bffb12c867923ad232a66bdc5182d467026"
     },
     {
       "path": "server/src/services/decisions.ts",
@@ -362,7 +362,7 @@
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",
-      "sha256": "94bf9e477b3dd81637cb5a76fca6699a56e05fd8905287878a0719ed5f81adf2"
+      "sha256": "b63a086ff018a4abb45b6ed6eb61ae1f3161afecc02f6f70ade39c64f597c738"
     },
     {
       "path": "server/src/services/memory/memory-privacy.ts",
@@ -410,7 +410,7 @@
     },
     {
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "7750e0d0038a189dd0b025551446a6c864df636feed7f518bb7b8c302360769c"
+      "sha256": "3799afe93dac2c82d387e97dc4e86afbca62ff2e64a472eef5b4f551ee06a6f2"
     },
     {
       "path": "server/src/services/workflows/workflow-authoring-tools.ts",

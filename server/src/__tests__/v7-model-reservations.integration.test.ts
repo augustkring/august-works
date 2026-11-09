@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -192,19 +192,25 @@ const support = await getEmbeddedPostgresTestSupport();
       lateProofEnabled: boolean,
       lateProofAccountMismatch: boolean;
     let cleanupOffboardingProviderFixture: (() => Promise<void>) | null = null;
-    beforeAll(async () => {
+    beforeEach(async () => {
+      // Global expiry and offboarding workers must not consume earlier tests’ companies.
       database = await startEmbeddedPostgresTestDatabase("aw-v7-model-budget-");
-      db = createDb(database.connectionString);
+      db = createDb(database.connectionString, { maxConnections: 3 });
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
-    afterAll(async () => {
-      await database?.cleanup();
-    }, 30000);
     afterEach(async () => {
-      await cleanupOffboardingProviderFixture?.();
-      cleanupOffboardingProviderFixture = null;
-    });
+      try {
+        await cleanupOffboardingProviderFixture?.();
+      } finally {
+        cleanupOffboardingProviderFixture = null;
+        try {
+          await db?.$client.end({ timeout: 0 });
+        } finally {
+          await database?.cleanup();
+        }
+      }
+    }, 30000);
     let supportPackageSequence = 0;
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({

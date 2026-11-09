@@ -2677,18 +2677,18 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "7750e0d0038a189dd0b025551446a6c864df636feed7f518bb7b8c302360769c",
+      "sourceSha256": "3799afe93dac2c82d387e97dc4e86afbca62ff2e64a472eef5b4f551ee06a6f2",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
-      "decision": "updated",
-      "rationale": "The gateway returns an explicit unavailable configuration result for unqualified managed tool effects. The article explains the user action without implying that connecting an app enables every action."
+      "decision": "no_change",
+      "rationale": "Reviewed same-process Memory approval credential continuity and signed, owner-validated replay. These internal Memory fixes do not change the app connection or reconnect instructions in this article; current action permissions and provider admission remain enforced."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "7750e0d0038a189dd0b025551446a6c864df636feed7f518bb7b8c302360769c",
+      "sourceSha256": "3799afe93dac2c82d387e97dc4e86afbca62ff2e64a472eef5b4f551ee06a6f2",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
-      "decision": "updated",
-      "rationale": "Administrerede v\u00e6rkt\u00f8jshandlinger kan v\u00e6re utilg\u00e6ngelige uafh\u00e6ngigt af appforbindelsens status. Den nye tekst henviser brugeren til en tilg\u00e6ngelig handling eller virksomhedens administrator."
+      "decision": "no_change",
+      "rationale": "Reviewed same-process Memory approval credential continuity and signed, owner-validated replay. These internal Memory fixes do not change the app connection or reconnect instructions in this article; current action permissions and provider admission remain enforced."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",

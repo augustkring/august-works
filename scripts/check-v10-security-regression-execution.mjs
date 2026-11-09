@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,7 +43,60 @@ export function assertSecuritySelectorsExecuted(report, selectors, root = repoRo
   return results;
 }
 
+export function assertSecurityShardExecuted(report) {
+  if (!Array.isArray(report?.testResults)) {
+    throw new Error("Vitest JSON report is missing the testResults array");
+  }
+  const executedTests = report.testResults.reduce((total, result) => total +
+    (Array.isArray(result.assertionResults) ? result.assertionResults : []).filter((assertion) =>
+      assertion.status === "passed" || assertion.status === "failed").length, 0);
+  if (executedTests === 0) throw new Error("Security regression shard executed zero tests");
+  return executedTests;
+}
+
+export function mergeSecurityShardReports(reports) {
+  if (!Array.isArray(reports) || reports.length === 0 || reports.some((report) => !Array.isArray(report?.testResults))) {
+    throw new Error("Security shard reports must each include a testResults array");
+  }
+  return { testResults: reports.flatMap((report) => report.testResults) };
+}
+
+function mergeShardReports(reportDirectory, expectedCount) {
+  const reportPaths = readdirSync(reportDirectory)
+    .filter((name) => name.endsWith(".json"))
+    .sort()
+    .map((name) => path.join(reportDirectory, name));
+  if (!Number.isSafeInteger(expectedCount) || expectedCount < 1 || reportPaths.length !== expectedCount) {
+    throw new Error(`Expected ${expectedCount} security shard reports, found ${reportPaths.length}`);
+  }
+  const reports = reportPaths.map((reportPath) => JSON.parse(readFileSync(reportPath, "utf8")));
+  return mergeSecurityShardReports(reports);
+}
+
 function main(argv) {
+  if (argv[0] === "--shard") {
+    if (argv.length !== 2) throw new Error("Usage: node scripts/check-v10-security-regression-execution.mjs --shard <vitest-json-report>");
+    const executedTests = assertSecurityShardExecuted(JSON.parse(readFileSync(argv[1], "utf8")));
+    process.stdout.write(`Executed ${executedTests} test(s) in this security shard.\n`);
+    return;
+  }
+  if (argv[0] === "--aggregate") {
+    const [, reportDirectory, expectedCountText, ...selectedPaths] = argv;
+    const expectedCount = Number(expectedCountText);
+    if (!reportDirectory || selectedPaths.length === 0) {
+      throw new Error("Usage: node scripts/check-v10-security-regression-execution.mjs --aggregate <report-directory> <shard-count> <selected-path> [...]");
+    }
+    const selectors = selectedPaths.map((selectedPath) => {
+      const absolutePath = path.resolve(repoRoot, selectedPath);
+      const stats = statSync(absolutePath);
+      return { path: selectedPath, kind: stats.isDirectory() ? "directory" : "file" };
+    });
+    const results = assertSecuritySelectorsExecuted(mergeShardReports(reportDirectory, expectedCount), selectors, repoRoot);
+    for (const result of results) {
+      process.stdout.write(`Executed ${result.executedTests} test(s) from ${result.path} (${result.matchedFiles} matched file(s)).\n`);
+    }
+    return;
+  }
   const [reportPath, ...selectedPaths] = argv;
   if (!reportPath || selectedPaths.length === 0) {
     throw new Error("Usage: node scripts/check-v10-security-regression-execution.mjs <vitest-json-report> <selected-path> [...]");

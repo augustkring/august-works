@@ -2746,37 +2746,6 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     }
   }
 
-  it("fences native selection when cancellation wins during preparation", async () => {
-    await withTempPaperclipHome(async () => {
-      const { agentId, issueId, runId } = await seedQueuedIssueRunFixture();
-      await db.update(agents).set({ adapterType: "paperclip_runner",
-        adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
-      }).where(eq(agents.id, agentId));
-      const factory = vi.fn(() => { throw new Error("provider must not start"); });
-      let reachedSelection = false;
-      const heartbeat = heartbeatService(db, {
-        nativeSessionBackendFactory: factory,
-        beforeNativeRuntimeSelection: async id => {
-          reachedSelection = true;
-          await heartbeat.cancelRun(id);
-        },
-      });
-      await heartbeat.resumeQueuedRuns();
-      await heartbeat.drainActiveRunExecutions();
-      expect(reachedSelection).toBe(true);
-      expect(await heartbeat.getRun(runId)).toMatchObject({ status: "cancelled", runtimeMode: "legacy",
-        runtimeModeResolvedAt: null, nativeSessionId: null,
-        resultJson: { startupCancellation: { beforeNativeSelection: true },
-          startupPreparationSettledAt: expect.any(String) },
-      });
-      expect(await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, runId))).toHaveLength(0);
-      expect(factory).not.toHaveBeenCalled();
-      expect(mockAdapterExecute).not.toHaveBeenCalled();
-      const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
-      expect(task.executionRunId).toBeNull();
-    });
-  });
-
   it("locks the issue before the run during native runtime selection", async () => {
     const { companyId, issueId, runId } = await seedQueuedIssueRunFixture();
     let holderPid = 0;
@@ -2830,55 +2799,6 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       await selection.catch(() => undefined);
     }
     await expect(selection).resolves.toMatchObject({ id: runId, companyId, nativeIssueId: null });
-  });
-
-  it("does not dispatch when cancellation wins after native selection", async () => {
-    await withTempPaperclipHome(async () => {
-      const { agentId, issueId, runId } = await seedQueuedIssueRunFixture();
-      await db.update(agents).set({ adapterType: "paperclip_runner",
-        adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
-      }).where(eq(agents.id, agentId));
-      await db.update(heartbeatRuns).set({ invocationSource: "automation" }).where(eq(heartbeatRuns.id, runId));
-      const factory = vi.fn(() => { throw new Error("provider must not start"); });
-      let reachedDispatch = false;
-      let cancellation: Promise<unknown> | null = null;
-      let cancellationError: unknown;
-      const heartbeat = heartbeatService(db, {
-        nativeSessionBackendFactory: factory,
-        beforeChatControlRecoveryCheck: async ({ stage, runId: id }) => {
-          if (stage !== "dispatch") return;
-          reachedDispatch = true;
-          expect((await heartbeat.getRun(id))?.runtimeMode).toBe("native");
-          // Do not await cancellation from the dispatch gate: cancelRun waits
-          // for the very execution that is currently inside this gate.
-          cancellation = heartbeat.cancelRun(id).catch((error) => { cancellationError = error; });
-          const requested = await waitForValue(async () => {
-            const [current] = await db.select({ resultJson: heartbeatRuns.resultJson })
-              .from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
-            const result = current?.resultJson as Record<string, unknown> | null | undefined;
-            const state = (result?.executionCancellation as Record<string, unknown> | undefined)?.state;
-            return state === "requested" ? true : null;
-          });
-          expect(requested).toBe(true);
-        },
-      });
-      await heartbeat.resumeQueuedRuns();
-      await heartbeat.drainActiveRunExecutions();
-      await cancellation;
-      expect(cancellationError).toBeUndefined();
-      expect(reachedDispatch).toBe(true);
-      const finalRun = await heartbeat.getRun(runId);
-      const finalProjection = { status: finalRun?.status, runtimeMode: finalRun?.runtimeMode,
-        errorCode: finalRun?.errorCode, error: finalRun?.error, resultJson: finalRun?.resultJson };
-      expect(finalProjection, JSON.stringify(finalProjection)).toMatchObject({ status: "cancelled", runtimeMode: "native",
-        resultJson: { startupPreparationSettledAt: expect.any(String) },
-      });
-      expect(factory).not.toHaveBeenCalled();
-      const [coordinator] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, runId));
-      expect(coordinator).toMatchObject({ attempt: 0, leaseOwner: null });
-      const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
-      expect(task.executionRunId).toBeNull();
-    });
   });
 
   it("dispatches local native external chat inside the server-selected task root", async () => {

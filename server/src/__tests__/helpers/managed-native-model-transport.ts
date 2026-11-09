@@ -114,7 +114,7 @@ function privilegedSocketOwner(client: Socket, until: number) {
   const expectedNodeHash = fileHash("/proc/self/exe", 256 * 1024 * 1024);
   const qualification = () => {
     const identities: unknown[] = [];
-    for (const [file, expectedHash] of [[launcher, "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079"], [scanner, "5907972e9bd2b8269142c04d38ab3e713df92d5e8bbeee9930fae1d4605389f2"],
+    for (const [file, expectedHash] of [[launcher, "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079"], [scanner, "a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4"],
       [node, expectedNodeHash], ["/usr/bin/sudo", null], ["/usr/bin/env", null], ["/usr/bin/id", null], ["/bin/sh", null]] as const) {
       const resolved = realpathSync(file), entry = lstatSync(file), metadata = lstatSync(resolved);
       checked(entry.uid === 0 && (entry.isSymbolicLink() || (entry.mode & 0o22) === 0));

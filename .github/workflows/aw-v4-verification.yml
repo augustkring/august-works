@@ -130,8 +130,210 @@ jobs:
       - name: Run stable test suite
         run: pnpm test:run ${{ matrix.args }}
 
+  security-regression-plan:
+    name: Plan changed-source security regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      selectors_json: ${{ steps.plan.outputs.selectors_json }}
+      has_selectors: ${{ steps.plan.outputs.has_selectors }}
+      shard_count: ${{ steps.plan.outputs.shard_count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Validate V10 security regression selectors
+        run: |
+          node scripts/check-v10-security-fast-path.mjs
+          node --test scripts/check-v10-security-fast-path.test.mjs
+
+      - name: Resolve selectors and config-aware shard count
+        id: plan
+        shell: bash
+        env:
+          CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CHANGE_BASE}" ] || [[ "${CHANGE_BASE}" =~ ^0+$ ]]; then
+            selectors="$(node scripts/check-v10-security-fast-path.mjs --all)"
+          else
+            selectors="$(node scripts/check-v10-security-fast-path.mjs --base "${CHANGE_BASE}")"
+          fi
+          if [ -z "$selectors" ]; then
+            printf 'matrix={"include":[{"shard":1,"count":1}]}\nselectors_json=[]\nhas_selectors=false\nshard_count=0\n' >> "$GITHUB_OUTPUT"
+            echo "No protected V10 source path changed."
+            exit 0
+          fi
+          selector_file="$RUNNER_TEMP/v10-security-selectors.txt"
+          file_list="$RUNNER_TEMP/v10-security-files.txt"
+          printf '%s\n' "$selectors" > "$selector_file"
+          mapfile -t selected_tests < "$selector_file"
+          pnpm run preflight:workspace-links
+          pnpm exec vitest list --filesOnly --json="$file_list" "${selected_tests[@]}"
+          node --input-type=module - "$selector_file" "$file_list" "$GITHUB_OUTPUT" <<'NODE'
+          import { appendFileSync, readFileSync } from "node:fs";
+          const [selectorFile, fileList, outputFile] = process.argv.slice(2);
+          const selectors = readFileSync(selectorFile, "utf8").split(/\r?\n/).filter(Boolean);
+          const listed = JSON.parse(readFileSync(fileList, "utf8"));
+          if (!Array.isArray(listed) || listed.some(entry => !entry || typeof entry.file !== "string" || !entry.file)) {
+            throw new Error("Invalid config-aware Vitest file list");
+          }
+          const files = [...new Set(listed.map(entry => entry.file))];
+          if (selectors.length === 0 || files.length === 0) throw new Error("Changed security selectors resolved to zero Vitest files");
+          const shardCount = Math.min(4, files.length);
+          const matrix = { include: Array.from({ length: shardCount }, (_, index) => ({ shard: index + 1, count: shardCount })) };
+          appendFileSync(outputFile, `matrix=${JSON.stringify(matrix)}\nselectors_json=${JSON.stringify(selectors)}\nhas_selectors=true\nshard_count=${shardCount}\n`);
+          console.log(`Resolved ${selectors.length} original selectors to ${files.length} Vitest files across ${shardCount} serial shards.`);
+          NODE
+
+  security-regressions:
+    name: Changed-source security regressions (${{ matrix.shard }}/${{ matrix.count }})
+    needs: security-regression-plan
+    if: needs.security-regression-plan.outputs.has_selectors == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.security-regression-plan.outputs.matrix) }}
+    env:
+      SECURITY_SELECTORS_JSON: ${{ needs.security-regression-plan.outputs.selectors_json }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
+
+      - name: Prepare workspace build dependencies
+        run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+
+      - name: Run one serial Vitest shard with default and JSON reporters
+        id: run-shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          selector_file="$RUNNER_TEMP/v10-security-selectors.txt"
+          node --input-type=module - "$selector_file" <<'NODE'
+          import { writeFileSync } from "node:fs";
+          writeFileSync(process.argv[2], `${JSON.parse(process.env.SECURITY_SELECTORS_JSON).join("\n")}\n`);
+          NODE
+          mapfile -t selected_tests < "$selector_file"
+          pnpm run preflight:workspace-links
+          execution_report="$(mktemp --suffix=.json "$RUNNER_TEMP/v10-security-vitest-${{ matrix.shard }}-XXXXXX")"
+          text_log="${execution_report%.json}.log"
+          echo "report=$execution_report" >> "$GITHUB_OUTPUT"
+          echo "text_log=$text_log" >> "$GITHUB_OUTPUT"
+          set +e
+          pnpm exec vitest run "${selected_tests[@]}" --maxWorkers=1 --no-file-parallelism \
+            --shard=${{ matrix.shard }}/${{ matrix.count }} --reporter=default --reporter=json --outputFile "$execution_report" 2>&1 | tee "$text_log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+          exit "$test_status"
+
+      - name: Guard this shard's JSON execution receipt
+        if: always()
+        env:
+          EXECUTION_REPORT: ${{ steps.run-shard.outputs.report }}
+        run: node scripts/check-v10-security-regression-execution.mjs --shard "$EXECUTION_REPORT"
+
+      - name: Upload shard diagnostics and JSON receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aw-v4-security-regression-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: |
+            ${{ steps.run-shard.outputs.report }}
+            ${{ steps.run-shard.outputs.text_log }}
+          if-no-files-found: warn
+          retention-days: 3
+
+  security-regression-aggregate:
+    name: Verify complete changed-source security coverage
+    needs: [security-regression-plan, security-regressions]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Download every shard report
+        if: needs.security-regression-plan.outputs.has_selectors == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: aw-v4-security-regression-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/v10-security-shards
+          merge-multiple: true
+
+      - name: Verify original selectors across all shard reports
+        if: always()
+        env:
+          PLAN_RESULT: ${{ needs.security-regression-plan.result }}
+          SHARDS_RESULT: ${{ needs.security-regressions.result }}
+          HAS_SELECTORS: ${{ needs.security-regression-plan.outputs.has_selectors }}
+          SELECTORS_JSON: ${{ needs.security-regression-plan.outputs.selectors_json }}
+          SHARD_COUNT: ${{ needs.security-regression-plan.outputs.shard_count }}
+        run: |
+          set -euo pipefail
+          if [[ "$PLAN_RESULT" != success ]]; then echo "Security regression planning failed." >&2; exit 1; fi
+          if [[ "$HAS_SELECTORS" != true ]]; then echo "No changed-source selectors; full hard gates remain required."; exit 0; fi
+          selector_file="$RUNNER_TEMP/v10-security-selectors.txt"
+          node --input-type=module - "$selector_file" <<'NODE'
+          import { writeFileSync } from "node:fs";
+          writeFileSync(process.argv[2], `${JSON.parse(process.env.SELECTORS_JSON).join("\n")}\n`);
+          NODE
+          mapfile -t selected_tests < "$selector_file"
+          node scripts/check-v10-security-regression-execution.mjs --aggregate \
+            "$RUNNER_TEMP/v10-security-shards" "$SHARD_COUNT" "${selected_tests[@]}"
+          if [[ "$SHARDS_RESULT" != success ]]; then echo "One or more changed-source security shards failed." >&2; exit 1; fi
+
   security-evals:
     name: Security hard gates
+    needs: security-regression-aggregate
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -160,33 +362,6 @@ jobs:
 
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
-
-      - name: Validate V10 security regression selectors
-        run: |
-          node scripts/check-v10-security-fast-path.mjs
-          node --test scripts/check-v10-security-fast-path.test.mjs
-
-      - name: Run change-triggered V10 security regressions
-        shell: bash
-        env:
-          CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          set -euo pipefail
-          if [ -z "${CHANGE_BASE}" ] || [[ "${CHANGE_BASE}" =~ ^0+$ ]]; then
-            selectors="$(node scripts/check-v10-security-fast-path.mjs --all)"
-          else
-            selectors="$(node scripts/check-v10-security-fast-path.mjs --base "${CHANGE_BASE}")"
-          fi
-          if [ -z "${selectors}" ]; then
-            echo "No protected V10 source path changed."
-            exit 0
-          fi
-          mapfile -t selected_tests <<< "${selectors}"
-          pnpm run preflight:workspace-links
-          execution_report="$(mktemp --suffix=.json "${RUNNER_TEMP}/v10-security-vitest-XXXXXX")"
-          trap 'rm -f "${execution_report}"' EXIT
-          pnpm exec vitest run "${selected_tests[@]}" --maxWorkers=1 --no-file-parallelism --reporter=default --reporter=json --outputFile "${execution_report}"
-          node scripts/check-v10-security-regression-execution.mjs "${execution_report}" "${selected_tests[@]}"
 
       - name: Prepare generated-code sandbox
         shell: bash

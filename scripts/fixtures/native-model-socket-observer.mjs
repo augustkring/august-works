@@ -1,8 +1,7 @@
 // Fixed read-only CI operation. No tenant paths, modules, subprocesses or writes.
 import { closeSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 // Bound startup/stdin as well as synchronous observation; no idle privileged reader survives this fixed operation.
-const rootStartedAt=Date.now(),rootDeadlineAt=rootStartedAt+10_000;
-const watchdog=setTimeout(()=>process.exit(126),10_000);watchdog.unref();
 const observerRssLimitBytes=80*1024*1024;
 const errnos = new Set(['ENOENT','ESRCH','EACCES','EPERM','EBADF','EIO','ENOTDIR','ELOOP','EMFILE','ENFILE','EINVAL']);
 function validInput(input, uid, now) {
@@ -12,8 +11,8 @@ function validInput(input, uid, now) {
     [input.localPort,input.remotePort].every(port => Number.isInteger(port) && port > 0 && port <= 65535) &&
     Number.isSafeInteger(input.deadlineAt) && input.deadlineAt > now && input.deadlineAt <= now + 10_000;
 }
-function observeSocketOwner(input, trustedUid, io = { closeSync,openSync,readFileSync,readSync,readdirSync,readlinkSync,statSync }, now = Date.now) {
-  let stage = 'table_open', visited = 0;
+export function observeSocketOwner(input, trustedUid, io = { closeSync,openSync,readFileSync,readSync,readdirSync,readlinkSync,statSync }, now = Date.now) {
+  let stage = 'table_open', processVisited = 0, fdVisited = 0;
   const checked = condition => { if (!condition) throw new Error('socket_observation_unknown'); };
   const transient = error => error && ['ENOENT','ESRCH'].includes(error.code);
   const local = `0100007F:${input.localPort.toString(16).padStart(4,'0').toUpperCase()}`;
@@ -37,7 +36,7 @@ function observeSocketOwner(input, trustedUid, io = { closeSync,openSync,readFil
     stage='proc_list';
     for(const pidText of io.readdirSync('/proc')) {
       if(!/^\d+$/.test(pidText))continue;
-      checked(now()<input.deadlineAt&&++visited<=8192);
+      checked(now()<input.deadlineAt&&++processVisited<=8192);
       const pid=Number(pidText);
       try {
         stage='process_directory_stat';
@@ -47,7 +46,7 @@ function observeSocketOwner(input, trustedUid, io = { closeSync,openSync,readFil
         if(raw.slice(raw.lastIndexOf(') ')+2).split(/\s+/)[0]==='Z')continue;
         stage='fd_directory_list';
         for(const fd of io.readdirSync(`/proc/${pid}/fd`)) {
-          checked(now()<input.deadlineAt&&++visited<=131072);stage='fd_readlink';
+          checked(now()<input.deadlineAt&&++fdVisited<=131072);stage='fd_readlink';
           try {if(io.readlinkSync(`/proc/${pid}/fd/${fd}`)===`socket:[${inode}]`)owners.add(pid);}
           catch(error){if(!transient(error))throw error;}
         }
@@ -70,21 +69,25 @@ function readOwnImagePeakRssBytes(io = { readFileSync }) {
   const kib=Number(row[1]),bytes=kib*1024;
   return Number.isSafeInteger(kib)&&kib>0&&Number.isSafeInteger(bytes)&&bytes>0?bytes:null;
 }
-let bytes=0,chunks=[];
-process.stdin.on('data',chunk=>{bytes+=chunk.length;if(bytes>4096){process.exitCode=126;process.stdin.destroy();return;}chunks.push(chunk);});
-process.stdin.on('error',()=>{process.exitCode=126;});
-process.stdin.on('end',()=>{
-  if(process.exitCode)return;
-  try {
-    const transport=process.env.PAPERCLIP_FIXTURE_ORIGINAL_UID;
-    const uid=typeof transport==='string'&&/^[1-9][0-9]{0,9}$/.test(transport)?Number(transport):NaN;
-    const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if(process.argv.length!==2||process.getuid?.()!==0||Date.now()>=rootDeadlineAt||!validInput(input,uid,Date.now())){process.exitCode=126;return;}
-    const observed=observeSocketOwner({...input,deadlineAt:Math.min(input.deadlineAt,rootDeadlineAt)},uid);
-    const observerMaxRssBytes=readOwnImagePeakRssBytes();
-    if(!Number.isSafeInteger(observerMaxRssBytes)||observerMaxRssBytes<=0){process.exitCode=126;return;}
-    const bounded=observerMaxRssBytes<=observerRssLimitBytes?observed:{complete:false,stage:'memory_bound',errno:null};
-    const result=JSON.stringify({...bounded,observerMaxRssBytes});if(Buffer.byteLength(result)>8192){process.exitCode=126;return;}
-    process.stdout.write(result+'\n');
-  } catch {process.exitCode=126;}
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const rootStartedAt=Date.now(),rootDeadlineAt=rootStartedAt+10_000;
+  const watchdog=setTimeout(()=>process.exit(126),10_000);watchdog.unref();
+  let bytes=0,chunks=[];
+  process.stdin.on('data',chunk=>{bytes+=chunk.length;if(bytes>4096){process.exitCode=126;process.stdin.destroy();return;}chunks.push(chunk);});
+  process.stdin.on('error',()=>{process.exitCode=126;});
+  process.stdin.on('end',()=>{
+    if(process.exitCode)return;
+    try {
+      const transport=process.env.PAPERCLIP_FIXTURE_ORIGINAL_UID;
+      const uid=typeof transport==='string'&&/^[1-9][0-9]{0,9}$/.test(transport)?Number(transport):NaN;
+      const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if(process.argv.length!==2||process.getuid?.()!==0||Date.now()>=rootDeadlineAt||!validInput(input,uid,Date.now())){process.exitCode=126;return;}
+      const observed=observeSocketOwner({...input,deadlineAt:Math.min(input.deadlineAt,rootDeadlineAt)},uid);
+      const observerMaxRssBytes=readOwnImagePeakRssBytes();
+      if(!Number.isSafeInteger(observerMaxRssBytes)||observerMaxRssBytes<=0){process.exitCode=126;return;}
+      const bounded=observerMaxRssBytes<=observerRssLimitBytes?observed:{complete:false,stage:'memory_bound',errno:null};
+      const result=JSON.stringify({...bounded,observerMaxRssBytes});if(Buffer.byteLength(result)>8192){process.exitCode=126;return;}
+      process.stdout.write(result+'\n');
+    } catch {process.exitCode=126;}
+  });
+}

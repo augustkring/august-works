@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertSecuritySelectorsExecuted } from "./check-v10-security-regression-execution.mjs";
+import { assertSecuritySelectorsExecuted, assertSecurityShardExecuted, mergeSecurityShardReports } from "./check-v10-security-regression-execution.mjs";
 
 const root = "/repo";
 const result = (name, statuses) => ({
@@ -49,4 +49,22 @@ test("rejects a directory selector with no matched executed files even if unrela
     () => assertSecuritySelectorsExecuted(report, [{ path: "server/src/auth", kind: "directory" }], root),
     /matched 0 test file\(s\) but executed zero tests/,
   );
+});
+
+
+test("requires each shard JSON receipt to contain at least one executed assertion", () => {
+  assert.equal(assertSecurityShardExecuted({ testResults: [result("server/src/auth.test.ts", ["passed"])] }), 1);
+  assert.throws(() => assertSecurityShardExecuted({ testResults: [result("server/src/auth.test.ts", ["skipped"])] }), /executed zero tests/);
+});
+
+test("aggregate receipts preserve directory coverage across separate shards", () => {
+  const merged = mergeSecurityShardReports([
+    { testResults: [result("server/src/auth/tenant.test.ts", ["passed"])] },
+    { testResults: [result("server/src/auth/permissions.test.ts", ["failed"])] },
+  ]);
+  assert.deepEqual(
+    assertSecuritySelectorsExecuted(merged, [{ path: "server/src/auth", kind: "directory" }], root),
+    [{ path: "server/src/auth", matchedFiles: 2, executedTests: 2 }],
+  );
+  assert.throws(() => mergeSecurityShardReports([{ testResults: [] }, {}]), /each include a testResults array/);
 });

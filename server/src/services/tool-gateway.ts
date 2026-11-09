@@ -1721,8 +1721,8 @@ export function createToolGatewayService(
   // writers can recheck its current credential, key revocation, run, and
   // responsible-user authority. A process restart intentionally loses this
   // carrier and makes Memory tools unavailable for those sessions.
-  const memorySessionActors = new Map<string, { actor: AuthorizationActor; sessionExpiresAt: number }>();
-  function rememberSessionActor(session: ToolGatewaySession, actor: AuthorizationActor | undefined) {
+  const memorySessionActors = new Map<string, { actor: AuthorizationActor; sessionExpiresAt: number; originalSessionId?: string }>();
+  function rememberSessionActor(session: ToolGatewaySession, actor: AuthorizationActor | undefined, originalSessionId?: string) {
     const now = Date.now();
     for (const [id, value] of memorySessionActors) {
       if (value.sessionExpiresAt <= now) memorySessionActors.delete(id);
@@ -1750,13 +1750,21 @@ export function createToolGatewayService(
       // never become reusable session authority.
       nativeToolEffect: undefined,
     };
-    memorySessionActors.set(session.id, { actor: detached, sessionExpiresAt: session.expiresAt.getTime() });
+    memorySessionActors.set(session.id, { actor: detached, sessionExpiresAt: session.expiresAt.getTime(), originalSessionId });
   }
   function currentSessionMemoryActor(session: ToolGatewaySession): AuthorizationActor | undefined {
     const value = memorySessionActors.get(session.id);
     if (!value || value.sessionExpiresAt <= Date.now()) {
       memorySessionActors.delete(session.id);
       return undefined;
+    }
+    if (value.originalSessionId) {
+      const origin = memorySessionActors.get(value.originalSessionId);
+      if (!origin || origin.originalSessionId) {
+        memorySessionActors.delete(session.id);
+        return undefined;
+      }
+      return currentSessionMemoryActor({ ...session, id: value.originalSessionId });
     }
     const actor = value.actor;
     if (actor.companyId !== session.companyId || actor.agentId !== session.agentId ||
@@ -3015,6 +3023,13 @@ export function createToolGatewayService(
     argumentsSummary: ReturnType<typeof summarizeToolValue>;
     policyDecision: ToolAccessDecision;
   }): Promise<never> {
+    if (input.tool.name === "paperclip-self:remember" && !currentSessionMemoryActor(input.session)) {
+      throw new ToolGatewayHttpError(
+        403,
+        "Memory tools require the original verified Agent credential",
+        "memory_agent_authority_unavailable",
+      );
+    }
     const canonicalArguments = canonicalToolArguments(input.parameters);
     const canonicalArgumentsHash = input.argumentsSummary.sha256 ?? "";
     const approvalSnapshot = await connectedRemoteApprovalSnapshot(
@@ -3307,6 +3322,15 @@ export function createToolGatewayService(
             "A parallel call already handled this approval. Retry the same call now to reach the live approval request.",
         },
       );
+    }
+
+    if (input.tool.name === "paperclip-self:remember") {
+      // The signed identityContextId above binds this action to input.session's captured identity.
+      const approvedSessionId = `approved-action:${actionRequest.id}`;
+      const originalActor = currentSessionMemoryActor(input.session);
+      if (originalActor && !memorySessionActors.has(approvedSessionId)) {
+        rememberSessionActor({ ...input.session, id: approvedSessionId, token: "" }, originalActor, input.session.id);
+      }
     }
 
     if (input.session.issueId && interaction) await db
@@ -3786,6 +3810,7 @@ export function createToolGatewayService(
     parameters: unknown,
     invocationId?: string,
     scopedContext?: ScopedToolGatewayContext,
+    replayOnly = false,
   ) {
     const params = asRecord(parameters) ?? {};
 
@@ -4363,7 +4388,7 @@ export function createToolGatewayService(
           tool.name === "paperclip-self:recall"
             ? await memory.recall(context, parameters)
             : tool.name === "paperclip-self:remember"
-              ? await memory.remember(context, parameters)
+              ? await memory.remember(context, parameters, replayOnly)
               : tool.name === "paperclip-self:correct_memory"
                 ? await memory.correct(context, parameters)
                 : await memory.share(context, parameters);
@@ -4480,7 +4505,11 @@ export function createToolGatewayService(
         : operation.operationId === "blentera.support.case.request" &&
             operation.canonicalService === "customerSupportCaseService.createFromNative"
           ? "idempotent_owner"
-          : null;
+          : operation.operationId === "blentera.memory.remember" &&
+              tool.name === "paperclip-self:remember" &&
+              operation.canonicalService === "memoryAgentToolsService.remember"
+            ? "idempotent_owner"
+            : null;
     if (!replayOwnerKind) {
       throw new ToolGatewayHttpError(409,
         "This first-party operation has no qualified replay owner; refresh through its canonical workflow",
@@ -4491,7 +4520,7 @@ export function createToolGatewayService(
       throw new ToolGatewayHttpError(403, "Current Agent and represented Human authority is unavailable", "native_task_authority_unavailable");
     }
     await assertPlatformSkillAdmission(db, actor, blenteraPlatformContractHashes());
-    const refreshed = await executeBuiltinTool(session, tool, parameters, invocationId);
+    const refreshed = await executeBuiltinTool(session, tool, parameters, invocationId, undefined, true);
     return validateToolContent({ value: refreshed, direction: "result", sensitiveMode: "redact",
       promptInjectionMode: "block" }).value;
   }
@@ -9407,6 +9436,11 @@ export function createToolGatewayService(
       );
     }
 
+    const approvedMemoryOrigin = invocation.toolName === "paperclip-self:remember"
+      ? memorySessionActors.get(`approved-action:${claimed.id}`)
+      : undefined;
+    if (approvedMemoryOrigin) memorySessionActors.delete(`approved-action:${claimed.id}`);
+
     // Terminal-issue expiry revokes pending/approved requests, but a claim that
     // committed just before the issue closed slips past that revocation. Recheck
     // the issue after winning the claim so a governed action never runs external
@@ -9475,11 +9509,35 @@ export function createToolGatewayService(
     let liveApprovalSnapshot: Awaited<
       ReturnType<typeof connectedRemoteApprovalSnapshot>
     >;
+    let approvedMemoryActor: AuthorizationActor | undefined;
+    let approvedMemoryOriginSessionId: string | undefined;
     try {
       await restoreApprovedActionIdentity(
         session,
         signedPayload.identityContextId,
       );
+      if (invocation.toolName === "paperclip-self:remember") {
+        if (!approvedMemoryOrigin?.originalSessionId || approvedMemoryOrigin.sessionExpiresAt <= Date.now()) {
+          throw new ToolGatewayHttpError(403, "Memory tools require the original verified Agent credential", "memory_agent_authority_unavailable");
+        }
+        const [originRow] = await db.select().from(toolGatewaySessions).where(and(
+          eq(toolGatewaySessions.id, approvedMemoryOrigin.originalSessionId),
+          eq(toolGatewaySessions.companyId, invocation.companyId),
+        )).limit(1);
+        if (!originRow || originRow.revokedAt || originRow.expiresAt.getTime() <= Date.now() ||
+          originRow.agentId !== session.agentId || originRow.runId !== session.runId ||
+          originRow.issueId !== session.issueId || originRow.projectId !== session.projectId) {
+          throw new ToolGatewayHttpError(403, "Memory tools require the original verified Agent credential", "memory_agent_authority_unavailable");
+        }
+        const originalSession = { ...gatewaySessionFromRow(originRow),
+          responsibleUserId: approvedMemoryOrigin.actor.onBehalfOfUserId ?? null };
+        approvedMemoryActor = currentSessionMemoryActor(originalSession);
+        if (!approvedMemoryActor || approvedMemoryActor.onBehalfOfUserId !== session.responsibleUserId) {
+          throw new ToolGatewayHttpError(403, "Memory tools require the original verified Agent credential", "memory_agent_authority_unavailable");
+        }
+        session.expiresAt = new Date(Math.min(session.expiresAt.getTime(), originRow.expiresAt.getTime()));
+        approvedMemoryOriginSessionId = originRow.id;
+      }
       session.approvedSlackInvocationId = invocation.id;
       tool = await findToolForSession(session, invocation.toolName);
       liveApprovalSnapshot = await connectedRemoteApprovalSnapshot(
@@ -9619,6 +9677,7 @@ export function createToolGatewayService(
 
     try {
       const executionTimeoutMs = timeoutMs(APPROVED_EXECUTION_TIMEOUT_MS);
+      if (approvedMemoryActor) rememberSessionActor(session, approvedMemoryActor, approvedMemoryOriginSessionId);
       const result =
         tool.providerType === "mcp_remote_http"
           ? (
@@ -9727,6 +9786,8 @@ export function createToolGatewayService(
         tool,
       });
       throw error;
+    } finally {
+      if (approvedMemoryActor) memorySessionActors.delete(session.id);
     }
   }
 
@@ -12493,6 +12554,11 @@ export function createToolGatewayService(
       let effectiveParameters: unknown = requestedParameters;
       let effectiveArgumentsSummary = argumentValidation.summary;
 
+      if (tool.name === "paperclip-self:remember" && !currentSessionMemoryActor(session)) {
+        throw new ToolGatewayHttpError(403, "Memory tools require the original verified Agent credential",
+          "memory_agent_authority_unavailable");
+      }
+
       if (!input.approvedActionRequestId) {
         const replay = await replayMatchingAgentAction({
           session,
@@ -12515,7 +12581,24 @@ export function createToolGatewayService(
               parameters: requestedParameters,
               consumeRateLimit: true,
             }));
-            if (!currentPolicy.allowed) {
+            let reviewedMemoryReplay = false;
+            if (tool.name === "paperclip-self:remember" && currentPolicy.decision === "require_approval") {
+              const [receipt] = await db.select({ signedArguments: toolActionRequests.signedArguments })
+                .from(toolActionRequests).innerJoin(toolInvocations, eq(toolInvocations.id, toolActionRequests.invocationId))
+                .where(and(eq(toolInvocations.id, replay.invocationId),
+                  eq(toolInvocations.companyId, session.companyId), eq(toolActionRequests.companyId, session.companyId),
+                  eq(toolInvocations.runId, session.runId!), eq(toolInvocations.agentId, session.agentId!),
+                  eq(toolInvocations.issueId, session.issueId!), eq(toolInvocations.toolName, tool.name),
+                  eq(toolInvocations.status, "succeeded"), eq(toolInvocations.approvalState, "approved"),
+                  eq(toolActionRequests.status, "executed"),
+                  eq(toolActionRequests.canonicalArgumentsHash, argumentValidation.summary.sha256 ?? ""))).limit(1);
+              const signed = receipt && readSignedToolArgumentsPayload({ signedArguments: receipt.signedArguments,
+                invocationId: replay.invocationId, toolName: tool.name, signingSecret: options.toolActionSigningSecret });
+              reviewedMemoryReplay = !!signed && signed.executionOnApprove === true &&
+                signed.identityContextId === session.identityContextId &&
+                canonicalToolArguments(signed.arguments) === canonicalToolArguments(requestedParameters);
+            }
+            if (!currentPolicy.allowed && !reviewedMemoryReplay) {
               throw new ToolGatewayHttpError(403, "Current Tool Gateway policy no longer permits this operation", "tool_policy_denied");
             }
             const refreshed = await revalidateFirstPartyBuiltinReplay(session, tool, requestedParameters, replay.invocationId);
