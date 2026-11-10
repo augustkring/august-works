@@ -42,6 +42,7 @@ afterAll(async () => {
 
 it("runs a real capped Project Worker in its realized worktree without changing the base repository", async () => {
   vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
+  vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
   const projectFixture = managedNativeProjectWorkspaceFixture({ root: home });
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, {
     cwd, encoding: "utf8", timeout: 5_000, maxBuffer: 64 * 1024, stdio: ["ignore", "pipe", "pipe"],
@@ -221,6 +222,7 @@ it("runs a real capped Project Worker in its realized worktree without changing 
 
 it("accepts a real plan confirmation and executes its managed Native workspace refresh", async () => {
   vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
+  vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
   const projectFixture = managedNativeProjectWorkspaceFixture({ root: home });
   const git = (cwd: string, ...args: string[]) => execFileSync("git", args, {
     cwd, encoding: "utf8", timeout: 5_000, maxBuffer: 64 * 1024, stdio: ["ignore", "pipe", "pipe"],

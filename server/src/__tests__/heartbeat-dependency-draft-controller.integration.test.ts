@@ -7,19 +7,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import request from "supertest";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { activityLog, agents, agentRuntimeState, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
   nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions, executionWorkspaces, workspaceOperations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
+import { prepareGenuineNativeDraftConformanceFixture } from "./helpers/prepare-genuine-native-draft-conformance-fixture.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { projectRoutes } from "../routes/projects.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
-import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
-import { aiConnectionService } from "../services/ai-connections.js";
-import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
@@ -89,51 +87,13 @@ describe("dependency scheduling through the installed Native text draft controll
 
   async function seedInstalledDraft() {
     const f = await seedV5Presences(db);
-    // Seed the current Human once; reuse that same authenticated actor for all
-    // source, provider and Plan operations rather than invalidating its session.
-    const human = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
-    const profileId = randomUUID();
-    const model = "fixture-worker-model-20261005";
-    await db.update(agents).set({ adapterType: "paperclip_runner",
-      adapterConfig: { provider: "aw_text_only", workerModelProfileId: profileId, model,
-        maxOutputTokens: 256, lifecycleMode: "per_turn" },
+    const qualified = await prepareGenuineNativeDraftConformanceFixture({ db, f, sourceSha,
+      credential, model: "fixture-worker-model-20261005" });
+    await db.update(agents).set({
       runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true, maxConcurrentRuns: 1 } },
     }).where(eq(agents.id, f.presence.id));
-    const providers = agentProviderBindingService(db);
-    const provider = await providers.create(human, f.home, f.presence.id, { providerType: "paperclip_native",
-      providerAgentRef: f.presence.id, isolationMode: "isolated_per_presence", providerEndpointRef: null });
-    await providers.attach(human, f.home, f.presence.id, { providerBindingId: provider.id, providerProfileRef: f.presence.id });
-    const [presence] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
-    if (!presence) throw new Error("dependency_draft_presence_missing");
-    const advertised = await discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config: presence.adapterConfig });
-    // Same explicit software-fixture protocol metadata as the existing v7
-    // text-controller fixture. No live/provider/pilot qualification is claimed.
-    const recorded = await providers.recordDiscovery(f.home, f.presence.id, advertised, {
-      connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true,
-    });
-    await providers.revalidate(human, f.home, f.presence.id, recorded.capabilitySnapshotHash!,
-      "Review the existing controlled draft-only software contract; no live provider qualification claimed");
-    const qualified = await providers.assertRuntime(f.home, f.presence.id);
-    if (!qualified.provider.capabilitySnapshotHash || !qualified.runtime.qualifiedConfigurationHash)
-      throw new Error("dependency_draft_current_profile_missing");
-    const connection = await aiConnectionService(db).save(f.home, f.userId, {
-      provider: "anthropic", method: "api_key", ownership: "shared", name: "Controlled dependency draft fixture",
-      apiKey: "fixture", allAgents: false, agentIds: [f.presence.id],
-    }, credential);
-    const profile: WorkerModelProfile = { id: profileId, companyId: f.home, workerAgentId: f.presence.id,
-      providerBindingId: qualified.provider.id, providerSnapshotHash: qualified.provider.capabilitySnapshotHash,
-      providerProfileRef: qualified.runtime.providerProfileRef, qualifiedConfigurationHash: qualified.runtime.qualifiedConfigurationHash,
-      binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection },
-      transport: "server-text-only-v1", contract: "anthropic-text-messages-2023-06-01", maximumEnvelopeBytes: 64000,
-      inputTokensUpperBound: 100000, maxOutputTokens: 1024,
-      // Existing v7 fixture tariff, not a commercial price or live qualification.
-      tariff: { provider: "anthropic", model, currency: "USD", inputMinorPerMillion: 0, outputMinorPerMillion: 0,
-        fixedMinor: 3, qualificationHash: "b".repeat(64), sourceSha, testedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 120_000).toISOString() },
-      qualificationEvidenceRef: "https://protected.test.invalid/qualification/worker-fixture-only.json",
-      qualificationArtifactSha256: "c".repeat(64) };
-
-    return { f, human, profile, model };
+    return { f, human: qualified.currentHuman, profile: qualified.primaryProfile, model: qualified.model,
+      conformanceRunIds: qualified.conformanceRunIds };
   }
 
   async function assertFirstBootstrapSourceCase(redactSecret: boolean) {
@@ -399,7 +359,8 @@ describe("dependency scheduling through the installed Native text draft controll
   }, 60_000);
 
   it("keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review", async () => {
-    const { f, human, profile, model } = await seedInstalledDraft();
+    const fixture = await seedInstalledDraft();
+    const { f, human, profile, model } = fixture;
 
     const tasks = issueService(db);
     const blocker = await tasks.create(f.home, { title: "Human dependency", description: "A Human must resolve this dependency.",
@@ -467,7 +428,7 @@ describe("dependency scheduling through the installed Native text draft controll
         eq(agentWakeupRequests.reason, "issue_dependencies_blocked")));
       expect(blockedRequests).toHaveLength(1);
       expect(blockedRequests[0]).toMatchObject({ status: "skipped" });
-      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toEqual([]);
       expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, plan.id))).toEqual([]);
       expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, plan.id))).toEqual([]);
       expect(calls).toBe(0);
@@ -479,7 +440,7 @@ describe("dependency scheduling through the installed Native text draft controll
         contextSnapshot: { issueId: task.id, wakeReason: "issue_blockers_resolved" } });
       expect(readyWake).not.toBeNull();
       await heartbeat.drainActiveRunExecutions();
-      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
       expect(runs).toHaveLength(1);
       expect(runs[0]).toMatchObject({ id: readyWake!.id, nativeIssueId: task.id, responsibleUserId: f.userId,
         runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
@@ -598,7 +559,7 @@ describe("dependency scheduling through the installed Native text draft controll
         payload: { issueId: task.id, ...(mode === "forged_payload" ? { manualUserWake: true } : {}) },
         contextSnapshot: { issueId: task.id, wakeReason: "issue_commented", responsibleUserId: operatorId } });
       await heartbeat.drainActiveRunExecutions();
-      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
       if (mode === "forged_payload") {
         expect(calls).toBe(0);
         expect(runs.some(run => run.responsibleUserId === operatorId)).toBe(false);
@@ -718,7 +679,7 @@ describe("dependency scheduling through the installed Native text draft controll
       routeApp.use(errorHandler);
 
       expect(calls).toBe(0);
-      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toHaveLength(0);
+      expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toHaveLength(0);
       // The canonical PATCH producer uses the second seeded current Human. Do not
       // synthesize a heartbeat request or set manualUserWake in this case.
       await request(routeApp).patch(`/api/issues/${blocker.id}`).send({ status: "done" }).expect(200);
@@ -754,7 +715,8 @@ describe("dependency scheduling through the installed Native text draft controll
   }, 60_000);
 
   it.each([false, true])("contains a queued second Human Run after canonical membership withdrawal (withdraw: %s)", async revokeSecondHuman => {
-    const { f, human, profile, model } = await seedInstalledDraft();
+    const fixture = await seedInstalledDraft();
+    const { f, human, profile, model } = fixture;
     const secondHumanId = `capacity-second-human-${randomUUID()}`;
     const secondHuman = await seedCurrentHumanSourceActor(db, [f.home], secondHumanId);
     const tasks = issueService(db);
@@ -901,7 +863,7 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(substitution).not.toHaveBeenCalled();
       releaseFirst();
       await heartbeat.drainActiveRunExecutions();
-      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
       expect(runs).toHaveLength(2);
       expect(dispatchedPlanIds).toEqual(revokeSecondHuman ? [taskPlans[0]!.plan.id] : taskPlans.map(({ plan }) => plan.id));
       expect(calls).toBe(revokeSecondHuman ? 1 : 2);
@@ -1037,7 +999,7 @@ describe("dependency scheduling through the installed Native text draft controll
       const [suppressed] = await db.select().from(agentWakeupRequests)
         .where(and(eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.agentId, f.presence.id)));
       expect(suppressed).toMatchObject({ status: "skipped", reason: "issue_tree_hold_active" });
-      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toEqual([]);
       expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entry.plan.id))).toEqual([]);
       expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id))).toEqual([]);
       expect(calls).toBe(0);
@@ -1050,7 +1012,7 @@ describe("dependency scheduling through the installed Native text draft controll
         reason: "issue_commented", payload: { issueId: entry.task.id, commentId: comment.id },
         requestedByActorType: "agent", requestedByActorId: f.presence.id });
       expect(forged).toBeNull();
-      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toEqual([]);
       expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entry.plan.id))).toEqual([]);
       expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id))).toEqual([]);
       expect(calls).toBe(0);
@@ -1076,7 +1038,7 @@ describe("dependency scheduling through the installed Native text draft controll
       const [heldAfterInteraction] = await db.select({ status: issueTreeHolds.status }).from(issueTreeHolds)
         .where(and(eq(issueTreeHolds.companyId, f.home), eq(issueTreeHolds.id, hold!.id)));
       expect(heldAfterInteraction).toMatchObject({ status: "active" });
-      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
       expect(runs).toHaveLength(1);
       expect(runs[0]).toMatchObject({ id: interaction!.id, nativeIssueId: entry.task.id,
         responsibleUserId: f.userId, runtimeMode: "native", driverKind: "aw_text_messages", status: "succeeded", error: null });
@@ -1229,7 +1191,7 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(second!.id).not.toBe(first!.id);
         await vi.waitFor(() => { expect(calls).toBe(2); }, { timeout: 10_000, interval: 25 });
 
-        const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+        const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
         expect(runs).toHaveLength(2);
         expect(new Set(runs.map(run => run.id))).toEqual(new Set([first!.id, second!.id]));
         expect(dispatchedPlanIds).toHaveLength(2);
@@ -1535,11 +1497,11 @@ describe("dependency scheduling through the installed Native text draft controll
           reason: "issue_blockers_resolved", payload, requestedByActorType: "system",
           requestedByActorId: "native-status-committer", idempotencyKey: `native-dependency:${issueId}` },
       ]).returning({ id: agentWakeupRequests.id });
-      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toEqual([]);
       expect(await heartbeat.dispatchPendingNativeStatusWakeups({ companyId: f.home }))
         .toMatchObject({ scanned: 2, dispatched: 1, recovered: 1 });
       await heartbeat.drainActiveRunExecutions();
-      const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+      const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
       expect(runs).toHaveLength(1);
       const deliveries = await db.select().from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, f.home),
         inArray(agentWakeupRequests.requestedByActorId, intents.map(intent => `native-status-wake-dispatch:${intent.id}`))));
@@ -1624,7 +1586,7 @@ describe("dependency scheduling through the installed Native text draft controll
         await heartbeat.drainActiveRunExecutions();
         await heartbeat.resumeQueuedRuns();
         await heartbeat.drainActiveRunExecutions();
-        const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+        const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
         expect(runs).toHaveLength(3);
         const blockedRun = runs.find(run => run.id === blocked!.id);
         expect(blockedRun).toMatchObject({ status: "cancelled", errorCode: "issue_dependencies_blocked",
@@ -2000,7 +1962,7 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(cancellationError).toBeUndefined();
         expect(selectionReached).toBe(true);expect(selectedRunId).toBe(wake.id);
         expect(dispatchReached).toBe(phase==="after_selection");
-        const runs=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId,f.home));
+        const runs=await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
         expect(runs).toHaveLength(1);
         const run=runs[0]!;
         expect(run).toMatchObject({id:wake.id,companyId:f.home,agentId:f.presence.id,responsibleUserId:f.userId,

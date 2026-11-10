@@ -374,7 +374,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-      "sha256": "db663ba6c02b9b39bf975b757a60106824535d924dd42c94adb5d2dd11a5afaf"
+      "sha256": "0da37b2dd28292dec87edaa38fd84078df0b4e37944865649be46fb38c6e0ca7"
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",

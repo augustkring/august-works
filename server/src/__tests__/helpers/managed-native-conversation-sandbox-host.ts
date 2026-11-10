@@ -855,7 +855,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     return scopedGateway;
   });
   qualificationGateway.setSandboxBrokerAuthority(runtime.authorizeSandboxBrokerCapability, brokerOrigin);
-  const namedGateway=await qualificationGateway.createNamedGateway({companyId,body:{name:"Conversation qualification and runtime gateway",profileId:gatewayProfile.id}});
+  const namedGateway=await qualificationGateway.createNamedGateway({companyId,body:{name:`Conversation qualification and runtime gateway ${randomUUID()}`,profileId:gatewayProfile.id}});
   const qualificationProviderProfile={id:"paperclip-qualification",
     credentials:[{name:"qualification_token",auth_style:"bearer",header_name:"Authorization",env_vars:["PAPERCLIP_SANDBOX_QUALIFICATION_TOKEN"]}],
     endpoints:[{host:new URL(brokerOrigin).hostname,port:Number(new URL(brokerOrigin).port || 443),protocol:"rest",enforcement:"enforce",

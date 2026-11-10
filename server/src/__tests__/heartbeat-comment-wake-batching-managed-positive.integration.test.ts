@@ -226,6 +226,59 @@ async function expectTaskDoneWithSafeFinalizationDiagnostic(input: {
     .toEqual({ status: "done", completedAtPresent: true });
 }
 
+// Failure-only, closed projection for an unexpected extra run. It follows the
+// durable run->wakeupRequestId edge and emits only ID hashes, known enums and
+// booleans; never include payload, comment, actor ID, or error text.
+async function projectUnexpectedRunWakeRows(input: {
+  runs: Array<typeof heartbeatRuns.$inferSelect>;
+  companyId: string;
+  taskId: string;
+}) {
+  const knownSources = new Set(["automation", "assignment", "on_demand", "timer"]);
+  const knownReasons = new Set([
+    "issue_assigned", "issue_execution_deferred", "issue_execution_promoted", "issue_status_changed",
+    "issue_commented", "issue_reopened_via_comment", "issue_comment_mentioned",
+    "issue_continuation_needed", "issue_children_completed", "issue_blockers_resolved",
+  ]);
+  const knownStatuses = new Set([
+    "queued", "claimed", "coalesced", "skipped", "completed", "failed",
+    "cancelled", "deferred_issue_execution",
+  ]);
+  const knownTriggers = new Set(["manual", "ping", "callback", "system"]);
+  const digest = (value: string | null | undefined) => value
+    ? createHash("sha256").update(value).digest("hex") : null;
+  const closed = (value: string | null, allow: Set<string>) =>
+    value === null ? null : (allow.has(value) ? value : "other");
+
+  const projected = await Promise.all(input.runs.map(async run => {
+    const [wake] = run.wakeupRequestId
+      ? await db.select({ id: agentWakeupRequests.id, source: agentWakeupRequests.source,
+          triggerDetail: agentWakeupRequests.triggerDetail, reason: agentWakeupRequests.reason,
+          status: agentWakeupRequests.status, requestedByActorType: agentWakeupRequests.requestedByActorType })
+        .from(agentWakeupRequests).where(and(eq(agentWakeupRequests.companyId, input.companyId),
+          eq(agentWakeupRequests.id, run.wakeupRequestId))).limit(1)
+      : [];
+    const runIssueId = run.nativeIssueId ??
+      (typeof run.contextSnapshot?.issueId === "string" ? run.contextSnapshot.issueId : null);
+    return {
+      runIdSha256: digest(run.id),
+      wakeIdSha256: digest(wake?.id),
+      reason: closed(wake?.reason ?? null, knownReasons),
+      source: closed(wake?.source ?? null, knownSources),
+      trigger: closed(wake?.triggerDetail ?? null, knownTriggers),
+      status: closed(wake?.status ?? null, knownStatuses),
+      runSource: closed(run.invocationSource, knownSources),
+      runTrigger: closed(run.triggerDetail, knownTriggers),
+      contextReason: closed(typeof run.contextSnapshot?.wakeReason === "string" ? run.contextSnapshot.wakeReason : null, knownReasons),
+      sameTask: runIssueId === input.taskId,
+      requestedByHuman: wake?.requestedByActorType === "user",
+      originWasDeferred: wake?.reason === "issue_execution_promoted" ||
+        wake?.reason === "issue_execution_deferred",
+    };
+  }));
+  console.info("managed_comment_unexpected_runs_safe_projection", JSON.stringify(projected));
+}
+
 describe("heartbeat comment wake batching", () => {
   it("cancels an empty deferred comment wake instead of promoting deleted input", async () => {
     let providerEntered = false;
@@ -306,6 +359,7 @@ describe("heartbeat comment wake batching", () => {
             reason: "issue_execution_deferred", requestedByActorType: "user", requestedByActorId: actor.userId });
           expect(finalWake?.payload?._paperclipWakeContext).toMatchObject({ wakeReason: "issue_commented" });
           const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+          if (runs.length !== 1) await projectUnexpectedRunWakeRows({ runs, companyId, taskId: task.id });
           expect(runs).toHaveLength(1);
           expect(runs[0]).toMatchObject({ id: firstRunId, status: "succeeded", runtimeMode: "native",
             invocationSource: "automation", triggerDetail: "system", nativeIssueId: task.id,
@@ -431,6 +485,7 @@ describe("heartbeat comment wake batching", () => {
             eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId)));
           expect(requests.filter(request => request.status === "cancelled")).toHaveLength(1);
           const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+          if (runs.length !== 1) await projectUnexpectedRunWakeRows({ runs, companyId, taskId: task.id });
           expect(runs).toHaveLength(1);
           expect(runs[0]).toMatchObject({ id: firstRunId, status: "succeeded", runtimeMode: "native",
             invocationSource: "assignment", triggerDetail: "system", nativeIssueId: task.id,
@@ -527,6 +582,7 @@ describe("heartbeat comment wake batching", () => {
               requestedByActorType: "user", requestedByActorId: actor.userId });
             expect(finalWake?.payload?._paperclipWakeContext).toMatchObject({ wakeReason: "issue_commented" });
             const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+            if (runs.length !== 1) await projectUnexpectedRunWakeRows({ runs, companyId, taskId: task.id });
             expect(runs).toHaveLength(1);
             expect(runs[0]).toMatchObject({ id: firstRunId, status: "succeeded", runtimeMode: "native",
               invocationSource: "assignment", triggerDetail: "system", nativeIssueId: task.id,

@@ -411,7 +411,8 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           .from(memoryRecords).where(eq(memoryRecords.id, memoryBRecordId));
         const memorySnapshotA = nativePayloadSourceSnapshotSchema.parse(outputA?.payloadSourceSnapshot);
         const memorySnapshotB = nativePayloadSourceSnapshotSchema.parse(outputB?.payloadSourceSnapshot);
-        expect(memorySnapshotA.inputs.some(source => source.kind === "context")).toBe(false);
+        expect(memorySnapshotA.inputs.filter(source => source.kind === "context"))
+          .toEqual(receipt.bootstrap.inputs.filter(source => source.kind === "context"));
         expect(memorySnapshotA.policy.memoryIds).not.toContain(privateRootMemoryId);
         expect(memorySnapshotB.policy.memoryIds).toContain(privateRootMemoryId);
         expect(memorySnapshotB.inputs.some(source => source.kind === "context")).toBe(true);
@@ -537,6 +538,15 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           policy: parsed.policy, inputs: parsed.inputs.slice(0, dispatchIndex) });
         replaySourceChecked = true;
         const firstReplay = await replay() as Record<string, unknown>;
+        console.info("managed_source_exact_replay_facts", JSON.stringify({
+          status: typeof firstReplay.status === "string" && ["completed", "replayed", "denied", "approval_required", "failed"].includes(firstReplay.status)
+            ? firstReplay.status : "other",
+          toolMatches: firstReplay.tool === "paperclip-self:remember",
+          invocationMatches: firstReplay.invocationId === invocationId,
+          resultMatchesOriginal: JSON.stringify(firstReplay.result) === JSON.stringify((initialResult as Record<string, unknown>).result),
+          originalResultPresent: Object.prototype.hasOwnProperty.call(initialResult, "result"),
+          replayResultPresent: Object.prototype.hasOwnProperty.call(firstReplay, "result"),
+        }));
         expect(firstReplay).toMatchObject({ invocationId, tool: "paperclip-self:remember", status: "replayed",
           result: (initialResult as Record<string, unknown>).result });
         const invocationKey = `aw-native-tool:${currentRunId}:${callId}`;

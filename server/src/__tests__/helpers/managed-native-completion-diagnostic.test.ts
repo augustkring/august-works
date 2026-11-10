@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { projectManagedNativeCompletionDiagnostic } from "./managed-native-completion-diagnostic.js";
 import { projectNativeFinalizationError } from "../../services/native-runtime/native-finalization-error-diagnostic.js";
 
@@ -113,5 +114,44 @@ describe("managed native completion failure projection", () => {
       decision: { reasonCode: "other", toStatus: "missing", applicationState: "missing" },
     });
     expect(JSON.stringify(diagnostic)).not.toContain("private phrase");
+  });
+
+  it("projects native interruption recovery facts without retaining its free-form message", () => {
+    const message = "native provider exited with private prompt text";
+    const diagnostic = projectManagedNativeCompletionDiagnostic({
+      finalization: { phase: "retryable_failure", failureCode: "native_session_interrupted", failureDetail: {
+        recoveryMode: "exact_checkpoint_resume", originalFailureCode: "provider_process_exited", recoverable: true,
+        providerSessionEstablished: true, providerEventsExist: true, checkpointExists: true, message,
+      } },
+      decision: null,
+      assessment: null,
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain(message);
+    expect(diagnostic.finalization).toMatchObject({
+      failureCode: "native_session_interrupted",
+      interruption: {
+        recoveryMode: "exact_checkpoint_resume", originalFailureCode: "provider_process_exited", recoverable: true,
+        providerSessionEstablished: true, providerEventsExist: true, checkpointExists: true,
+        messageSha256: createHash("sha256").update(message, "utf8").digest("hex"),
+        messageLength: Buffer.byteLength(message, "utf8"),
+      },
+    });
+  });
+
+  it("closes unknown interruption enums and marks absent facts as missing", () => {
+    const diagnostic = projectManagedNativeCompletionDiagnostic({
+      finalization: { phase: "retryable_failure", failureCode: "native_session_interrupted", failureDetail: {
+        recoveryMode: "private recovery phrase", originalFailureCode: "private failure code", message: "private message",
+      } },
+      decision: null,
+      assessment: null,
+    });
+    expect(diagnostic.finalization.interruption).toEqual({
+      recoveryMode: "other", originalFailureCode: "other", recoverable: null,
+      providerSessionEstablished: null, providerEventsExist: null, checkpointExists: null,
+      messageSha256: createHash("sha256").update("private message", "utf8").digest("hex"),
+      messageLength: Buffer.byteLength("private message", "utf8"),
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain("private message");
   });
 });

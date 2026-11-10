@@ -1,4 +1,6 @@
-/** Private failure-only projection: closed enums, booleans and counts only. */
+import { createHash } from "node:crypto";
+
+/** Private failure-only projection: closed enums, booleans, counts and message digest metadata only. */
 const outcomes = ["accepted", "missing", "rejected", "unverifiable"] as const;
 const kinds = ["event", "work_product", "approval", "interaction", "attachment", "unknown"] as const;
 const claims = ["satisfied", "not_satisfied", "unknown"] as const;
@@ -35,6 +37,19 @@ const safeOwnerPrefixes = ["native_checkout_not_released", "native_status_decisi
   "native_pending_effect_target_missing", "native_pending_effect_target_unimplemented", "native_status_reason_code_required"] as const;
 const finalizationFailures = ["native_finalization_superseded", "native_finalization_retry_exhausted",
   "native_workspace_sync_out_retry_exhausted", "status_cas_exhausted", "side_effect_planning_failed"] as const;
+const nativeSessionFailureCodes = [
+  "native_provider_terminal_failed", "native_provider_approval_required", "native_provider_usage_limit",
+  "native_session_cleanup_quarantined", "native_adopted_runner_authentication_timeout",
+  "runner_remote_provider_artifact_incompatible", "provider_process_exited", "provider_stdout_closed",
+  "provider_process_output_closed", "provider_process_status_failed", "provider_initialize_timeout",
+  "provider_initialize_protocol_error", "provider_request_timeout", "provider_request_protocol_error",
+  "provider_frame_too_large", "provider_transport_failed", "native_runner_process_exited",
+  "planning_mode_unsupported", "native_event_replay_conflict", "native_event_evidence_unavailable",
+  "native_provider_model_rejected", "native_current_wake_comments_unread",
+  "native_current_wake_comments_changed_after_read", "native_session_interrupted", "native_session_retry_exhausted",
+] as const;
+const nativeRecoveryModes = ["bootstrap_retry", "exact_checkpoint_resume", "ambiguous_state"] as const;
+const finalizationAndNativeFailureCodes = [...finalizationFailures, ...nativeSessionFailureCodes] as const;
 const verificationReasons = ["environment_unavailable", "tool_unavailable", "dependency_missing", "permission_denied",
   "credential_missing", "policy_restricted", "external_service_unavailable", "budget_exhausted", "other"] as const;
 type Closed<T extends readonly string[]> = T[number] | "other" | "missing";
@@ -79,10 +94,22 @@ export function projectManagedNativeCompletionDiagnostic(input: {
   const criteria = list(a.criterionAssessments);
   const verifications = list(a.verificationAssessments);
   const safeFailure = record(record(f.failureDetail).safeCause);
+  const failureDetail = record(f.failureDetail);
+  const failureMessage = typeof failureDetail.message === "string" ? failureDetail.message : null;
   const causes = list(safeFailure.causes);
   return {
     finalization: { present: input.finalization != null, phase: closed(f.phase, finalizationPhases),
-      failureCode: closed(f.failureCode, finalizationFailures),
+      failureCode: closed(f.failureCode, finalizationAndNativeFailureCodes),
+      interruption: {
+        recoveryMode: closed(failureDetail.recoveryMode, nativeRecoveryModes),
+        originalFailureCode: closed(failureDetail.originalFailureCode, nativeSessionFailureCodes),
+        recoverable: flag(failureDetail.recoverable),
+        providerSessionEstablished: flag(failureDetail.providerSessionEstablished),
+        providerEventsExist: flag(failureDetail.providerEventsExist),
+        checkpointExists: flag(failureDetail.checkpointExists),
+        messageSha256: failureMessage === null ? "missing" : createHash("sha256").update(failureMessage, "utf8").digest("hex"),
+        messageLength: failureMessage === null ? "missing" : Buffer.byteLength(failureMessage, "utf8"),
+      },
       safeFailurePhase: closed(safeFailure.phase, ["status_decision_commit"] as const),
       safeCauses: causes.slice(0, 3).map(value => { const c = record(value); return {
         errorClass: closed(c.errorClass, safeErrorClasses), code: closed(c.code, safeErrorCodes),

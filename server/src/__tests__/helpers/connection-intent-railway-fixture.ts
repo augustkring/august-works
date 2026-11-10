@@ -12,7 +12,7 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-type Capture = { purpose: "catalog" | "workspace_probe" | "projects_probe" | "projects_call" };
+type Capture = { purpose: "catalog" | "workspace_probe" | "projects_probe" | "projects_call" | "target_validation" | "deployment_validation" | "restart" };
 
 /** Only the HTTP boundary is controlled. Discovery, schema/version hashing,
  * vault bindings, grants, profiles and invocation authority use real owners.
@@ -27,6 +27,10 @@ export async function prepareConnectionIntentRailwayFixture(input: {
 }) {
   const workspaceId = randomUUID();
   const projectId = randomUUID();
+  const environmentId = randomUUID();
+  const serviceId = randomUUID();
+  const deploymentId = randomUUID();
+  const deploymentInstanceId = randomUUID();
   const credentialValue = randomUUID();
   const captures: Capture[] = [];
   const endpointLookup: NonNullable<Parameters<typeof toolAccessService>[1]>["remoteHttpEndpointLookup"] = async hostname => {
@@ -59,17 +63,43 @@ export async function prepareConnectionIntentRailwayFixture(input: {
       } });
     }
     const variables = object(body.variables);
-    if (body.query !== RAILWAY_QUERIES.projects || variables.workspaceId !== workspaceId ||
-        (variables.first !== 1 && variables.first !== 25 && !(input.reviewJourney === "always" && variables.first === 2)) ||
-        Object.keys(variables).some(key => !["workspaceId", "first", "after"].includes(key)) ||
-        (variables.after !== undefined && variables.after !== null))
-      throw new Error("railway_fixture_graphql_contract_not_fixed");
-    captures.push({ purpose: variables.first === 1 ? "projects_probe" : "projects_call" });
-    if (input.reviewJourney === "failure" && variables.first !== 1)
-      return Response.json({ errors: [{ message: "Fixture provider unavailable" }] }, { status: 502 });
-    return Response.json({ data: { projects: { edges: [{ node: {
-      id: projectId, name: input.reviewJourney ? "Roadmap" : "Fixture project inventory", workspaceId,
-    } }], pageInfo: { hasNextPage: false, endCursor: null } } } });
+    if (body.query === RAILWAY_QUERIES.projects && variables.workspaceId === workspaceId &&
+        (variables.first === 1 || variables.first === 25 || (input.reviewJourney === "always" && variables.first === 2)) &&
+        Object.keys(variables).every(key => ["workspaceId", "first", "after"].includes(key)) &&
+        (variables.after === undefined || variables.after === null)) {
+      captures.push({ purpose: variables.first === 1 ? "projects_probe" : "projects_call" });
+      if (input.reviewJourney === "failure" && variables.first !== 1)
+        return Response.json({ errors: [{ message: "Fixture provider unavailable" }] }, { status: 502 });
+      return Response.json({ data: { projects: { edges: [{ node: {
+        id: projectId, name: input.reviewJourney ? "Roadmap" : "Fixture project inventory", workspaceId,
+      } }], pageInfo: { hasNextPage: false, endCursor: null } } } });
+    }
+    if (body.query === RAILWAY_QUERIES.target && variables.projectId === projectId &&
+        variables.environmentId === environmentId && variables.serviceId === serviceId &&
+        Object.keys(variables).length === 3) {
+      captures.push({ purpose: "target_validation" });
+      return Response.json({ data: {
+        project: { id: projectId },
+        environment: { id: environmentId, projectId },
+        service: { id: serviceId, projectId },
+        serviceInstance: { id: randomUUID(), environmentId, serviceId, serviceName: "Fixture service",
+          source: { repo: null }, latestDeployment: { id: deploymentId, status: "SUCCESS" },
+          activeDeployments: [{ id: deploymentId, status: "SUCCESS" }] },
+      } });
+    }
+    if (body.query === RAILWAY_QUERIES.deployment && variables.deploymentId === deploymentId &&
+        Object.keys(variables).length === 1) {
+      captures.push({ purpose: "deployment_validation" });
+      return Response.json({ data: { deployment: { id: deploymentId, projectId, environmentId, serviceId,
+        status: "SUCCESS", createdAt: new Date(0).toISOString(), url: null, canRedeploy: true,
+        canRollback: true, instances: [{ id: deploymentInstanceId }] } } });
+    }
+    if (body.query === RAILWAY_QUERIES.restart && variables.deploymentId === deploymentId &&
+        Object.keys(variables).length === 1) {
+      captures.push({ purpose: "restart" });
+      return Response.json({ data: { deploymentRestart: true } });
+    }
+    throw new Error("railway_fixture_graphql_contract_not_fixed");
   };
   const actor = { actorType: "user" as const, actorId: input.userId, userId: input.userId };
   const secret = await secretService(input.db).create(input.companyId, {
@@ -100,7 +130,8 @@ export async function prepareConnectionIntentRailwayFixture(input: {
     installs: [{ targetType: "agent", targetId: input.holderAgentId }],
   }, actor);
   return {
-    connection: refreshed.connection, tool, workspaceId, projectId, request, endpointLookup,
+    connection: refreshed.connection, tool, workspaceId, projectId,
+    deploymentTarget: { projectId, environmentId, serviceId, deploymentId }, deploymentInstanceId, request, endpointLookup,
     captures: () => captures.map(capture => ({ ...capture })),
   };
 }

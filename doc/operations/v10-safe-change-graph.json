@@ -11,13 +11,13 @@
   },
   "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1951,
+    "sourceDeltaPathCount": 1952,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13926,
+    "fullDiffPathCount": 13932,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
@@ -4033,13 +4033,13 @@
         "identity": "full master base supplied by current build task"
       },
       "sourceInventoryBoundary": {
-        "sourceDeltaPathCount": 1951,
+        "sourceDeltaPathCount": 1952,
         "deletedSourcePathCount": 41,
         "untrackedSourceCandidateCount": 0,
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 13926,
+        "fullDiffPathCount": 13932,
         "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
       },
       "sourceAfterGeneration": "Private exact reviewed composed overlay anchored at b1; no final runtime, release or capability qualification."
@@ -6849,7 +6849,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-          "sha256": "db663ba6c02b9b39bf975b757a60106824535d924dd42c94adb5d2dd11a5afaf"
+          "sha256": "0da37b2dd28292dec87edaa38fd84078df0b4e37944865649be46fb38c6e0ca7"
         },
         {
           "path": "ui/src/api/search.ts",
@@ -8446,7 +8446,7 @@
         },
         {
           "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
-          "sha256": "7161f4e170442819b027d830c5c0a35ca918315b409e6857398d01ab564d429c"
+          "sha256": "be9bd5cf962092553447c1731a1ca294414eb7f480a3c18d470aee49b1d37d78"
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
@@ -8838,7 +8838,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-          "sha256": "db663ba6c02b9b39bf975b757a60106824535d924dd42c94adb5d2dd11a5afaf"
+          "sha256": "0da37b2dd28292dec87edaa38fd84078df0b4e37944865649be46fb38c6e0ca7"
         },
         {
           "path": "server/src/services/native-runtime/native-runner-file-handoff.test.ts",
@@ -9599,7 +9599,7 @@
         },
         {
           "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
-          "sha256": "7161f4e170442819b027d830c5c0a35ca918315b409e6857398d01ab564d429c"
+          "sha256": "be9bd5cf962092553447c1731a1ca294414eb7f480a3c18d470aee49b1d37d78"
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
@@ -12738,6 +12738,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/__tests__/plugin-managed-routines.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -13037,6 +13043,7 @@
         "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
         "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
         "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+        "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
         "server/src/__tests__/routine-pending-assignment.integration.test.ts",
@@ -13103,6 +13110,7 @@
         "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
         "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
         "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+        "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
         "server/src/__tests__/plugin-managed-routines.test.ts",
         "server/src/__tests__/routine-cron-deadlines.test.ts",
         "server/src/__tests__/routine-pending-assignment.integration.test.ts",
@@ -13177,7 +13185,8 @@
         "ui/src/components/routine-sections/editable-sections.test.tsx",
         "ui/src/pages/WorkflowBuilder.test.tsx",
         "ui/src/pages/WorkflowReview.test.tsx",
-        "ui/src/pages/WorkflowRun.test.tsx"
+        "ui/src/pages/WorkflowRun.test.tsx",
+        "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts"
       ],
       "currentWriter": "unknown; this inventory identifies code owner paths but does not establish every runtime writer or external writer",
       "durableState": "unknown unless explicitly stated in a linked source/test/evidence record; not inferred from directory names",
@@ -13225,11 +13234,11 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
-          "sha256": "42d16c7f33f0766051b7405aee4ed2305f32b3d7cbd81644a71ce88bebb2bc10"
+          "sha256": "efaaa5d026b8e03f3d52391342145178d3b563746db8892ae3887d857094b412"
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-          "sha256": "d19631307eb28452cf2157106821c260593d4d77534a9449cb45733282a351ee"
+          "sha256": "88578e8bf449c402e92a3946f18368d3d5a8ad02ea21b12adac4ee4bd89cdce1"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
@@ -13253,15 +13262,19 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
-          "sha256": "898d69147faff88d77293277022460cfffe11d5d3c73d628a6b1c3f9eeb9acec"
+          "sha256": "c0447085fa743cacff339c6a15c28291e50b516f841c638f8f90d2b7f5667527"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
-          "sha256": "5d5490e5e6a545b05c9d9946fa2d64de31abf849390e2ce9715688f1f9d3ebe3"
+          "sha256": "2757aebae9973482729ed142442821342ea34420cb0d49c5a4236256b17fe2c0"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
           "sha256": "6a9d1fba007952b52e11858c3bf29543d418c44e9ae4a70a0733a9e3252a3dfa"
+        },
+        {
+          "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
+          "sha256": "1182274b41a878498b152f2aaecc14c5ccbb2e1ec763f9915b6737aadb6901e4"
         },
         {
           "path": "server/src/__tests__/plugin-managed-routines.test.ts",
@@ -21466,7 +21479,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
-          "sha256": "cb2abe0c3ed0c6e1a3a4ce4c555047753c0c59a39230c45917c5127dd4845299"
+          "sha256": "14e2f754b8fcae14d3c319dcb5d917e2c6464d9578cd4200b8f38205583bffbb"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-project-workspace-fixture.ts",
@@ -29280,7 +29293,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-          "sha256": "8cd6521cc7c8337a57a54ab808be44b8c580ed94e05de744c28e45bac91f75cd"
+          "sha256": "9a0ded220be5b649bb3eae0ba172349999deacd2f3adf9a8107872229d800e43"
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
@@ -29296,7 +29309,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "b0f9c7ad25d6881cf2203b0b8d0e5a74bd1e50b1c44ad76eed198973c7932920"
+          "sha256": "f8bab0a6cf0e4f5f1a84b01984c7fb419ef1cd278d4e134817ffd8c3517c27d5"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -29867,7 +29880,7 @@
         },
         {
           "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-          "sha256": "65866b568b9ab14515f9db18494a65926a81a03d40b3c95b4804f8268bb6408c"
+          "sha256": "a16042a0831266469100eeaa144e41d565a3b64f44a23cfae8a258b1cf4cf7c8"
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
@@ -46319,7 +46332,7 @@
       "id": "source:server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-      "sha256": "db663ba6c02b9b39bf975b757a60106824535d924dd42c94adb5d2dd11a5afaf",
+      "sha256": "0da37b2dd28292dec87edaa38fd84078df0b4e37944865649be46fb38c6e0ca7",
       "changeIds": [
         "SCR-V10-HOTSPOT-04",
         "SCR-V10-HOTSPOT-06"
@@ -46608,7 +46621,7 @@
       "id": "source:server/src/__tests__/agent-runtime-fabric-v5.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
-      "sha256": "7161f4e170442819b027d830c5c0a35ca918315b409e6857398d01ab564d429c",
+      "sha256": "be9bd5cf962092553447c1731a1ca294414eb7f480a3c18d470aee49b1d37d78",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-07"
@@ -49276,7 +49289,7 @@
       "id": "source:server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
-      "sha256": "42d16c7f33f0766051b7405aee4ed2305f32b3d7cbd81644a71ce88bebb2bc10",
+      "sha256": "efaaa5d026b8e03f3d52391342145178d3b563746db8892ae3887d857094b412",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49291,7 +49304,7 @@
       "id": "source:server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-      "sha256": "d19631307eb28452cf2157106821c260593d4d77534a9449cb45733282a351ee",
+      "sha256": "88578e8bf449c402e92a3946f18368d3d5a8ad02ea21b12adac4ee4bd89cdce1",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49381,7 +49394,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.test.ts",
-      "sha256": "898d69147faff88d77293277022460cfffe11d5d3c73d628a6b1c3f9eeb9acec",
+      "sha256": "c0447085fa743cacff339c6a15c28291e50b516f841c638f8f90d2b7f5667527",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49396,7 +49409,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-completion-diagnostic.ts",
-      "sha256": "5d5490e5e6a545b05c9d9946fa2d64de31abf849390e2ce9715688f1f9d3ebe3",
+      "sha256": "2757aebae9973482729ed142442821342ea34420cb0d49c5a4236256b17fe2c0",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49417,6 +49430,21 @@
       ],
       "sourceBeforePin": {
         "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
+      "sha256": "1182274b41a878498b152f2aaecc14c5ccbb2e1ec763f9915b6737aadb6901e4",
+      "changeIds": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "absent_at_base",
         "sha256": null
@@ -57556,7 +57584,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
-      "sha256": "cb2abe0c3ed0c6e1a3a4ce4c555047753c0c59a39230c45917c5127dd4845299",
+      "sha256": "14e2f754b8fcae14d3c319dcb5d917e2c6464d9578cd4200b8f38205583bffbb",
       "changeIds": [
         "SCR-V10-PROJECT-REPOSITORY-SOURCE"
       ],
@@ -66406,7 +66434,7 @@
       "id": "source:server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
-      "sha256": "8cd6521cc7c8337a57a54ab808be44b8c580ed94e05de744c28e45bac91f75cd",
+      "sha256": "9a0ded220be5b649bb3eae0ba172349999deacd2f3adf9a8107872229d800e43",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -66466,7 +66494,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "b0f9c7ad25d6881cf2203b0b8d0e5a74bd1e50b1c44ad76eed198973c7932920",
+      "sha256": "f8bab0a6cf0e4f5f1a84b01984c7fb419ef1cd278d4e134817ffd8c3517c27d5",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -67051,7 +67079,7 @@
       "id": "source:doc/operations/agent-native-tool-alias-compatibility.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-      "sha256": "65866b568b9ab14515f9db18494a65926a81a03d40b3c95b4804f8268bb6408c",
+      "sha256": "a16042a0831266469100eeaa144e41d565a3b64f44a23cfae8a258b1cf4cf7c8",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -79943,6 +79971,11 @@
     {
       "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
       "to": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
+      "to": "source:server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {
