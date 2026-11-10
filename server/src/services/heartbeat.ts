@@ -8767,6 +8767,7 @@ export function buildPaperclipTaskMarkdown(input: {
     notice: string;
   }> | null;
   interaction?: {
+    id?: string | null;
     kind?: string | null;
     status?: string | null;
   } | null;
@@ -8834,11 +8835,22 @@ export function buildPaperclipTaskMarkdown(input: {
   if (!issue && effectiveWakeComments.length === 0) return null;
   // Ordinary answers render in the wake DTO, not this task markdown. Their
   // presence alone cannot create a source reference for bytes not rendered.
+  const renderedWithdrawalInteraction = input.interaction?.id &&
+    ((input.interaction.kind === "ask_user_questions" && input.interaction.status === "cancelled") ||
+      (["request_confirmation", "request_checkbox_confirmation"].includes(input.interaction.kind ?? "") &&
+        input.interaction.status === "rejected"))
+    ? { kind: "task_wake_interaction_state" as const, id: input.interaction.id,
+        interactionKind: input.interaction.kind as "ask_user_questions" | "request_confirmation" | "request_checkbox_confirmation",
+        interactionStatus: input.interaction.status as "cancelled" | "rejected" } : null;
+  const interactionStateIsOnlyUnsupportedReference = Boolean(renderedWithdrawalInteraction && !input.planReview?.status &&
+    !input.externalChatProvider && !input.acceptedPlanContinuation && !input.acceptedPlan?.revisionId);
   if (((input.interaction?.kind || input.interaction?.status) &&
       !(input.interaction?.kind === "ask_user_questions" && input.interaction.status === "answered")) ||
     input.planReview?.status || input.externalChatProvider || input.acceptedPlanContinuation || input.acceptedPlan?.revisionId) {
-    options.onRenderedSource?.({ kind: input.acceptedPlan?.revisionId ? "document_revision" : "unknown",
-      id: input.acceptedPlan?.revisionId ?? issue?.id ?? "unbound-task-markdown-source" });
+    options.onRenderedSource?.(input.acceptedPlan?.revisionId
+      ? { kind: "document_revision", id: input.acceptedPlan.revisionId }
+      : interactionStateIsOnlyUnsupportedReference ? renderedWithdrawalInteraction!
+      : { kind: "unknown", id: issue?.id ?? "unbound-task-markdown-source" });
   }
 
   const lines = [
@@ -21255,6 +21267,7 @@ export function heartbeatService(
         externalChatProvider: paperclipWakePayload?.externalChatProvider,
         nativeRunner: agent.adapterType === "paperclip_runner",
         interaction: {
+          id: readNonEmptyString(context.interactionId),
           kind: readNonEmptyString(context.interactionKind),
           status: readNonEmptyString(context.interactionStatus),
         },
@@ -24588,17 +24601,27 @@ export function heartbeatService(
               ?.flatMap(capture => capture.projection.sourceRunId ? [capture.projection.sourceRunId] : []) ?? [])];
             const administrativeExpiryRunPolicy: NativePayloadSourcePolicy | null = administrativeExpirySourceRunIds.length
               ? { issueIds: [], projectIds: [], runIds: administrativeExpirySourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
-            const presentationSourceRunIds = [...new Set(nativeBootstrapContinuationCapture?.currentHumanAssignment
-              ? [...nativeBootstrapContinuationCapture.envelope.messages.flatMap(message =>
-                  message.authorType === "agent" && message.createdByRunId ? [message.createdByRunId] : []),
-                  ...(nativeBootstrapContinuationCapture.finalizedSummary ?
-                    [nativeBootstrapContinuationCapture.finalizedSummary.sourceRunId] : [])] : [])].sort();
+            const reviewWithdrawalSourceRunIds = [...new Set(closedTaskContinuation?.humanReviewWithdrawals
+              ?.flatMap(capture => [capture.projection.interactionSourceRunId, capture.projection.owner.sourceRunId]) ?? [])];
+            const reviewWithdrawalRunPolicy: NativePayloadSourcePolicy | null = reviewWithdrawalSourceRunIds.length
+              ? { issueIds: [], projectIds: [], runIds: reviewWithdrawalSourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
+            const withdrawalPresentationSourceRunIds = closedTaskContinuation?.humanReviewWithdrawals?.length
+              ? closedTaskContinuation.commentSources.flatMap(source => source.acceptedPresentationOwner
+                ? [source.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId] : []) : [];
+            const presentationSourceRunIds = [...new Set([
+              ...(nativeBootstrapContinuationCapture?.currentHumanAssignment
+                ? [...nativeBootstrapContinuationCapture.envelope.messages.flatMap(message =>
+                    message.authorType === "agent" && message.createdByRunId ? [message.createdByRunId] : []),
+                    ...(nativeBootstrapContinuationCapture.finalizedSummary ?
+                      [nativeBootstrapContinuationCapture.finalizedSummary.sourceRunId] : [])] : []),
+              ...withdrawalPresentationSourceRunIds,
+            ])].sort();
             if (presentationSourceRunIds.length > 64)
               throw new Error("native_presentation_source_history_exceeds_bound");
             const presentationRunPolicy: NativePayloadSourcePolicy | null = presentationSourceRunIds.length
               ? { issueIds: [], projectIds: [], runIds: presentationSourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
             const additionalPolicyParts = [retainedRunPolicy, nativeProjectAdditionalPolicy, questionRunPolicy,
-              administrativeExpiryRunPolicy, presentationRunPolicy]
+              administrativeExpiryRunPolicy, reviewWithdrawalRunPolicy, presentationRunPolicy]
               .filter((part): part is NativePayloadSourcePolicy => part !== null);
             const additionalPolicy: NativePayloadSourcePolicy | null = additionalPolicyParts.length ? {
               issueIds: [...new Set(additionalPolicyParts.flatMap(part => part.issueIds))].sort(),
@@ -24608,7 +24631,8 @@ export function heartbeatService(
               foundationRevisionIds: [...new Set(additionalPolicyParts.flatMap(part => part.foundationRevisionIds))].sort(),
             } : null;
             const renderedAttachmentReferences = nativeBootstrapTaskMarkdownSourceMap?.references
-              ?.filter(reference => reference.kind === "attachment") ?? [];
+              ?.filter((reference): reference is Exclude<NativeRenderedSourceReference, { kind: "task_wake_interaction_state" }> & { kind: "attachment" } =>
+                reference.kind === "attachment") ?? [];
             const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = [],
               references = selectedNativeTaskSourceMap?.references ?? null) =>
               buildNativeBootstrapSourceSet({
@@ -24652,10 +24676,17 @@ export function heartbeatService(
                   ...(ordinaryPlanRead ? ordinaryPlanSources.map(capture => ({ kind: "document_revision" as const,
                     id: capture.input.revisionId, input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) : []),
                 ] : [],
+                taskWakeInteractionStateOwner: nativeTaskWakeSource && closedTaskContinuation ? {
+                  source: nativeTaskWakeSource, capture: closedTaskContinuation,
+                  responsibleUserId: closedTaskContinuation.responsibleUserId, wakeupRequestId: closedTaskContinuation.wakeupRequestId,
+                  wakeReason: nativeTaskWakeCapture?.persistedWakeReason ?? null,
+                  taskObjective: nativeTaskWakeCapture?.task.description ?? nativeTaskWakeCapture?.task.title ?? "",
+                } : null,
                 taskWakeInteractionSources: nativeTaskWakeSource && closedTaskContinuation
                   ? [...(closedTaskContinuation.governedInteractions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
                     ...(closedTaskContinuation.answeredQuestions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
                     ...(closedTaskContinuation.adminExpiredInteractions?.map(capture => capture.source) ?? []),
+                    ...(closedTaskContinuation.humanReviewWithdrawals?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
                     ...(closedTaskContinuation.pendingInteractions?.map(capture => capture.source) ?? []),
                     ...(closedTaskContinuation.acceptedPlanReview ? [closedTaskContinuation.acceptedPlanReview.interactionSource] : []),
                     ...(closedTaskContinuation.delivery ? [closedTaskContinuation.delivery.source] : [])] : [],

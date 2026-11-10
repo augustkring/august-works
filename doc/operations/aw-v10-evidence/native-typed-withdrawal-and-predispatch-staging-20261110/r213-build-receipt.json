@@ -1,0 +1,38 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.191668759987806,
+      "filesAdvised": 493049,
+      "memoryAfter": 7842529280,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 4.327194376994157,
+      "filesAdvised": 493054,
+      "memoryAfter": 12944162816,
+      "contentChanged": false
+    },
+    {
+      "elapsedSeconds": 5.960733158004587,
+      "filesAdvised": 493050,
+      "memoryAfter": 7866880000,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "../node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "--singleThreaded"
+      ],
+      "exit": 1,
+      "seconds": 95.2237820349983,
+      "peakGroupRssBytes": 5842182144,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

@@ -3853,7 +3853,8 @@ export function runtimeControlService(
         const attachmentOwner = attachmentOperation
           ? await captureNativeRemoteAttachmentStageOwner(tx as unknown as Db, { companyId: source.run.companyId,
               issueId: source.source.task.id, runId: source.run.id, agentId: source.run.agentId!,
-              taskRoot: workerPreparationRoot, operation: attachmentOperation }) : null;
+              taskRoot: workerPreparationRoot, leaseId: source.lease.id,
+              requirePersistedStageIntent: attachmentOperation.phase !== "cleanup", operation: attachmentOperation }) : null;
         const exactCommand = nativeAttachmentStage || nativeAttachmentCleanup
           ? !!attachmentOperation && !!attachmentOwner &&
             ((nativeAttachmentCleanup && attachmentOperation.phase === "cleanup") ||
@@ -4244,9 +4245,10 @@ export function runtimeControlService(
         // The server-stored preparation purpose is the only path that may run
         // a Native artifact command without either credential family.
         if (modelCredential !== undefined) throw forbidden("Provider-artifact preparation cannot receive a model credential");
-      } else if ((nativeHarnessState && !nativeHarnessModelRefresh) || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
+      } else if ((nativeHarnessState && !nativeHarnessModelRefresh) || nativeWorkspacePrepare || nativeRuntimeContextPrepare ||
+        nativeRuntimeAssetErasureProbe || nativeAttachmentStage || nativeAttachmentCleanup) {
         if (modelCredential !== undefined || credentials.mode !== "none" || credentials.bindings.length !== 0 || brokerCredential !== undefined)
-          throw forbidden("Native harness state commands cannot receive workload credentials");
+          throw forbidden("Credentialless Native preparation commands cannot receive workload credentials");
       } else if (modelSessionStop) {
         if (modelCredential !== undefined || brokerCredential !== undefined ||
           Object.keys(request.env).some(key => ["ANTHROPIC_API_KEY", "OPENAI_API_KEY",

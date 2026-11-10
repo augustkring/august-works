@@ -1,8 +1,10 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import {
   agentWakeupRequests,
+  agents,
   assets,
   heartbeatRuns,
+  environmentLeases,
   issueAttachments,
   issueComments,
   issues,
@@ -15,10 +17,11 @@ import {
   type NativePayloadSourcePolicy,
 } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
-import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
+import { assertNativePreDispatchTaskCommentAttachmentCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeSha256 } from "./canonical.js";
 import { readNativeAttachmentStageCleanupReceipts, type NativeRemoteAttachmentStageOperation } from "./native-attachment-remote-stage.js";
+import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "./native-chat-workspace.js";
 
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
@@ -42,6 +45,7 @@ export type NativeRemoteAttachmentStageOwner = {
   filename: string;
   contentType: string;
   stageNonce: string;
+  executionInputHash: string;
 } | { cleanupOnly: true; runId: string; companyId: string; issueId: string; agentId: string; stageNonce: string };
 
 /** Independently reconstruct the current Human wake, exact rendered attachment,
@@ -49,9 +53,11 @@ export type NativeRemoteAttachmentStageOwner = {
  * check is deliberately separate from the command syntax predicate. */
 export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transaction, input: {
   companyId: string; issueId: string; runId: string; agentId: string; taskRoot: string;
-  operation: NativeRemoteAttachmentStageOperation;
+  operation: NativeRemoteAttachmentStageOperation; leaseId?: string; expectedExecutionInputHash?: string;
+  requirePersistedStageIntent?: boolean;
 }): Promise<NativeRemoteAttachmentStageOwner> {
   if (!uuid(input.companyId) || !uuid(input.issueId) || !uuid(input.runId) || !uuid(input.agentId) ||
+      !uuid(input.operation.runId) || input.operation.runId !== input.runId ||
       !uuid(input.operation.attachmentId) || !uuid(input.operation.stageNonce)) return denied();
   const [run] = await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
@@ -82,11 +88,52 @@ export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transacti
   const executionValue = profile.nativeExecutionInput;
   let execution: ReturnType<typeof parseNativeExecutionInput>;
   try { execution = parseNativeExecutionInput(executionValue); } catch { return denied(); }
+  const executionInputHash = nativeSha256(executionValue);
+  const activeLease = input.leaseId ? (await db.select({ id: environmentLeases.id,
+    executionWorkspaceId: environmentLeases.executionWorkspaceId, metadata: environmentLeases.metadata })
+    .from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.id, input.leaseId),
+      eq(environmentLeases.heartbeatRunId, input.runId), eq(environmentLeases.issueId, input.issueId),
+      eq(environmentLeases.status, "active"), isNull(environmentLeases.releasedAt), gt(environmentLeases.expiresAt, new Date()),
+    )).for("share").limit(1))[0] : undefined;
+  let persistedStageIntent: Record<string, unknown> | null = null;
+  if (input.requirePersistedStageIntent) {
+    try {
+      readNativeAttachmentStageCleanupReceipts(profile, input.runId, input.leaseId);
+      const intents = Array.isArray(profile.nativeAttachmentStageIntents) ? profile.nativeAttachmentStageIntents : [];
+      persistedStageIntent = intents.map(record).find(intent => intent.stageNonce === input.operation.stageNonce &&
+        intent.attachmentId === input.operation.attachmentId) ?? null;
+    } catch { persistedStageIntent = null; }
+  }
+  const expectedInputHashMatches = (typeof input.expectedExecutionInputHash === "string" &&
+    /^[a-f0-9]{64}$/.test(input.expectedExecutionInputHash) && executionInputHash === input.expectedExecutionInputHash) ||
+    Boolean(input.requirePersistedStageIntent && persistedStageIntent?.executionInputHash === executionInputHash);
+  let ephemeralConversationWorkspaceMatches = false;
+  if (activeLease?.executionWorkspaceId === null && execution.binding.executionWorkspaceId === input.runId &&
+      run?.responsibleUserId && task) {
+    const [agent] = await db.select({ adapterType: agents.adapterType }).from(agents).where(and(
+      eq(agents.companyId, input.companyId), eq(agents.id, input.agentId),
+    )).limit(1);
+    const runContext = record(run.contextSnapshot);
+    const generation = typeof runContext.conversationSessionGeneration === "number"
+      ? runContext.conversationSessionGeneration : null;
+    const scope = agent ? await findNativeChatWorkspaceScope(db as Db, {
+      adapterType: agent.adapterType ?? "", environmentDriver: "sandbox", companyId: input.companyId,
+      agentId: input.agentId, issueId: input.issueId, runId: input.runId,
+      responsibleUserId: run.responsibleUserId, conversationSessionGeneration: generation,
+    }) : null;
+    const ephemeralTaskRoot = scope?.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
+    const leaseMetadata = record(activeLease.metadata);
+    ephemeralConversationWorkspaceMatches = Boolean(scope && scope.projectId === null &&
+      ephemeralTaskRoot === input.taskRoot && execution.workspace.cwd === input.taskRoot &&
+      leaseMetadata.remoteCwd === input.taskRoot);
+  }
+  const leaseWorkspaceMatches = activeLease?.executionWorkspaceId === execution.binding.executionWorkspaceId ||
+    ephemeralConversationWorkspaceMatches;
   const context = record(run?.contextSnapshot);
   const taskCapture = record(profile.nativeBootstrapTaskSource);
   const taskInput = nativePayloadSourceInputSchema.safeParse(taskCapture.input);
   const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(taskCapture.payloadSourceSnapshot);
-  const authority = record(profile.nativeOpenCodeSourceAuthority);
   const refs = record(profile.nativeBootstrapTaskMarkdownSourceMap).references;
   const attachmentRefs = Array.isArray(refs) ? refs.filter(value => {
     const ref = record(value);
@@ -108,7 +155,10 @@ export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transacti
       execution.binding.companyId !== input.companyId || execution.binding.runId !== input.runId ||
       execution.binding.issueId !== input.issueId || execution.binding.agentId !== input.agentId ||
       execution.workspace.cwd !== input.taskRoot ||
-      authority.version !== 1 || authority.executionInputHash !== nativeSha256(executionValue) ||
+      !expectedInputHashMatches || !activeLease || activeLease.id !== input.leaseId ||
+      !leaseWorkspaceMatches ||
+      (input.requirePersistedStageIntent && (!persistedStageIntent || persistedStageIntent.phase !== "staging" ||
+        persistedStageIntent.executionInputHash !== executionInputHash || persistedStageIntent.leaseId !== input.leaseId)) ||
       !taskInput.success || taskInput.data.kind !== "task" || taskInput.data.issueId !== input.issueId || !taskSnapshot.success ||
       taskSnapshot.data.owner.kind !== "issue" || taskSnapshot.data.owner.companyId !== input.companyId ||
       taskSnapshot.data.owner.id !== input.issueId ||
@@ -138,7 +188,12 @@ export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transacti
       row.attachment.issueCommentId !== commentInput.data.commentId || row.attachment.payloadSourceProtocolVersion !== 1 ||
       reference.byteSize !== row.asset.byteSize || typeof reference.filename !== "string" ||
       reference.contentType !== row.asset.contentType || snapshot.data.owner.kind !== "attachment" ||
-      snapshot.data.owner.companyId !== input.companyId || snapshot.data.owner.id !== input.operation.attachmentId)
+      snapshot.data.owner.companyId !== input.companyId || snapshot.data.owner.id !== input.operation.attachmentId ||
+      (input.requirePersistedStageIntent && (!persistedStageIntent || persistedStageIntent.sha256 !== row.asset.sha256 ||
+        persistedStageIntent.byteSize !== row.asset.byteSize || persistedStageIntent.sourceSnapshotHash !== nativeSha256(snapshot.data) ||
+        nativeSha256(persistedStageIntent.sourceBinding) !== nativeSha256({ kind: "attachment", issueId: input.issueId,
+          attachmentId: row.attachment.id, commentId: row.attachment.issueCommentId, assetId: row.asset.id,
+          sha256: row.asset.sha256, byteSize: row.asset.byteSize }))))
     return denied();
   const attachmentInput = nativePayloadSourceInputSchema.safeParse({ kind: "attachment", issueId: input.issueId,
     attachmentId: row.attachment.id, commentId: row.attachment.issueCommentId, assetId: row.asset.id,
@@ -149,13 +204,17 @@ export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transacti
   const actor = { type: "agent" as const, source: "none" as const, companyId: input.companyId,
     agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId };
   await assertNativeTaskSourceOwnerCurrent(db, { companyId: input.companyId, actor: { type: "board", source: "session", userId: run.responsibleUserId }, source: taskInput.data });
-  await assertNativePayloadSourceSetCurrent(db, { companyId: input.companyId, issueId: input.issueId, runId: input.runId,
-    actor, policy: commentSnapshot.data.policy, inputs: [commentInput.data] });
-  await assertNativePayloadSourceSetCurrent(db, { companyId: input.companyId, issueId: input.issueId, runId: input.runId,
-    actor, policy: snapshot.data.policy, inputs: [attachmentInput.data] });
+  // This is a pre-dispatch source owner, before nativeInputSourceReceipt is
+  // sealed. Reuse the exact Task, comment, and attachment current-owner checks;
+  // the continuation-set API is intentionally reserved for receipt-bound prefixes.
+  await assertNativePreDispatchTaskCommentAttachmentCurrent(db, { companyId: input.companyId,
+    issueId: input.issueId, runId: input.runId, agentId: input.agentId,
+    responsibleUserId: run.responsibleUserId, actor, taskSource: taskInput.data,
+    commentSource: commentInput.data, commentSnapshot: commentSnapshot.data,
+    attachmentSource: attachmentInput.data, attachmentSnapshot: snapshot.data });
   return { runId: input.runId, companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
     responsibleUserId: run.responsibleUserId, attachmentInput: attachmentInput.data, attachmentPolicy: snapshot.data.policy,
     attachmentSnapshot: snapshot.data as unknown as Record<string, unknown>,
     sourceHash: row.asset.sha256, byteSize: row.asset.byteSize, filename: reference.filename,
-    contentType: row.asset.contentType, stageNonce: input.operation.stageNonce };
+    contentType: row.asset.contentType, stageNonce: input.operation.stageNonce, executionInputHash };
 }

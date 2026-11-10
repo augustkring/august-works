@@ -27,6 +27,7 @@ export type NativeAttachmentStageIntent = {
   stageNonce: string;
   sha256: string;
   byteSize: number;
+  executionInputHash?: string;
   relativePath: string;
   sourceBinding: Record<string, unknown>;
   sourceSnapshot: Record<string, unknown>;
@@ -109,7 +110,9 @@ export function readNativeAttachmentStageCleanupReceipts(profileValue: unknown, 
       !UUID.test(String(intent.issueId)) || !UUID.test(String(intent.agentId)) || !UUID.test(String(intent.leaseId)) ||
       intent.companyId !== binding.companyId || intent.issueId !== binding.issueId || intent.agentId !== binding.agentId ||
       !UUID.test(String(intent.attachmentId)) || !UUID.test(String(intent.stageNonce)) ||
-      !/^[a-f0-9]{64}$/.test(String(intent.sha256)) || !Number.isSafeInteger(intent.byteSize) ||
+      !/^[a-f0-9]{64}$/.test(String(intent.sha256)) ||
+      (intent.executionInputHash !== undefined && !/^[a-f0-9]{64}$/.test(String(intent.executionInputHash))) ||
+      !Number.isSafeInteger(intent.byteSize) ||
       (intent.byteSize as number) < 1 || (intent.byteSize as number) > MAX_ATTACHMENT_BYTES ||
       intent.relativePath !== expectedPath || sourceBinding.kind !== "attachment" ||
       sourceBinding.issueId !== intent.issueId || sourceBinding.attachmentId !== intent.attachmentId ||

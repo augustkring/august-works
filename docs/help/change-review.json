@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
+      "sourceSha256": "893cb7aa50833e5fd2f8c9762ff2c2c72251d38d58c898f31b7aff6de7cfd807",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "The typed cancelled/rejected task-wake interaction reference is accepted only when the exact current closed Human continuation owner and both source renditions match. This changes server-side provenance/admission, not the available customer action or Help wording; the guidance to inspect the original task and current status remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
+      "sourceSha256": "893cb7aa50833e5fd2f8c9762ff2c2c72251d38d58c898f31b7aff6de7cfd807",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "Den typede annullerede/afviste interaktionsreference accepteres kun, n\u00e5r den pr\u00e6cise aktuelle, lukkede Human-forts\u00e6ttelsesejer og begge kilderenditioner stemmer. Det \u00e6ndrer serverens kildeproveniens/adgangskontrol, ikke kundens handlinger eller Hj\u00e6lp-teksten; r\u00e5det om at kontrollere den oprindelige opgave og aktuelle status er fortsat korrekt."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
+      "sourceSha256": "893cb7aa50833e5fd2f8c9762ff2c2c72251d38d58c898f31b7aff6de7cfd807",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "The changed wake-source capture does not alter export contents, deletion request semantics or erasure timing. Help still distinguishes submitting an organization deletion request from completed erasure."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
+      "sourceSha256": "893cb7aa50833e5fd2f8c9762ff2c2c72251d38d58c898f31b7aff6de7cfd807",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+      "rationale": "Den \u00e6ndrede registrering af wake-kilder \u00e6ndrer ikke eksportens indhold, betydningen af en sletteanmodning eller sletningens tidsforl\u00f8b. Hj\u00e6lp skelner fortsat mellem at indsende en anmodning om organisationssletning og gennemf\u00f8rt sletning."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

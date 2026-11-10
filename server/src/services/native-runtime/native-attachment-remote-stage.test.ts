@@ -124,7 +124,8 @@ describe("Native remote attachment staging owners", () => {
       policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [], digest: "b".repeat(64) };
     const unsigned = { schema: "paperclip.native-attachment-stage-intent.v1" as const,
       runId, companyId, issueId, agentId, leaseId, attachmentId, stageNonce,
-      sha256: "a".repeat(64), byteSize: 19, relativePath: `.paperclip-inbound/${runId}/${stageNonce}/payload`,
+      sha256: "a".repeat(64), byteSize: 19, executionInputHash: "e".repeat(64),
+      relativePath: `.paperclip-inbound/${runId}/${stageNonce}/payload`,
       sourceBinding, sourceSnapshot, sourceSnapshotHash: nativeSha256(sourceSnapshot), phase: "staging" as const };
     const profile = { nativeExecutionInput: { binding: { companyId, runId, issueId, agentId } }, nativeAttachmentStageIntents: [
       { ...unsigned, integrityHash: nativeSha256(unsigned) },
@@ -132,6 +133,10 @@ describe("Native remote attachment staging owners", () => {
     expect(readNativeAttachmentStageCleanupReceipts(profile, runId, leaseId)).toEqual([
       { attachmentId, stageNonce, sha256: "a".repeat(64), byteSize: 19 },
     ]);
+    const wrongInputHash = structuredClone(profile);
+    wrongInputHash.nativeAttachmentStageIntents[0]!.executionInputHash = "f".repeat(64);
+    expect(() => readNativeAttachmentStageCleanupReceipts(wrongInputHash, runId, leaseId))
+      .toThrow("native_attachment_cleanup_intents_invalid");
     const wrongLease = structuredClone(profile);
     wrongLease.nativeAttachmentStageIntents[0]!.leaseId = "a2345678-1234-4234-9234-123456789abc";
     expect(() => readNativeAttachmentStageCleanupReceipts(wrongLease, runId, leaseId)).toThrow("native_attachment_cleanup_intents_invalid");

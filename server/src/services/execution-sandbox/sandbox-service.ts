@@ -1524,7 +1524,11 @@ export function executionSandboxService(db: Db, options: {
       companyId: string; runId: string; taskId: string; planId: string; groupId: string; manifestId: string;
       manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
     }) => {
-      const bootstrap: NativeConformanceBootstrap = { ...input };
+      const bootstrap: NativeConformanceBootstrap = {
+        runId: input.runId, taskId: input.taskId, planId: input.planId, groupId: input.groupId,
+        manifestId: input.manifestId, manifestHash: input.manifestHash, leaseId: input.leaseId,
+        workspaceRoot: input.workspaceRoot, creationReceipt: input.creationReceipt,
+      };
       const initial = await db.transaction(async tx => {
         const { source, lease } = await assertNativeConformanceBootstrap(tx, actor, input.companyId, bootstrap);
         const cellRef = /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i.exec(source.runtime.providerProfileRef);

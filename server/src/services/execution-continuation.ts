@@ -807,7 +807,8 @@ export async function buildExecutionContinuation(input: {
     },
   });
   const finalCommentSources: NativeCommentSourceCapture[] = [];
-  if (input.onCommentSourceCapture || input.onContinuationSourceCapture) {
+  const captureCommentSources = async (withdrawalProducerRunIds: ReadonlySet<string> = new Set()) => {
+    if (!(input.onCommentSourceCapture || input.onContinuationSourceCapture)) return;
     // Match final redacted renditions to their own selected rows, never a new
     // live lookup or the independently selected wake/replay comment version.
     const selectedById = new Map(rows.map(row => [row.id, row]));
@@ -826,16 +827,23 @@ export async function buildExecutionContinuation(input: {
         payloadSourceSnapshot: selected.payloadSourceSnapshot,
       };
       let selectedCapture = capture;
-      if (assignmentSummarySelected && !selected.payloadSourceSnapshot && selected.authorType === "agent" &&
-          selected.createdByRunId && outcomeReader.type === "agent") {
+      const closedWithdrawalProducer = selected.createdByRunId !== null && withdrawalProducerRunIds.has(selected.createdByRunId);
+      if ((assignmentSummarySelected || closedWithdrawalProducer) && !selected.payloadSourceSnapshot &&
+          selected.authorType === "agent" && selected.createdByRunId && outcomeReader.type === "agent") {
         const acceptedPresentationOwner = await captureNativeAcceptedFinalizedPresentationCommentOwner({ db, companyId, issueId,
           commentId: selected.id, reader: outcomeReader });
-        if (acceptedPresentationOwner && isDeepStrictEqual(acceptedPresentationOwner.commentSourceIdentity, capture.input))
+        if (acceptedPresentationOwner && acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId === selected.createdByRunId &&
+            isDeepStrictEqual(acceptedPresentationOwner.commentSourceIdentity, capture.input))
           selectedCapture = { ...capture, acceptedPresentationOwner };
       }
       finalCommentSources.push(selectedCapture);
       input.onCommentSourceCapture?.(selectedCapture);
     }
+  };
+  let commentSourcesCaptured = false;
+  if (!input.onContinuationSourceCapture) {
+    await captureCommentSources();
+    commentSourcesCaptured = true;
   }
   if (input.onContinuationSourceCapture && receiver && outcomeReader.type === "agent" &&
     receiver.responsibleUserId && receiver.wakeupRequestId) {
@@ -876,6 +884,13 @@ export async function buildExecutionContinuation(input: {
         onContinuationSourceCapture: capture => { governedInteractions.push(capture); },
         onAnsweredQuestionCapture: capture => { answeredQuestions.push(capture); },
         onHumanReviewWithdrawalCapture: capture => { humanReviewWithdrawals.push(capture); } });
+    }
+    if (!commentSourcesCaptured) {
+      const withdrawalProducerRunIds = new Set(humanReviewWithdrawals.flatMap(capture =>
+        capture.projection.owner.sourceRunId === capture.projection.interactionSourceRunId
+          ? [capture.projection.owner.sourceRunId] : []));
+      await captureCommentSources(withdrawalProducerRunIds);
+      commentSourcesCaptured = true;
     }
     const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
     const pendingInteractions = wake && envelope.unresolvedInteractionIds.length
@@ -927,5 +942,6 @@ export async function buildExecutionContinuation(input: {
         originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload),
         ...(interaction ? { interaction } : {}), ...(manualQueueAdoption ? { manualQueueAdoption } : {}) } }));
   }
+  if (!commentSourcesCaptured) await captureCommentSources();
   return envelope;
 }

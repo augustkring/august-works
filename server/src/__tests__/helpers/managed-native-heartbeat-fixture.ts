@@ -107,6 +107,8 @@ import { environmentRuntimeService } from "../../services/environment-runtime.js
 import type { ManagedSandboxProviderRegistration } from "./managed-native-conversation-sandbox-host.js";
 
 type FrameInput = Parameters<typeof runManagedNativeConversationFrame>[0];
+type VerifiedModelRunScope = (runId: string, work: () => ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>) =>
+  ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
 /** Pre-run extraction of the existing controlled Host fixture. The driver
  * calls the real scheduler; this helper never inserts a Run or worker attempt.
  * Fake CLI/provider HTTP effects remain software-only, not physical evidence. */
@@ -154,7 +156,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     result: Awaited<ReturnType<ReturnType<typeof createToolGatewayService>["executeTool"]>>;
     replay: () => ReturnType<ReturnType<typeof createToolGatewayService>["executeTool"]>;
   }) => Promise<void>;
-  configureHeartbeat?: FrameInput["configureHeartbeat"];
+  configureHeartbeat?: (context: Parameters<NonNullable<FrameInput["configureHeartbeat"]>>[0] & {
+    withVerifiedModelRun: VerifiedModelRunScope;
+    preparedRegistration?: ManagedSandboxProviderRegistration;
+  }) => ReturnType<NonNullable<FrameInput["configureHeartbeat"]>>;
   driveScheduler: (context: { db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyId: string;
     agentId: string; gateway: ReturnType<typeof workerModelGateway>; heartbeat: ReturnType<typeof heartbeatService>;
     managedAgentIds: { executor: string; reviewer: string } | null;
@@ -167,8 +172,6 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       sandboxRuntimeFacts: Record<string, unknown> | null } }) => Promise<T>;
 }): Promise<T> {
   if (input.sandboxRelay === false) throw new Error("scheduler_fixture_requires_managed_sandbox");
-  if (input.schedulerMode === "serial" && input.configureHeartbeat)
-    throw new Error("scheduler_serial_fixture_requires_owned_host");
   if (input.ordinaryWorkerProject && input.schedulerMode !== "serial")
     throw new Error("project_workspace_scope_requires_serial_scheduler_host");
   if (input.managedTwoAgentSignoff && input.schedulerMode !== "serial")
@@ -845,6 +848,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       companyId: string; runId: string; taskId: string; planId: string; groupId: string; manifestId: string;
       manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
     }) => Promise<unknown>;
+    closeManagedAgentHostForRun?: (runId: string) => Promise<void>;
   };
   const hostsByAgent = new Map<string, ConfiguredHost>();
   const closedAgentHostIds = new Set<string>();
@@ -864,7 +868,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       providerBindingId: providerBindingsByAgent.get(configuredAgentId)!, gateway,
       profile: profilesByAgent.get(configuredAgentId)!, runHome: hostRoot, opencodeBinary: input.opencodeBinary,
       brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest,
-      observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
+      observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; },
+      withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work),
+      preparedRegistration: registrationsByAgent.get(configuredAgentId) });
     if (!host) throw new Error("scheduler_fixture_host_configuration_missing");
     const schedulerHost = host as ConfiguredHost;
     hostsByAgent.set(configuredAgentId, schedulerHost);
@@ -892,8 +898,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     if (!run || !host) throw new Error("scheduler_fixture_run_agent_unmapped");
     return { agentId: run.agentId, host };
   };
-  let closeManagedAgentHostForRun: (runId: string) => Promise<void> = async () => {
-    throw new Error("scheduler_fixture_two_agent_close_not_enabled");
+  let closeManagedAgentHostForRun: (runId: string) => Promise<void> = async runId => {
+    const [run] = await db.select({ agentId: heartbeatRuns.agentId }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
+    const host = run ? hostsByAgent.get(run.agentId) : undefined;
+    if (!host?.closeManagedAgentHostForRun)
+      throw new Error("scheduler_fixture_exact_run_host_close_unavailable");
+    await host.closeManagedAgentHostForRun(runId);
   };
   if (input.managedTwoAgentSignoff || input.managedOpenCodeConformance) {
     const closedHostRunByAgent = new Map<string, string>();

@@ -1,4 +1,28 @@
+const { failedRetryAuthorityObservers } = vi.hoisted(() => ({
+  failedRetryAuthorityObservers: new WeakMap<object, (tx: unknown, input: {
+    phase: "admission" | "promotion" | "execution"; companyId: string; agentId: string;
+    issueId: string | null; wakeupRequestId: string | null; runId?: string;
+    contextSnapshot: Record<string, unknown>;
+  }) => Promise<void>>(),
+}));
+vi.mock("../services/durable-chat-wakeup.js", async importOriginal => {
+  const actual = await importOriginal<typeof import("../services/durable-chat-wakeup.js")>();
+  return {
+    ...actual,
+    registerFailedChatRunRetryAuthority(db: Parameters<typeof actual.registerFailedChatRunRetryAuthority>[0],
+      authority: Parameters<typeof actual.registerFailedChatRunRetryAuthority>[1]) {
+      return actual.registerFailedChatRunRetryAuthority(db, async (tx, input) => {
+        await failedRetryAuthorityObservers.get(db)?.(tx, input);
+        await authority(tx, input);
+      });
+    },
+  };
+});
+
 import { randomUUID } from "node:crypto";
+import { mkdtemp, rmdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import {
   afterAll,
@@ -16,6 +40,8 @@ import {
   heartbeatRuns,
   agentWakeupRequests,
   chatConversations,
+  chatExternalPrincipals,
+  chatIdentityLinks,
   chatActions,
   chatEndpoints,
   chatMessageLinks,
@@ -29,6 +55,9 @@ import {
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService } from "../services/heartbeat.js";
+import { chatChannelService } from "../services/chat-channels.js";
+import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
+import { qualifiedOpenCodeBinary } from "./helpers/managed-native-opencode-e2e-fixture.js";
 import {
   authorizeFailedChatRunRetryWake,
   authorizeCommittedChatResponse,
@@ -50,6 +79,7 @@ import {
 describe("durable inbound chat scheduler receipts", () => {
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
+  let nativeFixtureRoot = "";
   const liveRunIds = new Set<string>();
   const unregisterAuthorities: Array<() => void> = [];
   let restoreApiUrl: (() => void) | null = null;
@@ -75,6 +105,8 @@ describe("durable inbound chat scheduler receipts", () => {
   });
   beforeAll(async () => {
     restoreApiUrl = installHeartbeatApiUrlFixture();
+    nativeFixtureRoot = await mkdtemp(join(tmpdir(), "durable-chat-managed-retry-"));
+    vi.stubEnv("PAPERCLIP_HOME", nativeFixtureRoot);
     temporary = await startEmbeddedPostgresTestDatabase(
       "chat-wakeup-receipts-",
     );
@@ -100,6 +132,14 @@ describe("durable inbound chat scheduler receipts", () => {
     unregisterServerAdapter("durable_chat_retry_test");
     restoreApiUrl?.();
     await temporary.cleanup();
+    vi.unstubAllEnvs();
+    if (nativeFixtureRoot) {
+      try { await rmdir(nativeFixtureRoot); }
+      catch (error) {
+        const code = error && typeof error === "object" ? (error as NodeJS.ErrnoException).code : undefined;
+        if (code !== "ENOENT" && code !== "ENOTEMPTY") throw error;
+      }
+    }
   });
 
   async function fixture(deferred = false) {
@@ -359,6 +399,188 @@ describe("durable inbound chat scheduler receipts", () => {
       register,
       wake,
     };
+  }
+
+  async function withManagedChannelRetryScenario(
+    drive: (input: {
+      db: typeof db;
+      heartbeat: ReturnType<typeof heartbeatService>;
+      service: ReturnType<typeof chatChannelService>;
+      companyId: string;
+      agentId: string;
+      actorUserId: string;
+      endpointId: string;
+      providerCallCount: () => number;
+      sourceRun: typeof heartbeatRuns.$inferSelect;
+      retryContext: Record<string, unknown>;
+      retryRequest: ReturnType<typeof createDurableChatWakeupRequest>;
+      authority: ReturnType<typeof vi.fn>;
+    }) => Promise<void>,
+  ) {
+    let endpointCallbacks: { onMessage?: (input: unknown) => Promise<unknown> } | null = null;
+    let injectedPreProviderFailure = false;
+    const identitySuffix = randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase();
+    const slackTeamId = `T${identitySuffix}`;
+    const slackBotId = `U${identitySuffix}`;
+    const slackExternalUserId = `U${randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`;
+    const slackChannelId = `C${identitySuffix}`;
+    const endpoints = new Map<string, unknown>();
+    const runtime = {
+      get: (id: string) => endpoints.get(id) ?? null,
+      replaceEndpoint: async (options: { endpointId: string; callbacks: unknown; providerConfig: { provider: string } }) => {
+        endpointCallbacks = options.callbacks as typeof endpointCallbacks;
+        const endpoint = {
+          provider: options.providerConfig.provider,
+          initialize: async () => undefined,
+          shutdown: async () => undefined,
+          post: async (threadId: string) => ({ id: randomUUID(), threadId }),
+          edit: async (_threadId: string, messageId: string) => ({ id: messageId }),
+          addReaction: async () => undefined,
+          removeReaction: async () => undefined,
+          startTyping: async () => undefined,
+          subscribe: async () => undefined,
+          postEphemeral: async (threadId: string) => ({ id: randomUUID(), threadId, usedFallback: false }),
+        };
+        endpoints.set(options.endpointId, endpoint);
+        return endpoint;
+      },
+      removeEndpoint: async (id: string) => { endpoints.delete(id); return true; },
+      shutdown: async () => { endpoints.clear(); },
+    };
+    const slackFetch = async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://slack.com/api/auth.test") return Response.json({ ok: true,
+        team_id: slackTeamId, team: "Paperclip Test", user_id: slackBotId, user: "maya" },
+        { headers: { "x-oauth-scopes": "app_mentions:read,assistant:write,channels:history,channels:read,chat:write,commands,files:read,files:write,groups:history,groups:read,im:history,im:read,mpim:history,mpim:read,reactions:read,reactions:write,users:read" } });
+      if (url.startsWith("https://slack.com/api/conversations.list")) return Response.json({ ok: true,
+        channels: [], response_metadata: { next_cursor: "" } });
+      if (url.startsWith("https://slack.com/api/conversations.info")) {
+        const body = new URLSearchParams(String(init?.body ?? ""));
+        const channel = new URL(url).searchParams.get("channel") ?? body.get("channel") ?? "C-DURABLE";
+        return Response.json({ ok: true, channel: { id: channel, name: "durable", is_member: true, is_archived: false } });
+      }
+      if (url === "https://slack.com/api/users.info") return Response.json({ ok: true,
+        user: { id: slackExternalUserId, team_id: slackTeamId } });
+      if (url === "https://slack.com/api/agents.sessions.setStatus") return Response.json({ ok: true });
+      throw new Error("durable_retry_fixture_unexpected_slack_request");
+    };
+    await withManagedNativeHeartbeatFixture({
+      db,
+      root: nativeFixtureRoot,
+      opencodeBinary: qualifiedOpenCodeBinary(),
+      timeoutSec: 120,
+      schedulerMode: "serial",
+      providerReply: () => ({ stop_reason: "end_turn", content: [{ type: "text", text: "The exact request is complete." }] }),
+      configureHeartbeat: async context => {
+        const { configureManagedSerialSchedulerSandboxHost } = await import("./helpers/managed-native-conversation-sandbox-host.js");
+        const host = await configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
+          preparedRegistration: context.preparedRegistration,
+          withVerifiedModelRun: context.withVerifiedModelRun });
+        const before = host.beforeNativeExecution;
+        return { ...host, beforeNativeExecution: async args => {
+          const environment = await before(args);
+          if (!injectedPreProviderFailure) {
+            injectedPreProviderFailure = true;
+            throw new Error("durable_retry_fixture_pre_provider_host_handoff_failure");
+          }
+          return environment;
+        } };
+      },
+      driveScheduler: async ({ heartbeat, companyId, agentId, actor, facts, closeManagedAgentHostForRun }) => {
+        if (!actor.userId) throw new Error("durable_retry_fixture_current_human_missing");
+        const chatService = chatChannelService(db, {
+          heartbeat: { wakeup: heartbeat.wakeup, cancelRun: heartbeat.cancelRun },
+          runtime: runtime as never,
+          fetch: slackFetch,
+          publicBaseUrl: "https://paperclip.example",
+        });
+        try {
+        const endpoint = await chatService.create(companyId, { provider: "slack", assignedAgentId: agentId,
+          name: `Managed durable retry ${identitySuffix}` }, actor.userId);
+        await chatService.update(endpoint.id, { allowUnlinkedPeople: false }, actor.userId);
+        await chatService.configure(endpoint.id, { action: "configure", credentials: {
+          botToken: `xoxb-durable-retry-${identitySuffix}`, signingSecret: `durable-retry-signing-${identitySuffix}`,
+        } }, actor.userId);
+        const [principal] = await db.insert(chatExternalPrincipals).values({ companyId, provider: "slack",
+          providerAccountId: slackTeamId, externalId: slackExternalUserId, kind: "user", displayName: "Channel User" }).returning();
+        if (!principal) throw new Error("durable_retry_fixture_linked_principal_missing");
+        await db.insert(chatIdentityLinks).values({ companyId, endpointId: endpoint.id, principalId: principal.id,
+          paperclipUserId: actor.userId, status: "linked", confirmedAt: new Date() });
+        if (!endpointCallbacks || typeof endpointCallbacks.onMessage !== "function")
+          throw new Error("durable_retry_fixture_callbacks_missing");
+        const channelId = slackChannelId;
+        const threadId = `slack:${channelId}:1789000000.100001`;
+        const thread = { id: threadId, channelId, isDM: false,
+          channel: { id: channelId, name: "durable-retry" },
+          adapter: { addReaction: async () => undefined },
+          startTyping: async () => undefined, subscribe: async () => undefined,
+          post: async () => ({ id: randomUUID(), threadId }),
+          postEphemeral: async () => ({ id: randomUUID(), threadId, usedFallback: false }) };
+        const message = { id: "1789000000.100001", raw: {}, text: "@maya retry the exact original request",
+          isMention: true, attachments: [], metadata: { dateSent: new Date(), edited: false },
+          author: { userId: slackExternalUserId, userName: "owner", fullName: "Channel User",
+            isBot: false, isMe: false, isSystem: false } };
+        await endpointCallbacks.onMessage({ endpointId: endpoint.id, provider: "slack", thread, message, trigger: "mention" });
+        const [sourceAction] = await db.select().from(chatActions).where(and(
+          eq(chatActions.endpointId, endpoint.id), eq(chatActions.kind, "inbound_wakeup")));
+        if (!sourceAction) throw new Error("durable_retry_fixture_source_action_missing");
+        const terminalDeadline = Date.now() + 60_000;
+        let sourceRun: typeof heartbeatRuns.$inferSelect | undefined;
+        while (Date.now() < terminalDeadline) {
+          const [receipt] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, sourceAction.id));
+          if (receipt?.runId) {
+            const [candidate] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, receipt.runId));
+            if (candidate && !["queued", "running"].includes(candidate.status)) { sourceRun = candidate; break; }
+          }
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        if (!sourceRun || sourceRun.status !== "failed")
+          throw new Error("durable_retry_fixture_pre_provider_run_not_failed");
+        await heartbeat.drainActiveRunExecutions();
+        const issueRuns = await db.select({ id: heartbeatRuns.id, wakeupRequestId: heartbeatRuns.wakeupRequestId,
+          contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId)));
+        const issueRunRows = issueRuns.filter(row => row.contextSnapshot && typeof row.contextSnapshot === "object" &&
+          (row.contextSnapshot as Record<string, unknown>).issueId === sourceAction.payload.issueId);
+        if (issueRunRows.length !== 1 || issueRunRows[0]?.id !== sourceRun.id ||
+            issueRunRows[0]?.wakeupRequestId !== sourceAction.id || facts().providerCallCount !== 0)
+          throw new Error("durable_retry_fixture_automatic_provider_replay_detected");
+        const [receipt] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, sourceAction.id));
+        const recovery = sourceRun.resultJson && typeof sourceRun.resultJson === "object"
+          ? (sourceRun.resultJson as Record<string, unknown>).executionRecovery as Record<string, unknown> | undefined : undefined;
+        const profile = sourceRun.runnerProfileJson && typeof sourceRun.runnerProfileJson === "object"
+          ? sourceRun.runnerProfileJson as Record<string, unknown> : {};
+        if (!receipt || receipt.runId !== sourceRun.id || sourceRun.runtimeMode !== "native" ||
+            !profile.nativeExecutionInput || recovery?.kind !== "bootstrap" || recovery.providerWorkStarted !== false ||
+            facts().providerCallCount !== 0)
+          throw new Error("durable_retry_fixture_source_run_binding_invalid");
+        await closeManagedAgentHostForRun(sourceRun.id);
+        const retry = await db.transaction(tx => chatService.prepareFailedChatRunRetry(tx, {
+          companyId, issueId: sourceAction.payload.issueId as string, agentId, failedRunId: sourceRun!.id,
+          initiatedByUserId: actor.userId!,
+        }));
+        const retryContext = { ...sourceRun.contextSnapshot, issueId: sourceAction.payload.issueId,
+          source: "chat:slack", retryOfRunId: sourceRun.id,
+          chatFailedRunRetry: { version: 1, actionId: retry.actionId, failedRunId: sourceRun.id } };
+        const authority = vi.fn(async (_tx: unknown, input: { contextSnapshot: Record<string, unknown>; phase: string }) => {
+          expect(input.contextSnapshot).toMatchObject(retryContext);
+        });
+        const request = createDurableChatWakeupRequest({ id: retry.actionId, companyId, agentId,
+          issueId: String(sourceAction.payload.issueId), commentId: String(sourceAction.payload.commentId),
+          requestedByActorType: sourceAction.payload.requestedByActorType === "user" ? "user" : "system",
+          requestedByActorId: String(sourceAction.payload.requestedByActorId), requestedAt: new Date(),
+          failedRunRetry: { failedRunId: sourceRun.id }, authorize: async () => undefined });
+        failedRetryAuthorityObservers.set(db, async (tx, input) => authority(tx, input));
+        await drive({ db, heartbeat, service: chatService, companyId, agentId, actorUserId: actor.userId!,
+          endpointId: endpoint.id, providerCallCount: () => facts().providerCallCount,
+          sourceRun, retryContext, retryRequest: request, authority });
+        } finally {
+          failedRetryAuthorityObservers.delete(db);
+          await heartbeat.drainActiveRunExecutions();
+          await chatService.shutdown();
+        }
+      },
+    });
   }
 
   it("fails closed for a persisted retry when its live authority is unavailable", async () => {
@@ -622,52 +844,37 @@ describe("durable inbound chat scheduler receipts", () => {
   it.each([false, true])(
     "rechecks current retry authority immediately before dispatch (revoked=%s)",
     async (revoked) => {
-      const f = await retryFixture();
-      await db
-        .update(agents)
-        .set({ adapterType: "durable_chat_retry_test" })
-        .where(eq(agents.id, f.agentId));
-      f.register();
-      const queued = await f.wake();
-      let executionChecks = 0;
-      f.authority.mockImplementation(async (_tx, input) => {
-        if (input.phase === "execution" && ++executionChecks === 2 && revoked) {
-          throw conflict("Current chat access was revoked before dispatch", {
-            code: "chat_failed_run_retry_not_authorized",
-          });
-        }
+      await withManagedChannelRetryScenario(async (f) => {
+        let executionChecks = 0;
+        f.authority.mockImplementation(async (tx: unknown, input: { contextSnapshot: Record<string, unknown>; phase: string;
+          companyId: string; agentId: string; issueId: string | null; wakeupRequestId: string | null; runId?: string }) => {
+          expect(input.contextSnapshot).toMatchObject(f.retryContext);
+          if (input.phase === "execution" && ++executionChecks === 2 && revoked) {
+            await (tx as typeof db).update(chatConversations).set({ state: "completed" })
+              .where(eq(chatConversations.issueId, f.sourceRun.nativeIssueId!));
+          }
+          // The observer runs before, and delegates to, the exact callback
+          // registered by chatChannelService; no authority is substituted.
+        });
+        const queued = await f.heartbeat.wakeup(f.agentId, {
+          source: "assignment", triggerDetail: "system", reason: "retry_failed_chat_run",
+          payload: f.retryContext, contextSnapshot: f.retryContext,
+          requestedByActorType: f.retryRequest.requestedByActorType, requestedByActorId: f.retryRequest.requestedByActorId,
+          durableChatRequest: f.retryRequest, allowRunCoalescing: true,
+        });
+        expect(queued).not.toBeNull();
+        await f.heartbeat.drainActiveRunExecutions();
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, queued!.id));
+        expect(executionChecks).toBe(2);
+        expect(f.providerCallCount()).toBe(revoked ? 0 : 1);
+        expect(run).toMatchObject({ status: revoked ? "failed" : "succeeded", retryOfRunId: f.sourceRun.id,
+          runtimeMode: "native" });
+        if (revoked) expect(run.errorCode).toBe("chat_failed_run_retry_not_authorized");
+        expect(await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(eq(heartbeatRuns.agentId, f.agentId))).toHaveLength(2);
+        expect(f.authority.mock.calls.map(call => call[1].phase)).toEqual(["admission", "execution", "execution"]);
       });
-      await f.heartbeat.cancelRun(
-        f.activeRunId,
-        "Fixture execution slot released",
-        { suppressImmediateRecovery: true },
-      );
-      await f.heartbeat.drainActiveRunExecutions();
-      const [run] = await db
-        .select()
-        .from(heartbeatRuns)
-        .where(eq(heartbeatRuns.id, queued!.id));
-      expect(executionChecks).toBe(2);
-      expect(execute).toHaveBeenCalledTimes(revoked ? 0 : 1);
-      expect(run).toMatchObject({
-        status: revoked ? "failed" : "succeeded",
-        retryOfRunId: f.failedRunId,
-        nativeSessionId: null,
-      });
-      if (revoked)
-        expect(run.errorCode).toBe("chat_failed_run_retry_not_authorized");
-      expect(
-        await db
-          .select()
-          .from(heartbeatRuns)
-          .where(eq(heartbeatRuns.agentId, f.agentId)),
-      ).toHaveLength(3);
-      expect(f.authority.mock.calls.map((call) => call[1].phase)).toEqual([
-        "admission",
-        "execution",
-        "execution",
-      ]);
     },
+    300_000,
   );
 
   it.each([

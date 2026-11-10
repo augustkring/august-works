@@ -3257,6 +3257,51 @@ export async function assertNativeTaskSourceOwnerCurrent(db: Db | Transaction, i
   }));
 }
 
+/** Revalidate the pre-dispatch Task, Human comment, and delivered attachment
+ * owners for a current Native Run. This is not a receipt-set API: each exact
+ * source is validated by its existing current-owner checker before the first
+ * Native receipt exists. */
+export async function assertNativePreDispatchTaskCommentAttachmentCurrent(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string; responsibleUserId: string;
+  actor: AuthorizationActor; taskSource: Extract<NativePayloadSourceInput, { kind: "task" }>;
+  commentSource: Extract<NativePayloadSourceInput, { kind: "comment" }>; commentSnapshot: NativePayloadSourceSnapshot;
+  attachmentSource: Extract<NativePayloadSourceInput, { kind: "attachment" }>;
+  attachmentSnapshot: NativePayloadSourceSnapshot;
+}): Promise<void> {
+  const { taskSource, commentSource, attachmentSource } = input;
+  if (input.actor.type !== "agent" || input.actor.companyId !== input.companyId ||
+      input.actor.agentId !== input.agentId || input.actor.runId !== input.runId ||
+      input.actor.onBehalfOfUserId !== input.responsibleUserId || taskSource.issueId !== input.issueId ||
+      commentSource.issueId !== input.issueId || attachmentSource.issueId !== input.issueId ||
+      attachmentSource.commentId !== commentSource.commentId || attachmentSource.disposition !== "delivered" ||
+      input.commentSnapshot.owner.kind !== "comment" || input.commentSnapshot.owner.companyId !== input.companyId ||
+      input.commentSnapshot.owner.id !== commentSource.commentId ||
+      input.attachmentSnapshot.owner.kind !== "attachment" || input.attachmentSnapshot.owner.companyId !== input.companyId ||
+      input.attachmentSnapshot.owner.id !== attachmentSource.attachmentId)
+    throw forbidden("The Native pre-dispatch conversation source is unavailable");
+  return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, input.companyId, async scope => {
+    await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
+    const run = await nativeSourceReadRun(tx, input.companyId, input.runId, scope);
+    if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.nativeIssueId !== input.issueId ||
+        run.agentId !== input.agentId || run.responsibleUserId !== input.responsibleUserId)
+      throw forbidden("The Native pre-dispatch conversation Run changed");
+    const [comment] = await tx.select({ payloadSourceSnapshot: issueComments.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated: issueComments.payloadSourceSnapshotInvalidated }).from(issueComments).where(and(
+      eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+      eq(issueComments.id, commentSource.commentId), isNull(issueComments.deletedAt))).for("share");
+    const currentCommentSnapshot = nativePayloadSourceSnapshotSchema.safeParse(comment?.payloadSourceSnapshot);
+    if (!comment || comment.payloadSourceSnapshotInvalidated || !currentCommentSnapshot.success ||
+        !isDeepStrictEqual(currentCommentSnapshot.data, input.commentSnapshot))
+      throw forbidden("The Native pre-dispatch conversation comment snapshot changed");
+    await assertNativeTaskSourceInputCurrentInScope(tx, input.companyId, input.actor, taskSource, scope);
+    await assertConversationCommentSourceCurrent(tx, { companyId: input.companyId, actor: input.actor,
+      source: commentSource, policy: currentCommentSnapshot.data.policy,
+      inputs: [commentSource] }, scope);
+    await assertNativeAttachmentSourceCurrentInScope(tx, input.companyId, input.actor, attachmentSource,
+      input.attachmentSnapshot.policy, [attachmentSource], scope, input.attachmentSnapshot);
+  }));
+}
+
 /** Recheck a Task reader under that Task's own immutable protocol-1 Context
  * prefix. Memory readers may contain several Tasks captured at different
  * points in time; applying the enclosing Memory prefix to each Task would let
@@ -3395,6 +3440,40 @@ export async function assertNativeReadResultSourceSetOwnersCurrent(db: Db | Tran
       policy: policy.data, inputs: inputs.data,
     }, scope, false);
   }));
+}
+
+/** Reuse this current attachment owner both for receipt-bound source sets and
+ * for the narrowly scoped pre-dispatch attachment-stage owner. */
+async function assertNativeAttachmentSourceCurrentInScope(db: Db | Transaction, companyId: string,
+  actor: AuthorizationActor, source: Extract<NativePayloadSourceInput, { kind: "attachment" }>,
+  policy: NativePayloadSourcePolicy, inputs: NativePayloadSourceInput[], scope: NativeSourceReadScope,
+  expectedSnapshot?: NativePayloadSourceSnapshot): Promise<void> {
+  const [attachment] = await db.select({ attachment: issueAttachments, asset: assets,
+    ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('attachment', to_jsonb(${issueAttachments}))`,
+    payloadSourceSnapshotDigestValid: sql<boolean>`(${issueAttachments.payloadSourceSnapshot}->>'digest') =
+      encode(sha256(convert_to((${issueAttachments.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')` })
+    .from(issueAttachments).innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId)))
+    .where(and(eq(issueAttachments.companyId, companyId), eq(issueAttachments.issueId, source.issueId),
+      eq(issueAttachments.id, source.attachmentId)));
+  const snapshot = nativePayloadSourceSnapshotSchema.safeParse(attachment?.attachment.payloadSourceSnapshot);
+  const snapshotRootsRetained = snapshot.success && snapshot.data.inputs.every(root =>
+    inputs.some(candidate => isDeepStrictEqual(candidate, root))) &&
+    (Object.keys(policy) as (keyof NativePayloadSourcePolicy)[]).every(key =>
+      snapshot.data.policy[key].every(sourceId => policy[key].includes(sourceId)));
+  if (!attachment || attachment.attachment.payloadSourceSnapshotInvalidated || !snapshot.success || !snapshotRootsRetained ||
+      attachment.payloadSourceSnapshotDigestValid !== true || snapshot.data.digest !== attachment.attachment.payloadSourceSnapshot?.digest ||
+      snapshot.data.owner.kind !== "attachment" || snapshot.data.owner.companyId !== companyId ||
+      snapshot.data.owner.id !== source.attachmentId || snapshot.data.owner.contentHash !== attachment.ownerBodyHash ||
+      (expectedSnapshot !== undefined && !isDeepStrictEqual(snapshot.data, expectedSnapshot)) ||
+      source.disposition !== "delivered" || source.assetId !== attachment.asset.id ||
+      source.sha256 !== attachment.asset.sha256 || source.byteSize !== attachment.asset.byteSize ||
+      source.commentId !== attachment.attachment.issueCommentId ||
+      !await canActorReadIssuePrivacy(db, actor, { id: source.issueId, companyId }))
+    throw forbidden("A Native source Attachment changed or was erased");
+  if (source.commentId) {
+    const { issueService } = await import("./issues.js");
+    if (!await issueService(db as Db).getComment(source.commentId)) throw forbidden("A Native source Attachment comment was erased");
+  }
 }
 
 async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Transaction, input: {
@@ -4349,31 +4428,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       continue;
     }
     if (source.kind === "attachment") {
-      const [attachment] = await db.select({ attachment: issueAttachments, asset: assets,
-        ownerBodyHash: sql<string>`public.aw_native_payload_body_hash('attachment', to_jsonb(${issueAttachments}))`,
-        payloadSourceSnapshotDigestValid: sql<boolean>`(${issueAttachments.payloadSourceSnapshot}->>'digest') = encode(sha256(convert_to((${issueAttachments.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')` })
-        .from(issueAttachments)
-        .innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId)))
-        .where(and(eq(issueAttachments.companyId, input.companyId), eq(issueAttachments.issueId, source.issueId),
-          eq(issueAttachments.id, source.attachmentId)));
-      const snapshot = nativePayloadSourceSnapshotSchema.safeParse(attachment?.attachment.payloadSourceSnapshot);
-      const snapshotRootsRetained = snapshot.success && snapshot.data.inputs.every(root =>
-        input.inputs.some(candidate => isDeepStrictEqual(candidate, root))) &&
-        (Object.keys(input.policy) as (keyof NativePayloadSourcePolicy)[]).every(key =>
-          snapshot.data.policy[key].every(sourceId => input.policy[key].includes(sourceId)));
-      if (!attachment || attachment.attachment.payloadSourceSnapshotInvalidated || !snapshot.success || !snapshotRootsRetained ||
-        attachment.payloadSourceSnapshotDigestValid !== true || snapshot.data.digest !== attachment.attachment.payloadSourceSnapshot?.digest ||
-        snapshot.data.owner.kind !== "attachment" || snapshot.data.owner.companyId !== input.companyId ||
-        snapshot.data.owner.id !== source.attachmentId || snapshot.data.owner.contentHash !== attachment.ownerBodyHash ||
-        source.disposition !== "delivered" || source.assetId !== attachment.asset.id ||
-        source.sha256 !== attachment.asset.sha256 || source.byteSize !== attachment.asset.byteSize ||
-        source.commentId !== attachment.attachment.issueCommentId ||
-        !await canActorReadIssuePrivacy(db, input.actor, { id: source.issueId, companyId: input.companyId }))
-        throw forbidden("A Native source Attachment changed or was erased");
-      if (source.commentId) {
-        const { issueService } = await import("./issues.js");
-        if (!await issueService(db as Db).getComment(source.commentId)) throw forbidden("A Native source Attachment comment was erased");
-      }
+      await assertNativeAttachmentSourceCurrentInScope(db, input.companyId, input.actor, source,
+        input.policy, input.inputs, scope);
       continue;
     }
     if (source.kind === "document_revision") {

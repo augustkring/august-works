@@ -790,9 +790,18 @@ export async function configureManagedSerialSchedulerSandboxHost(
         await prior.close();
         previous.closed = true;
       }
+      const context = run?.contextSnapshot && typeof run.contextSnapshot === "object"
+        ? run.contextSnapshot as Record<string, unknown> : {};
+      const conversationGeneration = typeof context.conversationSessionGeneration === "number"
+        ? context.conversationSessionGeneration : null;
+      const chatWorkspace = !input.nativeOpenCodeConformance && run?.nativeIssueId
+        ? await findNativeChatWorkspaceScope(input.db, { adapterType: "paperclip_runner", environmentDriver: "sandbox",
+            companyId: input.companyId, agentId: input.agentId, issueId: run.nativeIssueId, runId,
+            responsibleUserId: run.responsibleUserId, conversationSessionGeneration: conversationGeneration })
+        : null;
       const host = preparedHostsByRun.get(runId) ?? prequalifiedConformanceHost ?? await configureManagedSandboxRun({ ...input,
         ...(input.nativeOpenCodeConformance ? { nativeOpenCodeConformance: true as const }
-          : { ordinaryWorker: true as const, ordinaryWorkerRunId: runId }),
+          : chatWorkspace ? {} : { ordinaryWorker: true as const, ordinaryWorkerRunId: runId }),
         root: join(input.root, "scheduler-hosts", runId, leaseId) }, infrastructure, true);
       prequalifiedConformanceHost = null;
       preparedHostsByRun.delete(runId);
@@ -885,6 +894,15 @@ export async function configureManagedSerialSchedulerSandboxHost(
       const entry = hostAdmissionByRun.get(runId);
       if (!entry?.host) throw new Error("scheduler_software_host_run_not_observed");
       return { ...entry.host.facts(), serialContextRetired: entry.closed };
+    },
+    closeManagedAgentHostForRun: async (runId: string) => {
+      const entry = hostAdmissionByRun.get(runId);
+      if (!entry || !entry.host) throw new Error("scheduler_software_host_run_not_observed");
+      if (entry.closed) return;
+      const host = await entry.promise;
+      await host.assertSerialSuccessorReady(entry.leaseId);
+      await host.close();
+      entry.closed = true;
     },
     facts: () => ({ mode: "controlled_signed_host_relay_serial", hostId: infrastructure.host.id, cellId: infrastructure.cell.id,
       environmentId: infrastructure.environment.id, runs: [...hostAdmissionByRun].map(([runId, entry]) =>
@@ -2910,19 +2928,40 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       // Ordinary managed Native Task proof uses its existing exact Run/Task
       // workspace owner and the unchanged operator maximum.
       const workerRun = ordinaryWorkerMode ? await assertFixtureOrdinaryWorker(input, run.id) : null;
-      const [task] = workerRun?.nativeIssueId
-        ? await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, workerRun.nativeIssueId))).limit(1)
-        : run.nativeIssueId ? await db.select().from(issues).where(and(
-          eq(issues.companyId, companyId), eq(issues.id, run.nativeIssueId),
-          eq(issues.executionRunId, run.id), eq(issues.assigneeAgentId, run.agentId),
-          eq(issues.conversationAgentId, run.agentId),
-          eq(issues.conversationUserId, responsibleUserId),
-          eq(issues.conversationState, "active"), isNull(issues.conversationRetiredAt), isNull(issues.hiddenAt))).limit(1) : [];
+      const [task] = run.nativeIssueId
+        ? await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, run.nativeIssueId))).limit(1)
+        : [];
+      const context = run.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+        ? run.contextSnapshot as Record<string, unknown> : {};
+      const conversationGeneration = typeof context.conversationSessionGeneration === "number"
+        ? context.conversationSessionGeneration : null;
+      const chatScope = !workerRun && task
+        ? await findNativeChatWorkspaceScope(db, { adapterType: "paperclip_runner", environmentDriver: "sandbox",
+            companyId, agentId: run.agentId, issueId: task.id, runId: run.id, responsibleUserId,
+            conversationSessionGeneration: conversationGeneration })
+        : null;
+      const [channelConversation] = task?.originKind === "chat_channel" ? await db.select({
+        sessionGeneration: chatConversations.sessionGeneration, state: chatConversations.state,
+      }).from(chatConversations).where(and(eq(chatConversations.companyId, companyId),
+        eq(chatConversations.issueId, task.id))).limit(1) : [];
       taskRoot = expectedTaskRoot ?? "";
+      const canonicalChannelTask = Boolean(task?.originKind === "chat_channel" && chatScope &&
+        chatScope.companyId === companyId && chatScope.agentId === run.agentId && chatScope.issueId === task.id &&
+        chatScope.projectId === null && nativeChatWorkspaceCwd(chatScope, null, false) === taskRoot &&
+        conversationGeneration !== null && channelConversation &&
+        ["active", "waiting"].includes(channelConversation.state) &&
+        channelConversation.sessionGeneration === conversationGeneration &&
+        task.conversationRetiredAt === null && task.hiddenAt === null);
+      const canonicalAppConversationTask = Boolean(chatScope && task && task.originKind !== "chat_channel" &&
+        chatScope.companyId === companyId && chatScope.agentId === run.agentId && chatScope.issueId === task.id &&
+        task.conversationAgentId === run.agentId && task.conversationUserId === run.responsibleUserId &&
+        task.conversationState === "active" && task.conversationRetiredAt === null &&
+        nativeChatWorkspaceCwd(chatScope, null, false) === taskRoot);
       if (!task || !taskRoot || run.nativeIssueId !== task.id || responsibleUserId !== requesterUserId ||
           task.assigneeAgentId !== run.agentId || task.executionRunId !== run.id ||
           (workerRun ? task.conversationAgentId !== null || task.conversationUserId !== null
-            : task.conversationAgentId !== run.agentId || task.conversationUserId !== run.responsibleUserId) ||
+            : task.conversationRetiredAt !== null || task.hiddenAt !== null ||
+              !canonicalChannelTask && !canonicalAppConversationTask) ||
           Object.prototype.hasOwnProperty.call((await db.select({ payload: runtimeHostCommands.payload })
             .from(runtimeHostCommands).where(eq(runtimeHostCommands.id, commandId)).limit(1))[0]?.payload ?? {},
             "__nativeConformancePolicyProof"))
@@ -2974,44 +3013,31 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const prepare = prepares[0];
     if (prepares.length !== 1 || !prepare || prepare.safeResult === null || typeof prepare.safeResult !== "object" || Array.isArray(prepare.safeResult))
       throw new Error("software_only_host_peer_prepare_receipt_missing");
-    let wrongParentOwnerRejected = false;
+    let wrongMaximumRejected = false;
     if (nativeConformanceMode && proof.stage === "requested" &&
-        !softwareOnlyPolicyProofObservations.some(row => row.wrongParentOwnerRejected === true)) {
-      const wrongCompilation = { ...snapshot.compilation, boundaryPolicyHash: "e".repeat(64) };
-      const [latestSnapshot] = await db.select({ policyVersion: runtimePolicySnapshots.policyVersion }).from(runtimePolicySnapshots)
-        .where(and(eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, currentBinding.id)))
-        .orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1);
-      const [wrongSnapshot] = await db.insert(runtimePolicySnapshots).values({
-        companyId: snapshot.companyId, bindingId: snapshot.bindingId, runtimeCellId: snapshot.runtimeCellId,
-        agentId: snapshot.agentId, executionManifestId: snapshot.executionManifestId,
-        policyVersion: (latestSnapshot?.policyVersion ?? snapshot.policyVersion) + 1,
-        policyHash: nativeSha256(wrongCompilation), capabilitySnapshotHash: snapshot.capabilitySnapshotHash,
-        compilation: wrongCompilation, authorityHash: snapshot.authorityHash, sourcePolicyRefs: snapshot.sourcePolicyRefs,
-        status: "qualified", expiresAt: snapshot.expiresAt,
-      }).returning();
-      if (!wrongSnapshot) throw new Error("software_only_host_peer_negative_snapshot_missing");
-      const wrongConformance: NativeOpenCodeConformanceHostAuthority = { ...currentConformanceClaim!,
-        policySnapshotId: wrongSnapshot.id, policyHash: wrongSnapshot.policyHash };
-      const wrongProof: NonNullable<SandboxHostRequest["policyProof"]> = { ...proof, policyHash: wrongSnapshot.policyHash,
-        operationKey: "software-only-wrong-parent-owner" };
+        !softwareOnlyPolicyProofObservations.some(row => row.wrongMaximumRejected === true)) {
+      if (!currentConformanceClaim || !parent.document)
+        throw new Error("software_only_host_peer_current_maximum_missing");
+      const wrongProof: NonNullable<SandboxHostRequest["policyProof"]> = { ...proof,
+        operationKey: `software-only-wrong-maximum:${randomUUID()}`,
+        boundaryDocument: parent.document,
+        boundaryDocumentHash: nativeSha256(parent.document) };
       const before = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
         .where(and(eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeCellId, cell.id),
           eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND)));
       try {
-        await nativeSandboxHostTransport(db).bridge(actor, wrongConformance).provePolicy!(
+        await nativeSandboxHostTransport(db).bridge(actor, currentConformanceClaim).provePolicy!(
           command.scope, wrongProof, `${wrongProof.operationKey}:idempotency`);
       } catch (error) {
         const details = error && typeof error === "object" && "details" in error
           ? (error as { details?: { code?: unknown } }).details : undefined;
-        wrongParentOwnerRejected = details?.code === "sandbox_conformance_proof_attenuation_changed";
-      } finally {
-        await db.delete(runtimePolicySnapshots).where(eq(runtimePolicySnapshots.id, wrongSnapshot.id));
+        wrongMaximumRejected = details?.code === "sandbox_policy_proof_document_changed";
       }
       const after = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
         .where(and(eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeCellId, cell.id),
           eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND)));
-      if (!wrongParentOwnerRejected || after.length !== before.length)
-        throw new Error("software_only_host_peer_wrong_parent_owner_not_rejected");
+      if (!wrongMaximumRejected || after.length !== before.length)
+        throw new Error("software_only_host_peer_wrong_maximum_not_rejected");
     }
     const prepareRequest = prepare.payload as Record<string, any>;
     const prepareReply = prepare.safeResult as Record<string, any>;
@@ -3083,8 +3109,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     softwareOnlyPolicyProofObservations.push({ peer: "software_only_host_peer", physicalQualification: false, stage: proof.stage,
       persistedCompilationMatched: true, conformanceClaimPersisted: nativeConformanceMode, claimAbsentFromHostEnvelope: true,
       exactStoppedPreparedTarget: true, actualPinnedProver: true, result: "within_boundary", completedSuccessfully: false,
-      ...(nativeConformanceMode ? { wrongParentOwnerRejected:
-        wrongParentOwnerRejected || softwareOnlyPolicyProofObservations.some(row => row.wrongParentOwnerRejected === true) } : {}) });
+      ...(nativeConformanceMode ? { wrongMaximumRejected:
+        wrongMaximumRejected || softwareOnlyPolicyProofObservations.some(row => row.wrongMaximumRejected === true) } : {}) });
     return reply;
   };
   const driveHost = async <T>(work: Promise<T>): Promise<T> => {

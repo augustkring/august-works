@@ -82,7 +82,7 @@ import { routineService } from "../services/routines.js";
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { workflows, routines, workflowRuns, routineRuns } from "@paperclipai/db";
-import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
+import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyDeletionOperations, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
 import * as readinessOwnerBoundary from "../services/readiness/readiness-service.js";
@@ -155,6 +155,7 @@ import {
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
+import { agentIdentityService } from "../services/agent-identities.js";
 import { rolePackService } from "../services/role-packs.js";
 import { agentPackageService } from "../services/agent-packages/package-service.js";
 import { removeRuntimeStorageTree } from "../services/runtime-skill-cache.js";
@@ -3486,15 +3487,23 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
               domain: "example.test", from: "support@example.test", stagingRecipients: [`${f.userId}@test.invalid`] },
             billing: { environment: "sandbox", apiKey: "controlled-software-fixture", webhookSecret: "controlled-software-fixture",
               payloadKey: fixtureKey(13), payloadKeyId: "managed-browser", previousKeys: {}, graceDays: 7 },
-            objects: { bucket: "managed-browser-fixture", endpoint: "https://objects.example.test", region: "eu-west-1" },
+            objects: { bucket: "managed-browser-fixture", exportsBucket: "managed-browser-exports-fixture",
+              endpoint: "https://objects.example.test", region: "eu-west-1" },
+            backups: {
+              bucket: "managed-browser-backups-fixture",
+              retentionCredentials: { accessKeyId: "fixture-retention-access", secretAccessKey: "fixture-retention-secret" },
+              writeCredentials: { accessKeyId: "fixture-write-access", secretAccessKey: "fixture-write-secret" },
+              restoreCredentials: { accessKeyId: "fixture-restore-access", secretAccessKey: "fixture-restore-secret" },
+            },
             runtime: { region: "fixture", networkId: "fixture", hostPlan: "fixture", hostAgentImage: "fixture", osTemplate: "fixture",
               maxHosts: 0, maxCreatesPerHour: 0, maxEstimatedMonthlyMinor: "0", heartbeatSeconds: 30,
               suspectSeconds: 90, unreachableSeconds: 300, backupRetentionDays: 7 },
             operatorUserIds: [f.userId],
             deployment: { imageDigest: `sha256:${"0".repeat(64)}`, sourceSha: input.manifest.sourceRevision },
           } as SaasPlatformConfig, { primaryAppOrigin: origin, allowedAppOrigins: [origin], legacyOrigins: [] });
+          const localStorageService = createStorageService(createLocalDiskStorageProvider(join(fixtureHome, "managed-browser-storage")));
           app = await createApp(db, { heartbeat: heartbeatService(db), resolveSession, uiMode: "static",
-            serverPort: address.port, storageService: createStorageService(createLocalDiskStorageProvider(join(fixtureHome, "managed-browser-storage"))),
+            serverPort: address.port, storageService: localStorageService,
             deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1",
             allowedHostnames: ["127.0.0.1"], authReady: true, companyDeletionEnabled: false,
             saasPlatform: fixturePlatform,
@@ -3541,7 +3550,7 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
           };
           page.on("response", observePrivateExperienceResponse);
           try {
-          const [homeCompany] = await db.select({ issuePrefix: companies.issuePrefix }).from(companies).where(eq(companies.id, f.home));
+          const [homeCompany] = await db.select({ issuePrefix: companies.issuePrefix, name: companies.name }).from(companies).where(eq(companies.id, f.home));
           if (!homeCompany?.issuePrefix) throw new Error("managed_browser_home_company_prefix_missing");
           await page.goto(`${origin}/${homeCompany.issuePrefix}/dashboard`);
           const claimBootstrap = page.getByRole("button", { name: "Claim this instance", exact: true });
@@ -3730,6 +3739,50 @@ const browserExecutable = process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE;
           const currentView = await activationService(db).get(f.actor, f.home);
           expect(currentView.firstValue?.result).toMatchObject({ issueId: fixture.task.id, runId: nativeRun!.id,
             verificationRunId: review!.id, artifacts: [{ documentId: document!.id, revisionId: revision!.id }] });
+          // Export the same customer's selected support history, then record
+          // the owner's real offboarding request through the typed platform
+          // service. All storage destinations and credentials below are
+          // controlled software fixtures; no provider erase is attempted.
+          experienceStage = "support-export-before-deletion-request";
+          const exported = await companyPortabilityService(db).exportBundle(f.home, {
+            expectedUserId: f.userId,
+            include: { company: true, agents: false, projects: false, issues: false, skills: false, supportCases: true },
+          }, { actor: f.actor });
+          const supportArchive = JSON.parse(exported.files["blentera-support-cases-v1.json"]!) as {
+            schema: string; companyId: string; caseCount: number; cases: Array<{ id: string; description: string }>;
+          };
+          expect(supportArchive).toMatchObject({ schema: "blentera.support-cases.v1", companyId: f.home,
+            caseCount: 1, cases: [{ id: supportBody.id, description: supportDescription }] });
+          expect(exported.manifest.includes.supportCases).toBe(true);
+          const deletionInput = { confirmation: homeCompany.name, acknowledgeExport: true, idempotencyKey: randomUUID() };
+          await expect(fixturePlatform.offboarding.request(f.home, f.userId, deletionInput)).rejects.toMatchObject({
+            status: 409, details: { code: "IDENTITY_REHOME_REQUIRED" },
+          });
+          const rehomed = await agentIdentityService(db).rehome(f.actor, f.home, f.identity.id, f.guest);
+          expect(rehomed).toMatchObject({ id: f.identity.id, homeCompanyId: f.guest });
+          const deletionRequest = await fixturePlatform.offboarding.request(f.home, f.userId, deletionInput);
+          expect(deletionRequest).toMatchObject({ companyId: f.home, requestedByUserId: f.userId,
+            status: "requested", stage: "revoke" });
+          const deletionReceipt = await fixturePlatform.offboarding.get(f.home);
+          expect(deletionReceipt).toMatchObject({ id: deletionRequest.id, companyId: f.home,
+            requestedByUserId: f.userId, status: "requested", stage: "revoke" });
+          expect(deletionReceipt?.evidence).toMatchObject({ exportAcknowledgedAt: expect.any(String),
+            storageTargets: { environment: "staging", artifacts: { bucket: "managed-browser-fixture", prefix: expect.stringContaining(f.home) },
+              exports: { bucket: "managed-browser-exports-fixture", prefix: `companies/${f.home}/` },
+              backups: { bucket: "managed-browser-backups-fixture", prefix: `companies/${f.home}/runtime-backups/` } } });
+          expect(await db.select({ action: activityLog.action, actorType: activityLog.actorType,
+            actorId: activityLog.actorId, entityId: activityLog.entityId }).from(activityLog)
+            .where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "company.deletion_requested"))))
+            .toContainEqual({ action: "company.deletion_requested", actorType: "user", actorId: f.userId,
+              entityId: deletionRequest.id });
+          expect(await db.select({ status: companies.status, pauseReason: companies.pauseReason })
+            .from(companies).where(eq(companies.id, f.home))).toContainEqual({ status: "archived", pauseReason: "company_deletion" });
+          expect(await db.select({ id: companyDeletionOperations.id, status: companyDeletionOperations.status,
+            stage: companyDeletionOperations.stage }).from(companyDeletionOperations)
+            .where(eq(companyDeletionOperations.companyId, f.home))).toContainEqual({
+              id: deletionRequest.id, status: "requested", stage: "revoke",
+            });
+
           expect(pageErrors).toEqual([]);
           expect(activationServerErrors.filter(error => error.status === 403)).toEqual([
             expect.objectContaining({ context: "foreign-user-negative-probe" }),

@@ -7507,7 +7507,8 @@ export async function renewNativeSessionExecutionLease(input: {
 
 async function persistNativeRemoteAttachmentStageIntent(input: {
   db: Db; companyId: string; issueId: string; runId: string; agentId: string; leaseId: string;
-  taskRoot: string; attachmentId: string; stageNonce: string; sha256: string; byteSize: number; phase: "staging" | "committed";
+  taskRoot: string; attachmentId: string; stageNonce: string; sha256: string; byteSize: number; executionInputHash: string;
+  phase: "staging" | "committed";
   owner: Exclude<Awaited<ReturnType<typeof captureNativeRemoteAttachmentStageOwner>>, { cleanupOnly: true }>;
 }) {
   const sourceBinding = { kind: "attachment", issueId: input.owner.attachmentInput.issueId,
@@ -7519,7 +7520,7 @@ async function persistNativeRemoteAttachmentStageIntent(input: {
   const unsigned = { schema: "paperclip.native-attachment-stage-intent.v1" as const,
     runId: input.runId, companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
     leaseId: input.leaseId, attachmentId: input.attachmentId, stageNonce: input.stageNonce,
-    sha256: input.sha256, byteSize: input.byteSize, relativePath, sourceBinding,
+    sha256: input.sha256, byteSize: input.byteSize, executionInputHash: input.executionInputHash, relativePath, sourceBinding,
     sourceSnapshot, sourceSnapshotHash: nativeSha256(sourceSnapshot), phase: input.phase };
   const intent: NativeAttachmentStageIntent = { ...unsigned, integrityHash: nativeSha256(unsigned) };
   await input.db.transaction(async rawTx => {
@@ -7549,9 +7550,12 @@ async function persistNativeRemoteAttachmentStageIntent(input: {
       : { phase: "commit" as const, runId: input.runId, stageNonce: input.stageNonce, attachmentId: input.attachmentId,
         totalBytes: input.byteSize, sha256: input.sha256 };
     const currentOwner = await captureNativeRemoteAttachmentStageOwner(tx, { companyId: input.companyId,
-      issueId: input.issueId, runId: input.runId, agentId: input.agentId, taskRoot: input.taskRoot, operation });
+      issueId: input.issueId, runId: input.runId, agentId: input.agentId, taskRoot: input.taskRoot,
+      leaseId: input.leaseId, expectedExecutionInputHash: input.executionInputHash,
+      requirePersistedStageIntent: input.phase === "committed", operation });
     if ("cleanupOnly" in currentOwner || currentOwner.sourceHash.toLowerCase() !== input.sha256 ||
-        currentOwner.byteSize !== input.byteSize || currentOwner.attachmentInput.attachmentId !== input.owner.attachmentInput.attachmentId ||
+        currentOwner.byteSize !== input.byteSize || currentOwner.executionInputHash !== input.executionInputHash ||
+        currentOwner.attachmentInput.attachmentId !== input.owner.attachmentInput.attachmentId ||
         currentOwner.attachmentInput.assetId !== input.owner.attachmentInput.assetId ||
         nativeSha256(currentOwner.attachmentSnapshot) !== nativeSha256(input.owner.attachmentSnapshot))
       throw new Error("native_attachment_stage_intent_source_changed");
@@ -10096,9 +10100,11 @@ export async function executePaperclipNativeSession(input: {
               throw new Error("native_attachment_remote_target_unavailable");
             const operation = { phase: "init" as const, runId: input.execution.binding.runId,
               stageNonce: stage.stageNonce, attachmentId: stage.attachmentId };
+            const executionInputHash = input.nativeBootstrapExecutionInputHash ?? nativeSha256(input.execution);
             const owner = await captureNativeRemoteAttachmentStageOwner(input.db, { companyId: input.execution.binding.companyId,
               issueId: input.execution.binding.issueId, runId: input.execution.binding.runId,
-              agentId: input.execution.binding.agentId, taskRoot: target.remoteCwd, operation });
+              agentId: input.execution.binding.agentId, taskRoot: target.remoteCwd, leaseId: target.leaseId,
+              expectedExecutionInputHash: executionInputHash, operation });
             if ("cleanupOnly" in owner || owner.sourceHash.toLowerCase() !== stage.sha256 || owner.byteSize !== stage.bytes.length ||
                 owner.attachmentInput.attachmentId !== stage.sourceCapture.input.attachmentId ||
                 owner.attachmentInput.assetId !== stage.sourceCapture.input.assetId ||
@@ -10108,7 +10114,7 @@ export async function executePaperclipNativeSession(input: {
               issueId: input.execution.binding.issueId, runId: input.execution.binding.runId,
               agentId: input.execution.binding.agentId, leaseId: target.leaseId, taskRoot: target.remoteCwd,
               attachmentId: stage.attachmentId, stageNonce: stage.stageNonce, sha256: stage.sha256,
-              byteSize: stage.bytes.length, owner };
+              byteSize: stage.bytes.length, executionInputHash, owner };
             await persistNativeRemoteAttachmentStageIntent({ ...intentInput, phase: "staging" });
             const runner = serializeNativeRemoteCommands(target.runner);
             let staged: Awaited<ReturnType<typeof executeNativeRemoteAttachmentStage>> | undefined;
@@ -13702,8 +13708,8 @@ async function assertNativeOpenCodeConformanceBackendAuthority(input: {
         run.runnerInstanceId !== input.runnerInstanceId || execution.task.title !== task.title || execution.task.description !== task.description ||
         typeof qualificationGroupId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(qualificationGroupId) ||
         context.providerConformancePlanId !== plan.id || context.containsCompanyContext !== false || context.platformToolsGranted !== false ||
-        typeof probeId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(probeId) ||
-        typeof profileId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(profileId) ||
+        typeof probeId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(probeId) ||
+        typeof profileId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profileId) ||
         plan.createdBy !== run.responsibleUserId ||
         plan.executionPrincipal?.type !== "user" || plan.executionPrincipal.userId !== run.responsibleUserId ||
         plan.mode !== "single_worker" || plan.actionClass !== "internal_draft" || plan.riskClass !== "C0" ||

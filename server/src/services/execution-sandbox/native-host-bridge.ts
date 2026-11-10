@@ -865,6 +865,9 @@ export function nativeSandboxHostTransport(
       db,
       async (tx, publications) => {
         await authorize(tx as unknown as Db, safetyCleanup);
+        // This preliminary lookup only locates the Host. Do not lock the cell
+        // before current() acquires the canonical host → cell → binding locks;
+        // host heartbeat owns that same order while inventorying its cells.
         const [cell] = await tx
           .select()
           .from(runtimeCells)
@@ -873,8 +876,7 @@ export function nativeSandboxHostTransport(
               eq(runtimeCells.companyId, scope.companyId),
               eq(runtimeCells.id, scope.cellId),
             ),
-          )
-          .for("share");
+          );
         const [host] = cell?.runtimeHostId
           ? await tx
               .select()

@@ -368,7 +368,8 @@ describe("native model input dispatch intent", () => {
     try {
       await executePaperclipNativeSession({ db, execution, nativeBootstrapExecutionInputHash: nativeSha256(execution),
         bootstrapSourceClosure: null, prepareBootstrapSourceClosure: ({ execution: stagedExecution, attachmentStage }) => {
-          const references = renderedReferences.filter(reference => reference.kind === "attachment");
+          const references = renderedReferences.filter((reference): reference is Exclude<NativeRenderedSourceReference, { kind: "task_wake_interaction_state" }> & { kind: "attachment" } =>
+            reference.kind === "attachment");
           if (attachmentStage.sourceCaptures.length !== references.length || attachmentStage.attachments.length !== references.length) return null;
           const candidates: NativePreparedSourceCandidate[] = [];
           for (const reference of references) {

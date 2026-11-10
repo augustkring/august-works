@@ -170,7 +170,7 @@ const support = await getEmbeddedPostgresTestSupport();
           row.persistedCompilationMatched === true && row.conformanceClaimPersisted === true &&
           row.claimAbsentFromHostEnvelope === true && row.exactStoppedPreparedTarget === true &&
           row.actualPinnedProver === true && row.result === "within_boundary" && row.completedSuccessfully === true &&
-          row.wrongParentOwnerRejected === true &&
+          row.wrongMaximumRejected === true &&
           ["requested", "effective"].includes(String(row.stage)))).toBe(true);
         expect(observedStartTuples.map(row => row.runId).sort()).toEqual([...result.runIds].sort());
         const imagePackProbes = Array.isArray(hostFacts?.execFacts)
@@ -219,6 +219,8 @@ const support = await getEmbeddedPostgresTestSupport();
         dispatch.qualificationGroupId === result.groupId && dispatch.planId === context?.providerConformancePlanId &&
         dispatch.profileId === context?.nativeOpenCodeConformanceProfileId &&
         dispatch.probeId === context?.nativeOpenCodeConformanceProbeId &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(dispatch.profileId) &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(dispatch.probeId) &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(dispatch.dispatchNonce) &&
         /^[a-f0-9]{64}$/.test(dispatch.authorityHash) && started &&
         started.qualificationGroupId === dispatch.qualificationGroupId && started.planId === dispatch.planId &&
@@ -374,7 +376,60 @@ const support = await getEmbeddedPostgresTestSupport();
         expect(typeof startReply.sandboxId).toBe("string");
         expect(typeof startReply.containerId).toBe("string");
         const expectedTarget = { sandboxId: startReply.sandboxId, containerId: startReply.containerId };
-        const stops = commands.filter(command => (command.payload as any)?.action === "stop" && command.status === "SUCCEEDED");
+        const preparedCommands = commands.filter(command => {
+          const payload = command.payload as any;
+          const receipt = command.safeResult as any;
+          return payload?.action === "prepare" && command.status === "SUCCEEDED" &&
+            payload.provisioning?.purpose === "admission" && receipt?.action === "prepare" && !receipt.requiresRecreate &&
+            receipt.sandboxId === expectedTarget.sandboxId && receipt.containerId === expectedTarget.containerId &&
+            receipt.imageDigest === startReply.imageDigest;
+        });
+        const proofCommands = commands.filter(command => {
+          const payload = command.payload as any;
+          const proof = payload?.policyProof;
+          const proofClaim = payload?.__nativeConformancePolicyProof;
+          return payload?.action === "prove_policy" && command.status === "SUCCEEDED" &&
+            command.runtimeHostId === starts[0]!.runtimeHostId && command.runtimeCellId === starts[0]!.runtimeCellId &&
+            command.cellGeneration === starts[0]!.cellGeneration && proof?.stage === "effective" &&
+            proof?.policyHash === startReply.policyHash && proof?.sandboxId === expectedTarget.sandboxId &&
+            proof?.containerId === expectedTarget.containerId && payload.imageDigest === startReply.imageDigest &&
+            preparedCommands.some(prepared => {
+              const preparedRequest = prepared.payload as any;
+              const receipt = prepared.safeResult as any;
+              return preparedRequest.scope?.bindingId === payload.scope?.bindingId &&
+                preparedRequest.scope?.cellId === payload.scope?.cellId &&
+                preparedRequest.scope?.cellGeneration === payload.scope?.cellGeneration &&
+                preparedRequest.provisioning?.operationKey === proof.operationKey &&
+                receipt.bindingVersion === proof.bindingVersion && receipt.provisioningHash === proof.provisioningHash &&
+                receipt.hostEpoch === payload.hostEpoch && receipt.imageDigest === payload.imageDigest &&
+                receipt.sandboxId === proof.sandboxId && receipt.containerId === proof.containerId &&
+                receipt.policyHash === proof.policyHash;
+            }) && proofClaim?.version === 1 && proofClaim?.conformance?.policyHash === proof.policyHash &&
+            proofClaim?.conformance?.policySnapshotId;
+        });
+        expect(proofCommands.length).toBeGreaterThan(0);
+        const proofOwners = proofCommands.map(command => (command.payload as any).__nativeConformancePolicyProof.conformance);
+        const stops = commands.filter(command => {
+          const payload = command.payload as any;
+          const claim = payload?.__nativeConformanceAdmissionCleanup;
+          const cleanup = claim?.cleanup;
+          const owner = claim?.conformance;
+          return payload?.action === "stop" && command.status === "SUCCEEDED" && claim?.version === 1 &&
+            command.runtimeHostId === starts[0]!.runtimeHostId && command.runtimeCellId === starts[0]!.runtimeCellId &&
+            command.cellGeneration === starts[0]!.cellGeneration &&
+            claim.idempotencyKey === `v7-sandbox-admission-contain:${startRequest.scope.bindingId}:${startRequest.scope.cellGeneration}:${cleanup?.claimVersion}:${cleanup?.policySnapshotId}` &&
+            cleanup?.requesterUserId === startRequest.requesterUserId &&
+            payload.expectedTarget?.sandboxId === expectedTarget.sandboxId &&
+            payload.expectedTarget?.containerId === expectedTarget.containerId &&
+            cleanup?.sandboxId === expectedTarget.sandboxId && cleanup?.containerId === expectedTarget.containerId &&
+            cleanup?.imageDigest === startReply.imageDigest && cleanup?.policyHash === startReply.policyHash &&
+            proofOwners.some(proofOwner => proofOwner.runId === owner?.runId && proofOwner.taskId === owner?.taskId &&
+              proofOwner.planId === owner?.planId && proofOwner.groupId === owner?.groupId &&
+              proofOwner.manifestId === owner?.manifestId && proofOwner.manifestHash === owner?.manifestHash &&
+              proofOwner.leaseId === owner?.leaseId && proofOwner.workspaceRoot === owner?.workspaceRoot &&
+              proofOwner.policySnapshotId === owner?.policySnapshotId && proofOwner.policyHash === owner?.policyHash &&
+              proofOwner.creationReceipt === owner?.creationReceipt);
+        });
         expect(stops).toHaveLength(1);
         expect((stops[0]!.payload as any).expectedTarget).toEqual(expectedTarget);
         expect(stops[0]!.runtimeCellId).toBe(starts[0]!.runtimeCellId);

@@ -6,6 +6,7 @@ import { formatDurableQuestionResponseSummary } from "../question-response-deliv
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, nativeAnsweredQuestionContinuationSource, exactNativeInitialTaskContinuation, exactNativeTaskContinuation } from "./native-execution-input.js";
+import type { NativeRenderedSourceReference } from "./native-execution-input.js";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
@@ -774,8 +775,8 @@ describe("native bootstrap rendered-source closure", () => {
         coverage: { kind: "full_task_history", throughCommentId: commentId, summaryThroughCommentId: null } },
       commentSources: [{ input: { kind: "comment", issueId, commentId, sourceVersion: "1", contentHash: nativeContinuationMessageHash(message) }, payloadSourceSnapshot: null }],
       wake: { requestedByActorType: "user", requestedByActorId: responsibleUserId, reason: "issue_commented", originCommentIds: [commentId] } };
-    const check = (capture: NativeTaskContinuationCapture) => exactNativeTaskContinuation({ value: capture.envelope,
-      companyId, issueId, agentId, runId, responsibleUserId, wakeupRequestId, wakeReason: capture.wake.reason, capture });
+    const check = (capture: NativeTaskContinuationCapture, taskObjective?: string) => exactNativeTaskContinuation({ value: capture.envelope,
+      companyId, issueId, agentId, runId, responsibleUserId, wakeupRequestId, wakeReason: capture.wake.reason, capture, taskObjective });
     const withdrawal = structuredClone(base), withdrawalId = randomUUID(), withdrawalSourceRunId = randomUUID();
     const opaqueHumanId = "human-user-8f194f2e";
     const cancelledResult = { version: 1, answers: [], cancelled: true, cancellationReason: "Review withdrawn." };
@@ -802,6 +803,90 @@ describe("native bootstrap rendered-source closure", () => {
       originCommentIds: [commentId], interaction: { interactionId: withdrawalId, interactionKind: "ask_user_questions",
         interactionStatus: "cancelled", sourceRunId: withdrawalSourceRunId } };
     expect(check(withdrawal)).toBe(withdrawal);
+    const zeroOriginWithdrawal = structuredClone(withdrawal);
+    zeroOriginWithdrawal.envelope.originCommentIds = [];
+    const retainedSummaryBody = "Previously accepted, content-bound summary.";
+    zeroOriginWithdrawal.summary = { rawTrustHash: nativeSha256(null), source: { input: {
+      kind: "document_revision", issueId, documentId: randomUUID(), revisionId: randomUUID(), contentHash: "c".repeat(64),
+    }, payloadSourceSnapshot: null }, rendition: { key: "continuation-summary", title: "Continuation Summary",
+      body: retainedSummaryBody, sourceTrust: null, updatedAt: "2026-10-01T00:00:00.000Z" } };
+    zeroOriginWithdrawal.envelope.completedWork = retainedSummaryBody;
+    const canonicalTaskObjective = "Continue the accepted work under the current Task objective.";
+    const acceptedAgentMessage = nativeContinuationCommentProjection({ id: randomUUID(), authorType: "agent", authorAgentId: agentId,
+      authorUserId: null, createdByRunId: withdrawalSourceRunId, body: "Previously accepted Agent summary.",
+      createdAt: new Date("2026-10-01T00:00:00.000Z"), updatedAt: new Date("2026-10-01T00:00:00.000Z"), deletedAt: null,
+      sourceTrust: null });
+    zeroOriginWithdrawal.envelope.messages = [acceptedAgentMessage];
+    zeroOriginWithdrawal.envelope.objective = canonicalTaskObjective;
+    zeroOriginWithdrawal.envelope.coverage.throughCommentId = acceptedAgentMessage.id;
+    zeroOriginWithdrawal.commentSources = [{ input: { kind: "comment", issueId, commentId: acceptedAgentMessage.id, sourceVersion: "3",
+      contentHash: nativeContinuationMessageHash(acceptedAgentMessage) }, payloadSourceSnapshot: null }];
+    zeroOriginWithdrawal.wake.originCommentIds = [];
+    expect(check(zeroOriginWithdrawal, canonicalTaskObjective)).toBe(zeroOriginWithdrawal);
+    expect(check(zeroOriginWithdrawal)).toBeNull();
+    expect(check(zeroOriginWithdrawal, "A different Task objective.")).toBeNull();
+    const acceptedCommentSource = zeroOriginWithdrawal.commentSources[0]!.input;
+    const acceptedSummaryOwner: NonNullable<NativeTaskContinuationCapture["commentSources"][number]["acceptedPresentationOwner"]>["acceptedSummaryOwner"] = {
+      companyId, issueId, agentId, sourceRunId: withdrawalSourceRunId,
+      resultId: randomUUID(), resultCanonicalSha256: "f".repeat(64), resultCreatedAt: "2026-10-01T00:00:00.000Z",
+      finalizationVersion: "2026-10-01T00:00:01.000Z", assessmentId: randomUUID(), decisionId: randomUUID(),
+      decisionDigest: "a".repeat(64), decisionSnapshotHash: "d".repeat(64), body: retainedSummaryBody,
+      parentReceipt: { version: 1, binding: { companyId, issueId, agentId, runId: withdrawalSourceRunId,
+        responsibleUserId: opaqueHumanId }, bootstrap: { executionInputDigest: "b".repeat(64), policy,
+        inputs: [{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }] }, dispatches: [], additionalInputs: [], digest: "c".repeat(64) } };
+    zeroOriginWithdrawal.commentSources[0] = { ...zeroOriginWithdrawal.commentSources[0]!,
+      acceptedPresentationOwner: { commentSourceIdentity: acceptedCommentSource, acceptedSummaryOwner } };
+    expect(check(zeroOriginWithdrawal, canonicalTaskObjective)).toBe(zeroOriginWithdrawal);
+    const mismatchedPresentationProducer = structuredClone(zeroOriginWithdrawal);
+    mismatchedPresentationProducer.envelope.messages[0]!.createdByRunId = randomUUID();
+    const mismatchedMessage = mismatchedPresentationProducer.envelope.messages[0]!;
+    const mismatchedSource = mismatchedPresentationProducer.commentSources[0]!;
+    mismatchedSource.input.contentHash = nativeContinuationMessageHash(mismatchedMessage);
+    mismatchedSource.acceptedPresentationOwner!.commentSourceIdentity = mismatchedSource.input;
+    expect(check(mismatchedPresentationProducer, canonicalTaskObjective)).toBeNull();
+    const ordinaryAgentPresentation = structuredClone(base);
+    ordinaryAgentPresentation.envelope.messages = [message, acceptedAgentMessage];
+    ordinaryAgentPresentation.envelope.objective = message.body;
+    ordinaryAgentPresentation.envelope.coverage.throughCommentId = acceptedAgentMessage.id;
+    ordinaryAgentPresentation.envelope.originCommentIds = [message.id];
+    ordinaryAgentPresentation.commentSources = [
+      { input: { kind: "comment", issueId, commentId: message.id, sourceVersion: "1",
+        contentHash: nativeContinuationMessageHash(message) }, payloadSourceSnapshot: null },
+      { input: acceptedCommentSource, payloadSourceSnapshot: null,
+        acceptedPresentationOwner: { commentSourceIdentity: acceptedCommentSource, acceptedSummaryOwner } },
+    ];
+    ordinaryAgentPresentation.wake.originCommentIds = [message.id];
+    expect(check(ordinaryAgentPresentation)).toBeNull();
+    const nativeTaskWakeSource = { kind: "native_task_wake" as const, runId, issueId, sourceVersion: "1", contentHash: "d".repeat(64) };
+    const interactionStateReference = { kind: "task_wake_interaction_state" as const, id: withdrawalId,
+      interactionKind: "ask_user_questions" as const, interactionStatus: "cancelled" as const };
+    const buildWithdrawalSourceSet = (reference: NativeRenderedSourceReference = interactionStateReference, includeOwner = true,
+      suppliedWakeSource = nativeTaskWakeSource) => buildNativeBootstrapSourceSet({
+      companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task" as const, id: issueId }, reference],
+      candidates: [{ kind: "task" as const, id: issueId, input: { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash },
+        payloadSourceSnapshot: snapshot() }], runtimeInputs: [], additionalInputs: [suppliedWakeSource],
+      taskWakeInteractionSources: [zeroOriginWithdrawal.humanReviewWithdrawals![0]!.nativeSource,
+        zeroOriginWithdrawal.humanReviewWithdrawals![0]!.continuationSource],
+      ...(includeOwner ? { taskWakeInteractionStateOwner: { source: nativeTaskWakeSource, capture: zeroOriginWithdrawal,
+        responsibleUserId, wakeupRequestId, wakeReason: "issue_commented", taskObjective: canonicalTaskObjective } } : {}),
+      contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false,
+    });
+    const boundWithdrawalSet = buildWithdrawalSourceSet();
+    expect(boundWithdrawalSet?.inputs).toEqual(expect.arrayContaining([
+      zeroOriginWithdrawal.humanReviewWithdrawals![0]!.nativeSource,
+      zeroOriginWithdrawal.humanReviewWithdrawals![0]!.continuationSource,
+    ]));
+    expect(buildWithdrawalSourceSet(interactionStateReference, false)).toBeNull();
+    expect(buildWithdrawalSourceSet({ ...interactionStateReference, interactionStatus: "rejected" })).toBeNull();
+    expect(buildWithdrawalSourceSet(interactionStateReference, true, { ...nativeTaskWakeSource, contentHash: "e".repeat(64) })).toBeNull();
+    const unboundOrigin = structuredClone(zeroOriginWithdrawal);
+    unboundOrigin.envelope.originCommentIds = [randomUUID()];
+    expect(check(unboundOrigin)).toBeNull();
+    const zeroOriginOrdinary = structuredClone(base);
+    zeroOriginOrdinary.envelope.originCommentIds = [];
+    expect(check(zeroOriginOrdinary)).toBeNull();
     const unfinishedSource = structuredClone(withdrawal);
     const unfinishedProjection = unfinishedSource.humanReviewWithdrawals![0]!.projection;
     unfinishedProjection.owner.sourceRunStatus = "running" as never;
