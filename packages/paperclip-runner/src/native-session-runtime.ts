@@ -2455,6 +2455,7 @@ export async function executeNativeSession(
           const startedTurn = await session.startTurn(preparedInput);
           await options.onTurnStarted?.(acknowledgedInput, startedTurn.turnId,
             typeof dispatchId === "string" ? dispatchId : undefined, sourceClosure);
+          await startedTurn.releaseAfterInputAcknowledgement?.();
           await checkpoint();
         }
       } catch (error) {

@@ -4039,15 +4039,32 @@ export function runtimeControlService(
           source.run.runtimeMode === "native" && source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
           contextSnapshot.conversationSessionGeneration === generation && source.manifest.runId === source.run.id &&
           source.manifest.agentId === source.run.agentId && source.manifest.manifest.responsibleUserId === source.run.responsibleUserId;
-        const exactCurrentComment = snapshotComment?.success && snapshotComment.data.kind === "comment" &&
-          snapshotComment.data.issueId === task.id && commentId === snapshotComment.data.commentId &&
-          contextSnapshot.wakeCommentId === commentId && markdownMap.version === 1 &&
-          typeof markdownMap.renderedMarkdownDigest === "string" && /^[a-f0-9]{64}$/.test(markdownMap.renderedMarkdownDigest) &&
-          renderedMarkdownLength !== null && execution !== null &&
-          execution.task.prompt.length >= renderedMarkdownLength &&
-          sha256(execution.task.prompt.slice(-renderedMarkdownLength)) === markdownMap.renderedMarkdownDigest &&
-          markdownReferences.some(reference => reference.kind === "task" && reference.id === task.id) &&
-          markdownReferences.some(reference => reference.kind === "comment" && reference.id === commentId);
+        const currentCommentFacets = {
+          taskSnapshotSingleInput: taskSnapshot.success && taskSnapshot.data.inputs.length === 1,
+          snapshotInputComment: snapshotComment?.success === true && snapshotComment.data.kind === "comment",
+          snapshotInputIssueBound: snapshotComment?.success === true && snapshotComment.data.kind === "comment" &&
+            snapshotComment.data.issueId === task.id,
+          requestInputComment: capturedComment?.success === true && capturedComment.data.kind === "comment",
+          requestInputIssueBound: capturedComment?.success === true && capturedComment.data.kind === "comment" &&
+            capturedComment.data.issueId === task.id,
+          snapshotAndRequestCommentMatch: snapshotComment?.success === true && snapshotComment.data.kind === "comment" &&
+            commentId === snapshotComment.data.commentId,
+          wakeCommentIdMatches: commentId !== null && contextSnapshot.wakeCommentId === commentId,
+          markdownMapVersion: markdownMap.version === 1,
+          markdownDigestValid: typeof markdownMap.renderedMarkdownDigest === "string" &&
+            /^[a-f0-9]{64}$/.test(markdownMap.renderedMarkdownDigest),
+          markdownLengthValid: renderedMarkdownLength !== null,
+          executionPromptAvailable: execution !== null,
+          promptContainsMarkdownLength: execution !== null && renderedMarkdownLength !== null &&
+            execution.task.prompt.length >= renderedMarkdownLength,
+          promptMarkdownSuffixMatches: execution !== null && renderedMarkdownLength !== null &&
+            typeof markdownMap.renderedMarkdownDigest === "string" && /^[a-f0-9]{64}$/.test(markdownMap.renderedMarkdownDigest) &&
+            execution.task.prompt.length >= renderedMarkdownLength &&
+            sha256(execution.task.prompt.slice(-renderedMarkdownLength)) === markdownMap.renderedMarkdownDigest,
+          taskReferencePresent: markdownReferences.some(reference => reference.kind === "task" && reference.id === task.id),
+          commentReferencePresent: commentId !== null && markdownReferences.some(reference => reference.kind === "comment" && reference.id === commentId),
+        };
+        const exactCurrentComment = Object.values(currentCommentFacets).every(Boolean);
         const exactWorkspace = expectedTaskRoot !== null && path.resolve(request.cwd) === expectedTaskRoot &&
           readRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot) &&
           writeRoots.some(root => typeof root === "string" && path.resolve(root) === expectedTaskRoot);
@@ -4136,6 +4153,9 @@ export function runtimeControlService(
             ...(!exactNativeInput ? ["execution_input"] : []),
             ...(!exactHumanTask ? ["human_run_manifest"] : []),
             ...(!exactCurrentComment ? ["comment_source"] : []),
+            ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
+              ? Object.entries(currentCommentFacets).filter(([, valid]) => !valid)
+                .map(([facet]) => `comment_source_${facet}`) : []),
             ...(!exactWorkspace ? ["workspace_roots"] : []),
             ...(!exactTrustedCommand ? ["trusted_command"] : []),
             ...(nativeRuntimeContextPrepare && !exactRuntimeContextSource ? ["runtime_context_source_authority"] : []),

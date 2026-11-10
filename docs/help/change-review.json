@@ -901,10 +901,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
+      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Stage wake construction now uses the shared builder; current account, Task, source-access and interaction checks remain in place. The article still correctly directs users to the original Task and to share only authorized, non-secret information."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1213,10 +1213,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
+      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "V\u00e6kning af en fase bruger nu den f\u00e6lles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/routes/saas.ts",
@@ -1541,10 +1541,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
+      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Stage wake construction now uses the shared builder; current account, Task, source-access and interaction checks remain in place. The article still correctly directs users to the original Task and to share only authorized, non-secret information."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "7dccb0144fa007ceda3b338a8e88e66b6e1f1656e892368a1af8b6c2d5ba680f",
+      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Fresh Human reassignment retains full source-backed history and the actual accepted prior summary. Current Source ownership and reader access remain checked, and the existing guidance to inspect the original Task, run history and named requirements before retrying remains accurate."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "b5cfb8748cbda3ebcaa96390985ce5c8165ed381c1075fca10ab483e2bfff04e",
+      "sourceSha256": "5f4b7e6c8021c3c4af3538e9daa5254cb1293b48ac123047cc9db82a75d7e334",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The exact orchestration completion guard now returns the existing verification requirement as an HTTP conflict. Canonical Human Plan verification remains required before closing the Task, matching this article\u2019s instruction to resolve the named approval or other requirement before retrying."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1645,10 +1645,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "8d1f2ea3635d3b8248a237fc12d4530d058eafecc4c7fda33e2e18b0a6d1d96b",
+      "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "V\u00e6kning af en fase bruger nu den f\u00e6lles funktion. Kontrol af aktuel konto, opgave, kildeadgang og interaktion er bevaret. Artiklen henviser fortsat korrekt til den oprindelige opgave og til kun at dele tilladte oplysninger uden hemmeligheder."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/services/execution-workspaces.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "7dccb0144fa007ceda3b338a8e88e66b6e1f1656e892368a1af8b6c2d5ba680f",
+      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Fresh Human reassignment retains full source-backed history and the actual accepted prior summary. Current Source ownership and reader access remain checked, and the existing guidance to inspect the original Task, run history and named requirements before retrying remains accurate."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "b5cfb8748cbda3ebcaa96390985ce5c8165ed381c1075fca10ab483e2bfff04e",
+      "sourceSha256": "5f4b7e6c8021c3c4af3538e9daa5254cb1293b48ac123047cc9db82a75d7e334",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "The exact orchestration completion guard now returns the existing verification requirement as an HTTP conflict. Canonical Human Plan verification remains required before closing the Task, matching this article\u2019s instruction to resolve the named approval or other requirement before retrying."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "7dccb0144fa007ceda3b338a8e88e66b6e1f1656e892368a1af8b6c2d5ba680f",
+      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Reassigned Runs retain the actual producer Run roots and recursively revalidate their original receipts and current readers. This changes no export/deletion action, retention promise or accepted erasure/Stop receipt; the existing source-withdrawal guidance remains accurate."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "7dccb0144fa007ceda3b338a8e88e66b6e1f1656e892368a1af8b6c2d5ba680f",
+      "sourceSha256": "a8cf24bbc7c50bb82ae13afb2c22f48ed86a646addfe307615d910e79b865ffd",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Reassigned Runs retain the actual producer Run roots and recursively revalidate their original receipts and current readers. This changes no export/deletion action, retention promise or accepted erasure/Stop receipt; the existing source-withdrawal guidance remains accurate."
+      "rationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

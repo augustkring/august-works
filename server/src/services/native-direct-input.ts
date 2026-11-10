@@ -2249,6 +2249,16 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
         ...(acceptedPresentationOwner ? { acceptedPresentationOwner } : {}) });
     }
   }
+  let explicitHumanSource: NativeTaskContinuationCapture["explicitHumanSource"];
+  if (run && context && Object.hasOwn(context, "explicitUserContinuation") &&
+      continuation && typeof continuation === "object" && !Array.isArray(continuation)) {
+    // Both bootstrap and current-source validation use the same narrow DB
+    // owner reader; no saved descriptor is treated as proof.
+    const { captureNativeExplicitHumanSource } = await import("./execution-continuation.js");
+    explicitHumanSource = await captureNativeExplicitHumanSource({ db: db as Db, companyId: input.companyId,
+      issueId: input.issueId, agentId: run.agentId, receiverRunId: run.id, context,
+      envelope: continuation as NativeTaskContinuationCapture["envelope"] });
+  }
   const continuationCapture: NativeTaskContinuationCapture | null = run && admittedWake && run.responsibleUserId &&
     Array.isArray(continuationMessages) && hasBoundedContinuation && isDeepStrictEqual(context?.executionContinuation, continuation) ? {
       companyId: input.companyId, issueId: input.issueId, agentId: run.agentId, runId: input.runId,
@@ -2264,6 +2274,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
+      ...(explicitHumanSource ? { explicitHumanSource } : {}),
       ...(previousContext && retainedSource ? { previousContext, retainedSource } : {}),
       commentSources: capturedContinuationCommentSources,
       wake: { requestedByActorType: admittedWake.requestedByActorType, requestedByActorId: admittedWake.requestedByActorId,
@@ -6447,7 +6458,8 @@ export function nativePayloadSnapshotSql(kind: "issue" | "memory_record", policy
 
 /** Used only after the original owner admits an independent direct Human
  * input. This expression binds bytes; it supplies no permission or completeness. */
-export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comment" | "document_revision" | "attachment") {
+export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comment" | "document_revision" | "attachment",
+  attachmentCommentId?: string) {
   const table = kind === "issue" ? issues : kind === "project" ? projects : kind === "comment" ? issueComments
     : kind === "attachment" ? issueAttachments : documentRevisions;
   const issuePolicy = kind === "comment" ? sql`jsonb_build_array(${issueComments.issueId}::text)`
@@ -6467,10 +6479,16 @@ export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comme
     from project_workspaces w
     where w.company_id=${projects.companyId} and w.project_id=${projects.id}
   ),'[]'::jsonb)` : sql`'[]'::jsonb`;
+  // A direct Human upload becomes a comment-owned attachment in one UPDATE.
+  // Compute its new owner hash from that exact NEW row shape so the binding
+  // trigger can validate the source without an invalidating NULL intermediate.
+  const ownerRow = kind === "attachment" && attachmentCommentId
+    ? sql`to_jsonb(${table}) || jsonb_build_object('issue_comment_id',${attachmentCommentId}::uuid)`
+    : sql`to_jsonb(${table})`;
   return sql<NativePayloadSourceSnapshot>`(
     with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
       'kind',${kind}::text,'companyId',${table.companyId}::text,'id',${table.id}::text,
-      'contentHash',public.aw_native_payload_body_hash(${kind}::text,to_jsonb(${table}))),
+      'contentHash',public.aw_native_payload_body_hash(${kind}::text,${ownerRow})),
       'policy',jsonb_build_object('issueIds',${issuePolicy},'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
         'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),
       'inputs',${projectWorkspaceInputs}) as value)

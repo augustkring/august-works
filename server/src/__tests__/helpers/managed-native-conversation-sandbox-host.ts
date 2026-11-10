@@ -174,8 +174,13 @@ function safeNativePreReceiptFailedChecks(error: unknown): string[] {
   if (!message.startsWith(prefix)) return [];
   const allowed = new Set(["provider", "execution_input", "human_run_manifest", "comment_source", "workspace_roots",
     "trusted_command", "runtime_context_source_authority", "runtime_context_target", "credential_shape", "task_source_owner",
-    "workload_credentials"]);
-  return message.slice(prefix.length).split(",").filter((value, index, all) => all.indexOf(value) === index && allowed.has(value)).slice(0, 11);
+    "workload_credentials", "comment_source_taskSnapshotSingleInput", "comment_source_snapshotInputComment",
+    "comment_source_snapshotInputIssueBound", "comment_source_requestInputComment", "comment_source_requestInputIssueBound",
+    "comment_source_snapshotAndRequestCommentMatch", "comment_source_wakeCommentIdMatches", "comment_source_markdownMapVersion",
+    "comment_source_markdownDigestValid", "comment_source_markdownLengthValid", "comment_source_executionPromptAvailable",
+    "comment_source_promptContainsMarkdownLength", "comment_source_promptMarkdownSuffixMatches",
+    "comment_source_taskReferencePresent", "comment_source_commentReferencePresent"]);
+  return message.slice(prefix.length).split(",").filter((value, index, all) => all.indexOf(value) === index && allowed.has(value)).slice(0, 16);
 }
 
 
@@ -2793,9 +2798,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const safeDriveHostObservation = () => ({ active: driveHostObservation.active,
     phase: ["idle", "claiming", "processing", "waiting", "settled", "rejected", "deadline"].includes(driveHostObservation.phase)
       ? driveHostObservation.phase : "other",
-    currentAction: ["none", "capabilities", "prepare", "probe", "inspect", "apply", "start", "stop", "unknown"].includes(driveHostObservation.currentAction)
+    currentAction: ["none", "capabilities", "prepare", "probe", "inspect", "apply", "start", "prove_policy", "stop", "unknown"].includes(driveHostObservation.currentAction)
       ? driveHostObservation.currentAction : "other",
-    lastAction: ["none", "capabilities", "prepare", "probe", "inspect", "apply", "start", "stop", "unknown"].includes(driveHostObservation.lastAction)
+    lastAction: ["none", "capabilities", "prepare", "probe", "inspect", "apply", "start", "prove_policy", "stop", "unknown"].includes(driveHostObservation.lastAction)
       ? driveHostObservation.lastAction : "other",
     claimedCommands: Math.min(1_000_000, driveHostObservation.claimedCommands),
     claimPolls: Math.min(1_000_000, driveHostObservation.claimPolls),
@@ -2823,7 +2828,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         oaepLabel: Buffer.from("aw-runtime-command-v6") }, Buffer.from(claim.envelope.encryptedKey, "base64url"));
       const command = unseal<Record<string, any>>(claim.envelope.ciphertext, secret.toString("hex"), `command:${claim.id}:${host.id}:1`);
       const action = command.action as string;
-      const observedAction = ["capabilities", "prepare", "probe", "inspect", "apply", "start", "stop"].includes(action)
+      const observedAction = ["capabilities", "prepare", "probe", "inspect", "apply", "start", "prove_policy", "stop"].includes(action)
         ? action : "unknown";
       driveHostObservation.currentAction = observedAction; driveHostObservation.lastAction = observedAction;
       const snapshot = capabilities();
@@ -2890,7 +2895,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const needsEngineReceipt = sessionHostEngine && (
         (action === "prepare" && command.provisioning) ||
         action === "capabilities" ||
-        ["inspect", "effective_policy", "apply", "start", "stop", "revoke_providers", "destroy", "erase_native_session"].includes(action));
+        ["inspect", "effective_policy", "apply", "start", "prove_policy", "stop", "revoke_providers", "destroy", "erase_native_session"].includes(action));
       if (needsEngineReceipt) {
         const now = Date.now();
         const deadlines = [command.deadlineAt, command.provisioning?.expiresAt,

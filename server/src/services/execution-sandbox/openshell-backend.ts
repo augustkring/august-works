@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { Db } from "@paperclipai/db";
 import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
-import { qualificationProbeFixtureSchema, sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxPolicy, type SandboxPolicyCompilation, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
+import { qualificationProbeFixtureSchema, sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxHostRequest, type SandboxHostReply, type SandboxPolicy, type SandboxPolicyCompilation, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import { conflict, forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import type { ExecutionSandboxBackend, PreparedSandbox, SandboxAdmissionCleanup, SandboxIdentity, SandboxObservation, SandboxProbeCase, SandboxProbeResult, SandboxProvisioningIntent } from "./backend.js";
@@ -8,6 +9,10 @@ import { compileSandboxPolicy, type ResolvedSandboxBrokerBinding } from "./polic
 import { projectOpenShellQualificationProbePolicy } from "./openshell-policy.js";
 import { projectOpenShellPolicy, type OpenShellPolicyDocument } from "./openshell-policy.js";
 import { checkOpenShellBoundary } from "./openshell-prover.js";
+
+type SandboxHostPolicyProofRequest = NonNullable<SandboxHostRequest["policyProof"]>;
+type SandboxHostPolicyProofReply = Extract<SandboxHostReply, { action: "prove_policy" }>;
+const REQUIRED_POLICY_PROOF_DOMAINS = ["filesystem", "landlock", "network_l4", "network_rest", "process"] as const;
 
 /** Implemented by the authenticated native runtime host controller. Request
  * bodies and model output cannot register a bridge or supply qualification. */
@@ -21,6 +26,7 @@ export interface OpenShellHostBridge {
   }): Promise<PreparedSandbox>;
   inspect(scope: SandboxIdentity & { nativeAdmissionCleanup?: SandboxAdmissionCleanup }): Promise<SandboxObservation>;
   effectivePolicy(scope: SandboxIdentity): Promise<OpenShellPolicyDocument>;
+  provePolicy?(scope: SandboxIdentity, proof: SandboxHostPolicyProofRequest, idempotencyKey: string): Promise<SandboxHostPolicyProofReply>;
   apply(scope: SandboxIdentity & { document: OpenShellPolicyDocument; policyHash: string; expiresAt: string; idempotencyKey: string;
     resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "diskBytes" | "pidsLimit">;
     credentialProviderProfile?: { id: string; hash: string; binaries: string[] } }): Promise<{ applied: boolean; policyHash: string | null; requiresRecreate?: boolean }>;
@@ -77,6 +83,7 @@ export function openShellBackend(options: {
     ? { ...options.boundary, credentials: { mode: "none" as const, bindings: [] } }
     : options.boundary;
   let preparedEvidence: PreparedSandbox | null = null;
+  let preparedProvisioning: Awaited<ReturnType<typeof provisioning>> | null = null;
   function scope(input: SandboxIdentity) {
     if (nativeSha256(input) !== nativeSha256(identity)) throw forbidden("OpenShell bridge belongs to another immutable runtime scope");
   }
@@ -146,9 +153,65 @@ export function openShellBackend(options: {
     return { purpose: input.purpose, operationKey: input.operationKey, bindingVersion: input.bindingVersion, expiresAt: input.expiresAt, policyHash, document, resourceLimits,
       ...(qualificationProbeFixture ? { probeFixtureHash: qualificationProbeFixture.fixtureHash, qualificationProbeFixture } : {}) };
   }
-  async function boundaryProof(candidate: OpenShellPolicyDocument, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"], credentialBrokerEndpoints?: SandboxPolicyCompilation["credentialBrokerEndpoints"]) {
+  async function hostPolicyProof(stage: "requested" | "effective", candidate: OpenShellPolicyDocument,
+    boundary: OpenShellPolicyDocument, policyHash: string, idempotencyKey: string) {
+    const prepared = preparedEvidence, intent = preparedProvisioning;
+    if (!prepared || !intent || intent.purpose !== "admission" ||
+        !prepared.hostEpoch || !prepared.imageDigest || !prepared.sandboxId || !prepared.containerId ||
+        !prepared.bindingVersion || !prepared.provisioningHash || !prepared.policyHash ||
+        prepared.policyHash !== policyHash || intent.policyHash !== policyHash ||
+        intent.bindingVersion !== prepared.bindingVersion || intent.operationKey.length < 1 ||
+        nativeSha256(intent.document) !== nativeSha256(candidate))
+      throw conflict("An exact retained Host admission prepare receipt is required for protected policy proof", {
+        code: "sandbox_policy_proof_target_missing",
+      });
+    const provePolicy = bridge.provePolicy;
+    if (typeof provePolicy !== "function")
+      throw conflict("A protected Host policy proof owner is required for protected-host admission", {
+        code: "sandbox_host_policy_proof_unavailable",
+      });
+    const candidateDocumentHash = nativeSha256(candidate), boundaryDocumentHash = nativeSha256(boundary);
+    const proof = await provePolicy(identity, {
+      version: 1, stage, operationKey: intent.operationKey, bindingVersion: prepared.bindingVersion,
+      provisioningHash: prepared.provisioningHash, policyHash, sandboxId: prepared.sandboxId,
+      containerId: prepared.containerId, candidateDocument: candidate, boundaryDocument: boundary,
+      candidateDocumentHash, boundaryDocumentHash, proverSha256: options.prover.executableSha256,
+    }, idempotencyKey);
+    const expectedTarget = {
+      hostEpoch: prepared.hostEpoch, imageDigest: prepared.imageDigest, sandboxId: prepared.sandboxId,
+      containerId: prepared.containerId, bindingVersion: prepared.bindingVersion,
+      provisioningHash: prepared.provisioningHash, policyHash,
+    };
+    const proofFields = {
+      schema: "paperclip.sandbox-host-policy-proof.v1", stage, result: proof.result,
+      coveredDomains: proof.coveredDomains, candidateDocumentHash, boundaryDocumentHash,
+      effectiveDocumentHash: proof.effectiveDocumentHash, proverVersion: proof.proverVersion,
+      proverSha256: proof.proverSha256, target: proof.target,
+    };
+    const validCoverage = proof.coveredDomains.length === REQUIRED_POLICY_PROOF_DOMAINS.length &&
+      [...proof.coveredDomains].sort().join(",") === [...REQUIRED_POLICY_PROOF_DOMAINS].sort().join(",");
+    if (proof.stage !== stage || proof.result !== "within_boundary" || !validCoverage ||
+        proof.candidateDocumentHash !== candidateDocumentHash || proof.boundaryDocumentHash !== boundaryDocumentHash ||
+        proof.proverVersion !== "0.1.2" || proof.proverSha256 !== options.prover.executableSha256 ||
+        nativeSha256(proof.target) !== nativeSha256(expectedTarget) ||
+        (stage === "effective" && proof.effectiveDocumentHash !== candidateDocumentHash) ||
+        proof.evidenceHash !== nativeSha256(proofFields))
+      throw conflict("Protected Host did not return a complete proof for the exact current policy target", {
+        code: "sandbox_host_policy_proof_mismatch",
+      });
+    return proof;
+  }
+  async function boundaryProof(candidate: OpenShellPolicyDocument, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"],
+    credentialBrokerEndpoints?: SandboxPolicyCompilation["credentialBrokerEndpoints"], idempotencyKey: string = randomUUID()) {
     const boundary = projectOpenShellPolicy(projectionBoundary, modelBrokerEndpoint, credentialBrokerEndpoints);
     if (boundary.unsupportedFeatures.length) throw conflict("OpenShell alone cannot enforce the configured maximum boundary", { code: "sandbox_projection_unsupported", unsupportedFeatures: boundary.unsupportedFeatures });
+    if ((options.evidenceKind ?? "local_fixture") === "protected_host_report") {
+      const effective = await bridge.effectivePolicy(identity);
+      if (nativeSha256(effective) !== nativeSha256(candidate))
+        throw conflict("Current effective Host policy differs from the exact compiled request", { code: "sandbox_effective_policy_mismatch" });
+      return hostPolicyProof("effective", candidate, boundary.document, preparedProvisioning?.policyHash ?? "",
+        `${idempotencyKey}:policy-proof:effective`);
+    }
     const effective = await bridge.effectivePolicy(identity);
     const proof = await checkOpenShellBoundary({ ...options.prover, candidate: effective, boundary: boundary.document });
     if (proof.result !== "within_boundary" || ["filesystem", "network_l4", "network_rest", "process", "landlock"].some(domain => !proof.coveredDomains.includes(domain))) throw conflict("OpenShell effective policy did not earn a complete boundary proof", { code: "sandbox_boundary_unproven", result: proof.result, reasonCode: proof.reasonCode });
@@ -196,6 +259,7 @@ export function openShellBackend(options: {
         if (!exactReceipt) throw conflict("OpenShell qualification preparation lacks an exact protected target receipt", { code: "sandbox_qualification_target_mismatch" });
       }
       preparedEvidence = prepared;
+      preparedProvisioning = intentValue?.purpose === "admission" ? intentValue : null;
       return prepared;
     },
     applyPolicy: async input => {
@@ -213,9 +277,14 @@ export function openShellBackend(options: {
       if (current.state === "running") throw conflict("Stop the workload before its first policy application");
       const boundary = projectOpenShellPolicy(projectionBoundary, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
       if (boundary.unsupportedFeatures.length) return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: boundary.unsupportedFeatures };
-      const requestedProof = await checkOpenShellBoundary({ ...options.prover, candidate: projection.document, boundary: boundary.document });
-      if (requestedProof.result !== "within_boundary") return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: [`boundary:${requestedProof.result}`] };
       const policyHash = nativeSha256(input.policy);
+      if ((options.evidenceKind ?? "local_fixture") === "protected_host_report") {
+        await hostPolicyProof("requested", projection.document, boundary.document, policyHash,
+          `${input.idempotencyKey}:policy-proof:requested`);
+      } else {
+        const requestedProof = await checkOpenShellBoundary({ ...options.prover, candidate: projection.document, boundary: boundary.document });
+        if (requestedProof.result !== "within_boundary") return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: [`boundary:${requestedProof.result}`] };
+      }
       const brokerBinaries = broker?.bindings.map(binding => binding.binary) ?? [];
       const exactCredentialBinary = brokerBinaries.length > 0 && brokerBinaries.every(binary => binary !== null) &&
         new Set(brokerBinaries).size === 1;
@@ -233,7 +302,7 @@ export function openShellBackend(options: {
       if (receipt.requiresRecreate) return { applied: false, requiresRecreate: true, observedPolicyHash: null, unsupportedFeatures: [] };
       if (!receipt.applied || receipt.policyHash !== policyHash) throw conflict("OpenShell did not observe the exact requested policy");
       try {
-        await boundaryProof(projection.document, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
+        await boundaryProof(projection.document, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints, input.idempotencyKey);
         const after = await observed(input);
         if (!after.controlsHealthy || after.policyHash !== policyHash) throw conflict("OpenShell policy application has not been physically observed");
       } catch (error) { await contain(policyHash); throw error; }
@@ -250,7 +319,7 @@ export function openShellBackend(options: {
       if (projection.unsupportedFeatures.length) throw forbidden("OpenShell cannot enforce every requested control");
       const current = await observed(input), policyHash = nativeSha256(input.policy);
       if (!current.controlsHealthy || current.policyHash !== policyHash || !["ready", "stopped", "running"].includes(current.state)) throw conflict("Current observed policy is required before workload admission");
-      try { await boundaryProof(projection.document, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints); } catch (error) { await contain(policyHash); throw error; }
+      try { await boundaryProof(projection.document, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints, input.idempotencyKey); } catch (error) { await contain(policyHash); throw error; }
       return bridge.start({ ...identity, expiresAt: input.expiresAt, policyHash, idempotencyKey: input.idempotencyKey });
     },
     inspectWorkload: observed,

@@ -920,6 +920,35 @@ export function nativeExecutionFailureLogFields(input: {
 }): Record<string, unknown> {
   const failureCode = /^[a-z][a-z0-9_]{0,63}$/.test(input.failureCode) ? input.failureCode : "adapter_failed";
   const fields: Record<string, unknown> = { runId: input.runId, failureCode };
+  if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+    const errorKinds = ["Error", "TypeError", "ReferenceError", "SyntaxError", "HttpError", "ProviderDeadlineError", "AbortError", "AggregateError"];
+    fields.errorKind = input.error instanceof Error && errorKinds.includes(input.error.name) ? input.error.name : "other";
+    const seenContextErrors = new Set<object>();
+    let contextError: unknown = input.error;
+    for (let depth = 0; depth < 5 && contextError && typeof contextError === "object" &&
+      !seenContextErrors.has(contextError); depth += 1) {
+      seenContextErrors.add(contextError);
+      if (contextError instanceof HttpError) {
+        const details = parseObject(contextError.details);
+        if (contextError.status === 503 && details.code === "source_unavailable") {
+          const providerKeys = ["task", "foundation", "memory", "cognitive", "derived_memory", "connected_knowledge"];
+          const reasons = ["timeout", "provider_failed", "context_deadline"];
+          const timeoutBudgets = ["default_900ms", "native_bootstrap_7650ms", "other_bounded"];
+          const stages = ["task", "authorization", "context_manifest", "context_inspection", "context_audit", "unknown"];
+          fields.nativeContextFailure = {
+            status: 503,
+            providerKey: providerKeys.includes(String(details.providerKey)) ? details.providerKey : "unknown",
+            reason: reasons.includes(String(details.reason)) ? details.reason : "other",
+            providerTimeoutBudget: timeoutBudgets.includes(String(details.providerTimeoutBudget))
+              ? details.providerTimeoutBudget : "unknown",
+            stage: stages.includes(String(details.stage)) ? details.stage : "unknown",
+          };
+          break;
+        }
+      }
+      contextError = (contextError as { cause?: unknown }).cause;
+    }
+  }
   if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" && input.error instanceof Error && input.error.message.length <= 2_048) {
     const match = /^native_bootstrap_source_closure_unavailable:([a-zA-Z,]+);builder:([a-z_]+);wake:([A-Za-z_:+]+)$/.exec(input.error.message);
     const unsupportedKeys = new Set(["review", "directPrompt", "previousRun", "persistedInput", "resume",
@@ -963,7 +992,7 @@ export function nativeExecutionFailureLogFields(input: {
     if ((process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1" ||
       process.env.PAPERCLIP_NATIVE_FINALIZATION_DIAGNOSTICS === "1") && typeof candidate.stack === "string") {
       for (const line of candidate.stack.split(/\r?\n/)) {
-        const frame = /(?:^|[\\/])server[\\/]src[\\/]services[\\/](heartbeat|native-runtime[\\/]native-session-executor|native-direct-input|agent-conversations|issues)\.ts:(\d+):(\d+)/.exec(line);
+        const frame = /(?:^|[\\/])server[\\/]src[\\/]services[\\/](heartbeat|native-runtime[\\/]native-session-executor|native-direct-input|agent-conversations|issues|context[\\/]context-engine)\.ts:(\d+):(\d+)/.exec(line);
         if (frame) serviceFrames.push(`${frame[1]!.replaceAll("\\", "/")}.ts:${frame[2]}:${frame[3]}`);
         if (serviceFrames.length >= 5) break;
       }
@@ -24578,7 +24607,10 @@ export function heartbeatService(
               memoryIds: [...new Set(additionalPolicyParts.flatMap(part => part.memoryIds))].sort(),
               foundationRevisionIds: [...new Set(additionalPolicyParts.flatMap(part => part.foundationRevisionIds))].sort(),
             } : null;
-            const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = []) =>
+            const renderedAttachmentReferences = nativeBootstrapTaskMarkdownSourceMap?.references
+              ?.filter(reference => reference.kind === "attachment") ?? [];
+            const buildNativeBootstrapSet = (attachmentCandidates: NativePreparedSourceCandidate[] = [],
+              references = selectedNativeTaskSourceMap?.references ?? null) =>
               buildNativeBootstrapSourceSet({
                 companyId: agent.companyId,
                 runId: run.id,
@@ -24586,7 +24618,7 @@ export function heartbeatService(
                 issueId: issueRef.id,
                 renderedMarkdown: selectedMarkdown,
                 renderedMarkdownDigest: selectedNativeTaskSourceMap?.renderedMarkdownDigest ?? null,
-                references: selectedNativeTaskSourceMap?.references ?? null,
+                references,
                 candidates: [...nativeSourceCandidates, ...attachmentCandidates],
                 runtimeInputs: capturedAuthoredSources?.inputs ?? null,
                 additionalInputs: [
@@ -24639,13 +24671,20 @@ export function heartbeatService(
                 ...(process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1"
                   ? { onDiagnostic: reason => { nativeBootstrapSourceSetDiagnostics.push(reason); } } : {}),
               });
-            const nativeBootstrapSourceSet = buildNativeBootstrapSet();
-            if (!nativeBootstrapSourceSet && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+            // Attachment references cannot be qualified until the runner has
+            // staged bytes and captured their current DB owners below. Preflight
+            // every non-attachment reference now; never use that partial set as
+            // an executable closure. The post-stage factory must build the full
+            // set including all attachment candidates before dispatch.
+            const pendingAttachmentClosure = renderedAttachmentReferences.length > 0;
+            const preStageSourceSet = pendingAttachmentClosure
+              ? buildNativeBootstrapSet([], selectedNativeTaskSourceMap?.references?.filter(reference => reference.kind !== "attachment") ?? null)
+              : buildNativeBootstrapSet();
+            const nativeBootstrapSourceSet = pendingAttachmentClosure ? null : preStageSourceSet;
+            if (!preStageSourceSet && process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
               const unsupported = Object.entries(nativeBootstrapUnsupported).filter(([, value]) => value).map(([key]) => key);
               throw new Error(`native_bootstrap_source_closure_unavailable:${unsupported.length ? unsupported.join(",") : "none"};builder:${nativeBootstrapSourceSetDiagnostics[0] ?? "unknown"};wake:${nativeBootstrapWakeDiagnostics[0] ?? "ok"}`);
             }
-            const renderedAttachmentReferences = nativeBootstrapTaskMarkdownSourceMap?.references
-              ?.filter(reference => reference.kind === "attachment") ?? [];
             if (renderedAttachmentReferences.length) {
               nativeBootstrapAttachmentSourceClosureFactory = ({ execution, attachmentStage }) => {
                 const { sourceCaptures, attachments } = attachmentStage;

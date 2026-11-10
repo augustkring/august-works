@@ -21,13 +21,13 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1971,
+    "sourceDeltaPathCount": 1979,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13970,
+    "fullDiffPathCount": 13990,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -16349,6 +16349,24 @@
           "sha256": null
         },
         {
+          "path": "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "packages/db/src/migrations/meta/0572_snapshot.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "packages/db/src/migrations/meta/0573_snapshot.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "packages/paperclip-runner/generated/capability/capabilities.yaml",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -16431,6 +16449,12 @@
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "5a773a908db80e1a09869039cf74220235cb71a83d5cbbd685f2f87ba322f34c"
+        },
+        {
+          "path": "packages/paperclip-runner/src/contracts/native-session-backend.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "38b92443a5fb9b044191025e661f4e39bab0b084c83517d593acf0d137df8d2d"
         },
         {
           "path": "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.test.ts",
@@ -16889,6 +16913,24 @@
           "sha256": null
         },
         {
+          "path": "server/src/services/knowledge/connected-knowledge.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "9f5fef9997368be23a6c5485ea345ad25b141d4c613e5e546f4a0ceebb5c8565"
+        },
+        {
+          "path": "server/src/services/knowledge/github-synced-connected-knowledge.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "6a66e11f65f43c579933e8d735d385d582ec0fa584c14ffdbc32e497ed7fdc26"
+        },
+        {
+          "path": "server/src/services/knowledge/github-synced-connected-knowledge.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "702da4059e7606128d14699ce6d8f319b57e2881ca2085532fea90affa1eaa1b"
+        },
+        {
           "path": "server/src/services/legacy-execution-recovery.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -17189,6 +17231,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/services/native-text-unknown-charge.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/services/orchestration/native-draft-runtime.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -17381,6 +17429,9 @@
         "packages/adapters/opencode-local/src/server/test.ts",
         "packages/adapters/pi-local/src/server/test.ts",
         "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
+        "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
+        "packages/db/src/migrations/meta/0572_snapshot.json",
+        "packages/db/src/migrations/meta/0573_snapshot.json",
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
@@ -17395,6 +17446,7 @@
         "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-types.ts",
         "packages/paperclip-runner/src/cli/opencode-app-server-proxy.ts",
+        "packages/paperclip-runner/src/contracts/native-session-backend.ts",
         "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.test.ts",
         "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.ts",
         "packages/paperclip-runner/src/drivers/acpx/installation-integrity.test.ts",
@@ -17471,6 +17523,9 @@
         "server/src/services/explicit-native-continuation.ts",
         "server/src/services/issue-execution-policy.ts",
         "server/src/services/issue-execution-stage-wakeup.ts",
+        "server/src/services/knowledge/connected-knowledge.ts",
+        "server/src/services/knowledge/github-synced-connected-knowledge.test.ts",
+        "server/src/services/knowledge/github-synced-connected-knowledge.ts",
         "server/src/services/legacy-execution-recovery.ts",
         "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
         "server/src/services/native-opencode-conformance.ts",
@@ -17521,6 +17576,7 @@
         "server/src/services/native-runtime/runtime-context.test-fixture.ts",
         "server/src/services/native-runtime/runtime-context.test.ts",
         "server/src/services/native-runtime/worker-conversation-root.ts",
+        "server/src/services/native-text-unknown-charge.ts",
         "server/src/services/orchestration/native-draft-runtime.ts",
         "server/src/services/orchestration/native-opencode-conformance-admission.ts",
         "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
@@ -17570,6 +17626,9 @@
         "packages/adapters/opencode-local/src/server/test.ts",
         "packages/adapters/pi-local/src/server/test.ts",
         "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
+        "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
+        "packages/db/src/migrations/meta/0572_snapshot.json",
+        "packages/db/src/migrations/meta/0573_snapshot.json",
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
@@ -17584,6 +17643,7 @@
         "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-types.ts",
         "packages/paperclip-runner/src/cli/opencode-app-server-proxy.ts",
+        "packages/paperclip-runner/src/contracts/native-session-backend.ts",
         "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.test.ts",
         "packages/paperclip-runner/src/control-plane/durable-prp-control-plane.ts",
         "packages/paperclip-runner/src/drivers/acpx/installation-integrity.test.ts",
@@ -17660,6 +17720,9 @@
         "server/src/services/explicit-native-continuation.ts",
         "server/src/services/issue-execution-policy.ts",
         "server/src/services/issue-execution-stage-wakeup.ts",
+        "server/src/services/knowledge/connected-knowledge.ts",
+        "server/src/services/knowledge/github-synced-connected-knowledge.test.ts",
+        "server/src/services/knowledge/github-synced-connected-knowledge.ts",
         "server/src/services/legacy-execution-recovery.ts",
         "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
         "server/src/services/native-opencode-conformance.ts",
@@ -17710,6 +17773,7 @@
         "server/src/services/native-runtime/runtime-context.test-fixture.ts",
         "server/src/services/native-runtime/runtime-context.test.ts",
         "server/src/services/native-runtime/worker-conversation-root.ts",
+        "server/src/services/native-text-unknown-charge.ts",
         "server/src/services/orchestration/native-draft-runtime.ts",
         "server/src/services/orchestration/native-opencode-conformance-admission.ts",
         "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",

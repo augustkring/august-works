@@ -349,6 +349,7 @@ function draftSession(
   let ended = false,
     revoked = false,
     started = false;
+  let releaseAfterInputAcknowledgement: (() => void) | null = null;
   let work: Promise<void> = Promise.resolve();
   let report: {
     result: PrpStructuredRunResult;
@@ -395,6 +396,8 @@ function draftSession(
     revoked = true;
     report = null;
     controller.abort();
+    releaseAfterInputAcknowledgement?.();
+    releaseAfterInputAcknowledgement = null;
     event("turn.cancelled", { reason: "native_authority_revoked" });
     finish();
   };
@@ -467,9 +470,11 @@ function draftSession(
         throw forbidden("Text draft permits one fresh default turn");
       started = true;
       event("turn.started");
+      const inputAcknowledged = new Promise<void>(resolve => { releaseAfterInputAcknowledgement = resolve; });
       const message = turn.message.text;
       work = (async () => {
         try {
+          await inputAcknowledged;
           controller.signal.throwIfAborted();
           const wireReceipt: { value: WorkerModelDispatchWireReceipt | null } = { value: null };
           const modelCallId = `aw-draft:${identity.runId}`;
@@ -638,7 +643,11 @@ function draftSession(
           finish();
         }
       })();
-      return { turnId, effectiveCollaborationMode: "default" };
+      return { turnId, effectiveCollaborationMode: "default", releaseAfterInputAcknowledgement: () => {
+        const release = releaseAfterInputAcknowledgement;
+        releaseAfterInputAcknowledgement = null;
+        release?.();
+      } };
     },
     async interrupt() {
       revoke();

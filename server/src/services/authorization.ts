@@ -1131,74 +1131,101 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
         select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_dispatch
         where captured_dispatch->>'kind' in ('worker_model_dispatch','conversation_model_dispatch')) or (
           temporal_owner.conversation_agent_id is not null and temporal_owner.conversation_user_id is not null
-          and jsonb_array_length(temporal_owner.payload_source_snapshot->'inputs')=1
           and temporal_owner.payload_source_snapshot->'policy'->'issueIds'='[]'::jsonb
           and temporal_owner.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
           and temporal_owner.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
           and temporal_owner.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
           and temporal_owner.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
-          and ((not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
-            where conversation_input->>'kind'<>'comment' or conversation_input->>'issueId'<>temporal_owner.id::text
-              or conversation_input->>'commentId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
-          and exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
-            join issue_comments conversation_comment on
-              conversation_comment.id=case when conversation_input->>'commentId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
-                then (conversation_input->>'commentId')::uuid end
-            where conversation_comment.company_id=temporal_owner.company_id
-              and conversation_comment.issue_id=temporal_owner.id
-              and conversation_input->>'kind'='comment'
-              and conversation_input->>'issueId'=temporal_owner.id::text
-              and conversation_comment.deleted_at is null and conversation_comment.author_type='user'
-              and conversation_comment.author_user_id=temporal_owner.conversation_user_id
-              and conversation_input->>'sourceVersion'=extract(epoch from conversation_comment.updated_at)::text
-              and conversation_comment.payload_source_protocol_version=1
-              and conversation_comment.payload_source_snapshot is not null
-              and conversation_comment.payload_source_snapshot_invalidated=false
-              and conversation_comment.payload_source_snapshot->'owner'->>'kind'='comment'
-              and conversation_comment.payload_source_snapshot->'owner'->>'id'=conversation_comment.id::text
-              and conversation_comment.payload_source_snapshot->'owner'->>'companyId'=conversation_comment.company_id::text
-              and conversation_comment.payload_source_snapshot->'owner'->>'contentHash'=
-                public.aw_native_payload_body_hash('comment',to_jsonb(conversation_comment))
-              and conversation_comment.payload_source_snapshot->'policy'->'issueIds'=
-                jsonb_build_array(temporal_owner.id::text)
-              and conversation_comment.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
-              and conversation_comment.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
-              and conversation_comment.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
-              and conversation_comment.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
-              and conversation_comment.payload_source_snapshot->'inputs'='[]'::jsonb
-              and conversation_comment.payload_source_snapshot->>'digest'=
-                encode(sha256(convert_to((conversation_comment.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
-              and conversation_input->>'contentHash'=encode(sha256(convert_to(public.aw_native_canonical_jsonb(
-                jsonb_build_object('body',conversation_comment.body,'presentation',conversation_comment.presentation,
-                  'metadata',conversation_comment.metadata)),'UTF8')),'hex')))
-          or exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') upload_input
-            join issue_attachments upload on upload.company_id=temporal_owner.company_id
-              and upload.issue_id=temporal_owner.id and upload.id::text=upload_input->>'attachmentId'
-            join assets upload_asset on upload_asset.company_id=upload.company_id and upload_asset.id=upload.asset_id
-            where upload_input->>'kind'='attachment' and upload_input->>'issueId'=temporal_owner.id::text
-              and upload_input->'commentId'='null'::jsonb and upload_input->>'disposition'='delivered'
-              and upload_input->>'assetId'=upload_asset.id::text and upload_input->>'sha256'=upload_asset.sha256
-              and upload_input->>'sha256' ~ '^[0-9a-f]{64}$'
-              and upload_input->>'byteSize'=upload_asset.byte_size::text
-              and upload_asset.byte_size>0 and upload_asset.byte_size<=9007199254740991
-              and upload_asset.created_by_user_id=temporal_owner.conversation_user_id
-              and upload_asset.created_by_agent_id is null and upload.issue_comment_id is null and upload.originating_run_id is null
-              and upload.payload_source_protocol_version=1 and not upload.payload_source_snapshot_invalidated
-              and upload.payload_source_snapshot->'owner'->>'kind'='attachment'
-              and upload.payload_source_snapshot->'owner'->>'id'=upload.id::text
-              and upload.payload_source_snapshot->'owner'->>'companyId'=upload.company_id::text
-              and upload.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('attachment',to_jsonb(upload))
-              and upload.payload_source_snapshot->'policy'=jsonb_build_object('issueIds',jsonb_build_array(temporal_owner.id::text),
-                'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb)
-              and upload.payload_source_snapshot->'inputs'='[]'::jsonb
-              and upload.payload_source_snapshot->>'digest'=encode(sha256(convert_to((upload.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
-              and exists(select 1 from activity_log capture where capture.company_id=temporal_owner.company_id
-                and capture.actor_type='user' and capture.actor_id=temporal_owner.conversation_user_id
-                and capture.entity_type='issue' and capture.entity_id=temporal_owner.id::text
-                and capture.action='attachment.payload_source_captured'
-                and capture.details->>'attachmentId'=upload.id::text and capture.details->>'assetId'=upload_asset.id::text
-                and capture.details->>'producer'='direct_manual_upload'
-                and capture.details->>'digest'=upload.payload_source_snapshot->>'digest')))
+          and (
+            (jsonb_array_length(temporal_owner.payload_source_snapshot->'inputs')=1
+             and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
+               where jsonb_typeof(conversation_input) IS DISTINCT FROM 'object'
+                 or CASE WHEN jsonb_typeof(conversation_input)='object'
+                   THEN (SELECT count(*) FROM jsonb_object_keys(conversation_input))<>5 ELSE true END
+                 or conversation_input->>'kind'<>'comment' or conversation_input->>'issueId'<>temporal_owner.id::text
+                 or conversation_input->>'commentId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+             and exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') conversation_input
+               join issue_comments conversation_comment on
+                 conversation_comment.id=case when conversation_input->>'commentId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+                   then (conversation_input->>'commentId')::uuid end
+               where conversation_comment.company_id=temporal_owner.company_id
+                 and conversation_comment.issue_id=temporal_owner.id
+                 and CASE WHEN jsonb_typeof(conversation_input)='object'
+                   THEN (SELECT count(*) FROM jsonb_object_keys(conversation_input))=5 ELSE false END
+                 and conversation_input->>'kind'='comment'
+                 and conversation_input->>'issueId'=temporal_owner.id::text
+                 and conversation_comment.deleted_at is null and conversation_comment.author_type='user'
+                 and conversation_comment.author_user_id=temporal_owner.conversation_user_id
+                 and conversation_comment.author_agent_id is null and conversation_comment.created_by_run_id is null
+                 and conversation_input->>'sourceVersion'=extract(epoch from conversation_comment.updated_at)::text
+                 and conversation_comment.payload_source_protocol_version=1
+                 and conversation_comment.payload_source_snapshot is not null
+                 and conversation_comment.payload_source_snapshot_invalidated=false
+                 and conversation_comment.payload_source_snapshot->'owner'->>'kind'='comment'
+                 and conversation_comment.payload_source_snapshot->'owner'->>'id'=conversation_comment.id::text
+                 and conversation_comment.payload_source_snapshot->'owner'->>'companyId'=conversation_comment.company_id::text
+                 and conversation_comment.payload_source_snapshot->'owner'->>'contentHash'=
+                   public.aw_native_payload_body_hash('comment',to_jsonb(conversation_comment))
+                 and conversation_comment.payload_source_snapshot->'policy'->'issueIds'=
+                   jsonb_build_array(temporal_owner.id::text)
+                 and conversation_comment.payload_source_snapshot->'policy'->'projectIds'='[]'::jsonb
+                 and conversation_comment.payload_source_snapshot->'policy'->'runIds'='[]'::jsonb
+                 and conversation_comment.payload_source_snapshot->'policy'->'memoryIds'='[]'::jsonb
+                 and conversation_comment.payload_source_snapshot->'policy'->'foundationRevisionIds'='[]'::jsonb
+                 and conversation_comment.payload_source_snapshot->'inputs'='[]'::jsonb
+                 and conversation_comment.payload_source_snapshot->>'digest'=
+                   encode(sha256(convert_to((conversation_comment.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+                 and conversation_input->>'contentHash'=encode(sha256(convert_to(public.aw_native_canonical_jsonb(
+                   jsonb_build_object('body',conversation_comment.body,'presentation',conversation_comment.presentation,
+                     'metadata',conversation_comment.metadata)),'UTF8')),'hex')))
+            or (jsonb_array_length(temporal_owner.payload_source_snapshot->'inputs') between 1 and 20
+              and jsonb_array_length(temporal_owner.payload_source_snapshot->'inputs')=
+                (select count(*) from issue_attachments all_uploads
+                  where all_uploads.company_id=temporal_owner.company_id and all_uploads.issue_id=temporal_owner.id)
+              and (select count(distinct upload_input->>'attachmentId')
+                from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') upload_input)=
+                jsonb_array_length(temporal_owner.payload_source_snapshot->'inputs')
+              and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') upload_input
+                where upload_input->>'kind' is distinct from 'attachment'
+                  or CASE WHEN jsonb_typeof(upload_input)='object'
+                    THEN (SELECT count(*) FROM jsonb_object_keys(upload_input))<>8 ELSE true END
+                  or upload_input->>'issueId' is distinct from temporal_owner.id::text
+                  or upload_input->'commentId' is distinct from 'null'::jsonb
+                  or upload_input->>'disposition' is distinct from 'delivered'
+                  or not exists(select 1 from issue_attachments upload
+                    join assets upload_asset on upload_asset.company_id=upload.company_id and upload_asset.id=upload.asset_id
+                    where upload.company_id=temporal_owner.company_id and upload.issue_id=temporal_owner.id
+                      and upload.id::text=upload_input->>'attachmentId'
+                      and upload_input->>'assetId'=upload_asset.id::text
+                      and upload_input->>'sha256'=upload_asset.sha256
+                      and upload_input->>'sha256' ~ '^[0-9a-f]{64}$'
+                      and upload_input->>'byteSize'=upload_asset.byte_size::text
+                      and upload_asset.byte_size>0 and upload_asset.byte_size<=9007199254740991
+                      and upload_asset.created_by_user_id=temporal_owner.conversation_user_id
+                      and upload_asset.created_by_agent_id is null
+                      and upload.issue_comment_id is null and upload.originating_run_id is null
+                      and upload.payload_source_protocol_version=1 and not upload.payload_source_snapshot_invalidated
+                      and upload.payload_source_snapshot->'owner'->>'kind'='attachment'
+                      and upload.payload_source_snapshot->'owner'->>'id'=upload.id::text
+                      and upload.payload_source_snapshot->'owner'->>'companyId'=upload.company_id::text
+                      and upload.payload_source_snapshot->'owner'->>'contentHash'=
+                        public.aw_native_payload_body_hash('attachment',to_jsonb(upload))
+                      and upload.payload_source_snapshot->'policy'=jsonb_build_object('issueIds',jsonb_build_array(temporal_owner.id::text),
+                        'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb)
+                      and upload.payload_source_snapshot->'inputs'='[]'::jsonb
+                      and upload.payload_source_snapshot->>'digest'=
+                        encode(sha256(convert_to((upload.payload_source_snapshot-'digest')::text,'UTF8')),'hex')
+                      and exists(select 1 from activity_log capture where capture.company_id=temporal_owner.company_id
+                        and capture.actor_type='user' and capture.actor_id=temporal_owner.conversation_user_id
+                        and capture.entity_type='issue' and capture.entity_id=temporal_owner.id::text
+                        and capture.action='attachment.payload_source_captured'
+                        and capture.details->>'attachmentId'=upload.id::text
+                        and capture.details->>'assetId'=upload_asset.id::text
+                        and capture.details->>'producer'='direct_manual_upload'
+                        and capture.details->>'digest'=upload.payload_source_snapshot->>'digest'
+                        and capture.details->>'contentHash'=upload.payload_source_snapshot->'owner'->>'contentHash')))
+            )
+          )
         ))
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind'='context' and (

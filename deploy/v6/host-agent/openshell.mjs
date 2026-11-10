@@ -1,7 +1,8 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, stat, lstat, realpath, writeFile, unlink } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { readFile, stat, lstat, realpath, writeFile, unlink, rm, mkdir, statfs, chown, chmod, utimes, rename } from "node:fs/promises";
 import { readdir as readDir, readlink } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
@@ -18,6 +19,17 @@ const DISK_CA_TMPFS_MOUNT = "/run/openshell-supervisor-ca/material";
 const MIN_DISK_BYTES = 1_048_576;
 const MAX_DISK_BYTES = 1_099_511_627_776;
 const QUALIFICATION_CREDENTIAL_ENV = "PAPERCLIP_SANDBOX_QUALIFICATION_TOKEN";
+const POLICY_PROOF_MAX_BYTES = 256 * 1024 * 1024;
+const POLICY_PROOF_MAX_MOUNT_BYTES = 64 * 1024 * 1024;
+const POLICY_PROOF_MAX_ENTRIES = 50000;
+const POLICY_PROOF_MAX_SCRATCH_BYTES = 768 * 1024 * 1024;
+const POLICY_PROOF_CLEANUP_TIMEOUT_MS = 15_000;
+let policyProofQueue = Promise.resolve();
+function serializePolicyProof(work) {
+  const next = policyProofQueue.then(work);
+  policyProofQueue = next.catch(() => {});
+  return next;
+}
 export function archiveStatusProvesAbsence(rootStatus, targetStatus) {
   if (rootStatus !== 200 || ![200, 404].includes(targetStatus))
     throw new Error("sandbox_observation_unavailable");
@@ -25,6 +37,104 @@ export function archiveStatusProvesAbsence(rootStatus, targetStatus) {
 }
 export function dockerInspectRunAsMatches(containerInfo, expectedUser) {
   return typeof expectedUser === "string" && containerInfo?.Config?.User === expectedUser;
+}
+export function tmpfsSizeBytesFromMountOption(value) {
+  const match = /^size=([1-9][0-9]*)([kKmMgGtT]?)$/.exec(value ?? "");
+  if (!match) return null;
+  const units = { "": 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3, t: 1024 ** 4 };
+  const multiplier = units[match[2].toLowerCase()];
+  const bytes = Number(match[1]) * multiplier;
+  return Number.isSafeInteger(bytes) ? bytes : null;
+}
+export function policyProofWorkspaceNamespacePlan(candidate, boundary, taskRoot) {
+  const contains = (parent, child) => parent === "/" || child === parent || child.startsWith(`${parent.replace(/\/$/, "")}/`);
+  if (!path.posix.isAbsolute(taskRoot) || path.posix.normalize(taskRoot) !== taskRoot ||
+    taskRoot === "/workspace" || !contains("/workspace", taskRoot)) return null;
+  const candidateRoots = [...(candidate?.filesystem_policy?.read_only ?? []),
+    ...(candidate?.filesystem_policy?.read_write ?? [])];
+  const boundaryRoots = [...(boundary?.filesystem_policy?.read_only ?? []),
+    ...(boundary?.filesystem_policy?.read_write ?? [])];
+  const ancestors = new Set();
+  const validRoot = (root, isBoundary) => {
+    if (typeof root !== "string" || !path.posix.isAbsolute(root) || path.posix.normalize(root) !== root || root === "/workspace")
+      return false;
+    if (!contains("/workspace", root)) return true;
+    if (contains(taskRoot, root)) return true;
+    if (isBoundary && contains(root, taskRoot)) {
+      ancestors.add(root);
+      return true;
+    }
+    return false;
+  };
+  if (candidateRoots.some(root => !validRoot(root, false)) || boundaryRoots.some(root => !validRoot(root, true))) return null;
+  const binaryRoots = [candidate, boundary].flatMap(document => Object.values(document?.network_policies ?? {})
+    .flatMap(rule => (rule?.binaries ?? []).map(binary => binary?.path)));
+  if (binaryRoots.some(root => typeof root !== "string" || !path.posix.isAbsolute(root) ||
+    path.posix.normalize(root) !== root || contains("/workspace", root) && !contains(taskRoot, root))) return null;
+  if (!ancestors.size) return { namespaceRoot: null, directories: [] };
+  const namespaceRoot = [...ancestors].sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
+  const workspaceRelative = path.posix.relative("/workspace", namespaceRoot);
+  if (!workspaceRelative || workspaceRelative.startsWith("..") || path.posix.isAbsolute(workspaceRelative)) return null;
+  const outerDirectories = ["/workspace"];
+  let outerCurrent = "/workspace";
+  const rootParts = workspaceRelative.split("/");
+  for (const component of rootParts.slice(0, -1)) {
+    outerCurrent = path.posix.join(outerCurrent, component);
+    outerDirectories.push(outerCurrent);
+  }
+  const taskParent = path.posix.dirname(taskRoot);
+  const relative = path.posix.relative(namespaceRoot, taskParent);
+  if (relative === ".." || relative.startsWith(`..${path.posix.sep}`) || path.posix.isAbsolute(relative)) return null;
+  const directories = [namespaceRoot];
+  let current = namespaceRoot;
+  for (const component of relative.split("/").filter(Boolean)) {
+    current = path.posix.join(current, component);
+    directories.push(current);
+  }
+  return { namespaceRoot, directories, outerDirectories };
+}
+export async function materializePolicyProofNamespaceTree(root, namespaceRoot, taskRoot, taskSnapshot, ancestors) {
+  if (![root, taskSnapshot].every(value => typeof value === "string" && path.isAbsolute(value) && path.normalize(value) === value) ||
+    typeof namespaceRoot !== "string" || !path.posix.isAbsolute(namespaceRoot) || path.posix.normalize(namespaceRoot) !== namespaceRoot ||
+    typeof taskRoot !== "string" || !path.posix.isAbsolute(taskRoot) || path.posix.normalize(taskRoot) !== taskRoot ||
+    !Array.isArray(ancestors) || ancestors.length < 1 || ancestors.length > 16 || ancestors[0]?.guestPath !== namespaceRoot)
+    throw new Error("sandbox_operation_unsupported");
+  const expectedPaths = [namespaceRoot];
+  const relativeParent = path.posix.relative(namespaceRoot, path.posix.dirname(taskRoot));
+  if (relativeParent === ".." || relativeParent.startsWith(`..${path.posix.sep}`) || path.posix.isAbsolute(relativeParent))
+    throw new Error("sandbox_operation_unsupported");
+  let current = namespaceRoot;
+  for (const part of relativeParent.split("/").filter(Boolean)) {
+    current = path.posix.join(current, part);
+    expectedPaths.push(current);
+  }
+  if (ancestors.length !== expectedPaths.length || ancestors.some((item, index) =>
+    item?.guestPath !== expectedPaths[index] || !Number.isSafeInteger(item.mode) || item.mode < 0 || item.mode > 0o777 ||
+    !Number.isSafeInteger(item.uid) || item.uid < 0 || !Number.isSafeInteger(item.gid) || item.gid < 0 ||
+    !Number.isFinite(item.mtimeMs) || !Number.isFinite(item.atimeMs)))
+    throw new Error("sandbox_operation_unsupported");
+  const taskSnapshotInfo = await lstat(taskSnapshot);
+  if (!taskSnapshotInfo.isDirectory() || taskSnapshotInfo.isSymbolicLink())
+    throw new Error("sandbox_operation_unsupported");
+  await mkdir(root, { mode: 0o700 });
+  const localByGuest = new Map([[namespaceRoot, root]]);
+  for (const item of ancestors.slice(1)) {
+    const relative = path.posix.relative(namespaceRoot, item.guestPath);
+    const local = path.join(root, relative);
+    await mkdir(local, { mode: 0o700 });
+    localByGuest.set(item.guestPath, local);
+  }
+  const taskRelative = path.posix.relative(namespaceRoot, taskRoot);
+  if (!taskRelative || taskRelative === ".." || taskRelative.startsWith(`..${path.posix.sep}`) || path.posix.isAbsolute(taskRelative))
+    throw new Error("sandbox_operation_unsupported");
+  await rename(taskSnapshot, path.join(root, taskRelative));
+  for (const item of ancestors.slice().reverse()) {
+    const local = localByGuest.get(item.guestPath);
+    await chown(local, item.uid, item.gid);
+    await chmod(local, item.mode);
+    await utimes(local, new Date(item.atimeMs), new Date(item.mtimeMs));
+  }
+  return root;
 }
 export const NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT = `
 const fs=require("node:fs"),p=require("node:path"),C=fs.constants;
@@ -272,6 +382,7 @@ const actions = new Set([
   "prepare",
   "inspect",
   "effective_policy",
+  "prove_policy",
   "apply",
   "start",
   "probe",
@@ -295,6 +406,7 @@ export function openShellHostEngine({
     queue = Promise.resolve();
   const erasureBindings = new Set();
   const activeExecBindings = new Map();
+  let policyProofDockerExecutable = null;
   function serial(work) {
     const next = queue.then(work);
     queue = next.catch(() => {});
@@ -409,6 +521,58 @@ export function openShellHostEngine({
       stateHome,
       env: { HOME: stateHome, PATH: "/usr/bin:/bin", LANG: "C", NO_COLOR: "1" },
     };
+  }
+  async function policyProverConfiguration(minimumScratchFreeBytes = POLICY_PROOF_MAX_BYTES * 2 + 100 * 1024 * 1024 + 32 * 1024 * 1024) {
+    const configured = config?.policyProverExecutable;
+    const expectedSha256 = config?.policyProverSha256;
+    const dockerConfigured = config?.policyProofDockerExecutable;
+    const dockerSha256 = config?.policyProofDockerSha256;
+    const scratchConfigured = config?.policyProofScratchHome;
+    const scratchCapacity = config?.policyProofScratchCapacityBytes;
+    if (typeof configured !== "string" || !path.isAbsolute(configured) || path.normalize(configured) !== configured ||
+      !/^[a-f0-9]{64}$/.test(expectedSha256 ?? "") || typeof scratchConfigured !== "string" || /[,:\r\n\0]/.test(scratchConfigured) ||
+      !path.isAbsolute(scratchConfigured) || path.normalize(scratchConfigured) !== scratchConfigured ||
+      typeof dockerConfigured !== "string" || !path.isAbsolute(dockerConfigured) || path.normalize(dockerConfigured) !== dockerConfigured ||
+      !/^[a-f0-9]{64}$/.test(dockerSha256 ?? "") || scratchCapacity !== POLICY_PROOF_MAX_SCRATCH_BYTES)
+      throw new Error("sandbox_operation_unsupported");
+    const [executable, scratchHome, dockerExecutable, configuredScratchInfo, configuredBinaryInfo, configuredDockerInfo] = await Promise.all([
+      realpath(configured), realpath(scratchConfigured), realpath(dockerConfigured), lstat(scratchConfigured), lstat(configured), lstat(dockerConfigured),
+    ]);
+    const [binary, dockerBinary, fsInfo] = await Promise.all([stat(executable), stat(dockerExecutable), statfs(scratchHome)]);
+    if (executable !== configured || !configuredBinaryInfo.isFile() || configuredBinaryInfo.isSymbolicLink() ||
+      !binary.isFile() || binary.size < 1 || binary.size > 100 * 1024 * 1024 || !(binary.mode & 0o100) ||
+      binary.uid !== (process.getuid?.() ?? 0) || (binary.mode & 0o022) ||
+      dockerExecutable !== dockerConfigured || !configuredDockerInfo.isFile() || configuredDockerInfo.isSymbolicLink() ||
+      !dockerBinary.isFile() || dockerBinary.size < 1 || dockerBinary.size > 100 * 1024 * 1024 || !(dockerBinary.mode & 0o100) ||
+      dockerBinary.uid !== 0 || (dockerBinary.mode & 0o022) || hash(await readFile(dockerExecutable)) !== dockerSha256 ||
+      scratchHome !== scratchConfigured || !configuredScratchInfo.isDirectory() || configuredScratchInfo.isSymbolicLink() ||
+      configuredScratchInfo.uid !== (process.getuid?.() ?? 0) || (configuredScratchInfo.mode & 0o777) !== 0o700 || fsInfo.type !== 0x01021994 ||
+      fsInfo.bsize * fsInfo.blocks !== scratchCapacity ||
+      fsInfo.bsize * fsInfo.bavail < minimumScratchFreeBytes ||
+      hash(await readFile(executable)) !== expectedSha256)
+      throw new Error("sandbox_operation_unsupported");
+    const mountInfo = await readFile(path.join(hostProcRoot, "self/mountinfo"), "utf8");
+    const scratchMount = mountInfo.split("\n").map(line => line.split(" ")).filter(fields => fields.length > 6)
+      .map(fields => ({ point: decodeMountInfoPath(fields[4]), rest: fields.slice(fields.indexOf("-") + 1) }))
+      .filter(entry => scratchHome === entry.point)
+      .sort((a, b) => b.point.length - a.point.length)[0];
+    const mountFields = mountInfo.split("\n").map(line => line.split(" "))
+      .find(fields => decodeMountInfoPath(fields[4] ?? "") === scratchHome);
+    const superOptions = mountFields ? mountFields.slice(mountFields.indexOf("-") + 3).join(",").split(",") : [];
+    const mountSizeBytes = superOptions.map(option => option.startsWith("size=")
+      ? tmpfsSizeBytesFromMountOption(option) : null).find(value => value !== null);
+    if (!scratchMount || scratchMount.rest[0] !== "tmpfs" ||
+      mountSizeBytes !== scratchCapacity) throw new Error("sandbox_operation_unsupported");
+    return { executable, expectedSha256, scratchHome, scratchDevice: configuredScratchInfo.dev, scratchInode: configuredScratchInfo.ino,
+      scratchCapacityBytes: fsInfo.bsize * fsInfo.blocks, dockerExecutable, dockerSha256 };
+  }
+  async function withPolicyProofDocker(work, minimumScratchFreeBytes = POLICY_PROOF_MAX_BYTES * 2 +
+    POLICY_PROOF_MAX_MOUNT_BYTES + 128 * 1024 * 1024 + 32 * 1024 * 1024) {
+    const prover = await policyProverConfiguration(minimumScratchFreeBytes);
+    const previous = policyProofDockerExecutable;
+    policyProofDockerExecutable = prover.dockerExecutable;
+    try { return await work(prover); }
+    finally { policyProofDockerExecutable = previous; }
   }
   async function cli(args, deadlineAt, json = true, envOverrides = {}, timeoutCapMs = 6000) {
     const privateConfig = await privateConfiguration();
@@ -805,7 +969,7 @@ export function openShellHostEngine({
     const remaining = new Date(deadlineAt).getTime() - Date.now();
     if (!Number.isFinite(remaining) || remaining <= 0)
       throw new Error("sandbox_host_unavailable");
-    const { stdout } = await run("docker", args, {
+    const { stdout } = await run(policyProofDockerExecutable ?? "docker", args, {
       env: {
         ...privateConfig.env,
         PATH: process.env.PATH,
@@ -844,6 +1008,738 @@ export function openShellHostEngine({
       req.end();
     });
   }
+  function policyProofPaths(candidate, boundary, taskRoot) {
+    const scratchRoots = ["/.__aw_policy_proof", "/.__aw_policy_bootstrap"];
+    if (!policyProofWorkspaceNamespacePlan(candidate, boundary, taskRoot))
+      throw new Error("sandbox_operation_unsupported");
+    const paths = new Set([...candidate.filesystem_policy.read_only, ...candidate.filesystem_policy.read_write,
+      ...boundary.filesystem_policy.read_only, ...boundary.filesystem_policy.read_write]);
+    for (const document of [candidate, boundary]) for (const entry of Object.values(document.network_policies))
+      for (const binary of entry.binaries) paths.add(binary.path);
+    const values = [...paths];
+    if (values.some(value => value === "/" ||
+      pathContains(value, "/.openshell") || pathContains("/.openshell", value) && !pathContains("/.openshell/runtime", value) ||
+      scratchRoots.some(scratch => pathContains(value, scratch) || pathContains(scratch, value)) ||
+      !canonicalFixturePath(value))) throw new Error("sandbox_operation_unsupported");
+    return values.sort();
+  }
+  async function inspectPolicyProofNamespaceAncestors(upperDir, plan, deadlineAt) {
+    if (!plan.namespaceRoot) return { namespace: [], outer: [] };
+    if (!Array.isArray(plan.directories) || plan.directories.length < 1 || plan.directories.length > 16)
+      throw new Error("sandbox_operation_unsupported");
+    const inspectPaths = async (guestPaths, allowImageFallback = false) => {
+      const result = [];
+      for (const guestPath of guestPaths) {
+        if (Date.now() >= Date.parse(deadlineAt)) throw new Error("sandbox_host_unavailable");
+        let localPath = upperDir, info = await lstat(upperDir);
+        if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("sandbox_operation_unsupported");
+        let imageFallback = false;
+        for (const component of guestPath.slice(1).split("/")) {
+          localPath = path.join(localPath, component);
+          try { info = await lstat(localPath); }
+          catch (error) {
+            if (allowImageFallback && error.code === "ENOENT") { imageFallback = true; break; }
+            throw error;
+          }
+          if (!info.isDirectory() || info.isSymbolicLink() || (info.mode & 0o7000))
+            throw new Error("sandbox_operation_unsupported");
+        }
+        result.push(imageFallback ? { guestPath, imageFallback: true } : { guestPath, mode: info.mode & 0o777,
+          uid: info.uid, gid: info.gid, mtimeMs: info.mtimeMs, atimeMs: info.atimeMs });
+      }
+      return result;
+    };
+    if (!Array.isArray(plan.outerDirectories) || plan.outerDirectories.length < 1 || plan.outerDirectories.length > 16)
+      throw new Error("sandbox_operation_unsupported");
+    const [namespace, outer] = await Promise.all([
+      inspectPaths(plan.directories), inspectPaths(plan.outerDirectories, true),
+    ]);
+    return { namespace, outer };
+  }
+  async function verifyPolicyProofBaseAncestorMetadata(helperId, uid, gid, ancestors, deadlineAt) {
+    if (!ancestors.length) return;
+    for (const item of ancestors) {
+      const result = await docker(["exec", "--user", `${uid}:${gid}`, helperId, "/usr/bin/stat", "-c",
+        "%F|%a|%u|%g", "--", item.guestPath], deadlineAt, false, 5000);
+      const fields = result.trim().split("|");
+      if (fields.length !== 4 || fields[0] !== "directory" || !/^[0-7]{3,4}$/.test(fields[1]) ||
+        !/^[0-9]{1,10}$/.test(fields[2]) || !/^[0-9]{1,10}$/.test(fields[3]) ||
+        !item.imageFallback && (Number.parseInt(fields[1], 8) !== item.mode || Number(fields[2]) !== item.uid || Number(fields[3]) !== item.gid))
+        throw new Error("sandbox_operation_unsupported");
+    }
+  }
+  async function buildPolicyProofNamespaceSnapshot(scratchRoot, namespaceRoot, taskRoot, taskSnapshot, ancestors, deadlineAt) {
+    if (!namespaceRoot) return { root: taskSnapshot, mountRoot: taskRoot, info: null };
+    const root = path.join(scratchRoot, "namespace-snapshot");
+    if (Date.now() >= Date.parse(deadlineAt)) throw new Error("sandbox_host_unavailable");
+    await materializePolicyProofNamespaceTree(root, namespaceRoot, taskRoot, taskSnapshot, ancestors);
+    const info = await inspectPolicySnapshot(root, namespaceRoot, deadlineAt);
+    return { root, mountRoot: namespaceRoot, info };
+  }
+  async function copyPolicyProofSnapshot(containerId, sourcePath, destination, deadlineAt) {
+    if (!/^[a-f0-9]{64}$/.test(containerId) || !path.posix.isAbsolute(sourcePath) ||
+      path.posix.normalize(sourcePath) !== sourcePath || /[\r\n\0]/.test(sourcePath))
+      throw new Error("sandbox_scope_changed");
+    await docker(["cp", "-a", `${containerId}:${sourcePath}`, destination], deadlineAt, false, 15_000);
+  }
+  async function snapshotPolicyProofMounts(containerId, targetMounts, scratchRoot, deadlineAt) {
+    const snapshots = [];
+    let totalBytes = 0, totalEntries = 0;
+    for (let index = 0; index < targetMounts.length; index++) {
+      const target = targetMounts[index], parent = path.join(scratchRoot, "mount-snapshots", `mount-${index}`);
+      await mkdir(parent, { recursive: true, mode: 0o700 });
+      await copyPolicyProofSnapshot(containerId, target.destination, parent, deadlineAt);
+      const local = path.join(parent, path.posix.basename(target.destination));
+      const info = await inspectPolicySnapshot(local, target.destination, deadlineAt);
+      totalBytes += info.bytes;
+      totalEntries += info.entries;
+      if (totalBytes > POLICY_PROOF_MAX_MOUNT_BYTES || totalEntries > POLICY_PROOF_MAX_ENTRIES)
+        throw new Error("sandbox_operation_unsupported");
+      snapshots.push({ ...target, snapshotPath: local, snapshotBytes: info.bytes, snapshotManifestHash: info.manifestHash });
+    }
+    return { snapshots, bytes: totalBytes };
+  }
+  async function verifyPolicyProofMountSnapshots(containerId, snapshots, scratchRoot, deadlineAt, suffix) {
+    let totalBytes = 0, totalEntries = 0;
+    for (let index = 0; index < snapshots.length; index++) {
+      const expected = snapshots[index], parent = path.join(scratchRoot, `verify-mount-${suffix}-${index}`);
+      const frozen = await inspectPolicySnapshot(expected.snapshotPath, expected.destination, deadlineAt);
+      if (frozen.manifestHash !== expected.snapshotManifestHash || frozen.bytes !== expected.snapshotBytes)
+        throw new Error("sandbox_scope_changed");
+      await mkdir(parent, { mode: 0o700 });
+      await copyPolicyProofSnapshot(containerId, expected.destination, parent, deadlineAt);
+      const local = path.join(parent, path.posix.basename(expected.destination));
+      const observed = await inspectPolicySnapshot(local, expected.destination, deadlineAt);
+      await rm(parent, { recursive: true, force: false });
+      totalBytes += observed.bytes;
+      totalEntries += observed.entries;
+      if (observed.manifestHash !== expected.snapshotManifestHash || observed.bytes !== expected.snapshotBytes ||
+        totalBytes > POLICY_PROOF_MAX_MOUNT_BYTES || totalEntries > POLICY_PROOF_MAX_ENTRIES)
+        throw new Error("sandbox_scope_changed");
+      const frozenAfter = await inspectPolicySnapshot(expected.snapshotPath, expected.destination, deadlineAt);
+      if (frozenAfter.manifestHash !== expected.snapshotManifestHash || frozenAfter.bytes !== expected.snapshotBytes)
+        throw new Error("sandbox_scope_changed");
+    }
+  }
+  async function verifyPolicyProofHelperMountSnapshots(helperId, snapshots, scratchRoot, deadlineAt, suffix) {
+    let totalBytes = 0, totalEntries = 0;
+    for (let index = 0; index < snapshots.length; index++) {
+      const expected = snapshots[index], parent = path.join(scratchRoot, `verify-helper-mount-${suffix}-${index}`);
+      await mkdir(parent, { mode: 0o700 });
+      await copyPolicyProofSnapshot(helperId, expected.destination, parent, deadlineAt);
+      const local = path.join(parent, path.posix.basename(expected.destination));
+      const observed = await inspectPolicySnapshot(local, expected.destination, deadlineAt);
+      await rm(parent, { recursive: true, force: false });
+      totalBytes += observed.bytes;
+      totalEntries += observed.entries;
+      if (observed.manifestHash !== expected.snapshotManifestHash || observed.bytes !== expected.snapshotBytes)
+        throw new Error("sandbox_scope_changed");
+      if (totalBytes > POLICY_PROOF_MAX_MOUNT_BYTES || totalEntries > POLICY_PROOF_MAX_ENTRIES)
+        throw new Error("sandbox_scope_changed");
+    }
+  }
+  async function inspectPolicySnapshot(root, guestRoot, deadlineAt) {
+    const rootInfo = await lstat(root);
+    if (rootInfo.isSymbolicLink() || (rootInfo.mode & 0o7000))
+      throw new Error("sandbox_operation_unsupported");
+    const limitBytes = POLICY_PROOF_MAX_BYTES, limitEntries = POLICY_PROOF_MAX_ENTRIES;
+    if (rootInfo.isFile()) {
+      if (rootInfo.nlink !== 1 || rootInfo.size > limitBytes) throw new Error("sandbox_operation_unsupported");
+      const fileHash = createHash("sha256");
+      for await (const chunk of createReadStream(root)) fileHash.update(chunk);
+      const after = await lstat(root);
+      if (!after.isFile() || after.dev !== rootInfo.dev || after.ino !== rootInfo.ino || after.size !== rootInfo.size ||
+        after.mtimeMs !== rootInfo.mtimeMs) throw new Error("sandbox_scope_changed");
+      try {
+        const attributes = await run("/usr/bin/getfattr", ["--absolute-names", "--dump", "--match=-", "--no-dereference", root], {
+          timeout: Math.min(5000, Math.max(1, Date.parse(deadlineAt) - Date.now())), maxBuffer: 65536, windowsHide: true,
+        });
+        if (attributes.stdout?.trim()) throw new Error("sandbox_operation_unsupported");
+      } catch { throw new Error("sandbox_operation_unsupported"); }
+      const manifest = [{ path: guestRoot, type: "file", mode: rootInfo.mode & 0o7777, uid: rootInfo.uid,
+        gid: rootInfo.gid, mtimeMs: rootInfo.mtimeMs, size: rootInfo.size, nlink: rootInfo.nlink,
+        sha256: fileHash.digest("hex") }];
+      return { entries: 1, bytes: rootInfo.size, manifest, manifestHash: hash(JSON.stringify(canonical(manifest))),
+        root: { mode: rootInfo.mode & 0o777, uid: rootInfo.uid, gid: rootInfo.gid } };
+    }
+    if (!rootInfo.isDirectory()) throw new Error("sandbox_operation_unsupported");
+    let entries = 0, bytes = 0;
+    const manifest = [{ path: guestRoot, type: "directory", mode: rootInfo.mode & 0o7777,
+      uid: rootInfo.uid, gid: rootInfo.gid, mtimeMs: rootInfo.mtimeMs }];
+    const inodeLinks = new Map(), stack = [{ local: root, guest: guestRoot }];
+    while (stack.length) {
+      if (Date.now() >= Date.parse(deadlineAt)) throw new Error("sandbox_host_unavailable");
+      const current = stack.pop(), names = await readDir(current.local);
+      for (const name of names) {
+        if (++entries > limitEntries || !name || name === "." || name === ".." || name.includes("/") || /[\r\n\0]/.test(name))
+          throw new Error("sandbox_operation_unsupported");
+        const local = path.join(current.local, name), guest = path.posix.join(current.guest, name), info = await lstat(local);
+        if (info.mode & 0o7000) throw new Error("sandbox_operation_unsupported");
+        if (info.isSymbolicLink()) {
+          const target = await readlink(local);
+          const resolved = path.posix.normalize(target.startsWith("/") ? target : path.posix.join(path.posix.dirname(guest), target));
+          if (!pathContains(guestRoot, resolved)) throw new Error("sandbox_operation_unsupported");
+          manifest.push({ path: guest, type: "symlink", mode: info.mode & 0o7777, uid: info.uid, gid: info.gid,
+            mtimeMs: info.mtimeMs, target });
+        } else if (info.isDirectory()) stack.push({ local, guest });
+        else if (info.isFile()) {
+          bytes += info.size;
+          const key = `${info.dev}:${info.ino}`;
+          inodeLinks.set(key, (inodeLinks.get(key) ?? 0) + 1);
+          const before = info, fileHash = createHash("sha256");
+          for await (const chunk of createReadStream(local)) fileHash.update(chunk);
+          const after = await lstat(local);
+          if (after.dev !== before.dev || after.ino !== before.ino || after.size !== before.size ||
+            after.mtimeMs !== before.mtimeMs || !after.isFile()) throw new Error("sandbox_scope_changed");
+          manifest.push({ path: guest, type: "file", mode: info.mode & 0o7777, uid: info.uid, gid: info.gid,
+            mtimeMs: info.mtimeMs, size: info.size, nlink: info.nlink, sha256: fileHash.digest("hex") });
+        } else throw new Error("sandbox_operation_unsupported");
+        if (info.isDirectory()) manifest.push({ path: guest, type: "directory", mode: info.mode & 0o7777,
+          uid: info.uid, gid: info.gid, mtimeMs: info.mtimeMs });
+        if (bytes > limitBytes) throw new Error("sandbox_operation_unsupported");
+      }
+    }
+    try {
+      const attributes = await run("/usr/bin/getfattr", ["--absolute-names", "--recursive", "--dump", "--match=-", "--no-dereference", root], {
+        timeout: Math.min(5000, Math.max(1, Date.parse(deadlineAt) - Date.now())), maxBuffer: 65536, windowsHide: true,
+      });
+      if (attributes.stdout?.trim()) throw new Error("sandbox_operation_unsupported");
+    } catch { throw new Error("sandbox_operation_unsupported"); }
+    const walk = [{ local: root }];
+    while (walk.length) {
+      const current = walk.pop();
+      for (const name of await readDir(current.local)) {
+        const local = path.join(current.local, name), info = await lstat(local);
+        if (info.isDirectory()) walk.push({ local });
+        else if (info.isFile() && info.nlink !== inodeLinks.get(`${info.dev}:${info.ino}`))
+          throw new Error("sandbox_operation_unsupported");
+      }
+    }
+    manifest.sort((a, b) => a.path.localeCompare(b.path));
+    return { entries, bytes, manifest, manifestHash: hash(JSON.stringify(canonical(manifest))),
+      root: { mode: rootInfo.mode & 0o777, uid: rootInfo.uid, gid: rootInfo.gid } };
+  }
+  async function auditSnapshotUpperHardlinks(upperDir, guestRoot, deadlineAt, expectedManifest = null) {
+    const start = path.join(upperDir, guestRoot.slice(1));
+    let rootInfo;
+    try { rootInfo = await lstat(start); }
+    catch (error) { if (error.code === "ENOENT" && !expectedManifest) return; throw error; }
+    if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) throw new Error("sandbox_operation_unsupported");
+    if (expectedManifest) for (const expected of expectedManifest) {
+      const relative = path.posix.relative(guestRoot, expected.path);
+      if (relative.startsWith("../") || relative === ".." || path.posix.isAbsolute(relative))
+        throw new Error("sandbox_operation_unsupported");
+      const local = relative ? path.join(start, ...relative.split("/")) : start;
+      const info = await lstat(local);
+      if (expected.type === "directory" && (!info.isDirectory() || info.isSymbolicLink()) ||
+        expected.type === "file" && !info.isFile() || expected.type === "symlink" && !info.isSymbolicLink())
+        throw new Error("sandbox_operation_unsupported");
+    }
+    const stack = [start], links = new Map();
+    let count = 0;
+    while (stack.length) {
+      if (Date.now() >= Date.parse(deadlineAt)) throw new Error("sandbox_host_unavailable");
+      const current = stack.pop();
+      for (const name of await readDir(current)) {
+        if (++count > POLICY_PROOF_MAX_ENTRIES) throw new Error("sandbox_operation_unsupported");
+        if (name.startsWith(".wh.")) continue;
+        const child = path.join(current, name), info = await lstat(child);
+        if (info.isSymbolicLink()) continue;
+        if (info.isDirectory()) stack.push(child);
+        else if (info.isFile()) {
+          const key = `${info.dev}:${info.ino}`, found = links.get(key) ?? { seen: 0, nlink: info.nlink };
+          found.seen += 1;
+          if (found.nlink !== info.nlink) throw new Error("sandbox_operation_unsupported");
+          links.set(key, found);
+        }
+      }
+    }
+    if ([...links.values()].some(value => value.seen !== value.nlink)) throw new Error("sandbox_operation_unsupported");
+  }
+  async function auditPolicyProofUpper(upperDir, relevantPaths, exactRoots, deadlineAt, allowedDirectories = [], namespaceRoot = null) {
+    const deadline = Date.parse(deadlineAt);
+    let count = 0;
+    const stack = [{ local: upperDir, relative: "" }];
+    const overlapsSnapshot = absolute => exactRoots.some(root => pathContains(root, absolute));
+    while (stack.length) {
+      if (Date.now() >= deadline) throw new Error("sandbox_host_unavailable");
+      const current = stack.pop();
+      for (const name of await readDir(current.local)) {
+        if (++count > POLICY_PROOF_MAX_ENTRIES) throw new Error("sandbox_operation_unsupported");
+        const relative = current.relative ? `${current.relative}/${name}` : name;
+        const absolute = `/${relative}`;
+        if (overlapsSnapshot(absolute)) continue;
+        const affects = relevantPaths.some(value => pathContains(absolute, value) || pathContains(value, absolute));
+        const whiteoutTarget = name.startsWith(".wh.") ? path.posix.join(path.posix.dirname(absolute), name.slice(4)) : null;
+        const whiteoutAffects = whiteoutTarget && relevantPaths.some(value =>
+          pathContains(whiteoutTarget, value) || pathContains(value, whiteoutTarget));
+        if (namespaceRoot && pathContains(namespaceRoot, absolute) && !pathContains(absolute, exactRoots[0]) &&
+          !pathContains(exactRoots[0], absolute) && !whiteoutAffects) continue;
+        const local = path.join(current.local, name), info = await lstat(local);
+        const retainedDirectory = allowedDirectories.includes(absolute) && info.isDirectory() && !info.isSymbolicLink();
+        if ((affects && !retainedDirectory) || whiteoutAffects || info.isCharacterDevice() && info.rdev === 0 && affects)
+          throw new Error("sandbox_operation_unsupported");
+        if (info.isSymbolicLink()) continue;
+        if (info.isDirectory()) stack.push({ local, relative });
+        else if (!info.isFile() && !info.isCharacterDevice()) throw new Error("sandbox_operation_unsupported");
+      }
+    }
+    try {
+      const output = await run("/usr/bin/getfattr", ["--absolute-names", "--recursive", "--dump", "--match=-", "--no-dereference", upperDir], {
+        timeout: Math.min(5000, Math.max(1, deadline - Date.now())), maxBuffer: 262144, windowsHide: true,
+      });
+      let current = null;
+      for (const line of (output.stdout ?? "").split("\n")) {
+        const match = /^# file: (.+)$/.exec(line);
+        if (match) { current = match[1]; continue; }
+        if (!line || line.startsWith("#")) continue;
+        if (current === null || /[\\\r\n]/.test(current) || !path.posix.isAbsolute(current) ||
+          path.posix.normalize(current) !== current || !pathContains(upperDir, current))
+          throw new Error("sandbox_operation_unsupported");
+        const relative = path.posix.relative(upperDir, current);
+        const absolute = `/${relative}`;
+        if (exactRoots.some(root => pathContains(root, absolute)) || exactRoots.some(root => pathContains(absolute, root)))
+          throw new Error("sandbox_operation_unsupported");
+        if (relevantPaths.some(value => pathContains(absolute, value) || pathContains(value, absolute)))
+          throw new Error("sandbox_operation_unsupported");
+      }
+    } catch { throw new Error("sandbox_operation_unsupported"); }
+  }
+  function policyProofMounts(workload, paths) {
+    if (!Array.isArray(workload?.Mounts) || workload.Mounts.length > 32) throw new Error("sandbox_operation_unsupported");
+    const needed = [];
+    for (const mount of workload.Mounts) {
+      const destination = mount?.Destination;
+      if (typeof destination !== "string" || !path.posix.isAbsolute(destination) ||
+        path.posix.normalize(destination) !== destination) throw new Error("sandbox_operation_unsupported");
+      const applies = paths.some(value => pathContains(destination, value) || pathContains(value, destination));
+      if (!applies) continue;
+      if (paths.some(value => pathContains(destination, value) && destination !== value))
+        throw new Error("sandbox_operation_unsupported");
+      if (mount.RW !== false || !["bind", "volume"].includes(mount.Type) ||
+        typeof mount.Source !== "string" || !path.posix.isAbsolute(mount.Source) ||
+        path.posix.normalize(mount.Source) !== mount.Source || /[,\r\n\0]/.test(mount.Source) ||
+        ["/workspace", "/.openshell", "/.__aw_policy_proof"].some(root =>
+          pathContains(root, destination) || pathContains(destination, root)))
+        throw new Error("sandbox_operation_unsupported");
+      if (mount.Type === "volume") {
+        if (typeof mount.Name !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(mount.Name) ||
+          mount.Driver !== "local" || mount.Propagation && mount.Propagation !== "rprivate")
+          throw new Error("sandbox_operation_unsupported");
+        needed.push({ type: "volume", name: mount.Name, source: mount.Source, destination, driver: mount.Driver,
+          propagation: mount.Propagation ?? "", rw: false });
+      } else {
+        if (mount.Propagation && mount.Propagation !== "rprivate") throw new Error("sandbox_operation_unsupported");
+        needed.push({ type: "bind", source: mount.Source, destination, propagation: mount.Propagation || "rprivate", rw: false });
+      }
+    }
+    return needed.sort((a, b) => a.destination.localeCompare(b.destination));
+  }
+  function verifyPolicyProofHelper(info, operation) {
+    const name = operation.helperName, tmpfs = operation.tmpfs;
+    const env = info?.Config?.Env;
+    const mounts = Array.isArray(info?.Mounts) ? info.Mounts.slice().sort((a, b) => a.Destination.localeCompare(b.Destination)) : [];
+    const tmpfsDestinations = new Set(Object.keys(tmpfs ?? {}));
+    const helperMounts = operation.helperMounts ?? [];
+    const wantedDestinations = [...tmpfsDestinations, ...helperMounts.map(mount => mount.destination)].sort();
+    const mountMatches = mounts.length === wantedDestinations.length && mounts.every((mount, index) => {
+      if (mount.Destination !== wantedDestinations[index]) return false;
+      if (tmpfsDestinations.has(mount.Destination)) return mount.Type === "tmpfs" && mount.RW === true;
+      return mount.RW === false && helperMounts.some(expected => expected.destination === mount.Destination &&
+        expected.type === mount.Type && expected.source === mount.Source && (expected.name ?? null) === (mount.Name ?? null) &&
+        expected.propagation === (mount.Propagation || (expected.type === "bind" ? "rprivate" : "")));
+    });
+    if (!info || !["created", "running", "exited"].includes(info.State?.Status) ||
+      info.Name !== `/${name}` || info.Image !== operation.imageId || info.Config?.Image !== operation.imageId ||
+      info.Config?.Labels?.["aw.native_policy_proof"] !== "true" ||
+      info.Config?.Labels?.["aw.native_policy_proof_name"] !== name ||
+      info.Config?.Labels?.["aw.native_policy_proof_command"] !== operation.commandId ||
+      info.Config?.Entrypoint?.length !== 1 || info.Config.Entrypoint[0] !== operation.bootstrapPath ||
+      JSON.stringify(info.Config?.Cmd) !== JSON.stringify(operation.idleCommand) ||
+      info.Config?.User !== `${operation.uid}:${operation.gid}` ||
+      JSON.stringify(env) !== JSON.stringify(operation.helperEnv) || !Array.isArray(env) || env.some(value =>
+        typeof value !== "string" || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)=/i.test(value) ||
+        /https?:\/\/[^/@\s]+:[^/@\s]+@/i.test(value)) || !mountMatches ||
+      info.HostConfig?.NetworkMode !== "none" || info.HostConfig?.ReadonlyRootfs !== true ||
+      info.HostConfig?.Privileged !== false || info.HostConfig?.CapAdd?.length || info.HostConfig?.Devices?.length ||
+      info.HostConfig?.Binds?.length || info.HostConfig?.PortBindings && Object.keys(info.HostConfig.PortBindings).length ||
+      info.HostConfig?.PidsLimit !== 16 || info.HostConfig?.Memory !== 805306368 ||
+      info.HostConfig?.MemorySwap !== 805306368 || info.HostConfig?.CpuPeriod !== 100000 ||
+      info.HostConfig?.CpuQuota !== 25000 || info.HostConfig?.PublishAllPorts !== false ||
+      info.HostConfig?.RestartPolicy?.Name !== "no" || info.HostConfig?.LogConfig?.Type !== "none" ||
+      !sameDocument(info.HostConfig?.Tmpfs, tmpfs) ||
+      !Array.isArray(info.HostConfig?.CapDrop) || !info.HostConfig.CapDrop.includes("ALL") ||
+      JSON.stringify(info.HostConfig?.SecurityOpt) !== JSON.stringify(["no-new-privileges:true"]) ||
+      info.HostConfig?.UsernsMode && info.HostConfig.UsernsMode !== "")
+      throw new Error("sandbox_scope_changed");
+  }
+  function policyProofHelperIdentityMatches(info, operation) {
+    const tmpfsDestinations = new Set(Object.keys(operation.tmpfs ?? {}));
+    const helperMounts = operation.helperMounts ?? [];
+    const mounts = Array.isArray(info?.Mounts) ? info.Mounts.slice().sort((a, b) => a.Destination.localeCompare(b.Destination)) : [];
+    const expectedDestinations = [...tmpfsDestinations, ...helperMounts.map(mount => mount.destination)].sort();
+    const mountsMatch = mounts.length === expectedDestinations.length && mounts.every((mount, index) =>
+      mount.Destination === expectedDestinations[index] && (tmpfsDestinations.has(mount.Destination)
+        ? mount.Type === "tmpfs" && mount.RW === true
+        : mount.RW === false && helperMounts.some(expected => expected.destination === mount.Destination &&
+          expected.type === mount.Type && expected.source === mount.Source && expected.propagation ===
+          (mount.Propagation || "rprivate"))));
+    return Boolean(info && mountsMatch && /^[a-f0-9]{64}$/.test(info.Id ?? "") &&
+      (!operation.helperId || info.Id === operation.helperId) &&
+      info.Name === `/${operation.helperName}` && info.Image === operation.imageId &&
+      info.Config?.Image === operation.imageId &&
+      info.Config?.Labels?.["aw.native_policy_proof"] === "true" &&
+      info.Config?.Labels?.["aw.native_policy_proof_name"] === operation.helperName &&
+      info.Config?.Labels?.["aw.native_policy_proof_command"] === operation.commandId &&
+      info.Config?.Entrypoint?.length === 1 && info.Config.Entrypoint[0] === operation.bootstrapPath &&
+      sameDocument(info.Config?.Cmd, operation.idleCommand));
+  }
+  async function cleanupPolicyProofOperation(commandId, deadlineAt) {
+    const operation = journal.commands[commandId]?.policyProofOperation;
+    if (!operation) return;
+    return withPolicyProofDocker(prover => cleanupPolicyProofOperationPinned(commandId, deadlineAt, operation, prover), 0);
+  }
+  async function cleanupFailedPolicyProofOperation(commandId) {
+    const deadlineAt = new Date(Date.now() + POLICY_PROOF_CLEANUP_TIMEOUT_MS).toISOString();
+    await cleanupPolicyProofOperation(commandId, deadlineAt);
+  }
+  async function cleanupPolicyProofOperationPinned(commandId, deadlineAt, operation, prover) {
+    if (operation.scratchHomeDev !== prover.scratchDevice || operation.scratchHomeIno !== prover.scratchInode)
+      throw new Error("sandbox_scope_changed");
+    const helperName = operation.helperName;
+    if (typeof helperName !== "string" || !/^aw-policy-proof-[a-f0-9-]{36}$/.test(helperName))
+      throw new Error("sandbox_scope_changed");
+    const idsOutput = await docker(["ps", "-aq", "--no-trunc", "--filter", `name=^/${helperName}$`], deadlineAt, false);
+    const ids = idsOutput.trim().split(/\s+/).filter(Boolean);
+    if (ids.length > 1 || ids.some(id => !/^[a-f0-9]{64}$/.test(id))) throw new Error("sandbox_observation_unavailable");
+    if (ids.length) {
+      const rows = await docker(["inspect", ids[0]], deadlineAt);
+      const info = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+      if (!info || info.Id !== ids[0] || !policyProofHelperIdentityMatches(info, operation))
+        throw new Error("sandbox_scope_changed");
+      await docker(["rm", "--force", ids[0]], deadlineAt, false);
+    }
+    const remaining = (await docker(["ps", "-aq", "--no-trunc", "--filter", `name=^/${helperName}$`], deadlineAt, false))
+      .trim().split(/\s+/).filter(Boolean);
+    if (remaining.length) throw new Error("sandbox_observation_unavailable");
+    const scratchConfigured = config?.policyProofScratchHome;
+    if (typeof scratchConfigured !== "string" || !path.isAbsolute(scratchConfigured)) throw new Error("sandbox_operation_unsupported");
+    const scratchHome = await realpath(scratchConfigured), scratchRoot = path.join(scratchHome, operation.scratchName ?? "");
+    if (path.dirname(scratchRoot) !== scratchHome || !/^policy-proof-[a-f0-9-]{36}$/.test(operation.scratchName ?? ""))
+      throw new Error("sandbox_scope_changed");
+    const scratchInfo = await lstat(scratchRoot).catch(error => error.code === "ENOENT" ? null : Promise.reject(error));
+    if (scratchInfo) {
+      if (!scratchInfo.isDirectory() || scratchInfo.isSymbolicLink() || scratchInfo.uid !== (process.getuid?.() ?? 0) ||
+        (scratchInfo.mode & 0o777) !== 0o700 || (operation.scratchDev && operation.scratchDev !== scratchInfo.dev) ||
+        (operation.scratchIno && operation.scratchIno !== scratchInfo.ino)) throw new Error("sandbox_scope_changed");
+      await rm(scratchRoot, { recursive: true, force: false });
+    }
+    if (await lstat(scratchRoot).then(() => true, error => error.code === "ENOENT" ? false : Promise.reject(error)))
+      throw new Error("sandbox_observation_unavailable");
+    delete journal.commands[commandId].policyProofOperation;
+    await atomicJson(journalFile, journal);
+  }
+  async function cleanupAbandonedPolicyProofOperations(deadlineAt, excludeCommandId = null) {
+    const pending = Object.entries(journal.commands).filter(([id, command]) => id !== excludeCommandId &&
+      command?.policyProofOperation).map(([id]) => id);
+    if (pending.length > 16) throw new Error("sandbox_host_unavailable");
+    for (const id of pending) await cleanupPolicyProofOperation(id, deadlineAt);
+  }
+  async function policyProofBoundary(request, detail, deadlineAt, commandId) {
+    const proof = request.policyProof, scope = request.scope;
+    const entry = journal.scopes[scope.bindingId], creation = entry?.creation, pinned = entry?.policy;
+    if (!entry || entry.transition || entry.sandboxId !== proof.sandboxId || entry.containerId !== proof.containerId ||
+      !sameDocument(entry.scope, scope) || !creation || creation.purpose !== "admission" ||
+      creation.sandboxId !== proof.sandboxId || creation.containerId !== proof.containerId ||
+      creation.imageDigest !== request.imageDigest || creation.provisioningHash !== proof.provisioningHash ||
+      creation.operationKeyHash !== hash(proof.operationKey) || creation.bindingVersion !== proof.bindingVersion ||
+      typeof creation.workdirPath !== "string" ||
+      !path.posix.isAbsolute(creation.workdirPath) || path.posix.normalize(creation.workdirPath) !== creation.workdirPath ||
+      creation.policyHash !== proof.policyHash || entry.provisioning?.state !== "stopped" ||
+      entry.provisioning?.provisioningHash !== proof.provisioningHash ||
+      entry.provisioning?.requestId !== creation.requestId || detail.id !== proof.sandboxId || detail.phase !== "Stopped")
+      throw new Error("sandbox_scope_changed");
+    await cleanupAbandonedPolicyProofOperations(deadlineAt, commandId);
+    if (journal.commands[commandId]?.policyProofOperation) {
+      await cleanupPolicyProofOperation(commandId, deadlineAt);
+      delete journal.commands[commandId].policyProofOperation;
+      await atomicJson(journalFile, journal);
+    }
+    const workload = await container(scope, detail, request.imageDigest, deadlineAt);
+    const current = await policy(scope, deadlineAt);
+    if (workload.Id !== proof.containerId || workload.State?.Running !== false ||
+      !validOpenShellDocument(proof.candidateDocument) || !validOpenShellDocument(proof.boundaryDocument) ||
+      hash(JSON.stringify(canonical(proof.candidateDocument))) !== proof.candidateDocumentHash ||
+      hash(JSON.stringify(canonical(proof.boundaryDocument))) !== proof.boundaryDocumentHash ||
+      proof.proverSha256 !== config?.policyProverSha256 || !/^[a-f0-9]{64}$/.test(proof.proverSha256) ||
+      (proof.stage === "requested" && !sameDocument(proof.candidateDocument, creation.document)) ||
+      (proof.stage === "effective" && (!pinned || pinned.policyHash !== proof.policyHash ||
+        !sameDocument(pinned.document, proof.candidateDocument) || !sameDocument(current.policy, proof.candidateDocument))) ||
+      (proof.stage === "requested" && (!sameDocument(current.policy, creation.document) ||
+        current.hash !== creation.observedPolicyHash)) ||
+      !(await dockerDiskQuotaBackendSupported(deadlineAt)) ||
+      !resourceHostConfigMatches(workload, creation.resourceLimits, current.policy) ||
+      !dockerDiskStorageOptionMatches(workload, creation.resourceLimits) ||
+      !dockerPersistentLogsDisabled(workload) || !dockerDiskMountsMatch(workload, current.policy))
+      throw new Error("sandbox_scope_changed");
+
+    const namespacePlan = policyProofWorkspaceNamespacePlan(proof.candidateDocument, proof.boundaryDocument, creation.workdirPath);
+    const paths = policyProofPaths(proof.candidateDocument, proof.boundaryDocument, creation.workdirPath);
+    const targetMounts = policyProofMounts(workload, paths);
+    const prover = await policyProverConfiguration();
+    const versionText = (await docker(["--version"], deadlineAt, false)).trim();
+    const versionMatch = /^Docker version (\d+)\.(\d+)\.(\d+),/.exec(versionText);
+    const dockerVersion = versionMatch?.slice(1).map(Number) ?? [];
+    if (!versionMatch || dockerVersion[0] < 20 || dockerVersion[0] === 20 &&
+      (dockerVersion[1] < 10 || dockerVersion[1] === 10 && dockerVersion[2] < 24))
+      throw new Error("sandbox_operation_unsupported");
+    const op = journal.commands[commandId]?.policyProofOperation;
+    const scratchName = op?.scratchName ?? `policy-proof-${randomUUID()}`;
+    const scratchRoot = path.join(prover.scratchHome, scratchName);
+    const helperName = op?.helperName ?? `aw-policy-proof-${randomUUID()}`;
+    if (op && (op.scratchName !== scratchName || !/^aw-policy-proof-[a-f0-9-]{36}$/.test(op.helperName ?? "")))
+      throw new Error("sandbox_scope_changed");
+    if (!op) {
+      journal.commands[commandId].policyProofOperation = { phase: "scratch_claimed", scratchName,
+        helperName, helperId: null, scratchDev: null, scratchIno: null,
+        scratchHomeDev: prover.scratchDevice, scratchHomeIno: prover.scratchInode };
+      await atomicJson(journalFile, journal);
+    }
+    try { await mkdir(scratchRoot, { mode: 0o700 }); }
+    catch (error) { if (error.code !== "EEXIST") throw error; }
+    const scratchStat = await lstat(scratchRoot);
+    if (!scratchStat.isDirectory() || scratchStat.isSymbolicLink() || scratchStat.uid !== (process.getuid?.() ?? 0) ||
+      (scratchStat.mode & 0o777) !== 0o700 || (op?.scratchDev && (op.scratchDev !== scratchStat.dev || op.scratchIno !== scratchStat.ino)))
+      throw new Error("sandbox_scope_changed");
+    Object.assign(journal.commands[commandId].policyProofOperation, { scratchDev: scratchStat.dev, scratchIno: scratchStat.ino,
+      phase: "snapshot_claimed" });
+    await atomicJson(journalFile, journal);
+    const taskSnapshotDir = path.join(scratchRoot, "workspace"), openshellSnapshotDir = path.join(scratchRoot, "openshell");
+    await mkdir(taskSnapshotDir, { mode: 0o700 }); await mkdir(openshellSnapshotDir, { mode: 0o700 });
+    await copyPolicyProofSnapshot(workload.Id, creation.workdirPath, taskSnapshotDir, deadlineAt);
+    await copyPolicyProofSnapshot(workload.Id, "/.openshell/runtime", openshellSnapshotDir, deadlineAt);
+    const taskSnapshot = path.join(taskSnapshotDir, path.posix.basename(creation.workdirPath));
+    const openshellSnapshot = path.join(openshellSnapshotDir, "runtime");
+    const [taskSnapshotInfo, runtimeSnapshotInfo] = await Promise.all([
+      inspectPolicySnapshot(taskSnapshot, creation.workdirPath, deadlineAt),
+      inspectPolicySnapshot(openshellSnapshot, "/.openshell/runtime", deadlineAt),
+    ]);
+    if (taskSnapshotInfo.bytes > Math.min(POLICY_PROOF_MAX_BYTES, creation.resourceLimits?.diskBytes ?? 0) ||
+      runtimeSnapshotInfo.bytes > 128 * 1024 * 1024) throw new Error("sandbox_operation_unsupported");
+    const qualification = entry.qualification;
+    const bootstrap = path.join(openshellSnapshot, "openshell-sandbox");
+    const bootstrapInfo = await lstat(bootstrap);
+    if (!bootstrapInfo.isFile() || bootstrapInfo.isSymbolicLink() || !(bootstrapInfo.mode & 0o111) ||
+      bootstrapInfo.size < 1 || bootstrapInfo.size > 100 * 1024 * 1024)
+      throw new Error("sandbox_operation_unsupported");
+    const targetRuntimeHash = hash(await readFile(bootstrap));
+    if (!validQualificationSample(qualification) || qualification.sampleTarget.imageDigest !== request.imageDigest ||
+      qualification.sampleTarget.runtimeBinarySha256 !== targetRuntimeHash)
+      throw new Error("sandbox_operation_unsupported");
+    const offline = await assertContainerOverlayOffline(workload, deadlineAt);
+    const namespaceAncestors = await inspectPolicyProofNamespaceAncestors(offline.upperDir, namespacePlan, deadlineAt);
+    const mountedSnapshots = await snapshotPolicyProofMounts(workload.Id, targetMounts, scratchRoot, deadlineAt);
+    await Promise.all([auditSnapshotUpperHardlinks(offline.upperDir, creation.workdirPath, deadlineAt, taskSnapshotInfo.manifest),
+      auditSnapshotUpperHardlinks(offline.upperDir, "/.openshell/runtime", deadlineAt)]);
+    const namespaceAncestorSet = new Set(namespacePlan.directories);
+    const auditPaths = paths.filter(value => !namespaceAncestorSet.has(value));
+    await auditPolicyProofUpper(offline.upperDir, auditPaths, [creation.workdirPath, "/.openshell/runtime"], deadlineAt,
+      [...(namespacePlan.outerDirectories ?? []), ...namespacePlan.directories], namespacePlan.namespaceRoot);
+    const namespaceSnapshot = await buildPolicyProofNamespaceSnapshot(scratchRoot, namespacePlan.namespaceRoot,
+      creation.workdirPath, taskSnapshot, namespaceAncestors.namespace, deadlineAt);
+    if (namespaceSnapshot.root !== taskSnapshot) await rm(taskSnapshotDir, { recursive: true, force: false });
+    const helperRoot = "/.__aw_policy_proof", bootstrapPath = "/.__aw_policy_bootstrap";
+    const bootstrapBytes = await readFile(bootstrap);
+    const bootstrapBefore = await lstat(bootstrap), stagedBootstrapPath = path.join(scratchRoot, "openshell-sandbox-bootstrap");
+    if (!bootstrapBefore.isFile() || bootstrapBefore.isSymbolicLink() || bootstrapBefore.size !== bootstrapBytes.length ||
+      hash(bootstrapBytes) !== targetRuntimeHash) throw new Error("sandbox_scope_changed");
+    await writeFile(stagedBootstrapPath, bootstrapBytes, { flag: "wx", mode: 0o555 });
+    await chmod(stagedBootstrapPath, 0o555);
+    const [stagedBootstrapInfo, bootstrapAfter] = await Promise.all([lstat(stagedBootstrapPath), lstat(bootstrap)]);
+    if (!stagedBootstrapInfo.isFile() || stagedBootstrapInfo.isSymbolicLink() || stagedBootstrapInfo.uid !== (process.getuid?.() ?? 0) ||
+      (stagedBootstrapInfo.mode & 0o777) !== 0o555 || stagedBootstrapInfo.size !== bootstrapBytes.length ||
+      hash(await readFile(stagedBootstrapPath)) !== targetRuntimeHash || bootstrapAfter.dev !== bootstrapBefore.dev ||
+      bootstrapAfter.ino !== bootstrapBefore.ino || bootstrapAfter.size !== bootstrapBefore.size ||
+      bootstrapAfter.mtimeMs !== bootstrapBefore.mtimeMs || !bootstrapAfter.isFile()) throw new Error("sandbox_scope_changed");
+    const bootstrapSnapshotInfo = await inspectPolicySnapshot(stagedBootstrapPath, bootstrapPath, deadlineAt);
+    const bootstrapSnapshot = { destination: bootstrapPath, snapshotPath: stagedBootstrapPath,
+      snapshotBytes: bootstrapSnapshotInfo.bytes, snapshotManifestHash: bootstrapSnapshotInfo.manifestHash };
+    const readonlySnapshots = [...mountedSnapshots.snapshots, bootstrapSnapshot];
+    await verifyDockerDaemonSnapshotIdentity(offline, readonlySnapshots);
+    const helperMounts = readonlySnapshots.map(mount => ({ type: "bind", source: mount.snapshotPath,
+      destination: mount.destination, propagation: "rprivate", rw: false }));
+    if (detail.phase !== "Stopped" || workload.State?.Running !== false)
+      throw new Error("sandbox_scope_changed");
+    Object.assign(journal.commands[commandId].policyProofOperation, { phase: "snapshot_complete", upperDir: offline.upperDir,
+      taskSnapshotBytes: taskSnapshotInfo.bytes, taskSnapshotManifestHash: taskSnapshotInfo.manifestHash,
+      namespaceRoot: namespaceSnapshot.mountRoot,
+      namespaceManifestHash: namespaceSnapshot.info?.manifestHash ?? taskSnapshotInfo.manifestHash,
+      namespaceAncestorManifest: namespaceAncestors, targetMountSnapshots: mountedSnapshots.snapshots,
+      targetMountSnapshotBytes: mountedSnapshots.bytes, helperMounts,
+      dockerDaemon: { pid: offline.daemonPid, mountNamespace: offline.daemonMountNamespace,
+        startTime: offline.daemonStartTime },
+      runtimeSnapshotBytes: runtimeSnapshotInfo.bytes, runtimeSnapshotManifestHash: runtimeSnapshotInfo.manifestHash });
+    await atomicJson(journalFile, journal);
+
+    const candidatePath = path.join(scratchRoot, "candidate.json"), boundaryPath = path.join(scratchRoot, "boundary.json");
+    const candidateText = JSON.stringify(canonical(proof.candidateDocument)), boundaryText = JSON.stringify(canonical(proof.boundaryDocument));
+    if (Buffer.byteLength(candidateText) > 1024 * 1024 || Buffer.byteLength(boundaryText) > 1024 * 1024)
+      throw new Error("sandbox_operation_unsupported");
+    await writeFile(candidatePath, candidateText, { flag: "wx", mode: 0o644 });
+    await writeFile(boundaryPath, boundaryText, { flag: "wx", mode: 0o644 });
+
+    const expiresAt = Math.min(Date.parse(deadlineAt), Date.now() + 120_000);
+    const uid = proof.candidateDocument.process.run_as_user, gid = proof.candidateDocument.process.run_as_group;
+    const taskMountRootInfo = namespaceSnapshot.info?.root ?? taskSnapshotInfo.root;
+    const taskMountRoot = namespaceSnapshot.mountRoot;
+    const taskRootOptions = `rw,nosuid,nodev,size=256m,uid=${taskMountRootInfo.uid},gid=${taskMountRootInfo.gid},mode=${taskMountRootInfo.mode.toString(8)}`;
+    const runtimeOptions = `rw,nosuid,nodev,size=128m,uid=${runtimeSnapshotInfo.root.uid},gid=${runtimeSnapshotInfo.root.gid},mode=${runtimeSnapshotInfo.root.mode.toString(8)}`;
+    const tmpfs = [`${taskMountRoot}:${taskRootOptions}`,
+      `/.openshell/runtime:${runtimeOptions}`,
+      `${helperRoot}:rw,nosuid,nodev,size=128m,uid=${uid},gid=${gid},mode=0755`];
+    const tmpfsConfig = Object.fromEntries(tmpfs.map(value => { const split = value.indexOf(":"); return [value.slice(0, split), value.slice(split + 1)]; }));
+    const imageRows = await docker(["image", "inspect", workload.Image], deadlineAt);
+    if (!Array.isArray(imageRows) || imageRows.length !== 1 || imageRows[0]?.Id !== workload.Image ||
+      !(imageRows[0]?.Config?.Env === undefined || Array.isArray(imageRows[0].Config.Env))) throw new Error("sandbox_scope_changed");
+    const imageEnv = imageRows[0].Config.Env ?? [];
+    const safeImageEnv = /^(?:PATH|LANG|LC_ALL|LC_CTYPE|TZ|HOME|TMPDIR)=/;
+    if (new Set(imageEnv.map(value => typeof value === "string" ? value.slice(0, value.indexOf("=")) : "")).size !== imageEnv.length ||
+      imageEnv.some(value => typeof value !== "string" || !safeImageEnv.test(value) ||
+      /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)=/i.test(value) ||
+      /https?:\/\/[^/@\s]+:[^/@\s]+@/i.test(value))) throw new Error("sandbox_operation_unsupported");
+    const clearedProxyEnv = ["HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "ALL_PROXY", "NO_PROXY",
+      "http_proxy", "https_proxy", "ftp_proxy", "all_proxy", "no_proxy"];
+    const helperEnv = [...imageEnv, ...clearedProxyEnv.map(key => `${key}=`)];
+    const idleCommand = ["runtime-idle-until", "--unix-seconds", String(Math.floor(expiresAt / 1000))];
+    const proofSnapshotMountArgs = helperMounts.map(mount => ["--mount",
+      `type=bind,src=${mount.source},dst=${mount.destination},readonly,bind-propagation=${mount.propagation}`]).flat();
+    Object.assign(journal.commands[commandId].policyProofOperation, { phase: "helper_create_claimed", helperName,
+      commandId, imageId: workload.Image, bootstrapPath, uid, gid, targetMounts, helperMounts,
+      tmpfs: tmpfsConfig, imageEnv, helperEnv, idleCommand });
+    await atomicJson(journalFile, journal);
+    const helperId = (await docker(["create", "--name", helperName,
+      "--label", "aw.native_policy_proof=true", "--label", `aw.native_policy_proof_name=${helperName}`,
+      "--label", `aw.native_policy_proof_command=${commandId}`,
+      "--network", "none", "--read-only", "--pids-limit", "16", "--memory", "805306368", "--memory-swap", "805306368",
+      "--cpu-period", "100000", "--cpu-quota", "25000", "--log-driver", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+      "--user", `${uid}:${gid}`, ...clearedProxyEnv.flatMap(key => ["--env", `${key}=`]),
+      ...tmpfs.flatMap(value => ["--tmpfs", value]), ...proofSnapshotMountArgs,
+      "--entrypoint", bootstrapPath,
+      `sha256:${workload.Image.slice("sha256:".length)}`, ...idleCommand], deadlineAt, false)).trim();
+    if (!/^[a-f0-9]{64}$/.test(helperId)) throw new Error("sandbox_observation_unavailable");
+    Object.assign(journal.commands[commandId].policyProofOperation, { phase: "helper_created", helperId });
+    await atomicJson(journalFile, journal);
+    const helperBefore = await docker(["inspect", helperId], deadlineAt);
+    if (!Array.isArray(helperBefore) || helperBefore.length !== 1 || helperBefore[0].Id !== helperId)
+      throw new Error("sandbox_scope_changed");
+    verifyPolicyProofHelper(helperBefore[0], journal.commands[commandId].policyProofOperation);
+    await docker(["start", helperId], deadlineAt, false);
+    Object.assign(journal.commands[commandId].policyProofOperation, { phase: "helper_started" });
+    await atomicJson(journalFile, journal);
+    await verifyDockerDaemonSnapshotIdentity(offline, readonlySnapshots);
+    await verifyPolicyProofHelperMountSnapshots(helperId, readonlySnapshots, scratchRoot, deadlineAt, "bootstrap");
+    await verifyPolicyProofBaseAncestorMetadata(helperId, uid, gid, namespaceAncestors.outer, deadlineAt);
+    await docker(["cp", "-a", `${namespaceSnapshot.root}/.`, `${helperId}:${taskMountRoot}`], deadlineAt, false, 15_000);
+    await docker(["cp", "-a", `${openshellSnapshot}/.`, `${helperId}:/.openshell/runtime`], deadlineAt, false, 15_000);
+    const verifySnapshot = async (sourcePath, guestPath, expectedHash, label) => {
+      const verifyParent = path.join(scratchRoot, `verify-${label}`);
+      await mkdir(verifyParent, { mode: 0o700 });
+      await copyPolicyProofSnapshot(helperId, guestPath, verifyParent, deadlineAt);
+      const localRoot = path.join(verifyParent, path.posix.basename(guestPath));
+      const observedSnapshot = await inspectPolicySnapshot(localRoot, guestPath, deadlineAt);
+      if (observedSnapshot.manifestHash !== expectedHash) throw new Error("sandbox_scope_changed");
+      await rm(verifyParent, { recursive: true, force: false });
+      return sourcePath ? observedSnapshot : null;
+    };
+    await verifySnapshot(openshellSnapshot, "/.openshell/runtime", runtimeSnapshotInfo.manifestHash, "runtime");
+    await rm(openshellSnapshot, { recursive: true, force: false });
+    await rm(openshellSnapshotDir, { recursive: true, force: false });
+    await verifySnapshot(null, creation.workdirPath, taskSnapshotInfo.manifestHash, "task");
+    await verifySnapshot(null, taskMountRoot, namespaceSnapshot.info?.manifestHash ?? taskSnapshotInfo.manifestHash, "namespace");
+    if (namespaceSnapshot.root === taskSnapshot) await rm(taskSnapshotDir, { recursive: true, force: false });
+    else await rm(namespaceSnapshot.root, { recursive: true, force: false });
+    await docker(["cp", candidatePath, `${helperId}:${helperRoot}/candidate.json`], deadlineAt, false, 10_000);
+    await docker(["cp", boundaryPath, `${helperId}:${helperRoot}/boundary.json`], deadlineAt, false, 10_000);
+    const stagedProver = path.join(scratchRoot, "prover");
+    await writeFile(stagedProver, await readFile(prover.executable), { flag: "wx", mode: 0o555 });
+    await docker(["cp", stagedProver, `${helperId}:${helperRoot}/prover`], deadlineAt, false, 10_000);
+    const verifyHelperFile = async (remotePath, expectedHash, label, maxBytes) => {
+      const local = path.join(scratchRoot, `verify-${label}`);
+      await copyPolicyProofSnapshot(helperId, remotePath, local, deadlineAt);
+      const info = await lstat(local);
+      if (!info.isFile() || info.isSymbolicLink() || info.size < 1 || info.size > maxBytes ||
+        hash(await readFile(local)) !== expectedHash || label === "prover" && !(info.mode & 0o111))
+        throw new Error("sandbox_scope_changed");
+      await unlink(local);
+    };
+    await verifyHelperFile(`${helperRoot}/candidate.json`, proof.candidateDocumentHash, "candidate", 1024 * 1024);
+    await verifyHelperFile(`${helperRoot}/boundary.json`, proof.boundaryDocumentHash, "boundary", 1024 * 1024);
+    await verifyHelperFile(`${helperRoot}/prover`, prover.expectedSha256, "prover", 100 * 1024 * 1024);
+    const helperAfter = await docker(["inspect", helperId], deadlineAt);
+    if (!Array.isArray(helperAfter) || helperAfter[0]?.State?.Running !== true || helperAfter[0].Image !== workload.Image)
+      throw new Error("sandbox_observation_unavailable");
+    verifyPolicyProofHelper(helperAfter[0], journal.commands[commandId].policyProofOperation);
+    const proverPath = `${helperRoot}/prover`, candidateFile = `${helperRoot}/candidate.json`, boundaryFile = `${helperRoot}/boundary.json`;
+    await verifyDockerDaemonSnapshotIdentity(offline, readonlySnapshots);
+    await verifyPolicyProofHelperMountSnapshots(helperId, readonlySnapshots, scratchRoot, deadlineAt, "before");
+    await verifyPolicyProofMountSnapshots(workload.Id, mountedSnapshots.snapshots, scratchRoot, deadlineAt, "before");
+    const runCheck = async (left, right) => {
+      const stdout = await docker(["exec", "--user", `${uid}:${gid}`, helperId, proverPath, "check", left,
+        "--boundary", right, "--output", "json", "--timeout", "3s"], deadlineAt, false, 6000);
+      let value;
+      try { value = JSON.parse(stdout); } catch { throw new Error("sandbox_observation_unavailable"); }
+      if (!value || value.schema_version !== 1 || value.prover_version !== "0.1.2" || value.check !== "boundary" ||
+        value.result !== "within_boundary" || value.exit_code !== 0 || !Array.isArray(value.coverage?.domains))
+        throw new Error("sandbox_operation_unsupported");
+      const coveredDomains = [...new Set(value.coverage.domains)].sort();
+      if (coveredDomains.join(",") !== "filesystem,landlock,network_l4,network_rest,process")
+        throw new Error("sandbox_operation_unsupported");
+      return coveredDomains;
+    };
+    const coveredDomains = await runCheck(candidateFile, boundaryFile);
+    if (proof.stage === "effective") await runCheck(candidateFile, candidateFile);
+    await verifyPolicyProofHelperMountSnapshots(helperId, readonlySnapshots, scratchRoot, deadlineAt, "after");
+    await verifyPolicyProofMountSnapshots(workload.Id, mountedSnapshots.snapshots, scratchRoot, deadlineAt, "after");
+    await verifyDockerDaemonSnapshotIdentity(offline, readonlySnapshots);
+    await verifyHelperFile(`${helperRoot}/candidate.json`, proof.candidateDocumentHash, "candidate-after", 1024 * 1024);
+    await verifyHelperFile(`${helperRoot}/boundary.json`, proof.boundaryDocumentHash, "boundary-after", 1024 * 1024);
+    await verifyHelperFile(`${helperRoot}/prover`, prover.expectedSha256, "prover-after", 100 * 1024 * 1024);
+    await verifySnapshot(null, creation.workdirPath, taskSnapshotInfo.manifestHash, "task-after");
+    await verifySnapshot(null, taskMountRoot, namespaceSnapshot.info?.manifestHash ?? taskSnapshotInfo.manifestHash, "namespace-after");
+    await verifySnapshot(null, "/.openshell/runtime", runtimeSnapshotInfo.manifestHash, "runtime-after");
+    const afterDetail = await observed(scope, deadlineAt, { sandboxId: proof.sandboxId, containerId: proof.containerId });
+    const afterWorkload = await container(scope, afterDetail, request.imageDigest, deadlineAt);
+    const afterPolicy = await policy(scope, deadlineAt);
+    const afterOffline = await assertContainerOverlayOffline(afterWorkload, deadlineAt);
+    if (afterDetail.phase !== "Stopped" || afterDetail.id !== proof.sandboxId || afterWorkload.Id !== proof.containerId ||
+      afterWorkload.Image !== workload.Image || afterWorkload.State?.Running !== false ||
+      afterOffline.upperDir !== offline.upperDir || afterOffline.mergedDir !== offline.mergedDir ||
+      afterOffline.daemonPid !== offline.daemonPid || afterOffline.daemonMountNamespace !== offline.daemonMountNamespace ||
+      afterOffline.daemonStartTime !== offline.daemonStartTime ||
+      !sameDocument(policyProofMounts(afterWorkload, paths), targetMounts) ||
+      !sameDocument(afterPolicy.policy, current.policy) || afterPolicy.hash !== current.hash ||
+      afterPolicy.version !== current.version || afterPolicy.config_revision !== current.config_revision)
+      throw new Error("sandbox_scope_changed");
+    const target = { hostEpoch: epoch, imageDigest: request.imageDigest, sandboxId: proof.sandboxId,
+      containerId: proof.containerId, bindingVersion: proof.bindingVersion,
+      provisioningHash: proof.provisioningHash, policyHash: proof.policyHash };
+    const candidateDocumentHash = proof.candidateDocumentHash, boundaryDocumentHash = proof.boundaryDocumentHash;
+    const effectiveDocumentHash = hash(JSON.stringify(canonical(current.policy)));
+    const result = "within_boundary", proverVersion = "0.1.2";
+    const evidenceHash = hash(JSON.stringify(canonical({ schema: "paperclip.sandbox-host-policy-proof.v1", stage: proof.stage,
+      result, coveredDomains, candidateDocumentHash, boundaryDocumentHash, effectiveDocumentHash, proverVersion,
+      proverSha256: prover.expectedSha256, target })));
+    const reply = { action: "prove_policy", stage: proof.stage, result, coveredDomains, candidateDocumentHash,
+      boundaryDocumentHash, effectiveDocumentHash, proverSha256: prover.expectedSha256, proverVersion, target, evidenceHash };
+    const finalHelper = await docker(["inspect", helperId], deadlineAt);
+    if (!Array.isArray(finalHelper) || finalHelper[0]?.Id !== helperId || finalHelper[0].State?.Running !== true)
+      throw new Error("sandbox_observation_unavailable");
+    verifyPolicyProofHelper(finalHelper[0], journal.commands[commandId].policyProofOperation);
+    Object.assign(journal.commands[commandId].policyProofOperation, { phase: "proven", helperId, reply });
+    await atomicJson(journalFile, journal);
+    await cleanupPolicyProofOperation(commandId, deadlineAt);
+    return reply;
+  }
   function decodeMountInfoPath(value) {
     return value.replace(/\\([0-7]{3})/g, (_, octal) => String.fromCharCode(Number.parseInt(octal, 8)));
   }
@@ -861,8 +1757,12 @@ export function openShellHostEngine({
         if ((await readFile(path.join(hostProcRoot, pid, "comm"), "utf8")).trim() !== "dockerd") continue;
         const mountNamespace = await readlink(path.join(hostProcRoot, pid, "ns/mnt"));
         if (!/^mnt:\[[0-9]+\]$/.test(mountNamespace) || mountNamespace !== hostMountNamespace) continue;
+        const statText = await readFile(path.join(hostProcRoot, pid, "stat"), "utf8");
+        const statTail = statText.slice(statText.lastIndexOf(")") + 1).trim().split(/\s+/);
+        const startTime = statTail[19];
+        if (!/^[0-9]+$/.test(startTime ?? "")) continue;
         const mountInfo = await readFile(path.join(hostProcRoot, pid, "mountinfo"), "utf8");
-        matches.push({ pid, mountNamespace, mountInfo });
+        matches.push({ pid, mountNamespace, startTime, mountInfo });
       } catch { /* A process may disappear while the bounded /proc scan runs. */ }
     }
     if (matches.length !== 1) throw new Error("sandbox_operation_unsupported");
@@ -893,7 +1793,30 @@ export function openShellHostEngine({
       throw new Error("sandbox_operation_unsupported");
     const daemon = await dockerDaemonMountInfo(deadlineAt);
     if (mountInfoContainsPath(daemon.mountInfo, mergedDir)) throw new Error("sandbox_operation_unsupported");
-    return { dockerRoot, upperDir, mergedDir, daemonPid: daemon.pid, daemonMountNamespace: daemon.mountNamespace };
+    return { dockerRoot, upperDir, mergedDir, daemonPid: daemon.pid,
+      daemonMountNamespace: daemon.mountNamespace, daemonStartTime: daemon.startTime };
+  }
+  async function verifyDockerDaemonSnapshotIdentity(offline, snapshots) {
+    if (!offline || !/^[1-9][0-9]{0,8}$/.test(offline.daemonPid ?? "") ||
+      !/^mnt:\[[0-9]+\]$/.test(offline.daemonMountNamespace ?? "") || !/^[0-9]+$/.test(offline.daemonStartTime ?? ""))
+      throw new Error("sandbox_operation_unsupported");
+    const daemonProc = path.join(hostProcRoot, offline.daemonPid);
+    const [comm, mountNamespace, statText] = await Promise.all([
+      readFile(path.join(daemonProc, "comm"), "utf8"), readlink(path.join(daemonProc, "ns/mnt")),
+      readFile(path.join(daemonProc, "stat"), "utf8"),
+    ]);
+    const statTail = statText.slice(statText.lastIndexOf(")") + 1).trim().split(/\s+/);
+    if (comm.trim() !== "dockerd" || mountNamespace !== offline.daemonMountNamespace ||
+      statTail[19] !== offline.daemonStartTime) throw new Error("sandbox_scope_changed");
+    for (const snapshot of snapshots) {
+      const local = await lstat(snapshot.snapshotPath);
+      const daemonPath = path.join(daemonProc, "root", snapshot.snapshotPath.slice(1));
+      const daemonView = await lstat(daemonPath);
+      if (local.isSymbolicLink() || daemonView.isSymbolicLink() || local.dev !== daemonView.dev || local.ino !== daemonView.ino ||
+        local.uid !== daemonView.uid || local.gid !== daemonView.gid || (local.mode & 0o7777) !== (daemonView.mode & 0o7777) ||
+        local.size !== daemonView.size || local.isFile() !== daemonView.isFile() ||
+        local.isDirectory() !== daemonView.isDirectory()) throw new Error("sandbox_scope_changed");
+    }
   }
   async function inspectHostAgentImage(deadlineAt) {
     const hostName = "aw-runtime-host";
@@ -3772,6 +4695,10 @@ export function openShellHostEngine({
     return preparedReply(request, entry, provisioningHash, value);
   }
   async function executeAction(request, deadlineAt, commandId) {
+    if (request.action !== "prove_policy") return executeActionImpl(request, deadlineAt, commandId);
+    return withPolicyProofDocker(() => executeActionImpl(request, deadlineAt, commandId), 0);
+  }
+  async function executeActionImpl(request, deadlineAt, commandId) {
     const scope = request.scope;
     const pendingSessionErasure = Object.values(journal.modelBrokerSessions ?? {}).some(session => session?.binding?.bindingId === scope.bindingId &&
       session.erasure && session.erasure.phase !== "verified");
@@ -3804,6 +4731,10 @@ export function openShellHostEngine({
     if (request.action === "prepare" && request.provisioning)
       return prepareProvisionedSandbox(request, deadlineAt);
     const detail = await observed(scope, deadlineAt, request.expectedTarget);
+    if (request.action === "prove_policy") {
+      if ((activeExecBindings.get(scope.bindingId) ?? 0) !== 0) throw new Error("sandbox_observation_unavailable");
+      return await serializePolicyProof(() => policyProofBoundary(request, detail, deadlineAt, commandId));
+    }
     if (request.action === "erase_native_session") {
       if ((activeExecBindings.get(scope.bindingId) ?? 0) !== 0 || erasureBindings.has(scope.bindingId))
         throw new Error("sandbox_observation_unavailable");
@@ -4470,6 +5401,9 @@ export function openShellHostEngine({
         Object.keys(journal.commands).length > 10256 || Object.keys(journal.modelBrokerSessions).length > 1024
       )
         throw new Error("sandbox_host_unavailable");
+      if (Object.values(journal.commands).some(command => command?.policyProofOperation)) {
+        await cleanupAbandonedPolicyProofOperations(new Date(Date.now() + 15_000).toISOString());
+      }
     },
     execute(id, request, deadlineAt) {
       return serial(async () => {
@@ -4493,6 +5427,24 @@ export function openShellHostEngine({
           (request.action === "apply") !== Boolean(request.admission) ||
           (request.action === "start") !== Boolean(request.start) ||
           (request.action === "erase_native_session") !== Boolean(request.nativeSessionErasure) ||
+          (request.action === "prove_policy") !== Boolean(request.policyProof) ||
+          (request.action === "prove_policy" && (!request.policyProof ||
+            Object.keys(request.policyProof).sort().join(",") !==
+              "bindingVersion,boundaryDocument,boundaryDocumentHash,candidateDocument,candidateDocumentHash,containerId,operationKey,policyHash,proverSha256,provisioningHash,sandboxId,stage,version" ||
+            request.policyProof.version !== 1 || !["requested", "effective"].includes(request.policyProof.stage) ||
+            typeof request.policyProof.operationKey !== "string" || request.policyProof.operationKey.length < 1 ||
+            request.policyProof.operationKey.length > 200 || /[\r\n\0]/.test(request.policyProof.operationKey) ||
+            !Number.isSafeInteger(request.policyProof.bindingVersion) || request.policyProof.bindingVersion < 1 ||
+            !/^[a-f0-9]{64}$/.test(request.policyProof.provisioningHash ?? "") ||
+            !/^[a-f0-9]{64}$/.test(request.policyProof.policyHash ?? "") ||
+            !uuid.test(request.policyProof.sandboxId ?? "") || !/^[a-f0-9]{64}$/.test(request.policyProof.containerId ?? "") ||
+            !validOpenShellDocument(request.policyProof.candidateDocument) || !validOpenShellDocument(request.policyProof.boundaryDocument) ||
+            !/^[a-f0-9]{64}$/.test(request.policyProof.candidateDocumentHash ?? "") ||
+            !/^[a-f0-9]{64}$/.test(request.policyProof.boundaryDocumentHash ?? "") ||
+            !/^[a-f0-9]{64}$/.test(request.policyProof.proverSha256 ?? "") ||
+            request.expectedTarget !== undefined || request.probe !== undefined || request.admission !== undefined ||
+            request.start !== undefined || request.provisioning !== undefined || request.nativeSessionErasure !== undefined ||
+            request.cleanupAttestation !== undefined)) ||
           (request.action === "erase_native_session" && (request.cleanupAttestation !== undefined ||
             request.expectedTarget !== undefined || request.probe !== undefined || request.admission !== undefined ||
             request.start !== undefined || request.provisioning !== undefined || request.requesterUserId !== undefined ||
@@ -4557,6 +5509,7 @@ export function openShellHostEngine({
                 "cleanupAttestation",
                 "expectedTarget",
                 "nativeSessionErasure",
+                "policyProof",
                 "claimToken",
               ].includes(key),
           )
@@ -4568,6 +5521,33 @@ export function openShellHostEngine({
         if (existing) {
           if (existing.requestHash !== requestHash)
             throw new Error("sandbox_scope_changed");
+          if (request.action === "prove_policy") {
+            const originalDeadline = Date.parse(existing.operationDeadlineAt ?? ""), retryDeadline = Date.parse(deadlineAt);
+            if (!Number.isFinite(originalDeadline) || !Number.isFinite(retryDeadline))
+              throw new Error("sandbox_scope_changed");
+            deadlineAt = new Date(Math.min(originalDeadline, retryDeadline)).toISOString();
+            let refreshed;
+            if (originalDeadline <= Date.now()) {
+              try {
+                await cleanupFailedPolicyProofOperation(id);
+                refreshed = { success: false, reply: null, errorCode: "sandbox_host_unavailable" };
+              } catch {
+                refreshed = { success: false, reply: null, errorCode: "sandbox_observation_unavailable" };
+              }
+            } else {
+              try { refreshed = { success: true, reply: await executeAction(request, deadlineAt, id), errorCode: null }; }
+              catch (error) {
+                try { await cleanupFailedPolicyProofOperation(id); }
+                catch { error = new Error("sandbox_observation_unavailable"); }
+                refreshed = { success: false, reply: null, errorCode: ["sandbox_host_unavailable", "sandbox_scope_changed",
+                  "sandbox_operation_unsupported", "sandbox_observation_unavailable"].includes(error?.message)
+                  ? error.message : "sandbox_host_unavailable" };
+              }
+            }
+            journal.commands[id] = { ...existing, requestHash, result: refreshed };
+            await atomicJson(journalFile, journal);
+            return refreshed;
+          }
           if (request.action === "erase_native_session") {
             const originalDeadline = Date.parse(existing.operationDeadlineAt ?? "");
             if (!Number.isFinite(originalDeadline)) throw new Error("sandbox_scope_changed");
@@ -4629,7 +5609,7 @@ export function openShellHostEngine({
         )
           throw new Error("sandbox_host_unavailable");
         journal.commands[id] = { requestHash, result: null,
-          ...(request.action === "erase_native_session" ? { operationDeadlineAt: deadlineAt } : {}) };
+          ...(["erase_native_session", "prove_policy"].includes(request.action) ? { operationDeadlineAt: deadlineAt } : {}) };
         await atomicJson(journalFile, journal);
         let result;
         try {
@@ -4639,6 +5619,10 @@ export function openShellHostEngine({
             errorCode: null,
           };
         } catch (error) {
+          if (request.action === "prove_policy") {
+            try { await cleanupFailedPolicyProofOperation(id); }
+            catch { error = new Error("sandbox_observation_unavailable"); }
+          }
           result = {
             success: false,
             reply: null,

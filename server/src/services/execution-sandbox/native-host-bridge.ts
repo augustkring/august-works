@@ -77,6 +77,7 @@ export type StoppedNativeErasureClaim = {
   stopReceiptDigest: string; descriptorDigest: string;
 };
 import { sandboxCapabilityFacts } from "./sandbox-service.js";
+import { projectOpenShellPolicy } from "./openshell-policy.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROFILE_HASH, nativeRuntimeErasurePolicyIsolated } from "../native-runtime/remote-runner-identity.js";
 
 export type RemoteRuntimeCleanupAttestation = {
@@ -207,7 +208,7 @@ export function nativeSandboxHostTransport(
   const auth = runtimeHostAuth(db);
   const operatorUserIds = options.operatorUserIds ?? [];
   const requireRecent = (action: SandboxHostRequest["action"]) =>
-    ["prepare", "apply", "start", "probe", "revoke_providers", "stop", "destroy"].includes(
+    ["prepare", "apply", "start", "prove_policy", "probe", "revoke_providers", "stop", "destroy"].includes(
       action,
     );
   const assertOperator = async (actor: AuthorizationActor, action: SandboxHostRequest["action"], tx?: Db, companyId?: string, bindingId?: string) => {
@@ -302,7 +303,7 @@ export function nativeSandboxHostTransport(
       binding.cellGeneration !== request.scope.cellGeneration ||
       binding.backend !== "openshell" ||
       (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== request.scope.sandboxRef ||
-      (["apply", "start"].includes(request.action) && binding.status !== "admitting") ||
+      (["apply", "start", "prove_policy"].includes(request.action) && binding.status !== "admitting") ||
       ["deleted"].includes(binding.status) ||
       (!cleanupScope && !erasure && !safety(request.action) && binding.status === "quarantined") ||
       !host ||
@@ -381,6 +382,7 @@ export function nativeSandboxHostTransport(
         await assertV7Authorization(tx, actor, request.scope.companyId, "runtime:manage");
       }
     }
+    if (request.action === "prove_policy") await assertPolicyProofRequestCurrent(tx, request, hostId, cell, binding, now);
     if (request.probe?.qualificationCredentialCapability) {
       const claims = verifySandboxQualificationCredentialJwt(request.probe.qualificationCredentialCapability);
       const fixture = claims?.qualification_credential;
@@ -537,6 +539,80 @@ export function nativeSandboxHostTransport(
       throw forbidden("The original exact Sandbox admission claim is no longer the current Host workload");
   }
 
+  async function assertPolicyProofRequestCurrent(tx: Db, request: SandboxHostRequest, hostId: string,
+    cell: typeof runtimeCells.$inferSelect, binding: typeof runtimeSandboxBindings.$inferSelect, now: Date) {
+    const proof = request.policyProof;
+    if (request.action !== "prove_policy" || !proof || cell.status !== "STOPPED" ||
+        binding.status !== "admitting" || binding.version !== proof.bindingVersion ||
+        proof.proverSha256.length !== 64 || !/^[a-f0-9]{64}$/.test(proof.proverSha256) ||
+        proof.candidateDocumentHash !== nativeSha256(proof.candidateDocument) ||
+        proof.boundaryDocumentHash !== nativeSha256(proof.boundaryDocument))
+      throw conflict("Protected policy proof is outside the current stopped admission target", { code: "sandbox_policy_proof_scope_changed" });
+    const [snapshot, ...extraSnapshots] = await tx.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, request.scope.companyId),
+      eq(runtimePolicySnapshots.bindingId, request.scope.bindingId),
+      eq(runtimePolicySnapshots.policyHash, proof.policyHash),
+      eq(runtimePolicySnapshots.status, "qualified"),
+    )).limit(2);
+    if (!snapshot || extraSnapshots.length || snapshot.expiresAt <= now ||
+        snapshot.compilation.proverResult !== "pass" ||
+        nativeSha256(snapshot.compilation) !== proof.policyHash)
+      throw conflict("Protected policy proof has no unique current qualified compilation", { code: "sandbox_policy_proof_compilation_changed" });
+    const projectedCandidate = projectOpenShellPolicy(snapshot.compilation.compiledPolicy,
+      snapshot.compilation.modelBrokerEndpoint, snapshot.compilation.credentialBrokerEndpoints);
+    const sourceBoundary = binding.boundaryPolicy.credentials.mode === "brokered" &&
+      binding.boundaryPolicy.credentials.bindings.length === 0
+      ? { ...binding.boundaryPolicy, credentials: { mode: "none" as const, bindings: [] } }
+      : binding.boundaryPolicy;
+    const projectedBoundary = projectOpenShellPolicy(sourceBoundary,
+      snapshot.compilation.modelBrokerEndpoint, snapshot.compilation.credentialBrokerEndpoints);
+    if (projectedCandidate.unsupportedFeatures.length || projectedBoundary.unsupportedFeatures.length ||
+        nativeSha256(projectedCandidate.document) !== proof.candidateDocumentHash ||
+        nativeSha256(projectedBoundary.document) !== proof.boundaryDocumentHash)
+      throw conflict("Protected proof documents differ from the persisted compilation and maximum boundary", { code: "sandbox_policy_proof_document_changed" });
+    const prepareCommands = await tx.select().from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.companyId, request.scope.companyId),
+      eq(runtimeHostCommands.runtimeHostId, hostId),
+      eq(runtimeHostCommands.runtimeCellId, request.scope.cellId),
+      eq(runtimeHostCommands.cellGeneration, BigInt(request.scope.cellGeneration)),
+      eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND),
+      eq(runtimeHostCommands.status, "SUCCEEDED"),
+      sql`${runtimeHostCommands.payload}->>'action' = 'prepare'`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'purpose' = 'admission'`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'operationKey' = ${proof.operationKey}`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'bindingVersion' = ${String(proof.bindingVersion)}`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'provisioningHash' = ${proof.provisioningHash}`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'policyHash' = ${proof.policyHash}`,
+    )).limit(2);
+    const preparedTargets = prepareCommands.flatMap(command => {
+      try {
+        const preparedRequest = parseStoredSandboxHostRequest(command.payload, false);
+        const preparedReply = sandboxHostReplySchema.parse(command.safeResult);
+        const provisioning = preparedRequest.provisioning;
+        if (preparedRequest.action !== "prepare" || preparedRequest.scope.companyId !== request.scope.companyId ||
+            preparedRequest.scope.bindingId !== request.scope.bindingId || preparedRequest.scope.cellId !== request.scope.cellId ||
+            preparedRequest.scope.cellGeneration !== request.scope.cellGeneration || preparedRequest.scope.sandboxRef !== request.scope.sandboxRef ||
+            preparedRequest.requesterUserId !== request.requesterUserId || preparedRequest.hostEpoch !== request.hostEpoch ||
+            preparedRequest.imageDigest !== request.imageDigest || !provisioning || provisioning.purpose !== "admission" ||
+            provisioning.operationKey !== proof.operationKey || provisioning.bindingVersion !== proof.bindingVersion ||
+            provisioning.provisioningHash !== proof.provisioningHash || provisioning.policyHash !== proof.policyHash ||
+            nativeSha256(provisioning.document) !== proof.candidateDocumentHash ||
+            nativeSha256(provisioning.document) !== nativeSha256(proof.candidateDocument) ||
+            preparedReply.action !== "prepare" || preparedReply.requiresRecreate ||
+            preparedReply.hostEpoch !== request.hostEpoch || preparedReply.imageDigest !== request.imageDigest ||
+            preparedReply.bindingVersion !== proof.bindingVersion || preparedReply.provisioningHash !== proof.provisioningHash ||
+            preparedReply.policyHash !== proof.policyHash || preparedReply.sandboxId !== proof.sandboxId ||
+            preparedReply.containerId !== proof.containerId ||
+            preparedReply.probePolicyHash !== nativeSha256(provisioning.document)) return [];
+        return [{ id: command.id }];
+      } catch {
+        return [];
+      }
+    });
+    if (prepareCommands.length !== 1 || preparedTargets.length !== 1)
+      throw conflict("Protected policy proof lost its exact durable Host prepare receipt", { code: "sandbox_policy_proof_prepare_receipt_missing" });
+  }
+
   async function invoke(
     actor: AuthorizationActor,
     scope: SandboxIdentity,
@@ -548,6 +624,7 @@ export function nativeSandboxHostTransport(
     provisioning?: SandboxProvisioningInput,
     conformance?: NativeOpenCodeConformanceHostAuthority,
     safetyCleanup?: SandboxAdmissionCleanup,
+    policyProof?: SandboxHostRequest["policyProof"],
   ) {
     scope = {
       companyId: scope.companyId,
@@ -727,6 +804,7 @@ export function nativeSandboxHostTransport(
           ...(probe ? { probe } : {}),
           ...(admission ? { admission } : {}),
           ...(start ? { start } : {}),
+          ...(policyProof ? { policyProof } : {}),
           ...(safetyCleanup ? { expectedTarget: { sandboxId: safetyCleanup.sandboxId, containerId: safetyCleanup.containerId } } : {}),
           hostEpoch: host.credentialVersion,
           imageDigest: cell.activeImageDigest ?? cell.desiredImageDigest,
@@ -1213,8 +1291,9 @@ export function nativeSandboxHostTransport(
     bridge(actor: AuthorizationActor, conformance?: NativeOpenCodeConformanceHostAuthority): OpenShellHostBridge {
       const call = (scope: SandboxIdentity, action: SandboxHostRequest["action"], probe?: SandboxHostRequest["probe"],
         admission?: SandboxHostRequest["admission"], start?: SandboxHostRequest["start"], idempotencyKey?: string,
-        provisioning?: SandboxProvisioningInput, safetyCleanup?: SandboxAdmissionCleanup) => invoke(actor, scope, action, probe, admission, start,
-          idempotencyKey, provisioning, conformance, safetyCleanup);
+        provisioning?: SandboxProvisioningInput, safetyCleanup?: SandboxAdmissionCleanup,
+        policyProof?: SandboxHostRequest["policyProof"]) => invoke(actor, scope, action, probe, admission, start,
+          idempotencyKey, provisioning, conformance, safetyCleanup, policyProof);
       return {
         capabilities: async (scope) => {
           const { reply } = await call(scope, "capabilities");
@@ -1264,6 +1343,28 @@ export function nativeSandboxHostTransport(
           if (reply.action !== "effective_policy")
             throw conflict("Native sandbox reply action changed");
           return reply.document;
+        },
+        provePolicy: async (scope, policyProof, idempotencyKey) => {
+          // Each invocation needs a fresh observation; retries of that one
+          // invocation retain the generated command key.
+          const proofInvocationKey = `policy-proof:${nativeSha256({
+            requestedIdempotencyKey: idempotencyKey, policyProof, nonce: randomUUID(),
+          })}`;
+          const { reply, request } = await call(scope, "prove_policy", undefined, undefined, undefined,
+            proofInvocationKey, undefined, undefined, policyProof);
+          if (reply.action !== "prove_policy" || request.action !== "prove_policy" || !request.policyProof ||
+              nativeSha256(request.policyProof) !== nativeSha256(policyProof) ||
+              reply.stage !== policyProof.stage || reply.candidateDocumentHash !== policyProof.candidateDocumentHash ||
+              reply.boundaryDocumentHash !== policyProof.boundaryDocumentHash ||
+              reply.proverSha256 !== policyProof.proverSha256 ||
+              reply.target.hostEpoch !== request.hostEpoch || reply.target.imageDigest !== request.imageDigest ||
+              reply.target.sandboxId !== policyProof.sandboxId || reply.target.containerId !== policyProof.containerId ||
+              reply.target.bindingVersion !== policyProof.bindingVersion ||
+              reply.target.provisioningHash !== policyProof.provisioningHash || reply.target.policyHash !== policyProof.policyHash)
+            throw conflict("Protected Host policy proof does not match its exact signed request and target", {
+              code: "sandbox_host_policy_proof_target_mismatch",
+            });
+          return reply;
         },
         apply: async (input) => {
           const { reply } = await call(

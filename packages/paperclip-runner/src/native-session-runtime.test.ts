@@ -384,10 +384,14 @@ describe("executeNativeSession recovery", () => {
       goal: { ...oldGoal, createdAt: oldGoal.createdAt / 1000, updatedAt: oldGoal.updatedAt / 1000 },
     };
     const providerSubmittedInputs: Parameters<NativeSession["startTurn"]>[0][] = [];
+    const inputAcknowledgementOrder: string[] = [];
     const startTurn = vi.fn<NativeSession["startTurn"]>(async submitted => {
       providerSubmittedInputs.push(structuredClone(submitted));
       submitted.message.text = "backend mutation after submission";
-      return { turnId: "turn-recovery" };
+      return {
+        turnId: "turn-recovery",
+        releaseAfterInputAcknowledgement: () => { inputAcknowledgementOrder.push("released"); },
+      };
     });
     const goal = vi.fn(async () => oldGoal);
     const session: NativeSession = {
@@ -476,10 +480,12 @@ describe("executeNativeSession recovery", () => {
         return snapshotBeforeUpdate ? "dispatch-continuation" : "dispatch-fresh";
       },
       onTurnStarted: async (observed, turnId, dispatchId, sourceClosure) => {
+        inputAcknowledgementOrder.push("persisted");
         observedTurnStarts.push({ input: structuredClone(observed), turnId, dispatchId, sourceClosure });
       },
     });
     expect(startTurn).toHaveBeenCalledOnce();
+    expect(inputAcknowledgementOrder).toEqual(["persisted", "released"]);
     const submitted = providerSubmittedInputs[0]!;
     expect(observedTurnInputs).toEqual([submitted]);
     expect(observedTurnStarts).toEqual([{ input: submitted, turnId: "turn-recovery",
@@ -511,7 +517,8 @@ describe("executeNativeSession recovery", () => {
       structuredResult: true,
     };
     const rejected = new Error("input capture persistence failed");
-    const close = vi.fn(async () => {});
+    let releaseOnClose: (() => void) | undefined;
+    const close = vi.fn(async () => { releaseOnClose?.(); });
     const startTurn = vi.fn<NativeSession["startTurn"]>(async () => ({ turnId: "unexpected-turn" }));
     const session: NativeSession = {
       identity: () => identity,
@@ -577,6 +584,25 @@ describe("executeNativeSession recovery", () => {
     })).rejects.toBe(startFailure);
     expect(startTurn).toHaveBeenCalledOnce();
     expect(onTurnStarted).not.toHaveBeenCalled();
+
+    const releaseAfterInputAcknowledgement = vi.fn();
+    releaseOnClose = releaseAfterInputAcknowledgement;
+    startTurn.mockResolvedValue({
+      turnId: "started-but-not-acknowledged",
+      releaseAfterInputAcknowledgement,
+    });
+    const startedPersistenceFailure = new Error("turn start persistence failed");
+    await expect(executeNativeSession({
+      input,
+      backend,
+      controlPlane,
+      runnerInstanceId: "runner-recovery",
+      controlPlaneInstanceId: "control-recovery",
+      onTurnInput: async () => "dispatch-before-acknowledgement",
+      onTurnStarted: async () => { throw startedPersistenceFailure; },
+    })).rejects.toBe(startedPersistenceFailure);
+    expect(releaseAfterInputAcknowledgement).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledTimes(3);
   });
 
   it("applies a session goal control without starting an ordinary turn", async () => {

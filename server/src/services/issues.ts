@@ -2016,8 +2016,68 @@ type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /**
  * The exact pre-first-comment conversation shell is hidden by ordinary issue
  * privacy. Its sole exception is the current authenticated Human who opened
- * it, and only while its source-free, unsealed shape remains unchanged.
+ * it, and only while its source-free or exact upload-only bootstrap shape
+ * remains unchanged.
  */
+export type CurrentConversationAttachmentBootstrap = {
+  snapshot: NativePayloadSourceSnapshot;
+  inputs: Extract<NativePayloadSourceInput, { kind: "attachment" }>[];
+};
+
+/** Exact pre-comment upload-only state for a direct Human conversation shell.
+ * This is a proof of the existing upload owners, not a permission grant. */
+export async function currentConversationAttachmentBootstrap(
+  tx: DbTransaction,
+  issue: { id: string; companyId: string },
+  ownerUserId: string,
+): Promise<CurrentConversationAttachmentBootstrap | null> {
+  const [owner] = await tx.select({
+    row: issues,
+    ownerHash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))`,
+    digestValid: sql<boolean>`(${issues.payloadSourceSnapshot}->>'digest')=encode(sha256(convert_to((${issues.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')`,
+  }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    eq(issues.payloadSourceProtocolVersion, 1), eq(issues.payloadSourceSnapshotInvalidated, false))).for("share");
+  const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(owner?.row.payloadSourceSnapshot);
+  if (!owner || !taskSnapshot.success || owner.digestValid !== true || taskSnapshot.data.owner.kind !== "issue" ||
+      taskSnapshot.data.owner.id !== issue.id || taskSnapshot.data.owner.companyId !== issue.companyId ||
+      taskSnapshot.data.owner.contentHash !== owner.ownerHash || taskSnapshot.data.transforms?.length ||
+      !isDeepStrictEqual(taskSnapshot.data.policy, { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }) ||
+      taskSnapshot.data.inputs.length === 0 || taskSnapshot.data.inputs.length > MAX_CHAT_PRESENTATION_ATTACHMENTS ||
+      taskSnapshot.data.inputs.some(input => input.kind !== "attachment" || input.issueId !== issue.id ||
+        input.commentId !== null || input.disposition !== "delivered")) return null;
+  const inputs = taskSnapshot.data.inputs as Extract<NativePayloadSourceInput, { kind: "attachment" }>[];
+  const inputById = new Map(inputs.map(input => [input.attachmentId, input]));
+  if (inputById.size !== inputs.length) return null;
+  const rows = await tx.select({ attachment: issueAttachments, asset: assets,
+    ownerHash: sql<string>`public.aw_native_payload_body_hash('attachment',to_jsonb(${issueAttachments}))`,
+    digestValid: sql<boolean>`(${issueAttachments.payloadSourceSnapshot}->>'digest')=encode(sha256(convert_to((${issueAttachments.payloadSourceSnapshot}-'digest')::text,'UTF8')),'hex')`,
+  }).from(issueAttachments).innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId)))
+    .where(and(eq(issueAttachments.companyId, issue.companyId), eq(issueAttachments.issueId, issue.id))).for("share");
+  if (rows.length !== inputs.length) return null;
+  for (const row of rows) {
+    const input = inputById.get(row.attachment.id);
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(row.attachment.payloadSourceSnapshot);
+    if (!input || row.attachment.issueCommentId !== null || row.attachment.originatingRunId !== null ||
+        row.attachment.payloadSourceProtocolVersion !== 1 || row.attachment.payloadSourceSnapshotInvalidated ||
+        row.asset.createdByUserId !== ownerUserId || row.asset.createdByAgentId !== null ||
+        input.assetId !== row.asset.id || input.sha256 !== row.asset.sha256 || input.byteSize !== row.asset.byteSize ||
+        row.digestValid !== true || !snapshot.success || snapshot.data.owner.kind !== "attachment" ||
+        snapshot.data.owner.id !== row.attachment.id || snapshot.data.owner.companyId !== issue.companyId ||
+        snapshot.data.owner.contentHash !== row.ownerHash || snapshot.data.inputs.length !== 0 ||
+        !isDeepStrictEqual(snapshot.data.policy, { issueIds: [issue.id], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] })) return null;
+    const [capture] = await tx.select({ id: activityLog.id }).from(activityLog).where(and(
+      eq(activityLog.companyId, issue.companyId), eq(activityLog.actorType, "user"), eq(activityLog.actorId, ownerUserId),
+      eq(activityLog.action, "attachment.payload_source_captured"), eq(activityLog.entityType, "issue"),
+      eq(activityLog.entityId, issue.id), sql`${activityLog.details}->>'attachmentId'=${row.attachment.id}`,
+      sql`${activityLog.details}->>'assetId'=${row.asset.id}`, sql`${activityLog.details}->>'producer'='direct_manual_upload'`,
+      sql`${activityLog.details}->>'digest'=${snapshot.data.digest}`,
+      sql`${activityLog.details}->>'contentHash'=${snapshot.data.owner.contentHash}`,
+    )).limit(1);
+    if (!capture) return null;
+  }
+  return { snapshot: taskSnapshot.data, inputs };
+}
+
 export async function isCurrentUnsealedConversationShell(
   tx: DbTransaction,
   actor: AuthorizationActor,
@@ -2032,7 +2092,7 @@ export async function isCurrentUnsealedConversationShell(
     "The current conversation owner session is unavailable");
   const [current] = await tx.select().from(issues).where(and(
     eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
-    eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+    eq(issues.payloadSourceProtocolVersion, 1),
     eq(issues.payloadSourceSnapshotInvalidated, false),
     isNull(issues.projectId), isNull(issues.parentId), isNull(issues.description),
     isNull(issues.createdByAgentId), eq(issues.originKind, "manual"), isNull(issues.originId),
@@ -2064,7 +2124,9 @@ export async function isCurrentUnsealedConversationShell(
   const [linkedAttachment] = await tx.select({ id: issueAttachments.id }).from(issueAttachments).where(and(
     eq(issueAttachments.companyId, current.companyId), eq(issueAttachments.issueId, current.id),
   )).limit(1);
-  if (linkedSource || linkedDocument || linkedAttachment) return false;
+  if (linkedSource || linkedDocument) return false;
+  if (linkedAttachment && !await currentConversationAttachmentBootstrap(tx, current, ownerUserId)) return false;
+  if (!linkedAttachment && current.payloadSourceSnapshot !== null) return false;
   const membership = await pinIssueMutationHuman(tx, pinned.actor, current.companyId, true);
   await assertManualInputCredentialCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
     "The current conversation owner session is unavailable");
@@ -13688,6 +13750,8 @@ export function issueService(db: Db) {
         clientRequestId?: string;
         /** Server-only: authenticated Paperclip messages also belong in the Slack thread. */
         mirrorToSlack?: boolean;
+        /** Only the exact upload-to-first-comment owner transition defers activation until its Task snapshot is sealed. */
+        deferConversationActivation?: boolean;
         /** Actual HTTP actor, never inferred from author attribution. */
         manualInputActor?: AuthorizationActor;
         /**
@@ -14071,6 +14135,10 @@ export function issueService(db: Db) {
             id: issueAttachments.id,
             issueCommentId: issueAttachments.issueCommentId,
             originatingRunId: issueAttachments.originatingRunId,
+            payloadSourceProtocolVersion: issueAttachments.payloadSourceProtocolVersion,
+            payloadSourceSnapshot: issueAttachments.payloadSourceSnapshot,
+            payloadSourceSnapshotInvalidated: issueAttachments.payloadSourceSnapshotInvalidated,
+            createdByUserId: assets.createdByUserId,
             createdByAgentId: assets.createdByAgentId,
             originalFilename: assets.originalFilename,
           })
@@ -14088,6 +14156,10 @@ export function issueService(db: Db) {
           id: string;
           issueCommentId: string | null;
           originatingRunId: string | null;
+          payloadSourceProtocolVersion: number;
+          payloadSourceSnapshot: unknown;
+          payloadSourceSnapshotInvalidated: boolean;
+          createdByUserId: string | null;
           createdByAgentId: string | null;
           originalFilename: string | null;
         };
@@ -14175,10 +14247,18 @@ export function issueService(db: Db) {
           (attachment: CommentAttachmentRow) =>
             attachment.issueCommentId === null ? [attachment.id] : [],
         );
+        const recaptureHumanUploads = manualInputProtocol === 1 && authorType === "user" &&
+          typeof actor.userId === "string" && !actor.agentId && !createdByRunId && attachmentRows.every((attachment: CommentAttachmentRow) =>
+            attachment.createdByUserId === actor.userId && attachment.createdByAgentId === null &&
+            attachment.originatingRunId === null && attachment.payloadSourceProtocolVersion === 1 &&
+            attachment.payloadSourceSnapshot !== null && !attachment.payloadSourceSnapshotInvalidated);
         const attached = unboundAttachmentIds.length
           ? await dbOrTx
               .update(issueAttachments)
-              .set({ issueCommentId: comment.id, payloadSourceSnapshot: null, updatedAt: new Date() })
+              .set({ issueCommentId: comment.id,
+                payloadSourceSnapshot: recaptureHumanUploads
+                  ? directHumanPayloadSnapshotSql("attachment", comment.id) : null,
+                updatedAt: new Date() })
               .where(
                 and(
                   eq(issueAttachments.companyId, issue.companyId),
@@ -14254,7 +14334,7 @@ export function issueService(db: Db) {
         }
       }
 
-      if (issue.conversationAgentId && actor.userId) {
+      if (issue.conversationAgentId && actor.userId && !options?.deferConversationActivation) {
         await dbOrTx.update(issues).set({ conversationState: "active" }).where(eq(issues.id, issueId));
       }
       if (options?.mirrorToSlack && actor.userId && authorType === "user") {
@@ -14424,6 +14504,7 @@ export function issueService(db: Db) {
       let sourcePublication: ActivityPublication | null = null;
       const result = await db.transaction(async (tx) => {
         let sourceExpiresAt: number | null = null, sourceOperator = false, ownerShell = false;
+        let ownerShellSnapshot: NativePayloadSourceSnapshot | null = null;
         const finishManualInput = async () => {
           if (manualActor && sourceExpiresAt !== null) {
             if (sourceOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
@@ -14439,12 +14520,18 @@ export function issueService(db: Db) {
           await finishManualInput();
           await lockIssuePrivacyTree(tx, issue.companyId);
           const [current] = await tx.select({ id: issues.id, companyId: issues.companyId, status: issues.status,
-            assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId }).from(issues)
+            assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId,
+            payloadSourceSnapshot: issues.payloadSourceSnapshot }).from(issues)
             .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId))).for("update");
           if (!current) throw notFound("Issue not found");
           await finishManualInput();
           const actor = { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !sourceOperator };
           ownerShell = await isCurrentUnsealedConversationShell(tx, actor, current, "issue:comment");
+          if (ownerShell && current.payloadSourceSnapshot) {
+            const parsedShell = nativePayloadSourceSnapshotSchema.safeParse(current.payloadSourceSnapshot);
+            if (!parsedShell.success) throw conflict("Conversation upload source state changed");
+            ownerShellSnapshot = parsedShell.data;
+          }
           const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
             resource: { type: "issue", companyId: issue.companyId, issueId: issue.id, status: current.status,
               assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId }, enforceResponsibleUserIntersection: true });
@@ -14662,12 +14749,24 @@ export function issueService(db: Db) {
           if (!captured?.payloadSourceSnapshot) throw conflict("Manual upload source capture was not stored");
           const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
           if (ownerShell) {
+            const nextInput: Extract<NativePayloadSourceInput, { kind: "attachment" }> = {
+              kind: "attachment", issueId: issue.id, attachmentId: attachment.id, commentId: null,
+              assetId: asset.id, sha256: asset.sha256, byteSize: asset.byteSize, disposition: "delivered",
+            };
+            const priorInputs = ownerShellSnapshot?.inputs ?? [];
+            if (priorInputs.some(source => source.kind !== "attachment" || source.commentId !== null || source.issueId !== issue.id))
+              throw conflict("Conversation upload source state is not attachment-only");
+            if (priorInputs.length >= MAX_CHAT_PRESENTATION_ATTACHMENTS)
+              throw unprocessable("A conversation can bind at most the supported number of original uploads");
+            const nextInputs = [...priorInputs, nextInput].sort((left, right) =>
+              (left.kind === "attachment" ? left.attachmentId : "").localeCompare(right.kind === "attachment" ? right.attachmentId : ""));
+            const priorSnapshotCondition = ownerShellSnapshot
+              ? sql`${issues.payloadSourceSnapshot}->>'digest'=${ownerShellSnapshot.digest}`
+              : isNull(issues.payloadSourceSnapshot);
             const [sealed] = await tx.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue",
-              { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
-              [{ kind: "attachment", issueId: issue.id, attachmentId: attachment.id, commentId: null,
-                assetId: asset.id, sha256: asset.sha256, byteSize: asset.byteSize, disposition: "delivered" }]) })
+              { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, nextInputs) })
               .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
-                eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+                eq(issues.payloadSourceProtocolVersion, 1), priorSnapshotCondition,
                 eq(issues.payloadSourceSnapshotInvalidated, false))).returning({ snapshot: issues.payloadSourceSnapshot });
             if (!sealed?.snapshot) throw conflict("Conversation upload source capture was not stored");
           }

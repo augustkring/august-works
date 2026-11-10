@@ -1242,6 +1242,7 @@ const nativeChargeReservationId = "10000000-0000-4000-8000-000000000005";
 const nativeChargePlanId = "10000000-0000-4000-8000-000000000006";
 const nativeChargeAttemptId = "10000000-0000-4000-8000-000000000007";
 const nativeChargeRequestHash = "a".repeat(64);
+const nativeChargeInputHash = "c".repeat(64);
 const nativeChargeBodyHash = "b".repeat(64);
 
 function nativeTextChargeProof(): NativeTextChargeProof {
@@ -1253,11 +1254,12 @@ function nativeTextChargeProof(): NativeTextChargeProof {
       automaticRecovery: { replay: "blocked", actionOutcome: "unknown" } },
     reservation: { id: nativeChargeReservationId, companyId: nativeChargeCompanyId, purpose: "worker_model", status: "unknown",
       workerAttemptId: nativeChargeAttemptId, planId: nativeChargePlanId, requestHash: nativeChargeRequestHash,
+      inputHash: nativeChargeInputHash,
       providerWireReceipt: { version: 1, reservationId: nativeChargeReservationId, requestHash: nativeChargeRequestHash,
         method: "POST", endpoint: "https://api.anthropic.com/v1/messages", bodySha256: nativeChargeBodyHash, callId: null } },
     binding: { runId: nativeChargeRunId, agentId: nativeChargeAgentId, planIssueId: nativeChargeIssueId,
       workerIssueId: nativeChargeIssueId, workerAgentId: nativeChargeAgentId },
-    wireIntents: [{ reservationId: nativeChargeReservationId, requestHash: nativeChargeRequestHash,
+    wireIntents: [{ reservationId: nativeChargeReservationId, requestHash: nativeChargeInputHash,
       wireBodyHash: nativeChargeBodyHash, method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
       modelPurpose: "worker_model" }],
   };
@@ -1275,6 +1277,9 @@ describe("unknown NativeText charge continuation proof", () => {
     ["driver", (value: NativeTextChargeProof) => { value.run.driverKind = "paperclip_runner"; }],
     ["company", (value: NativeTextChargeProof) => { value.reservation.companyId = "10000000-0000-4000-8000-000000000099"; }],
     ["wire intent", (value: NativeTextChargeProof) => { value.wireIntents = []; }],
+    ["wire intent input hash", (value: NativeTextChargeProof) => {
+      value.wireIntents = [{ ...(value.wireIntents as Record<string, unknown>[])[0], requestHash: nativeChargeRequestHash }];
+    }],
   ] as const)("rejects mismatched %s evidence", (_label, mutate) => {
     const value = nativeTextChargeProof();
     mutate(value);

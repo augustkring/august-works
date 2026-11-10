@@ -361,9 +361,9 @@ describe("dependency scheduling through the installed Native text draft controll
     });
   }, 60_000);
 
-  it("runs one bounded review-path recovery before exposing the stalled Human decision", async () => {
+  it("continues once after a Human withdraws the last review interaction, then exposes the stalled decision", async () => {
     const fixture = await seedInstalledDraft();
-    const { f, model } = fixture;
+    const { f, model, human } = fixture;
     const outputs = [
       "Initial internal draft retained for Human review.",
       "One bounded review-path recovery draft retained for Human review.",
@@ -383,24 +383,59 @@ describe("dependency scheduling through the installed Native text draft controll
       const entry = await createDraftPlan(fixture, "Recover the lost review path once", undefined, undefined,
         { maxModelCostMinor: 9, maxToolActions: 5 });
       const initial = await heartbeat.wakeup(f.presence.id, {
-        source: "automation", triggerDetail: "system", reason: "issue_commented",
-        payload: { issueId: entry.task.id, interactionId: "superseded-confirmation",
-          reviewPathLost: true, reviewPathConsumedRef: "superseded-confirmation" },
+        source: "assignment", triggerDetail: "system", reason: "issue_assigned",
+        payload: { issueId: entry.task.id },
         requestedByActorType: "user", requestedByActorId: f.userId,
-        contextSnapshot: { issueId: entry.task.id, taskId: entry.task.id, wakeReason: "issue_commented",
-          interactionId: "superseded-confirmation", reviewPathLost: true,
-          reviewPathConsumedRef: "superseded-confirmation" },
+        contextSnapshot: { issueId: entry.task.id, taskId: entry.task.id, wakeReason: "issue_assigned" },
       });
       expect(initial).not.toBeNull();
+      if (!initial) throw new Error("native_review_path_source_run_missing");
       await heartbeat.drainActiveRunExecutions();
 
-      const recoveryWakes = await db.select().from(agentWakeupRequests).where(and(
-        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "issue_review_path_lost")));
-      expect(recoveryWakes).toHaveLength(1);
-      expect(recoveryWakes[0]).toMatchObject({ status: "completed", payload: expect.objectContaining({
-        issueId: entry.task.id, reviewPathConsumedRef: "superseded-confirmation",
-        reviewPathRecoveryAttempt: 1, maxReviewPathRecoveryAttempts: 1,
-      }) });
+      const [sourceRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, initial.id));
+      expect(sourceRun).toMatchObject({ status: "succeeded", runtimeMode: "native", nativeIssueId: entry.task.id });
+      const [sourceIssue] = await db.select().from(issues).where(eq(issues.id, entry.task.id));
+      expect(sourceIssue?.status).toBe("in_review");
+      if (!sourceIssue) throw new Error("native_review_path_source_issue_missing");
+      const sourceAttention = (await issueService(db).listReviewAttention(f.home, [sourceIssue]))
+        .get(entry.task.id) ?? { state: "none", paths: [], reason: null };
+      expect(sourceAttention.state).not.toBe("stalled");
+      expect(sourceAttention.paths.map(path => path.kind)).toContain("interaction");
+      const pendingInteractions = await db.select({ id: issueThreadInteractions.id, kind: issueThreadInteractions.kind,
+        status: issueThreadInteractions.status }).from(issueThreadInteractions).where(and(
+        eq(issueThreadInteractions.companyId, f.home), eq(issueThreadInteractions.issueId, entry.task.id),
+        eq(issueThreadInteractions.status, "pending")));
+      expect(pendingInteractions).toHaveLength(1);
+      const pendingInteraction = pendingInteractions[0]!;
+      if (human.type !== "board" || human.source !== "session" || !human.sessionId)
+        throw new Error("native_review_recovery_requires_current_human_session");
+      const interactionRoutes = express();
+      interactionRoutes.use(express.json());
+      interactionRoutes.use((req, _res, next) => {
+        req.actor = { type: "board", source: "session", userId: f.userId, sessionId: human.sessionId, companyIds: [f.home],
+          memberships: [{ companyId: f.home, membershipRole: "owner", status: "active" }] };
+        next();
+      });
+      interactionRoutes.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      interactionRoutes.use(errorHandler);
+      if (pendingInteraction.kind === "ask_user_questions") {
+        await request(interactionRoutes).post(`/api/issues/${entry.task.id}/interactions/${pendingInteraction.id}/cancel`)
+          .send({ reason: "Human withdrew the pending question before lost-path recovery." }).expect(200);
+      } else {
+        expect(["request_confirmation", "request_checkbox_confirmation"]).toContain(pendingInteraction.kind);
+        await request(interactionRoutes).post(`/api/issues/${entry.task.id}/interactions/${pendingInteraction.id}/reject`)
+          .send({ reason: "Human requests changes before bounded review continuation." }).expect(200);
+      }
+      const interactionWakes = await db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.agentId, f.presence.id),
+        eq(agentWakeupRequests.reason, "issue_commented"),
+        sql`${agentWakeupRequests.payload}->>'interactionId' = ${pendingInteraction.id}`));
+      expect(interactionWakes).toHaveLength(1);
+      expect(interactionWakes[0]).toMatchObject({ requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: expect.objectContaining({ issueId: entry.task.id, interactionId: pendingInteraction.id }) });
+      await heartbeat.drainActiveRunExecutions();
+      const [interactionWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, interactionWakes[0]!.id));
+      expect(interactionWake?.status).toBe("completed");
       expect(calls).toBe(2);
       const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
         notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
@@ -445,10 +480,12 @@ describe("dependency scheduling through the installed Native text draft controll
         contextSnapshot: { issueId: entry.task.id },
       })));
       const holds = await db.select().from(agentWakeupRequests).where(and(
-        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "issue_continuation_needed")));
+        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "execution_reconciliation_required"),
+        sql`${agentWakeupRequests.payload}->>'issueId' = ${entry.task.id}`));
       expect(holds).toHaveLength(1);
       expect(holds[0]).toMatchObject({ status: "skipped", runId: null,
-        reason: "execution_reconciliation_required", coalescedCount: 5 });
+        reason: "execution_reconciliation_required", coalescedCount: 5,
+        payload: { issueId: entry.task.id, executionWait: { recoveryActionId: action.id } } });
       expect(calls).toBe(0);
       expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
         notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toHaveLength(0);
@@ -495,10 +532,12 @@ describe("dependency scheduling through the installed Native text draft controll
       })));
       expect(await getExecutionBlocker(db, f.home, entry.task.id)).toMatchObject({ recoveryActionId: action.id });
       const waits = await db.select().from(agentWakeupRequests).where(and(
-        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "issue_continuation_needed")));
+        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "execution_reconciliation_required"),
+        sql`${agentWakeupRequests.payload}->>'issueId' = ${entry.task.id}`));
       expect(waits).toHaveLength(1);
       expect(waits[0]).toMatchObject({ status: "skipped", runId: null,
-        reason: "execution_reconciliation_required", coalescedCount: 5 });
+        reason: "execution_reconciliation_required", coalescedCount: 5,
+        payload: { issueId: entry.task.id, executionWait: { recoveryActionId: action.id } } });
       expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
         notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toHaveLength(0);
     });
@@ -598,7 +637,33 @@ describe("dependency scheduling through the installed Native text draft controll
         contextSnapshot: { issueId: task.id, wakeReason: "issue_commented", wakeCommentId: comment.id } });
       expect(resumed).not.toBeNull();
       await heartbeat.drainActiveRunExecutions();
-      expect(calls).toBe(2);
+      const [resumedRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, resumed!.id));
+      const [resumedFinalization] = await db.select().from(nativeRunFinalizations)
+        .where(eq(nativeRunFinalizations.runId, resumed!.id));
+      const [resumedIssue] = await db.select().from(issues).where(eq(issues.id, task.id));
+      const resumedAttention = resumedIssue
+        ? (await issueService(db).listReviewAttention(f.home, [resumedIssue])).get(task.id) ?? null
+        : null;
+      const resumedActions = await db.select().from(issueRecoveryActions).where(and(
+        eq(issueRecoveryActions.companyId, f.home), eq(issueRecoveryActions.sourceIssueId, task.id)));
+      if (calls !== 2) throw new Error(`native_text_explicit_continuation_did_not_dispatch:${JSON.stringify({
+        run: resumedRun && { status: resumedRun.status, errorCode: resumedRun.errorCode,
+          nativePhase: resumedRun.nativePhase },
+        finalization: resumedFinalization && { phase: resumedFinalization.phase, failureCode: resumedFinalization.failureCode },
+        issue: resumedIssue && { status: resumedIssue.status, assigneeAgentPresent: Boolean(resumedIssue.assigneeAgentId),
+          assigneeUserPresent: Boolean(resumedIssue.assigneeUserId),
+          executionState: resumedIssue.executionState && typeof resumedIssue.executionState === "object" &&
+            "status" in resumedIssue.executionState ? resumedIssue.executionState.status : null },
+        attention: resumedAttention && { state: resumedAttention.state, pathKinds: resumedAttention.paths.map(path => path.kind),
+          pathCount: resumedAttention.paths.length },
+        actions: resumedActions.map(action => ({ status: action.status, outcome: action.outcome,
+          cause: action.cause, hasUnknownLiability: Boolean(action.evidence.automaticRecovery &&
+            typeof action.evidence.automaticRecovery === "object" &&
+            (action.evidence.automaticRecovery as Record<string, unknown>).actionOutcome === "unknown"),
+          replay: action.evidence.automaticRecovery && typeof action.evidence.automaticRecovery === "object"
+            ? (action.evidence.automaticRecovery as Record<string, unknown>).replay : null,
+          hasExplicitUserContinuation: Boolean(action.evidence.explicitUserContinuation) })),
+      })}`);
       expect(await getExecutionBlocker(db, f.home, task.id)).toBeNull();
       const [continuedHold] = await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.id, hold!.id));
       expect(continuedHold).toMatchObject({ status: "resolved", outcome: "cancelled", evidence: {

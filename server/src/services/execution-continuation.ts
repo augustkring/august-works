@@ -9,6 +9,7 @@ import {
   issueRecoveryActions,
   nativeRunFinalizations, nativeRunResults, statusDecisions,
   issueThreadInteractions,
+  orchestrationModelReservations, orchestrationWorkerAttempts, orchestrationWorkers, orchestrationPlans,
   issues,
   type Db,
 } from "@paperclipai/db";
@@ -21,6 +22,8 @@ import { canActorReadHeartbeatRunPrivacy, type AuthorizationActor } from "./auth
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 import { nativeContinuationCommentProjection, nativeContinuationMessageHash, nativeTaskWakeOriginCommentIds, nativeTaskWakeInteraction, nativeSha256 } from "./native-runtime/canonical.js";
 import { readNativeManualQueueAdoption } from "./native-runtime/manual-queue-adoption.js";
+import { hasAcknowledgedNativeStopIntent } from "./acknowledged-native-stop.js";
+import { isExactUnknownNativeTextCharge } from "./native-text-unknown-charge.js";
 import type { NativeCommentSourceCapture } from "./agent-conversations.js";
 
 /** A snapshot of the actual receiver and final redacted owner rendition; not
@@ -53,10 +56,106 @@ export type NativeTaskContinuationCapture = {
   answeredQuestions?: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[];
   adminExpiredInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeAdministrativeInteractionExpiryCapture[];
   acceptedPlanReview?: import("./native-runtime/accepted-plan-review-source.js").NativeAcceptedPlanReviewCapture;
+  /** Persisted Human admission for one fresh turn after a stopped Native Text
+   * request with an unresolved provider charge. This never carries the result. */
+  explicitHumanSource?: { version: 1; companyId: string; issueId: string; receiverRunId: string; sourceRunId: string;
+    actorId: string; commentId: string; recoveryActionId: string; reservationId: string;
+    recoveryActionCause: "uncertain_provider_action"; recoveryActionStatus: "resolved"; recoveryActionOutcome: "cancelled";
+    recoveryReplay: "explicit_user_continuation";
+    sourceStatus: "cancelled"; sourceRuntimeMode: "native"; sourceDriverKind: "aw_text_messages"; sourceStopReceiptHash: string;
+    reservationStatus: "unknown"; reservationPurpose: "worker_model";
+    reservationRequestHash: string; reservationInputHash: string; providerBodyHash: string };
   wake: { requestedByActorType: string | null; requestedByActorId: string | null; reason: string | null; originCommentIds: string[];
     interaction?: NonNullable<ReturnType<typeof nativeTaskWakeInteraction>>;
     manualQueueAdoption?: import("./native-runtime/manual-queue-adoption.js").NativeManualQueueAdoption };
 };
+
+/** Reconstructs the only admitted explicit continuation after an unknown
+ * Native Text charge. Called by both bootstrap capture and current-source
+ * validation; a saved descriptor is never accepted as proof. */
+export async function captureNativeExplicitHumanSource(input: {
+  db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0]; companyId: string; issueId: string;
+  agentId: string; receiverRunId: string; context: Record<string, unknown>;
+  envelope: ExecutionContinuationEnvelope;
+}): Promise<NativeTaskContinuationCapture["explicitHumanSource"] | undefined> {
+  const continuation = object(input.context.explicitUserContinuation);
+  const sourceRunId = string(continuation.previousRunId), commentId = string(continuation.commentId);
+  if (!sourceRunId || !commentId || input.envelope.completedWork !== null ||
+      input.envelope.trigger?.sourceRunId !== sourceRunId || input.envelope.interruptedRunId !== sourceRunId) return undefined;
+  const [receiver] = await input.db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.id, input.receiverRunId), eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"),
+  )).limit(1);
+  const [issue] = await input.db.select().from(issues).where(and(
+    eq(issues.companyId, input.companyId), eq(issues.id, input.issueId),
+  )).limit(1);
+  if (!receiver?.responsibleUserId || !receiver.wakeupRequestId || !issue || receiver.id !== input.receiverRunId ||
+      receiver.responsibleUserId !== issue?.responsibleUserId || issue.assigneeAgentId !== input.agentId) return undefined;
+  const [wake] = await input.db.select().from(agentWakeupRequests).where(and(
+    eq(agentWakeupRequests.id, receiver.wakeupRequestId), eq(agentWakeupRequests.companyId, input.companyId),
+    eq(agentWakeupRequests.agentId, input.agentId), eq(agentWakeupRequests.runId, receiver.id),
+  )).limit(1);
+  if (!wake || wake.requestedByActorType !== "user" || !wake.requestedByActorId ||
+      wake.requestedByActorId !== receiver.responsibleUserId || wake.reason !== "issue_commented" ||
+      !nativeTaskWakeOriginCommentIds(wake.payload).includes(commentId)) return undefined;
+  const [latestRequest] = await input.db.select().from(issueComments).where(and(
+    eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+    eq(issueComments.authorType, "user"), isNull(issueComments.createdByRunId),
+    isNull(issueComments.deletedAt),
+  )).orderBy(desc(issueComments.createdAt), desc(issueComments.id)).limit(1);
+  if (!latestRequest || latestRequest.id !== commentId || latestRequest.authorUserId !== wake.requestedByActorId ||
+      !latestRequest.body.trim()) return undefined;
+  const [source] = await input.db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, sourceRunId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.runtimeMode, "native"),
+    eq(heartbeatRuns.driverKind, "aw_text_messages"), eq(heartbeatRuns.nativeIssueId, input.issueId),
+    eq(heartbeatRuns.status, "cancelled"),
+  )).limit(1);
+  if (!source || !hasAcknowledgedNativeStopIntent(source)) return undefined;
+  const [action, ...otherActions] = await input.db.select().from(issueRecoveryActions).where(and(
+    eq(issueRecoveryActions.companyId, input.companyId), eq(issueRecoveryActions.sourceIssueId, input.issueId),
+    eq(issueRecoveryActions.status, "resolved"), eq(issueRecoveryActions.outcome, "cancelled"),
+    eq(issueRecoveryActions.cause, "uncertain_provider_action"),
+    sql`${issueRecoveryActions.evidence}->'explicitUserContinuation'->>'runId'=${receiver.id}`,
+    sql`${issueRecoveryActions.evidence}->'explicitUserContinuation'->>'previousRunId'=${sourceRunId}`,
+    sql`${issueRecoveryActions.evidence}->'explicitUserContinuation'->>'commentId'=${commentId}`,
+    sql`${issueRecoveryActions.evidence}->'explicitUserContinuation'->>'actorId'=${wake.requestedByActorId}`,
+  )).limit(2);
+  if (!action || otherActions.length) return undefined;
+  const auth = object(action?.evidence.explicitUserContinuation);
+  const reservationId = string(action?.evidence.modelReservationId);
+  if (!action || !reservationId || auth.runId !== receiver.id || auth.previousRunId !== sourceRunId ||
+      auth.commentId !== commentId || auth.actorId !== wake.requestedByActorId) return undefined;
+  const [reservation] = await input.db.select().from(orchestrationModelReservations).where(and(
+    eq(orchestrationModelReservations.companyId, input.companyId), eq(orchestrationModelReservations.id, reservationId),
+    eq(orchestrationModelReservations.purpose, "worker_model"), eq(orchestrationModelReservations.status, "unknown"),
+  )).limit(1);
+  const [binding] = reservation?.workerAttemptId && reservation.planId ? await input.db.select({
+    runId: orchestrationWorkerAttempts.runId, agentId: orchestrationWorkerAttempts.agentId,
+    planIssueId: orchestrationPlans.issueId, workerIssueId: orchestrationWorkers.issueId,
+    workerAgentId: orchestrationWorkers.agentId,
+  }).from(orchestrationWorkerAttempts).innerJoin(orchestrationWorkers, and(
+    eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+    eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId),
+  )).innerJoin(orchestrationPlans, and(
+    eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
+    eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId),
+  )).where(and(eq(orchestrationWorkerAttempts.companyId, input.companyId),
+    eq(orchestrationWorkerAttempts.id, reservation.workerAttemptId), eq(orchestrationWorkerAttempts.planId, reservation.planId))).limit(1) : [];
+  const providerWireReceipt = object(reservation?.providerWireReceipt);
+  if (!reservation || !binding || typeof reservation.requestHash !== "string" || typeof reservation.inputHash !== "string" ||
+      typeof providerWireReceipt.bodySha256 !== "string" || !isExactUnknownNativeTextCharge({ run: source,
+        issueId: input.issueId, actionCause: action.cause, actionEvidence: action.evidence, reservation, binding,
+        wireIntents: object(source.runnerProfileJson).nativeAwModelWireIntents, expectedReplay: "explicit_user_continuation" }))
+    return undefined;
+  return { version: 1, companyId: input.companyId, issueId: input.issueId, receiverRunId: receiver.id, sourceRunId: source.id,
+    actorId: wake.requestedByActorId, commentId, recoveryActionId: action.id, reservationId: reservation.id,
+    recoveryActionCause: "uncertain_provider_action", recoveryActionStatus: "resolved", recoveryActionOutcome: "cancelled",
+    recoveryReplay: "explicit_user_continuation", sourceStatus: "cancelled", sourceRuntimeMode: "native",
+    sourceDriverKind: "aw_text_messages", sourceStopReceiptHash: nativeSha256(object(source.resultJson).nativeCancellation),
+    reservationStatus: "unknown", reservationPurpose: "worker_model", reservationRequestHash: reservation.requestHash,
+    reservationInputHash: reservation.inputHash, providerBodyHash: providerWireReceipt.bodySha256 };
+}
 
 /** A low-trust summary of one actual finalized Native result. Its parent
  * receipt is recursively revalidated for the current reader, never a Run grant. */
@@ -494,6 +593,10 @@ export async function buildExecutionContinuation(input: {
     input.context.wakeReason === "issue_assigned" && issue.assigneeAgentId === input.agentId &&
     issue.responsibleUserId === receiver.responsibleUserId && (assignmentFinalizedSummary ||
       input.summaryDocument?.source.payloadSourceSnapshot && input.summary === input.summaryDocument.value.body));
+  // A canonical Human continuation deliberately starts a fresh session. Keep
+  // its exact source envelope in full-history form instead of capturing a
+  // provider-session delta that heartbeat will later discard.
+  const fullHistoryTurn = freshAssignmentUsesFullHistory || input.context.forceFreshSession === true;
   const effectiveSummary = assignmentFinalizedSummary ? null : input.summary;
   const messages = rows.map((row) => {
     const safe = input.exposeLowTrustRaw
@@ -521,7 +624,7 @@ export async function buildExecutionContinuation(input: {
     ? priorEnvelope.messages.map(object)
     : null;
   const resumeDelta =
-    !freshAssignmentUsesFullHistory && deliveredMessages?.length && input.previousContextRunId
+    !fullHistoryTurn && deliveredMessages?.length && input.previousContextRunId
       ? {
           baseRunId: input.previousContextRunId,
           messages: messages.filter(
@@ -679,9 +782,12 @@ export async function buildExecutionContinuation(input: {
     // Low-trust evidence only: renderPaperclipWakePrompt removes completedWork
     // from requestContext and encodes it in the fenced, non-authoritative
     // continuation-evidence section. It cannot supply objective or authority.
+    // An explicit Human continuation may name a stopped source whose provider
+    // result is still unknown. Only a separately captured summary owner may
+    // turn that Run into completed work; never copy its raw result summary.
     completedWork: assignmentFinalizedSummary?.body ?? effectiveSummary ?? (stageContinuation ? stageContinuation.summary?.body ?? null :
-      string(object(object(sourceRun?.result).nativeResult).summary)?.slice(0, 32_000) ??
-      string(object(sourceRun?.result).summary)?.slice(0, 32_000) ?? null),
+      !explicitUserSource ? string(object(object(sourceRun?.result).nativeResult).summary)?.slice(0, 32_000) ??
+        string(object(sourceRun?.result).summary)?.slice(0, 32_000) ?? null : null),
     completedActions,
     unresolvedInteractionIds: interactions
       .filter((row) => row.status === "pending")
@@ -729,6 +835,9 @@ export async function buildExecutionContinuation(input: {
       eq(agentWakeupRequests.id, receiver.wakeupRequestId), eq(agentWakeupRequests.companyId, companyId),
       eq(agentWakeupRequests.agentId, input.agentId), eq(agentWakeupRequests.runId, receiver.id),
     )).limit(1);
+    const explicitHumanSource = await captureNativeExplicitHumanSource({ db, companyId, issueId,
+      agentId: input.agentId, receiverRunId: receiver.id, context: input.context, envelope });
+
     const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
     const answeredQuestions: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[] = [];
     const adminExpiredInteractions: import("./native-runtime/native-interaction-bridge.js").NativeAdministrativeInteractionExpiryCapture[] = [];
@@ -800,7 +909,8 @@ export async function buildExecutionContinuation(input: {
       ...(summary ? { summary } : {}),
       ...(currentHumanAssignment ? { currentHumanAssignment } : {}),
       ...(finalizedSummary ? { finalizedSummary } : {}),
-      ...(!freshAssignmentUsesFullHistory && input.previousContextRunId && deliveredMessages?.length ? { previousContext: { runId: input.previousContextRunId,
+      ...(explicitHumanSource ? { explicitHumanSource } : {}),
+      ...(!fullHistoryTurn && input.previousContextRunId && deliveredMessages?.length ? { previousContext: { runId: input.previousContextRunId,
         messages: deliveredMessages as ExecutionContinuationEnvelope["messages"] } } : {}),
       wake: { requestedByActorType: wake.requestedByActorType, requestedByActorId: wake.requestedByActorId, reason: wake.reason,
         originCommentIds: nativeTaskWakeOriginCommentIds(wake.payload),

@@ -24,6 +24,7 @@ import { seedNativePasskeyActor, seedNativePasskeySession } from "./native-authe
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { heartbeatService } from "../../services/heartbeat.js";
 import { issueRoutes } from "../../routes/issues.js";
+import { getStorageService } from "../../storage/index.js";
 import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.js";
 import { errorHandler } from "../../middleware/error-handler.js";
 import { actorMiddleware } from "../../middleware/auth.js";
@@ -637,7 +638,7 @@ export async function runManagedNativeConversationFrame(input: {
       app = express();
       app.use(express.json());
       app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession }));
-      app.use("/api", issueRoutes(db, {} as never, { heartbeat }));
+      app.use("/api", issueRoutes(db, getStorageService(), { heartbeat }));
       app.use(errorHandler);
     }
     let conversationIssueId: string;

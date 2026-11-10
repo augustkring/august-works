@@ -10162,11 +10162,11 @@ export async function executePaperclipNativeSession(input: {
       };
     }
     if (input.prepareBootstrapSourceClosure) {
-      preparedInput = { ...preparedInput,
-        bootstrapSourceClosure: input.prepareBootstrapSourceClosure({
-          execution: preparedInput.execution,
-          attachmentStage,
-        }) };
+      const attachmentSourceClosure = input.prepareBootstrapSourceClosure({
+        execution: preparedInput.execution, attachmentStage,
+      });
+      if (!attachmentSourceClosure) throw new Error("native_attachment_source_closure_unavailable");
+      preparedInput = { ...preparedInput, bootstrapSourceClosure: attachmentSourceClosure };
     }
     return await executePaperclipNativeSessionWithinScope(preparedInput, attachmentStage.sourceCaptures,
       attachmentStage.attachments, input.execution, attachmentStage.remoteStageReceipts);

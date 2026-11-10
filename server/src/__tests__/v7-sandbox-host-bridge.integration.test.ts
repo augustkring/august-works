@@ -52,7 +52,7 @@ import {
   toolProfileBindings,
   toolProfiles,
 } from "@paperclipai/db";
-import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostReplySchema, sandboxHostRequestSchema, type SandboxCapabilitySnapshot, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostReplySchema, sandboxHostRequestSchema, type SandboxHostRequest, type SandboxCapabilitySnapshot, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -447,7 +447,8 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
             document = projected.document;
             policyHash = projected.documentHash;
           } else {
-            document = projectOpenShellPolicy(intent.policy!.compiledPolicy, intent.policy!.modelBrokerEndpoint).document;
+            document = projectOpenShellPolicy(intent.policy!.compiledPolicy, intent.policy!.modelBrokerEndpoint,
+              intent.policy!.credentialBrokerEndpoints).document;
             policyHash = nativeSha256(intent.policy!);
           }
           const resources = intent.purpose === "qualification" ? policyFixture().resources : intent.policy!.compiledPolicy.resources;
@@ -558,6 +559,31 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           : action === "inspect" ? { action, ...common, state: testWorkloadStates.get(command.scope.cellId) ?? "stopped", ...(command.expectedTarget ? command.expectedTarget : {}), policyHash: testWorkloadPolicies.get(command.scope.cellId) ?? null, controlsHealthy: true }
           : action === "apply" ? (testWorkloadStates.set(command.scope.cellId, "ready"), testWorkloadPolicies.set(command.scope.cellId, command.admission.policyHash), { action, applied: true, requiresRecreate: false, policyHash: command.admission.policyHash, effectivePolicyHash: command.admission.policyHash })
           : action === "start" ? (testWorkloadStates.set(command.scope.cellId, "running"), testWorkloadPolicies.set(command.scope.cellId, command.start.policyHash), { action, started: true, operationId: claim.id, sandboxId: command.scope.bindingId, containerId: "b".repeat(64), imageDigest: command.imageDigest, policyHash: command.start.policyHash, effectivePolicyHash: command.start.policyHash })
+          : action === "prove_policy" ? (() => {
+              const proof = command.policyProof;
+              const proofFields = {
+                schema: "paperclip.sandbox-host-policy-proof.v1",
+                stage: proof.stage,
+                result: "within_boundary",
+                coveredDomains: ["filesystem", "landlock", "network_l4", "network_rest", "process"],
+                candidateDocumentHash: proof.candidateDocumentHash,
+                boundaryDocumentHash: proof.boundaryDocumentHash,
+                effectiveDocumentHash: proof.candidateDocumentHash,
+                proverVersion: "0.1.2",
+                proverSha256: proof.proverSha256,
+                target: {
+                  hostEpoch: command.hostEpoch,
+                  imageDigest: command.imageDigest,
+                  sandboxId: proof.sandboxId,
+                  containerId: proof.containerId,
+                  bindingVersion: proof.bindingVersion,
+                  provisioningHash: proof.provisioningHash,
+                  policyHash: proof.policyHash,
+                },
+              };
+              const { schema: _schema, ...reply } = proofFields;
+              return { action, ...reply, evidenceHash: nativeSha256(proofFields) };
+            })()
           : action === "stop" ? (testWorkloadStates.set(command.scope.cellId, "stopped"), { action, stopped: true, ...(command.expectedTarget ? command.expectedTarget : {}) })
           : action === "revoke_providers" ? { action, revoked: true }
           : action === "destroy" ? { action, destroyed: true }
@@ -1712,8 +1738,89 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       const admissionPromise = request(app).post(admissionPath).send(admissionInput);
       let admissionReplay: Promise<{ status: number; body: any } | { error: unknown }> | undefined;
       let replayHostCommandCount: { before: number; after: number } | undefined;
+      let repeatedProofCalls: Promise<unknown>[] = [];
+      let repeatedProofRequest: NonNullable<SandboxHostRequest["policyProof"]> | undefined;
+      let repeatedProofRows: Array<{ id: string; idempotencyKey: string }> = [];
       const admitted = await driveHost(admissionPromise.then(response => { expect(response.status, JSON.stringify(response.body)).toBe(200); return response.body; }),
         admissionCell!.id, async command => {
+          if (command.action === "apply" && repeatedProofCalls.length === 0) {
+            // This CI path uses a local execution adapter, so it does not
+            // automatically request protected Host proofs. Exercise the
+            // signed bridge directly while admission is still stopped, using
+            // only the persisted compilation and exact completed prepare.
+            const [persistedCompilation] = await db.select().from(runtimePolicySnapshots).where(and(
+              eq(runtimePolicySnapshots.id, compiled.id), eq(runtimePolicySnapshots.status, "qualified"),
+            )).limit(1);
+            const [persistedBinding] = await db.select().from(runtimeSandboxBindings)
+              .where(eq(runtimeSandboxBindings.id, sandboxBinding.id)).limit(1);
+            const prepareRows = await db.select().from(runtimeHostCommands).where(and(
+              eq(runtimeHostCommands.companyId, f.home), eq(runtimeHostCommands.runtimeHostId, host!.id),
+              eq(runtimeHostCommands.runtimeCellId, admissionCell!.id),
+              eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+              sql`${runtimeHostCommands.payload}->>'action' = 'prepare'`,
+              sql`${runtimeHostCommands.payload}->'provisioning'->>'purpose' = 'admission'`,
+            )).limit(2);
+            expect(persistedCompilation).toBeTruthy();
+            expect(persistedBinding).toMatchObject({ status: "admitting" });
+            expect(prepareRows).toHaveLength(1);
+            const prepareRequest = prepareRows[0]!.payload as Record<string, any>;
+            const prepareReceipt = prepareRows[0]!.safeResult as Record<string, any>;
+            const provisioning = prepareRequest.provisioning as Record<string, any>;
+            const compilation = persistedCompilation!.compilation;
+            const candidateProjection = projectOpenShellPolicy(compilation.compiledPolicy,
+              compilation.modelBrokerEndpoint, compilation.credentialBrokerEndpoints);
+            const maximum = persistedBinding!.boundaryPolicy.credentials.mode === "brokered" &&
+              persistedBinding!.boundaryPolicy.credentials.bindings.length === 0
+              ? { ...persistedBinding!.boundaryPolicy, credentials: { mode: "none" as const, bindings: [] } }
+              : persistedBinding!.boundaryPolicy;
+            const boundaryProjection = projectOpenShellPolicy(maximum,
+              compilation.modelBrokerEndpoint, compilation.credentialBrokerEndpoints);
+            expect(candidateProjection.unsupportedFeatures).toEqual([]);
+            expect(boundaryProjection.unsupportedFeatures).toEqual([]);
+            expect(nativeSha256(candidateProjection.document)).toBe(nativeSha256(provisioning.document));
+            expect(provisioning).toMatchObject({ purpose: "admission", policyHash: compiled.policyHash });
+            expect(prepareReceipt.requiresRecreate).not.toBe(true);
+            expect(prepareReceipt).toMatchObject({ action: "prepare",
+              hostEpoch: prepareRequest.hostEpoch, imageDigest: prepareRequest.imageDigest,
+              bindingVersion: provisioning.bindingVersion, provisioningHash: provisioning.provisioningHash,
+              policyHash: provisioning.policyHash });
+            repeatedProofRequest = {
+              version: 1,
+              stage: "requested",
+              operationKey: provisioning.operationKey,
+              bindingVersion: provisioning.bindingVersion,
+              provisioningHash: provisioning.provisioningHash,
+              policyHash: provisioning.policyHash,
+              sandboxId: prepareReceipt.sandboxId,
+              containerId: prepareReceipt.containerId,
+              candidateDocument: candidateProjection.document,
+              boundaryDocument: boundaryProjection.document,
+              candidateDocumentHash: nativeSha256(candidateProjection.document),
+              boundaryDocumentHash: nativeSha256(boundaryProjection.document),
+              // The controlled signed-Host test adapter owns this configured
+              // mock pin; it is not evidence of a physical prover execution.
+              proverSha256: createHash("sha256").update("controlled signed Host policy-proof adapter v1").digest("hex"),
+            };
+            const proofBridge = transportForTest.bridge(f.actor);
+            if (typeof proofBridge.provePolicy !== "function") throw new Error("Protected policy proof bridge is unavailable");
+            repeatedProofCalls = [
+              proofBridge.provePolicy(sandboxIdentity, repeatedProofRequest, "same-caller-proof-key"),
+              proofBridge.provePolicy(sandboxIdentity, repeatedProofRequest, "same-caller-proof-key"),
+            ];
+            const queueDeadline = Date.now() + 5000;
+            while (Date.now() < queueDeadline) {
+              const rows = await db.select({ id: runtimeHostCommands.id, idempotencyKey: runtimeHostCommands.idempotencyKey,
+                payload: runtimeHostCommands.payload }).from(runtimeHostCommands)
+                .where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
+              repeatedProofRows = rows.filter(row => (row.payload as Record<string, any>).action === "prove_policy" &&
+                nativeSha256((row.payload as Record<string, any>).policyProof) === nativeSha256(repeatedProofRequest))
+                .map(({ id, idempotencyKey }) => ({ id, idempotencyKey }));
+              if (repeatedProofRows.length >= 2) break;
+              await new Promise(resolve => setTimeout(resolve, 2));
+            }
+            expect(repeatedProofRows).toHaveLength(2);
+            expect(new Set(repeatedProofRows.map(row => row.idempotencyKey)).size).toBe(repeatedProofRows.length);
+          }
           if (command.action === "prepare" && !admissionReplay) {
             const before = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
               .where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id));
@@ -1739,6 +1846,15 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         "the durable claim and successful start each advance the binding fence");
       expect((await db.select().from(runtimeCells).where(eq(runtimeCells.id, admissionCell!.id)))[0]).toMatchObject({ status: "HEALTHY" });
       expect((await db.select().from(runtimeOperations).where(eq(runtimeOperations.runtimeCellId, admissionCell!.id))).map(row => [row.operationType, row.status])).toEqual([["start", "SUCCEEDED"]]);
+      await Promise.all(repeatedProofCalls);
+      expect(repeatedProofRows).toHaveLength(2);
+      const commandCountAfterAdmission = (await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+        .where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id))).length;
+      await expect(transportForTest.bridge(f.actor).provePolicy!(sandboxIdentity, repeatedProofRequest!, "same-caller-proof-key"))
+        .rejects.toMatchObject({ status: 409 });
+      expect((await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+        .where(eq(runtimeHostCommands.runtimeCellId, admissionCell!.id))).length).toBe(commandCountAfterAdmission,
+        "a fresh proof invocation rechecks the now-changed cell and binding before queueing a Host command");
       const previousJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
       process.env.PAPERCLIP_AGENT_JWT_SECRET = "v7-sandbox-exec-software-fixture-secret";
       const relayServer = createServer();

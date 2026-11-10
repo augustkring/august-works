@@ -93,7 +93,7 @@ import { currentNativeControllerIdentity } from "../services/native-runtime/nati
 import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement } from "../services/native-runtime/native-session-executor.js";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "../services/native-runtime/native-execution-input.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
-import { buildNativeModelEnvelope, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { buildNativeModelEnvelope, parseNativeExecutionInput, type NativeSession } from "../vendor/paperclip-runner/index.js";
 import { buildRetainedNativeRuntimeContext } from "../services/native-runtime/runtime-context.js";
 import { ensureNativeCompletionContract } from "../services/native-runtime/completion-contracts.js";
 import { initializeRunIdentity } from "../services/run-identity.js";
@@ -1021,10 +1021,48 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       ...nativeBinding(),
       sessionId: randomUUID(),
     });
+    async function startAcknowledgedDraftTurn(
+      session: NativeSession,
+      input: Parameters<NativeSession["startTurn"]>[0],
+    ) {
+      const started = await session.startTurn(input);
+      await started.releaseAfterInputAcknowledgement?.();
+      return started;
+    }
+    it("holds actual Native Text work until input acknowledgement and cancels safely before release", async () => {
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      const iterator = session.events()[Symbol.asyncIterator]();
+      await iterator.next();
+      const started = await session.startTurn({
+        message: { role: "user", text: "Write the draft." },
+      });
+      expect((await iterator.next()).value?.eventType).toBe("turn.started");
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+
+      const cancellation = session.cancel!({
+        reason: "native_stop",
+        signal: new AbortController().signal,
+      });
+      expect((await iterator.next()).value?.eventType).toBe("turn.cancelled");
+      await iterator.return?.();
+      await cancellation.cleanup;
+      await session.close({ reason: "cancelled_before_acknowledgement" });
+      expect(await session.result()).toBeNull();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+      // Cancellation owns release; callers cannot accidentally dispatch after
+      // the Native controller has revoked this turn.
+      await started.releaseAfterInputAcknowledgement?.();
+      expect(calls).toBe(0);
+      expect(await ledger()).toHaveLength(0);
+    });
     it("reviewed proposal: saves bounded data and requests Human approval before any backlog task exists", async () => {
       modelOutput = JSON.stringify({ draft: "Review the internal evidence", proposedTask: { title: "Follow up on the approved scope", description: "Compare only the internal source" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal follow-up for Human review" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal follow-up for Human review" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review", completionClaim: { objectiveSatisfied: false } } });
       expect(calls).toBe(1);
       expect(JSON.parse(observedBody).system).toContain("proposedTask");
@@ -1074,7 +1112,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: explicit absence saves a draft without requesting task approval", async () => {
       modelOutput = JSON.stringify({ draft: "No additional task is needed", proposedTask: null });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Draft only the requested answer" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Draft only the requested answer" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toEqual([]);
       expect((await documentService(db).getIssueDocumentByKey(task.id, "result"))?.body).toBe("No additional task is needed");
@@ -1082,7 +1120,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: erased run Source prevents Human task creation and rolls back the verdict", async () => {
       modelOutput = JSON.stringify({ draft: "A Source-bound draft", proposedTask: { title: "A Source-bound task", description: "Only retained source data" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal task" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
       await db.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${run.id}` });
@@ -1094,7 +1132,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: current Human membership withdrawal prevents separate task creation", async () => {
       modelOutput = JSON.stringify({ draft: "A bounded draft", proposedTask: { title: "A bounded task", description: "Original internal scope" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal task" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
       await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
@@ -1106,7 +1144,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: an unverified Human cannot approve a separate task", async () => {
       modelOutput = JSON.stringify({ draft: "A bounded draft", proposedTask: { title: "A bounded task", description: "Original internal scope" } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one internal task" } });
       expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
       const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
       await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
@@ -1123,7 +1161,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     it("reviewed proposal: refuses model-selected assignees before saving output or an interaction", async () => {
       modelOutput = JSON.stringify({ draft: "An invalid proposal", proposedTask: { title: "Widen the scope", description: "Unsafe extra fields", assigneeAgentId: f.guestPresence.id } });
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose one bounded task" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose one bounded task" } });
       expect(await session.result()).toBeNull();
       expect((await ledger())[0]).toMatchObject({ status: "completed", maximumMinor: 3 });
       expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
@@ -1140,7 +1178,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           { authoredPublication: next, recordRevision: { id: next.revisionId, source: "agent_authoring_publish", createdByUserId: f.userId } });
       };
       const session = await draftBackend().openSession({ identity: sessionIdentity() });
-      await session.startTurn({ message: { role: "user", text: "Propose the original reviewed scope" } });
+      await startAcknowledgedDraftTurn(session, { message: { role: "user", text: "Propose the original reviewed scope" } });
       expect(await session.result()).toBeNull();
       expect(calls).toBe(1);
       expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
@@ -1159,7 +1197,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(descriptor.runtimeContextCapabilities).toBeUndefined();
       const session = await backend.openSession({ identity });
       expect(calls).toBe(0);
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the declared internal draft." },
       });
       const result = await session.result();
@@ -1261,7 +1299,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const backend = draftBackend(),
         identity = sessionIdentity();
       const session = await backend.openSession({ identity });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       await session.result();
@@ -1314,7 +1352,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const session = await draftBackend(gateway(broken)).openSession({
         identity: sessionIdentity(),
       });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       expect(await session.result()).toBeNull();
@@ -1359,7 +1397,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const session = await draftBackend(gateway(empty)).openSession({
         identity: sessionIdentity(),
       });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       expect(await session.result()).toBeNull();
@@ -1407,7 +1445,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       });
       const iterator = session.events()[Symbol.asyncIterator]();
       await iterator.next();
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       await iterator.next();
@@ -1448,7 +1486,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       const session = await draftBackend().openSession({
         identity: sessionIdentity(),
       });
-      await session.startTurn({
+      await startAcknowledgedDraftTurn(session, {
         message: { role: "user", text: "Write the draft." },
       });
       expect(await session.result()).toBeNull();

@@ -98,6 +98,7 @@ export const sandboxHostRequestSchema = z
       "prepare",
       "inspect",
       "effective_policy",
+      "prove_policy",
       "apply",
       "start",
       "probe",
@@ -177,6 +178,28 @@ export const sandboxHostRequestSchema = z
       })
       .strict()
       .optional(),
+    /** Controller-generated proof request over the unchanged OpenShell
+     * documents and the exact journaled admission target. The Host supplies
+     * its executable path from protected configuration; only its pinned SHA
+     * crosses this signed command boundary. */
+    policyProof: z
+      .object({
+        version: z.literal(1),
+        stage: z.enum(["requested", "effective"]),
+        operationKey: z.string().min(1).max(200),
+        bindingVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        provisioningHash: hash,
+        policyHash: hash,
+        sandboxId: z.string().uuid(),
+        containerId: z.string().regex(/^[a-f0-9]{64}$/),
+        candidateDocument: openShellObservedDocumentSchema,
+        boundaryDocument: openShellObservedDocumentSchema,
+        candidateDocumentHash: hash,
+        boundaryDocumentHash: hash,
+        proverSha256: hash,
+      })
+      .strict()
+      .optional(),
     /** Server-owned cleanup-only refresh. This is never accepted by the
      * operator bridge; the host may only return its protected report or one
      * controller-selected fixed boundary probe for the active erasure job. */
@@ -229,6 +252,7 @@ export const sandboxHostRequestSchema = z
       (value.action === "probe") !== Boolean(value.probe) ||
       (value.action === "apply") !== Boolean(value.admission) ||
       (value.action === "start") !== Boolean(value.start) ||
+      (value.action === "prove_policy") !== Boolean(value.policyProof) ||
       (value.action === "erase_native_session") !== Boolean(value.nativeSessionErasure) ||
       (Boolean(value.provisioning) && value.action !== "prepare") ||
       (Boolean(value.expectedTarget) && !["stop", "inspect"].includes(value.action)) ||
@@ -289,6 +313,35 @@ export const sandboxHostReplySchema = z.discriminatedUnion("action", [
       document: openShellObservedDocumentSchema,
     })
     .strict(),
+  z
+    .object({
+      action: z.literal("prove_policy"),
+      stage: z.enum(["requested", "effective"]),
+      result: z.enum(["within_boundary", "exceeds_boundary", "unsupported", "inconclusive"]),
+      coveredDomains: z.array(z.enum(["filesystem", "network_l4", "network_rest", "process", "landlock"])).max(5),
+      candidateDocumentHash: hash,
+      boundaryDocumentHash: hash,
+      effectiveDocumentHash: hash,
+      proverVersion: z.literal("0.1.2"),
+      proverSha256: hash,
+      target: z.object({
+        hostEpoch: z.number().int().positive(),
+        imageDigest: digest,
+        sandboxId: z.string().uuid(),
+        containerId: z.string().regex(/^[a-f0-9]{64}$/),
+        bindingVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        provisioningHash: hash,
+        policyHash: hash,
+      }).strict(),
+      evidenceHash: hash,
+    })
+    .strict()
+    .superRefine((proof, ctx) => {
+      const expectedDomains = ["filesystem", "landlock", "network_l4", "network_rest", "process"];
+      if (proof.coveredDomains.length !== expectedDomains.length ||
+          [...proof.coveredDomains].sort().join(",") !== expectedDomains.join(","))
+        ctx.addIssue({ code: "custom", path: ["coveredDomains"], message: "Policy proof requires exact complete domain coverage" });
+    }),
   z
     .object({
       action: z.literal("apply"),

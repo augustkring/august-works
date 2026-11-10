@@ -7,7 +7,7 @@ import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { activityLog, agents, assets, authSessions, authUsers, companies, companyMemberships, createDb,
-  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueAttachments, issues, heartbeatRuns } from "@paperclipai/db";
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, issueAttachments, issueComments, issues, heartbeatRuns } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { createLocalDiskStorageProvider } from "../storage/local-disk-provider.js";
 import { createStorageService } from "../storage/service.js";
@@ -15,6 +15,8 @@ import { issueRoutes } from "../routes/issues.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { issueService, lockIssuePrivacyTree } from "../services/issues.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { nativePayloadSnapshotSql } from "../services/native-direct-input.js";
+import { nativeCommentProjectionHash } from "../services/native-runtime/canonical.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 
 describe("original literal Human upload source capture", () => {
@@ -28,8 +30,8 @@ describe("original literal Human upload source capture", () => {
     storage = createStorageService(createLocalDiskStorageProvider(root));
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   afterAll(async () => { await database?.cleanup(); if (root) await rm(root, { recursive: true, force: true }); }, 30_000);
-  async function seed() {
-    const companyId = randomUUID(), userId = randomUUID(), sessionId = randomUUID(), now = new Date();
+  async function seed(userId = randomUUID()) {
+    const companyId = randomUUID(), sessionId = randomUUID(), now = new Date();
     await db.insert(companies).values({ id: companyId, name: "Direct upload source", issuePrefix: `MU${companyId.slice(0, 5)}` });
     await db.insert(authUsers).values({ id: userId, name: "Upload Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
@@ -82,8 +84,8 @@ describe("original literal Human upload source capture", () => {
     await db.update(assets).set({ originalFilename: "renamed.txt" }).where(eq(assets.id, row.assetId));
     expect((await owner(row.id)).row).toMatchObject({ payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
   });
-  async function conversationShell() {
-    const f = await seed();
+  async function conversationShell(userId?: string) {
+    const f = await seed(userId);
     await instanceSettingsService(db).updateExperimental({ enableAgentChat: true });
     const [agent] = await db.insert(agents).values({ companyId: f.companyId, name: "Upload recipient",
       adapterType: "process", adapterConfig: {}, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: false } }, status: "idle" }).returning();
@@ -112,6 +114,82 @@ describe("original literal Human upload source capture", () => {
     expect(after.body).toHaveLength(2);
     await http.get(result.body.contentPath).expect(200);
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.companyId))).toHaveLength(0);
+  });
+  it("atomically rebinds the exact upload-only Task source to the first Human comment", async () => {
+    const f = await conversationShell(`user-${randomUUID()}`), http = request(appFor(f.actor));
+    const upload = await http.post(`/api/companies/${f.companyId}/issues/${f.issue.id}/attachments`)
+      .attach("file", bytes, { filename: "bound-chat.txt", contentType: "text/plain" }).expect(201);
+    const response = await http.post(`/api/issues/${f.issue.id}/comments`).send({ body: "Use this uploaded note.",
+      clientRequestId: randomUUID(), attachmentIds: [upload.body.id] });
+    expect(response.status, response.text).toBe(201);
+    const saved = response;
+    const [task] = await db.select().from(issues).where(eq(issues.id, f.issue.id));
+    const { row, proof } = await owner(upload.body.id);
+    const [comment] = await db.select().from(issueComments).where(eq(issueComments.id, row.issueCommentId!));
+    expect(row.issueCommentId).toBe(saved.body.id);
+    expect(row.payloadSourceSnapshot).toMatchObject({ owner: { kind: "attachment", id: row.id, contentHash: proof.hash }, inputs: [] });
+    expect(task!.payloadSourceSnapshot).toMatchObject({ inputs: [{ kind: "comment", issueId: f.issue.id, commentId: saved.body.id }] });
+    expect(task!.payloadSourceSnapshot.inputs).toHaveLength(1);
+    expect(comment!.payloadSourceSnapshot).toMatchObject({ owner: { kind: "comment", id: comment!.id }, inputs: [] });
+    expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
+      eq(activityLog.action, "attachment.payload_source_captured"), sql`${activityLog.details}->>'attachmentId'=${row.id}`)))
+      .toHaveLength(1);
+  });
+  it("refuses a first-comment binding when the uploaded source belongs to another Task", async () => {
+    const f = await conversationShell(), other = await conversationShell();
+    const http = request(appFor(f.actor));
+    const upload = await request(appFor(other.actor)).post(`/api/companies/${other.companyId}/issues/${other.issue.id}/attachments`)
+      .attach("file", bytes, { filename: "other-task.txt", contentType: "text/plain" }).expect(201);
+    const response = await http.post(`/api/issues/${f.issue.id}/comments`).send({ body: "Wrong Task file.",
+      clientRequestId: randomUUID(), attachmentIds: [upload.body.id] });
+    expect(response.status).not.toBe(201);
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, f.issue.id))).toHaveLength(0);
+    expect((await owner(upload.body.id)).row.issueCommentId).toBeNull();
+  });
+  it("does not let a direct snapshot rewrite discard upload roots without the qualified attachment transition", async () => {
+    const f = await conversationShell(), http = request(appFor(f.actor));
+    const upload = await http.post(`/api/companies/${f.companyId}/issues/${f.issue.id}/attachments`)
+      .attach("file", bytes, { filename: "unbound-chat.txt", contentType: "text/plain" }).expect(201);
+    await http.post(`/api/issues/${f.issue.id}/comments`).send({ body: "Keep the upload unbound.",
+      clientRequestId: randomUUID() }).expect(201);
+    const [comment] = await db.select().from(issueComments).where(eq(issueComments.issueId, f.issue.id));
+    const [sourceVersion] = await db.select({ value: sql<string>`extract(epoch from ${issueComments.updatedAt})::text` })
+      .from(issueComments).where(eq(issueComments.id, comment!.id));
+    const forgedCommentSource = { kind: "comment" as const, issueId: f.issue.id, commentId: comment!.id,
+      sourceVersion: sourceVersion!.value,
+      contentHash: nativeCommentProjectionHash({ body: comment!.body, presentation: comment!.presentation, metadata: comment!.metadata }) };
+    const emptyPolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+    await expect(db.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", emptyPolicy, [forgedCommentSource]) })
+      .where(eq(issues.id, f.issue.id))).rejects.toBeDefined();
+    expect((await db.select().from(issues).where(eq(issues.id, f.issue.id)))[0]!.payloadSourceSnapshot)
+      .toMatchObject({ inputs: [{ kind: "attachment", attachmentId: upload.body.id, commentId: null }] });
+  });
+  it("refuses a first-comment binding by a different Human", async () => {
+    const f = await conversationShell(), stranger = await seed();
+    await db.insert(companyMemberships).values({ companyId: f.companyId, principalType: "user", principalId: stranger.userId,
+      status: "active", membershipRole: "member" });
+    stranger.actor.companyIds.push(f.companyId);
+    const http = request(appFor(f.actor));
+    const upload = await http.post(`/api/companies/${f.companyId}/issues/${f.issue.id}/attachments`)
+      .attach("file", bytes, { filename: "owner-chat.txt", contentType: "text/plain" }).expect(201);
+    const strangerHttp = request(appFor(stranger.actor));
+    const response = await strangerHttp.post(`/api/issues/${f.issue.id}/comments`).send({ body: "Wrong Human.",
+      clientRequestId: randomUUID(), attachmentIds: [upload.body.id] });
+    expect(response.status).not.toBe(201);
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, f.issue.id))).toHaveLength(0);
+    expect((await owner(upload.body.id)).row.issueCommentId).toBeNull();
+  });
+  it("refuses a first-comment binding after the upload's qualified source hash changes", async () => {
+    const f = await conversationShell(), http = request(appFor(f.actor));
+    const upload = await http.post(`/api/companies/${f.companyId}/issues/${f.issue.id}/attachments`)
+      .attach("file", bytes, { filename: "changed-chat.txt", contentType: "text/plain" }).expect(201);
+    const { row } = await owner(upload.body.id);
+    await db.update(assets).set({ sha256: "0".repeat(64) }).where(eq(assets.id, row.assetId));
+    const response = await http.post(`/api/issues/${f.issue.id}/comments`).send({ body: "Stale upload.",
+      clientRequestId: randomUUID(), attachmentIds: [row.id] });
+    expect(response.status).not.toBe(201);
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, f.issue.id))).toHaveLength(0);
+    expect((await owner(row.id)).row.issueCommentId).toBeNull();
   });
   it.each(["stranger", "expired", "source_withdrawn"] as const)("refuses %s chat shell upload and attachment read", async kind => {
     const f = await conversationShell();

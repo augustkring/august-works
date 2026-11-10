@@ -49,13 +49,13 @@ describe("Native execution failure log privacy", () => {
     const marker = "private-diagnostic-marker-31af";
     const cause = Object.assign(new Error(marker), {
       code: "55P03",
-      stack: `Error: ${marker}\n    at owner (/workspace/server/src/services/native-runtime/native-session-executor.ts:123:45)\n    at private (/tmp/${marker}.ts:9:2)`,
+      stack: `Error: ${marker}\n    at owner (/workspace/server/src/services/native-runtime/native-session-executor.ts:123:45)\n    at context (/workspace/server/src/services/context/context-engine.ts:650:17)\n    at private (/tmp/${marker}.ts:9:2)\n    at private (/workspace/server/src/services/${marker}.ts:9:2)`,
     });
     const error = new Error(marker, { cause: { cause: { cause, code: "not-a-sql-state" } } });
     const fields = nativeExecutionFailureLogFields({ error, runId: "00000000-0000-4000-8000-000000000001",
       failureCode: "adapter_failed" });
     expect(fields).toMatchObject({ sqlState: "55P03",
-      serviceFrames: ["native-runtime/native-session-executor.ts:123:45"] });
+      serviceFrames: ["native-runtime/native-session-executor.ts:123:45", "context/context-engine.ts:650:17"] });
     expect(JSON.stringify(fields)).not.toContain(marker);
     expect(JSON.stringify(fields)).not.toContain("/tmp/");
   });

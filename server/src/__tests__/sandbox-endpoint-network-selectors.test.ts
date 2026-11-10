@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe,it,expect,vi } from "vitest";
-import { SANDBOX_CONTROLS,sandboxCapabilitySnapshotSchema,sandboxNetworkCallerBinariesSchema,type SandboxCapabilitySnapshot } from "@paperclipai/shared";
+import { SANDBOX_CONTROLS,sandboxCapabilitySnapshotSchema,sandboxHostReplySchema,sandboxNetworkCallerBinariesSchema,type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { compileSandboxPolicy,type ResolvedSandboxBrokerBinding } from "../services/execution-sandbox/policy-compiler.js";
 import { projectOpenShellPolicy } from "../services/execution-sandbox/openshell-policy.js";
 import { checkOpenShellBoundary } from "../services/execution-sandbox/openshell-prover.js";
@@ -99,28 +99,55 @@ describe("verified endpoint network callers without a general process allowlist"
   const input=setup();delete input.capabilities.modelBrokerProviderProfile!.binaries;delete input.capabilities.credentialBrokerProviderProfile!.binaries;
   expect(sandboxCapabilitySnapshotSchema.safeParse(input.capabilities).success).toBe(true);expect(compileSandboxPolicy(input).proverResult).not.toBe("pass");
  });
- it("runs the production backend prepare/apply/boundary-proof/start with the pinned real prover",async()=>{
+ it("keeps positive backend apply/start with a controlled mock Host proof owner and pinned real prover",async()=>{
+  // Component-level controlled Host owner only; this does not establish physical Host proof or SDK qualification.
   const input=setup();input.capabilities.credentialBrokerProviderProfile!.binaries=["/usr/bin/curl","/usr/bin/node"];
   const compiled=compileSandboxPolicy(input);expect(compiled.proverResult).toBe("pass");
   const db={select:vi.fn(()=>{throw Error("metadata must not resolve a secret");})} as unknown as Db;
   const gateway=createToolGatewayService(db),runtime=runtimeControlService(db,{runtime:{suspectSeconds:90,unreachableSeconds:600,relayPort:3102}} as SaasPlatformConfig,undefined,{credentialBrokerOrigin:origin});
   gateway.setSandboxBrokerAuthority(runtime.authorizeSandboxBrokerCapability,origin);registerAssignedMcpGateway(db,gateway);
   const identity={companyId:"company",bindingId:"binding",cellId:"cell",cellGeneration:"1",sandboxRef:"sandbox"};
+  const prover={executable:process.env.AW_V7_OPENSHELL_PROVER ?? "/workspace/v10-preparation/tools/openshell-prover-v0.1.2/openshell-prover",
+    executableSha256:"3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1"};
   let effective=projection(compiled).document, observedHash:string|null=null;
   const bridge:OpenShellHostBridge={
    capabilities:async()=>input.capabilities,
-   prepare:vi.fn(async(scope,provisioning)=>({...scope,backendVersion:"0.1.2",imageDigest:input.capabilities.sandboxImageDigest,policyHash:provisioning?.policyHash})),
+   prepare:vi.fn(async(scope,provisioning)=>({...scope,backendVersion:"0.1.2",hostEpoch:input.capabilities.qualificationTarget!.hostEpoch,
+    imageDigest:input.capabilities.sandboxImageDigest,sandboxId:input.capabilities.qualificationTarget!.sandboxId,
+    containerId:input.capabilities.qualificationTarget!.containerId,bindingVersion:input.capabilities.qualificationTarget!.bindingVersion,
+    provisioningHash:"3".repeat(64),policyHash:provisioning?.policyHash})),
    inspect:vi.fn(async()=>({state:"stopped" as const,generation:identity.cellGeneration,imageDigest:input.capabilities.sandboxImageDigest,controlsHealthy:true,policyHash:observedHash})),
    effectivePolicy:vi.fn(async()=>effective),
+   provePolicy:vi.fn(async(_scope,request)=>{
+    const checked=await checkOpenShellBoundary({...prover,candidate:request.candidateDocument,boundary:request.boundaryDocument});
+    const target={hostEpoch:input.capabilities.qualificationTarget!.hostEpoch,imageDigest:input.capabilities.sandboxImageDigest,
+     sandboxId:request.sandboxId,containerId:request.containerId,bindingVersion:request.bindingVersion,
+     provisioningHash:request.provisioningHash,policyHash:request.policyHash};
+    const proofFields={schema:"paperclip.sandbox-host-policy-proof.v1",stage:request.stage,result:checked.result,
+     coveredDomains:checked.coveredDomains,candidateDocumentHash:request.candidateDocumentHash,
+     boundaryDocumentHash:request.boundaryDocumentHash,effectiveDocumentHash:nativeSha256(effective),
+     proverVersion:"0.1.2",proverSha256:prover.executableSha256,target};
+    const reply=sandboxHostReplySchema.parse({action:"prove_policy" as const,stage:request.stage,result:checked.result,coveredDomains:checked.coveredDomains,
+     candidateDocumentHash:request.candidateDocumentHash,boundaryDocumentHash:request.boundaryDocumentHash,
+     effectiveDocumentHash:nativeSha256(effective),proverVersion:"0.1.2" as const,proverSha256:prover.executableSha256,
+     target,evidenceHash:nativeSha256(proofFields)});
+    if(reply.action!=="prove_policy")throw Error("Policy proof action changed");
+    return reply;
+   }),
    apply:vi.fn(async value=>{effective=value.document;observedHash=value.policyHash;return {applied:true,policyHash:value.policyHash};}),
    start:vi.fn(async()=>({operationId:"actual-backend-start"})),revokeProviders:vi.fn(async()=>{}),stop:vi.fn(async()=>({operationId:"stop"})),destroy:vi.fn(async()=>({operationId:"destroy"})),probe:vi.fn(),
   };
-  const backend=openShellBackend({identity,boundary:input.boundary,bridge,evidenceKind:"protected_host_report",credentialBrokerDatabase:db,credentialBrokerOrigin:origin,resolveCredentialBrokerBindings:async()=>({authorizedConnectionGrantHashes:input.authorizedConnectionGrantHashes,bindings:input.credentialBrokerBindings}),prover:{executable:process.env.AW_V7_OPENSHELL_PROVER ?? "/workspace/v10-preparation/tools/openshell-prover-v0.1.2/openshell-prover",executableSha256:"3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1"}});
+  const backend=openShellBackend({identity,boundary:input.boundary,bridge,evidenceKind:"protected_host_report",credentialBrokerDatabase:db,credentialBrokerOrigin:origin,resolveCredentialBrokerBindings:async()=>({authorizedConnectionGrantHashes:input.authorizedConnectionGrantHashes,bindings:input.credentialBrokerBindings}),prover});
   const expiresAt=new Date(Date.now()+60000).toISOString();
   await backend.prepareSandbox!(identity,{purpose:"admission",operationKey:"prepare",bindingVersion:1,expiresAt,policy:compiled});
   const value={...identity,policy:compiled,currentStaticFingerprint:null,expiresAt,idempotencyKey:"apply"};
   expect((await backend.applyPolicy(value)).applied).toBe(true);
+  expect(bridge.provePolicy).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(bridge.provePolicy!).mock.calls.map(([,proof])=>proof.stage)).toEqual(["requested","effective"]);
   expect(await backend.startWorkload({...value,idempotencyKey:"start"})).toEqual({operationId:"actual-backend-start"});
+  expect(bridge.provePolicy).toHaveBeenCalledTimes(3);
+  expect(vi.mocked(bridge.provePolicy!).mock.calls.map(([,proof])=>proof.stage)).toEqual(["requested","effective","effective"]);
+  expect(new Set(vi.mocked(bridge.provePolicy!).mock.calls.map(([, ,key])=>key)).size).toBe(3);
   expect(bridge.effectivePolicy).toHaveBeenCalledTimes(2);expect(bridge.revokeProviders).not.toHaveBeenCalled();
   expect(bridge.apply).toHaveBeenCalledWith(expect.objectContaining({credentialProviderProfile:{id:"app",hash:"b".repeat(64),binaries:["/usr/bin/curl","/usr/bin/node"]}}));
   const appRoute=Object.values(effective.network_policies).find(route=>route.endpoints[0]!.rules[0]!.allow.path === "/mcp/gateways/gateway_1");
@@ -128,6 +155,40 @@ describe("verified endpoint network callers without a general process allowlist"
   input.capabilities.modelBrokerProviderProfile!.binaries=["/work/opencode"];
   await expect(backend.startWorkload({...value,idempotencyKey:"stale-start"})).rejects.toThrow("qualification changed");
   expect(bridge.start).toHaveBeenCalledTimes(1);
+  input.capabilities.modelBrokerProviderProfile!.binaries=["/usr/bin/opencode"];
+  const originalOwner=vi.mocked(bridge.provePolicy!).getMockImplementation();expect(originalOwner).toBeDefined();
+  vi.mocked(bridge.provePolicy!).mockImplementationOnce(async(scope,request,idempotencyKey)=>{
+   const reply=await originalOwner!(scope,request,idempotencyKey);
+   return {...reply,target:{...reply.target,containerId:"f".repeat(64)}};
+  });
+  await expect(backend.startWorkload({...value,idempotencyKey:"wrong-proof-target"})).rejects.toThrow("Protected Host did not return a complete proof");
+  vi.mocked(bridge.provePolicy!).mockImplementationOnce(async(scope,request,idempotencyKey)=>{
+   const reply=await originalOwner!(scope,request,idempotencyKey);
+   return {...reply,evidenceHash:"0".repeat(64)};
+  });
+  await expect(backend.startWorkload({...value,idempotencyKey:"wrong-proof-hash"})).rejects.toThrow("Protected Host did not return a complete proof");
+  expect(bridge.start).toHaveBeenCalledTimes(1);
+ });
+ it("fails closed when a protected Host policy proof owner is absent",async()=>{
+  const input=setup();const compiled=compileSandboxPolicy(input);
+  const db={select:vi.fn(()=>{throw Error("metadata must not resolve a secret");})} as unknown as Db;
+  const gateway=createToolGatewayService(db),runtime=runtimeControlService(db,{runtime:{suspectSeconds:90,unreachableSeconds:600,relayPort:3102}} as SaasPlatformConfig,undefined,{credentialBrokerOrigin:origin});
+  gateway.setSandboxBrokerAuthority(runtime.authorizeSandboxBrokerCapability,origin);registerAssignedMcpGateway(db,gateway);
+  const identity={companyId:"company",bindingId:"binding",cellId:"cell",cellGeneration:"1",sandboxRef:"sandbox"};
+  const effective=projection(compiled).document;
+  const bridge:OpenShellHostBridge={capabilities:async()=>input.capabilities,
+   prepare:vi.fn(async(scope,provisioning)=>({...scope,backendVersion:"0.1.2",hostEpoch:input.capabilities.qualificationTarget!.hostEpoch,
+    imageDigest:input.capabilities.sandboxImageDigest,sandboxId:input.capabilities.qualificationTarget!.sandboxId,
+    containerId:input.capabilities.qualificationTarget!.containerId,bindingVersion:input.capabilities.qualificationTarget!.bindingVersion,
+    provisioningHash:"3".repeat(64),policyHash:provisioning?.policyHash})),
+   inspect:vi.fn(async()=>({state:"stopped" as const,generation:identity.cellGeneration,imageDigest:input.capabilities.sandboxImageDigest,controlsHealthy:true,policyHash:null})),
+   effectivePolicy:vi.fn(async()=>effective),apply:vi.fn(),start:vi.fn(),revokeProviders:vi.fn(),stop:vi.fn(),destroy:vi.fn(),probe:vi.fn()};
+  const backend=openShellBackend({identity,boundary:input.boundary,bridge,evidenceKind:"protected_host_report",credentialBrokerDatabase:db,credentialBrokerOrigin:origin,resolveCredentialBrokerBindings:async()=>({authorizedConnectionGrantHashes:input.authorizedConnectionGrantHashes,bindings:input.credentialBrokerBindings}),prover:{executable:process.env.AW_V7_OPENSHELL_PROVER ?? "/workspace/v10-preparation/tools/openshell-prover-v0.1.2/openshell-prover",executableSha256:"3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1"}});
+  const expiresAt=new Date(Date.now()+60000).toISOString();
+  await backend.prepareSandbox!(identity,{purpose:"admission",operationKey:"prepare",bindingVersion:1,expiresAt,policy:compiled});
+  await expect(backend.applyPolicy({...identity,policy:compiled,currentStaticFingerprint:null,expiresAt,idempotencyKey:"apply"}))
+   .rejects.toThrow("A protected Host policy proof owner is required");
+  expect(bridge.apply).not.toHaveBeenCalled();expect(bridge.start).not.toHaveBeenCalled();
  });
  it("the pinned real prover parses and proves the exact App/model documents",async()=>{
   const compiled=compileSandboxPolicy(setup()),projected=projection(compiled);expect(projected.unsupportedFeatures).toEqual([]);

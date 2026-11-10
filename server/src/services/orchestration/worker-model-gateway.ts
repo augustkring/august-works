@@ -34,6 +34,7 @@ import {
   nativePayloadSourceInputSchema,
   unionNativePayloadSourceInputs,
   nativePayloadSourcePolicySchema,
+  modelProviderWireReceiptSchema,
   type WorkerModelBinding,
   type ConversationModelBinding,
   type WorkerModelCall,
@@ -87,6 +88,7 @@ import { authoringTestRuntime } from "../agents/authoring-test-runtime.js";
 import { agentRuntimeCandidateService } from "../agents/authoring-runtime-candidates.js";
 import { agentRuntimeCandidateConformanceService } from "../agents/authoring-runtime-candidate-conformance.js";
 import { callNativeOpenCodeConformanceMessages, issueNativeOpenCodeConformanceRun } from "./native-opencode-conformance-admission.js";
+import { issueRecoveryActionService } from "../issue-recovery-actions.js";
 import { validatePrpEvent, validatePrpStructuredRunResult } from "../../vendor/paperclip-runner/index.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
@@ -2299,18 +2301,75 @@ export function workerModelGateway(db: Db, options: Options) {
           ...result,
         });
       } catch {
+        let unresolved: Awaited<ReturnType<typeof reservations.recordOutcome>> | null = null;
         if (!financiallySettled)
-          await reservations
+          unresolved = await reservations
             .recordOutcome(claims.company_id, reservation.id, {
               status: "unknown",
               providerResponseHash: null,
               usage: null,
             })
-            .catch(() => {});
+            .catch(() => null);
         const reasonCode = financiallySettled
           ? "worker_model_result_withheld"
           : "worker_model_unsettled";
         await fence(claims.company_id, bound.worker_model.planId, reasonCode);
+        const wire = modelProviderWireReceiptSchema.safeParse(unresolved?.providerWireReceipt);
+        if (unresolved?.status === "unknown" && unresolved.dispatchedAt && wire.success &&
+            wire.data.reservationId === unresolved.id && wire.data.requestHash === unresolved.requestHash &&
+            unresolved.workerAttemptId === bound.worker_model.workerAttemptId &&
+            unresolved.planId === bound.worker_model.planId) {
+          const [source] = await db.select({ issueId: orchestrationWorkers.issueId })
+            .from(orchestrationWorkerAttempts)
+            .innerJoin(orchestrationWorkers, and(
+              eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+              eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId),
+            ))
+            .where(and(
+              eq(orchestrationWorkerAttempts.companyId, claims.company_id),
+              eq(orchestrationWorkerAttempts.id, bound.worker_model.workerAttemptId),
+              eq(orchestrationWorkerAttempts.planId, bound.worker_model.planId),
+              eq(orchestrationWorkerAttempts.runId, claims.run_id),
+            )).limit(1);
+          const [sourceRun] = await db.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
+            eq(heartbeatRuns.agentId, claims.sub),
+          )).limit(1);
+          const profile = sourceRun?.runnerProfileJson && typeof sourceRun.runnerProfileJson === "object" &&
+            !Array.isArray(sourceRun.runnerProfileJson) ? sourceRun.runnerProfileJson as Record<string, unknown> : null;
+          const wireIntents = profile?.nativeAwModelWireIntents;
+          const exactIntent = Array.isArray(wireIntents) && wireIntents.some(value => value && typeof value === "object" &&
+            !Array.isArray(value) && (value as Record<string, unknown>).reservationId === unresolved.id &&
+            (value as Record<string, unknown>).requestHash === unresolved.inputHash &&
+            (value as Record<string, unknown>).wireBodyHash === wire.data.bodySha256 &&
+            (value as Record<string, unknown>).method === wire.data.method &&
+            (value as Record<string, unknown>).endpoint === wire.data.endpoint &&
+            (value as Record<string, unknown>).modelPurpose === "worker_model");
+          if (source && sourceRun?.runtimeMode === "native" && sourceRun.driverKind === "aw_text_messages" &&
+              sourceRun.nativeIssueId === source.issueId && exactIntent) {
+            await issueRecoveryActionService(db).upsertSourceScoped({
+              companyId: claims.company_id,
+              sourceIssueId: source.issueId,
+              kind: "active_run_watchdog",
+              ownerType: "board",
+              returnOwnerAgentId: claims.sub,
+              cause: "uncertain_provider_action",
+              fingerprint: `native-model-response:${claims.run_id}:${unresolved.id}`,
+              evidence: {
+                runId: claims.run_id,
+                modelReservationId: unresolved.id,
+                automaticRecovery: {
+                  policy: "preserve_without_replay_v1",
+                  actionOutcome: "unknown",
+                  replay: "blocked",
+                  runId: claims.run_id,
+                  reservationId: unresolved.id,
+                },
+              },
+              nextAction: "The dispatched NativeText response is unresolved. Keep its reservation held and reconcile the original provider outcome before considering further work.",
+            });
+          }
+        }
         throw conflict("Worker model result requires human resolution", {
           code: reasonCode,
         });

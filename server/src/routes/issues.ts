@@ -290,6 +290,7 @@ import {
   ISSUE_WAKE_DIAGNOSTICS_LOOKBACK_DAYS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_ACTIVITY_RECORDS,
   ISSUE_WAKE_DIAGNOSTICS_MAX_WAKE_REQUESTS,
+  currentConversationAttachmentBootstrap,
   isCurrentUnsealedConversationShell,
   isManualRelatedPayloadInput,
   readAcceptedPlanConfirmationTarget,
@@ -17893,12 +17894,22 @@ export function issueRoutes(
           if ((!issueCommentDecision.allowed && !ownerShell) ||
             (!ownerShell && !await canActorReadIssuePrivacy(tx, pinned.actor, lockedIssue)))
             throw notFound("Conversation not found");
+          const requestedAttachmentIds = [...new Set<string>(req.body.attachmentIds ?? [])].sort();
+          let attachmentBootstrap: Awaited<ReturnType<typeof currentConversationAttachmentBootstrap>> = null;
+          if (ownerShell && requestedAttachmentIds.length > 0) {
+            attachmentBootstrap = await currentConversationAttachmentBootstrap(tx, lockedIssue, userId);
+            const bootstrapIds = attachmentBootstrap?.inputs.map(input => input.attachmentId).sort() ?? [];
+            if (!attachmentBootstrap || bootstrapIds.length !== requestedAttachmentIds.length ||
+                bootstrapIds.some((attachmentId, index) => attachmentId !== requestedAttachmentIds[index]))
+              throw conflict("Conversation uploads changed before they could be bound to the first message");
+          }
           const [existing] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
             eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
             eq(issueComments.clientRequestId, req.body.clientRequestId),
           ));
           const saved = await svc.addComment(issue.id, req.body.body, { userId }, {
             clientRequestId: req.body.clientRequestId, authorType: "user", attachmentIds: req.body.attachmentIds,
+            deferConversationActivation: attachmentBootstrap !== null,
           }, tx, 1);
           const [savedCaptureState] = await tx.select({ protocolVersion: issueComments.payloadSourceProtocolVersion,
             snapshot: issueComments.payloadSourceSnapshot }).from(issueComments).where(and(
@@ -17920,12 +17931,17 @@ export function issueRoutes(
             if (!source.sourceVersion) throw conflict("Conversation Human input version is unavailable");
             const commentSnapshot = nativePayloadSourceSnapshotSchema.parse(capturedComment.payloadSourceSnapshot);
             let taskDigest: string | null = null;
-            if (ownerShell) {
+            const taskSourceCaptureRequired = ownerShell &&
+              (lockedIssue.payloadSourceSnapshot === null || attachmentBootstrap !== null);
+            if (taskSourceCaptureRequired) {
               const sourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+              const priorTaskSnapshotCondition = attachmentBootstrap
+                ? sql`${issueRows.payloadSourceSnapshot}->>'digest'=${attachmentBootstrap.snapshot.digest}`
+                : isNull(issueRows.payloadSourceSnapshot);
               const [capturedIssue] = await tx.update(issueRows)
                 .set({ payloadSourceSnapshot: nativePayloadSnapshotSql("issue", sourcePolicy, [source]) })
                 .where(and(eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
-                  eq(issueRows.payloadSourceProtocolVersion, 1), isNull(issueRows.payloadSourceSnapshot),
+                  eq(issueRows.payloadSourceProtocolVersion, 1), priorTaskSnapshotCondition,
                   eq(issueRows.payloadSourceSnapshotInvalidated, false)))
                 .returning({ payloadSourceSnapshot: issueRows.payloadSourceSnapshot });
               if (!capturedIssue?.payloadSourceSnapshot) throw conflict("Conversation Task source capture was not stored");
@@ -17937,6 +17953,12 @@ export function issueRoutes(
               details: { producer: "direct_human_conversation_input", commentId: saved.id,
                 commentDigest: commentSnapshot.digest, ...(taskDigest ? { taskDigest } : {}) },
             }, publications);
+          }
+          if (ownerShell && lockedIssue.conversationState === "waiting") {
+            await tx.update(issueRows).set({ conversationState: "active" }).where(and(
+              eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
+              eq(issueRows.conversationState, "waiting"), eq(issueRows.conversationSessionGeneration, 0),
+              isNull(issueRows.conversationRetiredAt)));
           }
           await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
             "The current conversation owner session is unavailable");
@@ -19120,7 +19142,11 @@ export function issueRoutes(
     const shellOwner = candidate && hasCompanyAccess(req, candidate.companyId) && req.actor.type === "board" &&
       req.actor.userId != null && await db.transaction(tx => isCurrentUnsealedConversationShell(tx,
         { ...req.actor, userId: req.actor.userId ?? undefined }, candidate, "issue:read"));
-    if (shellOwner) { res.json([]); return; }
+    if (shellOwner) {
+      const attachments = await svc.listAttachments(issueId);
+      res.json(attachments.map(withContentPath));
+      return;
+    }
     const issue = await getAccessibleResource(req, res, candidate, "Issue not found");
     if (!issue) return;
     if (!(await assertIssueReadAllowed(req, res, issue))) return;

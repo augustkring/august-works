@@ -95,6 +95,37 @@ describe("native bootstrap rendered-source closure", () => {
     const check = (value = capture, proof: typeof stageTrigger | undefined = stageTrigger) => exactNativeTaskContinuation({
       companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,wakeReason:reason,
       value:value.envelope,capture:value,...(proof ? {stageTrigger:proof}: {}) });
+    const explicit = structuredClone(capture);
+    const sourceRunId = randomUUID(), recoveryActionId = randomUUID(), reservationId = randomUUID();
+    explicit.wake = { requestedByActorType: "user", requestedByActorId: humanId, reason: "issue_commented", originCommentIds: [human.id] };
+    explicit.envelope.trigger = { reason: "issue_commented", interactionId: null, sourceRunId };
+    explicit.envelope.interruptedRunId = sourceRunId;
+    explicit.envelope.originCommentIds = [human.id];
+    explicit.envelope.messages[0]!.authorId = humanId;
+    explicit.commentSources[0]!.input.contentHash = nativeContinuationMessageHash(explicit.envelope.messages[0]!);
+    explicit.explicitHumanSource = { version: 1, companyId, issueId, receiverRunId: runId, sourceRunId,
+      actorId: humanId, commentId: human.id, recoveryActionId, reservationId,
+      recoveryActionCause: "uncertain_provider_action", recoveryActionStatus: "resolved", recoveryActionOutcome: "cancelled",
+      recoveryReplay: "explicit_user_continuation",
+      sourceStatus: "cancelled", sourceRuntimeMode: "native", sourceDriverKind: "aw_text_messages", sourceStopReceiptHash: "d".repeat(64),
+      reservationStatus: "unknown", reservationPurpose: "worker_model",
+      reservationRequestHash: "a".repeat(64), reservationInputHash: "b".repeat(64), providerBodyHash: "c".repeat(64) };
+    const checkExplicit = (value: NativeTaskContinuationCapture) => exactNativeTaskContinuation({
+      companyId, issueId, runId, agentId, responsibleUserId: humanId, wakeupRequestId: wakeId,
+      wakeReason: "issue_commented", value: value.envelope, capture: value });
+    expect(checkExplicit(explicit)).toBe(explicit);
+    for (const mutate of [
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.sourceRunId = randomUUID(); },
+      (v: NativeTaskContinuationCapture) => { v.envelope.interruptedRunId = randomUUID(); },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.commentId = randomUUID(); },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.reservationId = "not-a-reservation-id"; },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.reservationRequestHash = "invalid"; },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.actorId = randomUUID(); },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.sourceStatus = "failed" as "cancelled"; },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.recoveryActionOutcome = "blocked" as "cancelled"; },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.reservationStatus = "settled" as "unknown"; },
+      (v: NativeTaskContinuationCapture) => { v.explicitHumanSource!.sourceStopReceiptHash = "invalid"; },
+    ]) { const changed = structuredClone(explicit); mutate(changed); expect(checkExplicit(changed)).toBeNull(); }
     expect(check()).toBe(capture);
     expect(exactNativeTaskContinuation({companyId,issueId,runId,agentId,responsibleUserId:humanId,wakeupRequestId:wakeId,
       wakeReason:reason,value:capture.envelope,capture})).toBeNull();
@@ -678,8 +709,22 @@ describe("native bootstrap rendered-source closure", () => {
       (c: NativeTaskContinuationCapture) => { c.envelope.messages.push(c.envelope.messages[0]!); },
       (c: NativeTaskContinuationCapture) => { Object.assign(c.envelope, { unknownField: "opaque" }); },
     ]) { const changed = structuredClone(initialCapture); change(changed); expect(captureInitial(changed)).toBeNull(); }
+    const commentWakeSource = captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
+      task, payload: commentWake, commentSources: [commentSource] });
+    expect(commentWakeSource).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    expect(commentWakeSource?.contentHash).toBe(nativeSha256(commentWake));
+    const attachmentId = randomUUID();
+    const attachedCommentWake = { ...commentWake, comments: [{ ...comment, attachments: [{ id: attachmentId,
+      filename: "input.txt", contentType: "text/plain", byteSize: 14,
+      contentPath: `/api/attachments/${attachmentId}/content` }] }] };
+    const attachedWakeSource = captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1",
+      persistedWakeReason: "on_demand", task, payload: attachedCommentWake, commentSources: [commentSource] });
+    expect(attachedWakeSource).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    expect(attachedWakeSource?.contentHash).toBe(nativeSha256(commentWake));
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",
-      task, payload: commentWake, commentSources: [commentSource] })).toMatchObject({ kind: "native_task_wake", runId, issueId });
+      task, payload: { ...commentWake, comments: [{ ...comment, attachments: [{ id: attachmentId,
+        filename: "input.txt", contentType: "text/plain", byteSize: 14,
+        contentPath: `/api/attachments/${randomUUID()}/content` }] }] }, commentSources: [commentSource] })).toBeNull();
     const unrelatedRendition = { ...commentSource,
       contentHash: nativeCommentProjectionHash({ body: "redacted alternate rendition", presentation: null, metadata: null }) };
     expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", persistedWakeReason: "on_demand",

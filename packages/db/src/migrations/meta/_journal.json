@@ -3998,6 +3998,13 @@
       "when": 1793664000000,
       "tag": "0572_sandbox_hidden_conformance_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 573,
+      "version": "7",
+      "when": 1794268800000,
+      "tag": "0573_native_conversation_upload_comment_transition",
+      "breakpoints": true
     }
   ]
 }

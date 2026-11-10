@@ -193,6 +193,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const captureKeys = ["agentId", "commentSources", "companyId", "envelope", "issueId", "responsibleUserId", "runId", "wake", "wakeupRequestId",
     ...(capture.governedInteractions !== undefined ? ["governedInteractions"] : []),
     ...(capture.acceptedPlanReview !== undefined ? ["acceptedPlanReview"] : []),
+    ...(capture.explicitHumanSource !== undefined ? ["explicitHumanSource"] : []),
     ...(capture.answeredQuestions !== undefined ? ["answeredQuestions"] : []),
     ...(capture.adminExpiredInteractions !== undefined ? ["adminExpiredInteractions"] : []),
     ...(capture.stageActions !== undefined ? ["stageActions"] : []),
@@ -273,6 +274,36 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     }
   }
   const hasResolutionWake = capture.wake?.interaction !== undefined;
+  const explicitHumanSource = capture.explicitHumanSource;
+  const hasExplicitHumanSource = explicitHumanSource !== undefined;
+  const explicitHumanMessage = explicitHumanSource
+    ? capture.envelope?.messages?.find(message => message?.id === explicitHumanSource.commentId) : undefined;
+  const exactExplicitHumanSource = Boolean(explicitHumanSource &&
+    Object.keys(explicitHumanSource).sort().join(",") === "actorId,commentId,companyId,issueId,providerBodyHash,receiverRunId,recoveryActionCause,recoveryActionId,recoveryActionOutcome,recoveryActionStatus,recoveryReplay,reservationId,reservationInputHash,reservationPurpose,reservationRequestHash,reservationStatus,sourceDriverKind,sourceRunId,sourceRuntimeMode,sourceStatus,sourceStopReceiptHash,version" &&
+    explicitHumanSource.version === 1 && explicitHumanSource.companyId === input.companyId &&
+    explicitHumanSource.issueId === input.issueId && explicitHumanSource.receiverRunId === input.runId &&
+    explicitHumanSource.sourceRunId === capture.envelope?.trigger?.sourceRunId &&
+    explicitHumanSource.sourceRunId === capture.envelope?.interruptedRunId &&
+    explicitHumanSource.sourceStatus === "cancelled" && explicitHumanSource.sourceRuntimeMode === "native" &&
+    explicitHumanSource.sourceDriverKind === "aw_text_messages" &&
+    explicitHumanSource.recoveryActionCause === "uncertain_provider_action" &&
+    explicitHumanSource.recoveryActionStatus === "resolved" && explicitHumanSource.recoveryActionOutcome === "cancelled" &&
+    explicitHumanSource.recoveryReplay === "explicit_user_continuation" &&
+    explicitHumanSource.reservationStatus === "unknown" && explicitHumanSource.reservationPurpose === "worker_model" &&
+    typeof explicitHumanSource.sourceStopReceiptHash === "string" && /^[a-f0-9]{64}$/i.test(explicitHumanSource.sourceStopReceiptHash) &&
+    typeof explicitHumanSource.actorId === "string" && explicitHumanSource.actorId === input.responsibleUserId &&
+    typeof explicitHumanSource.commentId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(explicitHumanSource.commentId) &&
+    [explicitHumanSource.recoveryActionId, explicitHumanSource.reservationId].every(id => typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) &&
+    [explicitHumanSource.reservationRequestHash, explicitHumanSource.reservationInputHash, explicitHumanSource.providerBodyHash]
+      .every(hash => typeof hash === "string" && /^[a-f0-9]{64}$/i.test(hash)) &&
+    capture.wake?.requestedByActorType === "user" && capture.wake.requestedByActorId === explicitHumanSource.actorId &&
+    capture.wake.reason === "issue_commented" && capture.wake.originCommentIds.includes(explicitHumanSource.commentId) &&
+    explicitHumanMessage?.authorType === "user" && explicitHumanMessage.authorId === explicitHumanSource.actorId &&
+    explicitHumanMessage.createdByRunId === null && !explicitHumanMessage.deleted &&
+    capture.envelope.originCommentIds.includes(explicitHumanSource.commentId) &&
+    capture.commentSources?.some(source => source.input?.kind === "comment" && source.input.commentId === explicitHumanSource.commentId) &&
+    capture.envelope.completedWork === null && !capture.finalizedSummary && !capture.summary && !hasResolutionWake);
+  if (hasExplicitHumanSource && !exactExplicitHumanSource) return null;
   const stageTrigger = input.stageTrigger;
   const hasStageTrigger = stageTrigger !== undefined;
   const assignment = capture.currentHumanAssignment;
@@ -323,12 +354,13 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       ...(capture.wake.manualQueueAdoption ? ["manualQueueAdoption"] : [])].sort().join(",") ||
     !Array.isArray(capture.wake.originCommentIds) || !Array.isArray(capture.commentSources)) return null;
   const keys = ["version", "companyId", "issueId", "trigger", "originCommentIds", "objective", "messages", "humanResponses",
-    "interactionOutcomes", "completedWork", "recoveryOutcomes", "unresolvedInteractionIds", "coverage", "completedActions", "resumeDelta"];
+    "interactionOutcomes", "completedWork", "recoveryOutcomes", "unresolvedInteractionIds", "coverage", "completedActions", "resumeDelta",
+    ...(exactExplicitHumanSource ? ["interruptedRunId"] : [])];
   if (Object.keys(c).some(key => !keys.includes(key)) || c.version !== 1 || c.companyId !== input.companyId || c.issueId !== input.issueId ||
     Object.keys(c.trigger).sort().join(",") !== "interactionId,reason,sourceRunId" ||
     c.trigger.reason !== (input.wakeReason ?? "task_execution") ||
     (!hasResolutionWake && (c.trigger.interactionId !== null ||
-      (c.trigger.sourceRunId !== null && !(hasSummaryAssignment && finalizedSummaryRecord)))) ||
+      (c.trigger.sourceRunId !== null && !(hasSummaryAssignment && finalizedSummaryRecord) && !exactExplicitHumanSource))) ||
     !Array.isArray(c.messages) || (c.messages.length === 0 && !hasStageTrigger && !hasSummaryAssignment) || c.messages.length > 256 ||
     !Array.isArray(c.originCommentIds) || (hasStageTrigger || hasSummaryAssignment ? c.originCommentIds.length !== 0 : c.originCommentIds.length === 0) || c.originCommentIds.length > 256 ||
     new Set(c.originCommentIds).size !== c.originCommentIds.length ||
@@ -885,7 +917,7 @@ export function captureNativeTaskWakeSource(input: {
       const comment = comments[index];
       if (!comment || typeof comment !== "object" || Array.isArray(comment)) return reject("comment_shape_invalid");
       const item = comment as Record<string, unknown>;
-      if (item.bodyTruncated !== false || item.deletedAt !== null || item.attachments !== undefined || typeof item.body !== "string")
+      if (item.bodyTruncated !== false || item.deletedAt !== null || typeof item.body !== "string")
         return reject("comment_shape_invalid");
       if (item.id !== commentId || item.issueId !== input.issueId) return reject("comment_source_invalid", [
         ...(item.id !== commentId ? ["payload_comment_id"] : []),
@@ -904,6 +936,31 @@ export function captureNativeTaskWakeSource(input: {
       ]);
     }
   }
+  // Attachment descriptors are rendered into the prompt, but they are not
+  // comment content authority. Validate their closed display shape here and
+  // omit them from the wake/comment projection below; the separately staged
+  // attachment source owner binds the actual asset, bytes, comment and receipt.
+  const attachmentIds = new Set<string>();
+  let attachmentCount = 0;
+  for (const comment of comments) {
+    const item = comment as Record<string, unknown>;
+    if (item.attachments === undefined) continue;
+    if (!Array.isArray(item.attachments)) return reject("comment_shape_invalid");
+    for (const value of item.attachments) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return reject("comment_shape_invalid");
+      const attachment = value as Record<string, unknown>;
+      const attachmentId = attachment.id;
+      if (Object.keys(attachment).sort().join(",") !== "byteSize,contentPath,contentType,filename,id" ||
+        typeof attachmentId !== "string" || !uuid.test(attachmentId) || attachmentIds.has(attachmentId) ||
+        typeof attachment.filename !== "string" || !attachment.filename.trim() || attachment.filename.length > 512 ||
+        typeof attachment.contentType !== "string" || !attachment.contentType.trim() || attachment.contentType.length > 256 ||
+        !Number.isSafeInteger(attachment.byteSize) || (attachment.byteSize as number) < 0 ||
+        attachment.contentPath !== `/api/attachments/${attachmentId}/content`) return reject("comment_shape_invalid");
+      attachmentIds.add(attachmentId);
+      attachmentCount += 1;
+      if (attachmentCount > 20) return reject("comment_shape_invalid");
+    }
+  }
   const commentWindow = payload.commentWindow;
   if (!commentWindow || typeof commentWindow !== "object" || Array.isArray(commentWindow)) return reject("comment_window_invalid");
   const commentWindowRecord = commentWindow as Record<string, unknown>;
@@ -913,10 +970,19 @@ export function captureNativeTaskWakeSource(input: {
     ? exactNativeWorkspaceCoordination(input.workspaceCoordinationCapture, input) : null;
   if (input.workspaceCoordinationCapture && !coordination) return reject("wake_fields_invalid", ["workspaceCoordination"]);
   const manualQueueAdoption = input.continuationCapture?.wake.manualQueueAdoption;
+  const hasAttachmentDescriptors = comments.some(value =>
+    (value as Record<string, unknown>).attachments !== undefined);
+  const commentSourceProjection = hasAttachmentDescriptors ? comments.map(value => {
+    const comment = value as Record<string, unknown>;
+    if (comment.attachments === undefined) return comment;
+    const { attachments: _attachments, ...sourceComment } = comment;
+    return sourceComment;
+  }) : null;
+  const sourcePayload = commentSourceProjection ? { ...payload, comments: commentSourceProjection } : payload;
   const content = manualQueueAdoption
-    ? (coordination ? { wake: payload, manualQueueAdoption, workspaceCoordination: coordination }
-      : { wake: payload, manualQueueAdoption })
-    : coordination ? { wake: payload, workspaceCoordination: coordination } : payload;
+    ? (coordination ? { wake: sourcePayload, manualQueueAdoption, workspaceCoordination: coordination }
+      : { wake: sourcePayload, manualQueueAdoption })
+    : coordination ? { wake: sourcePayload, workspaceCoordination: coordination } : sourcePayload;
   return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId,
     sourceVersion: input.sourceVersion, contentHash: nativeSha256(content) };
 }

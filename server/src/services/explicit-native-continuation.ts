@@ -6,7 +6,8 @@ import { hasNativeLocalProcessStop, hasHistoricalSuspendedNativeSession } from "
 import { completeTerminatedRemoteNativeSessionCleanup } from "../vendor/paperclip-runner/index.js";
 import { hasRemoteTerminationReceipt, remoteLeaseCleanupScope } from "./remote-execution-termination.js";
 import { z } from "zod";
-import { modelProviderWireReceiptSchema } from "@paperclipai/shared";
+import { isExactUnknownNativeTextCharge } from "./native-text-unknown-charge.js";
+export { isExactUnknownNativeTextCharge } from "./native-text-unknown-charge.js";
 import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   agents, agentWakeupRequests, approvals, issueApprovals, issueThreadInteractions,
@@ -24,47 +25,6 @@ import { queuedCommentIdsFromWakePayload } from "./issue-queued-comment-queue.js
 
 type Run = typeof heartbeatRuns.$inferSelect;
 const terminal = ["failed", "interrupted", "timed_out", "cancelled"];
-
-export function isExactUnknownNativeTextCharge(input: {
-  run: Pick<Run, "id" | "companyId" | "agentId" | "nativeIssueId" | "runtimeMode" | "driverKind">;
-  issueId: string;
-  actionCause: string;
-  actionEvidence: Record<string, unknown>;
-  reservation: Pick<typeof orchestrationModelReservations.$inferSelect,
-    "id" | "companyId" | "purpose" | "status" | "workerAttemptId" | "planId" | "requestHash" | "providerWireReceipt">;
-  binding: {
-    runId: string | null;
-    agentId: string | null;
-    planIssueId: string;
-    workerIssueId: string;
-    workerAgentId: string | null;
-  };
-  wireIntents: unknown;
-}): boolean {
-  const automaticRecovery = input.actionEvidence.automaticRecovery;
-  const wire = modelProviderWireReceiptSchema.safeParse(input.reservation.providerWireReceipt);
-  if (input.run.runtimeMode !== "native" || input.run.driverKind !== "aw_text_messages" ||
-      input.run.nativeIssueId !== input.issueId || input.actionCause !== "uncertain_provider_action" ||
-      input.actionEvidence.runId !== input.run.id || input.actionEvidence.modelReservationId !== input.reservation.id ||
-      !automaticRecovery || typeof automaticRecovery !== "object" || Array.isArray(automaticRecovery) ||
-      (automaticRecovery as Record<string, unknown>).replay !== "blocked" ||
-      input.reservation.companyId !== input.run.companyId || input.reservation.purpose !== "worker_model" ||
-      input.reservation.status !== "unknown" || input.reservation.workerAttemptId === null || input.reservation.planId === null ||
-      !wire.success || wire.data.reservationId !== input.reservation.id ||
-      wire.data.requestHash !== input.reservation.requestHash ||
-      input.binding.runId !== input.run.id || input.binding.agentId !== input.run.agentId ||
-      input.binding.workerAgentId !== input.run.agentId || input.binding.planIssueId !== input.issueId ||
-      input.binding.workerIssueId !== input.issueId || !Array.isArray(input.wireIntents)) return false;
-  return input.wireIntents.some(value => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-    const intent = value as Record<string, unknown>;
-    return intent.reservationId === input.reservation.id &&
-      intent.requestHash === wire.data.requestHash &&
-      intent.wireBodyHash === wire.data.bodySha256 &&
-      intent.method === wire.data.method && intent.endpoint === wire.data.endpoint &&
-      intent.modelPurpose === "worker_model";
-  });
-}
 
 function processStopped(pid: number): boolean {
   try { process.kill(pid, 0); return false; }

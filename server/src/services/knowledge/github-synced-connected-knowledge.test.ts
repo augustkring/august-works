@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import type { ConnectedKnowledgeRequest } from "@paperclipai/shared";
+import type { ConnectedKnowledgeAuthorizedScope, ConnectedKnowledgeRequest } from "@paperclipai/shared";
+import type { NativeContextInspectionOwner } from "../authorization.js";
 import {
   createGitHubSyncedConnectedKnowledgeProvider,
+  githubSyncedKnowledgeActorMatchesRequest,
   type GitHubSyncedKnowledgeDependencies,
   type GitHubSyncedKnowledgeObject,
 } from "./github-synced-connected-knowledge.js";
-import { createConnectedKnowledgeRegistry } from "./connected-knowledge.js";
+import { createConnectedKnowledgeRegistry, fingerprintConnectedKnowledgeRequest } from "./connected-knowledge.js";
 
 function request(
   overrides: Partial<ConnectedKnowledgeRequest> = {},
@@ -81,6 +83,211 @@ function deps(): {
 }
 
 describe("GitHub synced Connected Knowledge", () => {
+
+  it("keeps current authorization inside direct retrieval calls", async () => {
+    const req = request();
+    const d = deps();
+    d.authorizeIssue.mockResolvedValue({ allowed: true, authorizationVersion: "issue-acl-v1" });
+    d.listAuthorizedObjectIds.mockResolvedValue([]);
+    const provider = createGitHubSyncedConnectedKnowledgeProvider(d.value);
+    const requestFingerprint = fingerprintConnectedKnowledgeRequest(req);
+    const authorizedScope: ConnectedKnowledgeAuthorizedScope = {
+      providerKey: "github-sync",
+      companyId: req.companyId,
+      agentId: req.agentId,
+      responsibleUserId: req.responsibleUserId,
+      runId: req.runId,
+      requestFingerprint,
+      aclVersion: "acl-v1",
+      authorizedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      constraints: { issueId: req.issueId, objectIds: [] },
+    };
+
+    await provider.retrieveAuthorized({
+      request: req,
+      requestFingerprint,
+      authorizedScope,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    });
+
+    expect(d.authorizeIssue).toHaveBeenCalledTimes(1);
+    expect(d.authorizeIssue).toHaveBeenCalledWith({ request: req });
+  });
+
+  it("rejects direct retrieval with a mismatched request fingerprint", async () => {
+    const req = request();
+    const d = deps();
+    const provider = createGitHubSyncedConnectedKnowledgeProvider(d.value);
+    const requestFingerprint = fingerprintConnectedKnowledgeRequest(req);
+    const authorizedScope: ConnectedKnowledgeAuthorizedScope = {
+      providerKey: "github-sync",
+      companyId: req.companyId,
+      agentId: req.agentId,
+      responsibleUserId: req.responsibleUserId,
+      runId: req.runId,
+      requestFingerprint,
+      aclVersion: "acl-v1",
+      authorizedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      constraints: { issueId: req.issueId, objectIds: [] },
+    };
+
+    await expect(provider.retrieveAuthorized({
+      request: req,
+      requestFingerprint: "0".repeat(64),
+      authorizedScope,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    })).rejects.toMatchObject({ status: 403 });
+    expect(d.authorizeIssue).not.toHaveBeenCalled();
+  });
+
+  it("binds the private Context reader to the exact company, agent, run, and human", () => {
+    const req = request();
+    const actor = {
+      type: "agent" as const,
+      source: "none" as const,
+      companyId: req.companyId,
+      agentId: req.agentId,
+      runId: req.runId,
+      onBehalfOfUserId: req.responsibleUserId,
+    };
+    expect(githubSyncedKnowledgeActorMatchesRequest(req, actor)).toBe(true);
+    expect(githubSyncedKnowledgeActorMatchesRequest(req, { ...actor, runId: randomUUID() })).toBe(false);
+    expect(githubSyncedKnowledgeActorMatchesRequest(req, { ...actor, onBehalfOfUserId: "other-human" })).toBe(false);
+  });
+
+
+  it("reuses the exact server reader for the immediate pre-retrieval check", async () => {
+    const req = request();
+    const actor = {
+      type: "agent" as const,
+      source: "none" as const,
+      companyId: req.companyId,
+      agentId: req.agentId,
+      runId: req.runId,
+      onBehalfOfUserId: req.responsibleUserId,
+    };
+    const decision = vi.fn();
+    const synced = object(req);
+    const d = deps();
+    d.authorizeIssue.mockResolvedValue({ allowed: true, authorizationVersion: "issue-acl-v1" });
+    d.listAuthorizedObjectIds.mockResolvedValue([synced.id]);
+    d.loadObjects.mockResolvedValue([synced]);
+    const registry = createConnectedKnowledgeRegistry([
+      createGitHubSyncedConnectedKnowledgeProvider(d.value),
+    ]);
+
+    await registry.retrieve({
+      providerKey: "github-sync",
+      request: req,
+      authorizationActor: actor,
+      authorizationDecision: decision,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    });
+
+    expect(d.authorizeIssue).toHaveBeenCalledTimes(3);
+    for (const call of d.authorizeIssue.mock.calls) {
+      expect(call[0]).toMatchObject({ request: req, authorizationActor: actor, authorizationDecision: decision });
+    }
+    expect(d.loadObjects).toHaveBeenCalledWith({ request: req, objectIds: [synced.id] });
+    expect(JSON.stringify(d.loadObjects.mock.calls)).not.toContain("authorizationDecision");
+  });
+
+  it("forwards the source-none bootstrap actor without fabricating a callback", async () => {
+    const req = request();
+    const actor = {
+      type: "agent" as const,
+      source: "none" as const,
+      companyId: req.companyId,
+      agentId: req.agentId,
+      runId: req.runId,
+      onBehalfOfUserId: req.responsibleUserId,
+    };
+    const d = deps();
+    d.authorizeIssue.mockResolvedValue({ allowed: true, authorizationVersion: "issue-acl-v1" });
+    d.listAuthorizedObjectIds.mockResolvedValue([]);
+    const registry = createConnectedKnowledgeRegistry([
+      createGitHubSyncedConnectedKnowledgeProvider(d.value),
+    ]);
+
+    await expect(registry.retrieve({
+      providerKey: "github-sync",
+      request: req,
+      authorizationActor: actor,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    })).resolves.toMatchObject({ evidence: [] });
+
+    expect(d.authorizeIssue).toHaveBeenCalledTimes(3);
+    expect(d.authorizeIssue.mock.calls[0]![0]).toMatchObject({ request: req, authorizationActor: actor });
+    expect(d.authorizeIssue.mock.calls[0]![0]).not.toHaveProperty("authorizationDecision");
+    expect(d.authorizeIssue.mock.calls[1]![0]).toMatchObject({ request: req, authorizationActor: actor });
+    expect(d.authorizeIssue.mock.calls[1]![0]).not.toHaveProperty("authorizationDecision");
+    expect(d.authorizeIssue.mock.calls[2]![0]).toMatchObject({ request: req, authorizationActor: actor });
+    expect(d.authorizeIssue.mock.calls[2]![0]).not.toHaveProperty("authorizationDecision");
+  });
+
+  it("uses the task-bound decision callback and refuses a different task", async () => {
+    const req = request();
+    const actor = {
+      type: "agent" as const,
+      source: "none" as const,
+      companyId: req.companyId,
+      agentId: req.agentId,
+      runId: req.runId,
+      onBehalfOfUserId: req.responsibleUserId,
+    };
+    const boundTaskId = req.issueId;
+    const decision = vi.fn(async ({ resource }: Parameters<NativeContextInspectionOwner["decide"]>[0]) => ({
+      allowed: resource.type === "issue" && resource.issueId === boundTaskId,
+      action: "issue:read" as const,
+      explanation: "task-scoped test decision",
+      reason: resource.type === "issue" && resource.issueId === boundTaskId ? "allow_self" as const : "deny_issue_private" as const,
+    }));
+    const d = deps();
+    d.authorizeIssue.mockImplementation(async ({ request: authRequest, authorizationActor, authorizationDecision }) => {
+      const result = await authorizationDecision!({
+        actor: authorizationActor!,
+        action: "issue:read",
+        resource: { type: "issue", companyId: authRequest.companyId, issueId: authRequest.issueId } as never,
+      });
+      return result.allowed
+        ? { allowed: true, authorizationVersion: "issue-acl-v1" }
+        : { allowed: false, reason: result.reason };
+    });
+    d.listAuthorizedObjectIds.mockResolvedValue([]);
+    const registry = createConnectedKnowledgeRegistry([
+      createGitHubSyncedConnectedKnowledgeProvider(d.value),
+    ]);
+    const common = {
+      providerKey: "github-sync",
+      authorizationActor: actor,
+      authorizationDecision: decision,
+      signal: new AbortController().signal,
+      deadlineAt: Date.now() + 1_000,
+    };
+
+    await expect(registry.retrieve({ ...common, request: req })).resolves.toMatchObject({ evidence: [] });
+    expect(decision).toHaveBeenCalledWith(expect.objectContaining({
+      actor,
+      action: "issue:read",
+      resource: expect.objectContaining({ issueId: boundTaskId }),
+    }));
+
+    await expect(registry.retrieve({ ...common, request: { ...req, issueId: randomUUID() } }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(d.listAuthorizedObjectIds).toHaveBeenCalledTimes(2);
+    expect(decision).toHaveBeenLastCalledWith(expect.objectContaining({
+      actor,
+      action: "issue:read",
+      resource: expect.objectContaining({ issueId: expect.not.stringMatching(String(boundTaskId)) }),
+    }));
+  });
+
   it("requires task scope before touching synced objects", async () => {
     const d = deps();
     const registry = createConnectedKnowledgeRegistry([
@@ -156,7 +363,7 @@ describe("GitHub synced Connected Knowledge", () => {
       deadlineAt: Date.now() + 1_000,
     });
 
-    expect(d.authorizeIssue).toHaveBeenCalledTimes(2);
+    expect(d.authorizeIssue).toHaveBeenCalledTimes(3);
     expect(d.listAuthorizedObjectIds).toHaveBeenCalledTimes(2);
     expect(d.loadObjects).toHaveBeenCalledWith({
       request: req,
