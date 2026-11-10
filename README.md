@@ -542,3 +542,9 @@ MIT &copy; 2026 [Paperclip Labs, Inc](https://paperclip.ing)
 <p align="center">
   <sub>Open source under MIT. Built for people who want to get work done, not babysit agents.</sub>
 </p>
+
+---
+
+## About this fork
+
+This repository is a fork of [Paperclip](https://github.com/paperclipai/paperclip), maintained by [August Kring](https://augustkring.com/) for his work on agentic AI systems. The original Paperclip project and its maintainers are credited in the documentation above.
