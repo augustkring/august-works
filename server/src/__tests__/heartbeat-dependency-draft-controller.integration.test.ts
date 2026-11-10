@@ -29,7 +29,8 @@ import { getExecutionBlocker } from "../services/execution-blocker.js";
 import { accessService } from "../services/access.js";
 import { documentService } from "../services/documents.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
-import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativePayloadSourceSetCurrent } from "../services/native-direct-input.js";
+import { captureNativeExplicitHumanSource } from "../services/execution-continuation.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { issueTreeControlService } from "../services/issue-tree-control.js";
 import { heartbeatService, nativeExecutionFailureLogFields } from "../services/heartbeat.js";
@@ -671,6 +672,33 @@ describe("dependency scheduling through the installed Native text draft controll
         automaticRecovery: { actionOutcome: "unknown", replay: "explicit_user_continuation" },
       } });
       await assertCompletedDraft(fixture, { task, plan: nextPlan }, resumed!.id, output);
+      const completedReceipt = nativeRunInputSourceReceiptSchema.parse(resumedRun!.runnerProfileJson?.nativeInputSourceReceipt);
+      await expect(assertNativePayloadSourceSetCurrent(db, { companyId: f.home, issueId: task.id, runId: resumed!.id,
+        actor: fixture.human, ...completedReceipt.bootstrap })).resolves.toBeUndefined();
+      const laterHumanComment = await issueService(db).addComment(task.id,
+        "A later Human note must not replace the stopped request's original source comment.", { userId: f.userId },
+        { authorType: "user", manualInputActor: fixture.human });
+      expect(laterHumanComment.id).not.toBe(comment.id);
+      await expect(assertNativePayloadSourceSetCurrent(db, { companyId: f.home, issueId: task.id, runId: resumed!.id,
+        actor: fixture.human, ...completedReceipt.bootstrap })).resolves.toBeUndefined();
+      const nextResponsibleUserId = "historical-source-reader-" + randomUUID();
+      await seedCurrentHumanSourceActor(db, [f.home], nextResponsibleUserId);
+      await issueService(db).update(task.id, { responsibleUserId: nextResponsibleUserId,
+        actorUserId: f.userId, privacyActor: fixture.human });
+      expect((await db.select({ responsibleUserId: issues.responsibleUserId }).from(issues)
+        .where(eq(issues.id, task.id)))[0]?.responsibleUserId).toBe(nextResponsibleUserId);
+      // The original Human remains independently authorized by company access;
+      // historical source proof must not demand today's Task assignment.
+      await expect(assertNativePayloadSourceSetCurrent(db, { companyId: f.home, issueId: task.id, runId: resumed!.id,
+        actor: fixture.human, ...completedReceipt.bootstrap })).resolves.toBeUndefined();
+      const savedContext = resumedRun!.contextSnapshot as Record<string, unknown>;
+      const savedWake = savedContext.paperclipWake as Record<string, unknown>;
+      const historicalProof = await captureNativeExplicitHumanSource({ db, companyId: f.home, issueId: task.id,
+        agentId: f.presence.id, receiverRunId: resumed!.id, context: savedContext,
+        envelope: savedWake.executionContinuation as Parameters<typeof captureNativeExplicitHumanSource>[0]["envelope"],
+        historicalSourceRead: true });
+      expect(historicalProof).toMatchObject({ receiverRunId: resumed!.id, sourceRunId: stopped.id,
+        commentId: comment.id, reservationStatus: "unknown", reservationPurpose: "worker_model" });
       expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, stopped.id)))[0]?.status).toBe("cancelled");
       expect((await db.select().from(orchestrationModelReservations)
         .where(eq(orchestrationModelReservations.id, sourceReservation!.id)))[0])

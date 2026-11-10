@@ -1,0 +1,10 @@
+{
+  "path": ".github/workflows/aw-v4-verification.yml",
+  "sha256": "89e6587442af5998fb4d7ae59841bab2fe9081a6cd9231af8483ed1e8c85fe85",
+  "validation": {
+    "uniqueYamlKeys": true,
+    "bashSyntaxRunSteps": 38
+  },
+  "independentReview": "gpt-6-luna reviewed required Runner binary staging, artifact/source checks, fixture environment paths, read-only permissions and unchanged event scope. Root checked package scripts and staged binary path.",
+  "limit": "Source and static validation only; this workflow change has not yet passed a GitHub Actions run."
+}

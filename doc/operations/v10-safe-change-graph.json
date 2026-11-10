@@ -17,7 +17,7 @@
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13990,
+    "fullDiffPathCount": 13994,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
@@ -4039,7 +4039,7 @@
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 13990,
+        "fullDiffPathCount": 13994,
         "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
       },
       "sourceAfterGeneration": "Private exact reviewed composed overlay anchored at b1; no final runtime, release or capability qualification."
@@ -8790,7 +8790,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "c6e68f84aaea37c26c02642613c3a5c02e71d73c0e056c17c69227d46242ac76"
+          "sha256": "b5f177cf305ea821dcaab1f6d2db1cde01ab586679eee8209dcce3aa6b785a9b"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -13210,7 +13210,7 @@
       "sources": [
         {
           "path": ".github/workflows/aw-v4-verification.yml",
-          "sha256": "ae6c37eef750b9e78d0bf8fa15ff58129066f129162bfff836c819b2efb271b8"
+          "sha256": "89e6587442af5998fb4d7ae59841bab2fe9081a6cd9231af8483ed1e8c85fe85"
         },
         {
           "path": ".github/workflows/aw-v9-coverage.yml",
@@ -13238,7 +13238,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-          "sha256": "e9c6e597b7f4136a9082a544614b989324a60817bfa11658531ed06d8da07c72"
+          "sha256": "45704549d91a014ebc3b688028179ec19db159c827f8a425a8f393e35d5823ca"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
@@ -23580,7 +23580,7 @@
         },
         {
           "path": "server/src/services/execution-continuation.ts",
-          "sha256": "3bb031e27a7fccb897554d622e52171aa0effa0bc8d00c3897c9f0dfeafb5b0d"
+          "sha256": "52aa46fd5ef9aacacefa791b6bf0c6fd9d70ea853ce546c8ddbc1e36ad00e97d"
         },
         {
           "path": "server/src/services/execution-control-reconciliation.test.ts",
@@ -30204,7 +30204,7 @@
         },
         {
           "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-          "sha256": "0159b88eb77ba4748dabd9d2547001e3dceb2441d7424a1dc071144efd52342b"
+          "sha256": "3afaf72b2271c43e133a8ecd4803aee1753dffe2f4454aa8b2f9f93b8a4c2514"
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
@@ -47777,7 +47777,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "c6e68f84aaea37c26c02642613c3a5c02e71d73c0e056c17c69227d46242ac76",
+      "sha256": "b5f177cf305ea821dcaab1f6d2db1cde01ab586679eee8209dcce3aa6b785a9b",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -49543,7 +49543,7 @@
       "id": "source:.github/workflows/aw-v4-verification.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/aw-v4-verification.yml",
-      "sha256": "ae6c37eef750b9e78d0bf8fa15ff58129066f129162bfff836c819b2efb271b8",
+      "sha256": "89e6587442af5998fb4d7ae59841bab2fe9081a6cd9231af8483ed1e8c85fe85",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -49648,7 +49648,7 @@
       "id": "source:server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-      "sha256": "e9c6e597b7f4136a9082a544614b989324a60817bfa11658531ed06d8da07c72",
+      "sha256": "45704549d91a014ebc3b688028179ec19db159c827f8a425a8f393e35d5823ca",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -59653,7 +59653,7 @@
       "id": "source:server/src/services/execution-continuation.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/execution-continuation.ts",
-      "sha256": "3bb031e27a7fccb897554d622e52171aa0effa0bc8d00c3897c9f0dfeafb5b0d",
+      "sha256": "52aa46fd5ef9aacacefa791b6bf0c6fd9d70ea853ce546c8ddbc1e36ad00e97d",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -67798,7 +67798,7 @@
       "id": "source:doc/operations/agent-native-tool-alias-compatibility.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-      "sha256": "0159b88eb77ba4748dabd9d2547001e3dceb2441d7424a1dc071144efd52342b",
+      "sha256": "3afaf72b2271c43e133a8ecd4803aee1753dffe2f4454aa8b2f9f93b8a4c2514",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],

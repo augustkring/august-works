@@ -76,7 +76,7 @@ export type NativeTaskContinuationCapture = {
 export async function captureNativeExplicitHumanSource(input: {
   db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0]; companyId: string; issueId: string;
   agentId: string; receiverRunId: string; context: Record<string, unknown>;
-  envelope: ExecutionContinuationEnvelope;
+  envelope: ExecutionContinuationEnvelope; historicalSourceRead?: boolean;
 }): Promise<NativeTaskContinuationCapture["explicitHumanSource"] | undefined> {
   const continuation = object(input.context.explicitUserContinuation);
   const sourceRunId = string(continuation.previousRunId), commentId = string(continuation.commentId);
@@ -84,13 +84,19 @@ export async function captureNativeExplicitHumanSource(input: {
       input.envelope.trigger?.sourceRunId !== sourceRunId || input.envelope.interruptedRunId !== sourceRunId) return undefined;
   const [receiver] = await input.db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, input.receiverRunId), eq(heartbeatRuns.companyId, input.companyId),
-    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"),
+    eq(heartbeatRuns.agentId, input.agentId),
+    ...(input.historicalSourceRead ? [eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.driverKind, "aw_text_messages")] : []),
+    eq(heartbeatRuns.status, input.historicalSourceRead ? "succeeded" : "running"),
   )).limit(1);
-  const [issue] = await input.db.select().from(issues).where(and(
-    eq(issues.companyId, input.companyId), eq(issues.id, input.issueId),
-  )).limit(1);
-  if (!receiver?.responsibleUserId || !receiver.wakeupRequestId || !issue || receiver.id !== input.receiverRunId ||
-      receiver.responsibleUserId !== issue?.responsibleUserId || issue.assigneeAgentId !== input.agentId) return undefined;
+  if (!receiver?.responsibleUserId || !receiver.wakeupRequestId || receiver.id !== input.receiverRunId) return undefined;
+  if (!input.historicalSourceRead) {
+    const [issue] = await input.db.select().from(issues).where(and(
+      eq(issues.companyId, input.companyId), eq(issues.id, input.issueId),
+    )).limit(1);
+    if (!issue || receiver.responsibleUserId !== issue.responsibleUserId || issue.assigneeAgentId !== input.agentId)
+      return undefined;
+  }
   const [wake] = await input.db.select().from(agentWakeupRequests).where(and(
     eq(agentWakeupRequests.id, receiver.wakeupRequestId), eq(agentWakeupRequests.companyId, input.companyId),
     eq(agentWakeupRequests.agentId, input.agentId), eq(agentWakeupRequests.runId, receiver.id),
@@ -98,13 +104,14 @@ export async function captureNativeExplicitHumanSource(input: {
   if (!wake || wake.requestedByActorType !== "user" || !wake.requestedByActorId ||
       wake.requestedByActorId !== receiver.responsibleUserId || wake.reason !== "issue_commented" ||
       !nativeTaskWakeOriginCommentIds(wake.payload).includes(commentId)) return undefined;
-  const [latestRequest] = await input.db.select().from(issueComments).where(and(
+  const [sourceComment] = await input.db.select().from(issueComments).where(and(
     eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
     eq(issueComments.authorType, "user"), isNull(issueComments.createdByRunId),
     isNull(issueComments.deletedAt),
+    ...(input.historicalSourceRead ? [eq(issueComments.id, commentId)] : []),
   )).orderBy(desc(issueComments.createdAt), desc(issueComments.id)).limit(1);
-  if (!latestRequest || latestRequest.id !== commentId || latestRequest.authorUserId !== wake.requestedByActorId ||
-      !latestRequest.body.trim()) return undefined;
+  if (!sourceComment || (!input.historicalSourceRead && sourceComment.id !== commentId) ||
+      sourceComment.authorUserId !== wake.requestedByActorId || !sourceComment.body.trim()) return undefined;
   const [source] = await input.db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, sourceRunId),
     eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.runtimeMode, "native"),

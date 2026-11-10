@@ -2257,7 +2257,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     const { captureNativeExplicitHumanSource } = await import("./execution-continuation.js");
     explicitHumanSource = await captureNativeExplicitHumanSource({ db: db as Db, companyId: input.companyId,
       issueId: input.issueId, agentId: run.agentId, receiverRunId: run.id, context,
-      envelope: continuation as NativeTaskContinuationCapture["envelope"] });
+      envelope: continuation as NativeTaskContinuationCapture["envelope"], historicalSourceRead: run.status === "succeeded" });
   }
   const continuationCapture: NativeTaskContinuationCapture | null = run && admittedWake && run.responsibleUserId &&
     Array.isArray(continuationMessages) && hasBoundedContinuation && isDeepStrictEqual(context?.executionContinuation, continuation) ? {
