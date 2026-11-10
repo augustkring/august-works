@@ -28,6 +28,9 @@ type Gateway = ReturnType<typeof workerModelGateway>;
 type Plan = typeof orchestrationPlans.$inferSelect;
 type Worker = typeof orchestrationWorkers.$inferSelect;
 const installed = new WeakMap<Db, Gateway>();
+const preparedBackends = new WeakMap<NativeSessionBackend, {
+  db: Db; gateway: Gateway; companyId: string; agentId: string; issueId: string; runId: string;
+}>();
 
 /** The heartbeat's provider seam cannot substitute an unbounded backend for
  * an internal draft. All other Native providers retain their existing seam. */
@@ -59,6 +62,19 @@ export function installedNativeDraftGateway(db: Db) {
   const gateway = installed.get(db);
   if (!gateway) throw conflict("The installed native draft controller is required");
   return gateway;
+}
+
+/** True only for the exact backend object prepared by this installed controller
+ * for this Native binding. The provider kind or a caller-supplied flag cannot
+ * claim in-process ownership. */
+export function isPreparedNativeDraftBackend(
+  db: Db, execution: NativeExecutionInput, backend: NativeSessionBackend | undefined,
+): backend is NativeSessionBackend {
+  if (!backend || execution.provider.kind !== "aw_text_only") return false;
+  const prepared = preparedBackends.get(backend);
+  return Boolean(prepared && prepared.db === db && prepared.gateway === installed.get(db) &&
+    prepared.companyId === execution.binding.companyId && prepared.agentId === execution.binding.agentId &&
+    prepared.issueId === execution.binding.issueId && prepared.runId === execution.binding.runId);
 }
 
 /** Read-only original controller qualification before a canonical Task exists.
@@ -391,7 +407,7 @@ export async function prepareNativeDraftBackend(
   const skills = [];
   for (const skill of execution.runtimeContext.skills)
     skills.push({ key: skill.key, files: await read(skill.bundle) });
-  return createAwTextDraftBackend(db, gateway, {
+  const backend = createAwTextDraftBackend(db, gateway, {
     companyId: execution.binding.companyId,
     agentId: execution.binding.agentId,
     runId: execution.binding.runId,
@@ -413,4 +429,7 @@ export async function prepareNativeDraftBackend(
     },
     sourceClosure,
   });
+  preparedBackends.set(backend, { db, gateway, companyId: execution.binding.companyId,
+    agentId: execution.binding.agentId, issueId: execution.binding.issueId, runId: execution.binding.runId });
+  return backend;
 }

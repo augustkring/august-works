@@ -68,7 +68,7 @@ import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent, assertNativeProjectSourceCurrent } from "../native-direct-input.js";
-import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
+import { PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED } from "../native-local-process-stop.js";
 import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import {
   anthropicReadOnlyCall,
@@ -383,7 +383,7 @@ async function currentNativeWorkerSourceDispatchBinding(db: Db, claims: BoundCla
   const [launch] = await db.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
     eq(heartbeatRunEvents.companyId, run.companyId), eq(heartbeatRunEvents.runId, run.id),
     eq(heartbeatRunEvents.agentId, run.agentId), eq(heartbeatRunEvents.seq, matchingInputs[0]!.eventSeq as number),
-    eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+    inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED]),
   ));
   if (!launch) throw forbidden("The Native source receipt cannot bind this model dispatch");
   const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: run.companyId,
@@ -2238,7 +2238,7 @@ export function workerModelGateway(db: Db, options: Options) {
               const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
                 eq(heartbeatRunEvents.companyId, run.companyId), eq(heartbeatRunEvents.runId, run.id),
                 eq(heartbeatRunEvents.agentId, run.agentId), eq(heartbeatRunEvents.seq, inputDispatches[0]!.eventSeq as number),
-                eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+                inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED]),
               )).for("share");
               if (!launch) throw forbidden("The Native source receipt cannot bind this model dispatch");
               await captureNativeBlockedHumanInteraction(tx as unknown as Db, { companyId: run.companyId,

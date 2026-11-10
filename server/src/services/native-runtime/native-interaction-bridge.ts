@@ -2,6 +2,7 @@ import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { isDeepStrictEqual } from "node:util";
 import type { Db } from "@paperclipai/db";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   agents,
@@ -209,7 +210,7 @@ export async function captureNativeGovernedPendingInteractions(input: {
   if (input.interactionIds.length > 256 || new Set(input.interactionIds).size !== input.interactionIds.length)
     throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Pending interaction selection is invalid");
   const [run] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.runId),
-    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"))).limit(1);
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.status, "running"))).limit(1).for("share");
   const [task] = await input.db.select().from(issues).where(and(eq(issues.id, input.issueId), eq(issues.companyId, input.companyId),
     eq(issues.assigneeAgentId, input.agentId))).limit(1);
   const reader = input.reader ?? { type: "agent" as const, source: "agent_jwt" as const, companyId: input.companyId,
@@ -536,6 +537,8 @@ export async function materializeNativeInteractionResponses(input: {
   runId: string;
   agentId: string;
   interactionIds: string[];
+  /** Current run-bound reader already validated by its caller's Task/wake owner. */
+  sourceReader?: AuthorizationActor;
   onSourceCapture?: (source: Extract<NativePayloadSourceInput, { kind: "interaction" }>) => void;
   onContinuationSourceCapture?: (capture: NativeGovernedInteractionContinuationCapture) => void;
   onAnsweredQuestionCapture?: (capture: NativeAnsweredQuestionContinuationCapture) => void;
@@ -853,32 +856,30 @@ export async function materializeNativeInteractionResponses(input: {
               eq(orchestrationWorkerAttempts.runId, producer.id), eq(orchestrationWorkerAttempts.agentId, input.agentId),
               eq(orchestrationWorkers.issueId, input.issueId), eq(orchestrationPlans.issueId, input.issueId)))
             .limit(2) : [];
-          const profile = producer?.runnerProfileJson && typeof producer.runnerProfileJson === "object" && !Array.isArray(producer.runnerProfileJson)
-            ? producer.runnerProfileJson as Record<string, unknown> : {};
-          const receipt = producer ? nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt) : null;
-          const receiptValid = Boolean(producer && receipt?.success && receipt.data.binding.companyId === input.companyId &&
-            receipt.data.binding.issueId === input.issueId && receipt.data.binding.runId === producer.id &&
-            receipt.data.binding.agentId === input.agentId &&
-            receipt.data.binding.responsibleUserId === (producer.responsibleUserId ?? null) &&
-            receipt.data.bootstrap.inputs.some(source => source.kind === "task" && source.issueId === input.issueId));
-          const sourceReceiptHash = receipt?.success && receiptValid ? receipt.data.digest : null;
-          const finals = producer?.finishedAt ? await input.db.select({ finalization: nativeRunFinalizations, result: nativeRunResults })
-            .from(nativeRunFinalizations).innerJoin(nativeRunResults, and(eq(nativeRunResults.companyId, nativeRunFinalizations.companyId),
-              eq(nativeRunResults.issueId, nativeRunFinalizations.issueId), eq(nativeRunResults.runId, nativeRunFinalizations.runId),
-              eq(nativeRunResults.id, nativeRunFinalizations.resultId), eq(nativeRunResults.schemaStatus, "accepted")))
-            .where(and(eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
-              eq(nativeRunFinalizations.runId, producer.id), inArray(nativeRunFinalizations.phase, ["committed", "applied"]))).limit(2) : [];
-          const finalized = finals.length === 1 && finals[0]!.result.runId === producer?.id &&
-            finals[0]!.finalization.resultId === finals[0]!.result.id;
-          const owner = producer?.finishedAt && sourceReceiptHash && finalized && attempts.length === 1 &&
+          const sourceReader = input.sourceReader;
+          const sourceReaderAvailable = Boolean(sourceReader && sourceReader.type !== "none");
+          // Reconstruct the same accepted, committed, lease-free and cleanup-closed
+          // producer owner used by retained-source readers. The caller supplies its
+          // current authorized reader (which can be a Board Human or a run-bound
+          // Agent); source privacy is decided by the canonical reader helper. The
+          // receiver may predate nativeIssueId association. Interaction resolver
+          // data remains evidence and never supplies source-read authority.
+          const summaryCapture = producer?.finishedAt && sourceReaderAvailable
+            ? await (await import("../execution-continuation.js")).captureNativeAcceptedFinalizedSummaryOwner({
+                db: input.db, companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+                sourceRunId: producer.id, reader: sourceReader!,
+              })
+            : null;
+          const owner = producer && producer.finishedAt && summaryCapture && summaryCapture.sourceRun.id === producer.id && attempts.length === 1 &&
               attempts[0]!.attempt.runId === producer.id && ["running", "succeeded"].includes(attempts[0]!.attempt.status) &&
               attempts[0]!.worker.agentId === input.agentId && attempts[0]!.plan.status !== "cancelled" &&
               attempts[0]!.plan.status !== "failed"
             ? { sourceKind: "native_interaction" as const, sourceRunId: producer.id,
                 resolvedByUserId: selected.resolvedByUserId!, resolvedAt: new Date(selected.resolvedAt!).toISOString(),
                 planId: attempts[0]!.plan.id, workerId: attempts[0]!.worker.id, workerAttemptId: attempts[0]!.attempt.id,
-                sourceRunStatus: "succeeded" as const, sourceReceiptHash,
-                finalizationResultId: finals[0]!.result.id, finalizationResultHash: finals[0]!.result.canonicalSha256 }
+                sourceRunStatus: "succeeded" as const, sourceReceiptHash: summaryCapture.owner.parentReceipt.digest,
+                finalizationResultId: summaryCapture.owner.resultId,
+                finalizationResultHash: summaryCapture.owner.resultCanonicalSha256 }
             : undefined;
           if (owner) {
             const humanResponse = selected.kind === "ask_user_questions" ? null : {

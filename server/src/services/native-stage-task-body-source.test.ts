@@ -36,8 +36,8 @@ describe("Native Stage input-receipt prefix",()=>{
     const migration=readFileSync(new URL("../../../packages/db/src/migrations/0571_issue_native_stage_source_transform.sql",import.meta.url),"utf8");
     const compact=migration.replace(/\s+/g," ");
     expect(compact).not.toMatch(/\bjsonb_object_length\s*\(/i);
-    expect(compact).toContain("CASE WHEN jsonb_typeof(receipt)='object' THEN (SELECT count(*) FROM jsonb_object_keys(receipt)) ELSE -1 END<>20");
-    expect(compact).toContain("CASE WHEN jsonb_typeof(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)='object' THEN (SELECT count(*) FROM jsonb_object_keys(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)) ELSE -1 END=19");
+    expect(compact).toContain("(CASE WHEN jsonb_typeof(receipt)='object' THEN (SELECT count(*) FROM jsonb_object_keys(receipt)) ELSE -1 END)<>20");
+    expect(compact).toContain("(CASE WHEN jsonb_typeof(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)='object' THEN (SELECT count(*) FROM jsonb_object_keys(producer.result_json->'nativeStagePolicyTransitions'->receipt_key)) ELSE -1 END)=19");
     expect(compact).toContain("receipt ?& ARRAY['version','companyId','issueId','runId','agentId','responsibleUserId'");
     expect(compact).toContain("'originalDispatchCount','originalAdditionalInputCount'");
   });

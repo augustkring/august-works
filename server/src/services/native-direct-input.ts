@@ -1,5 +1,5 @@
 import type { NativeCommentSourceCapture } from "./agent-conversations.js";
-import { PROCESS_START_REQUESTED } from "./native-local-process-stop.js";
+import { PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED } from "./native-local-process-stop.js";
 import { readNativeWorkspaceCoordination } from "./native-runtime/native-workspace-coordination-source.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
@@ -2000,7 +2000,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     await prepareNativeSourceEffectBoundary(scope);
     await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
       runId: input.runId, agentId: run.agentId, interactionIds: outcomes.map(value => String(nativeSourceRecord(value).id)),
-      onHumanReviewWithdrawalCapture: value => { humanReviewWithdrawals.push(value); } });
+      sourceReader: input.actor, onHumanReviewWithdrawalCapture: value => { humanReviewWithdrawals.push(value); } });
     if (humanReviewWithdrawals.length !== outcomes.length || humanReviewWithdrawals.some(value =>
       !isDeepStrictEqual(value.interactionOutcome, outcomes.find(outcome => nativeSourceRecord(outcome).id === value.projection.interactionId)) ||
       !input.bootstrapInputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
@@ -2460,7 +2460,7 @@ export async function readNativeTaskWakeQuestionSourcesCurrent(db: Db | Transact
       const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
         eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, run.id),
         eq(heartbeatRunEvents.agentId, run.agentId), eq(heartbeatRunEvents.seq, input.identity.eventSeq),
-        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED))).for("share");
+        inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED]))).for("share");
       if (!launch) throw forbidden("The Native historical question launch is unavailable");
       bootstrapInputs = inputs.data;
       for (const source of inputs.data) {
@@ -4324,8 +4324,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       const continuationCurrent: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
       await prepareNativeSourceEffectBoundary(scope);
       await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: source.issueId,
-        runId: input.runId, agentId: run.agentId, interactionIds: [source.interactionId], onSourceCapture: value => { current.push(value); },
-        onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); },
+        runId: input.runId, agentId: run.agentId, interactionIds: [source.interactionId], sourceReader: input.actor,
+        onSourceCapture: value => { current.push(value); }, onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); },
         onHumanReviewWithdrawalCapture: value => { continuationCurrent.push(value.continuationSource); } });
       continuationCurrent.push(...await readNativeQuestionContinuationSource(db, { companyId: input.companyId,
         issueId: source.issueId, runId: input.runId, agentId: run.agentId, kind: pendingOwner?.kind, source, normal: current }));
@@ -6270,7 +6270,7 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
       const continuationCurrent: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
       await prepareNativeSourceEffectBoundary(scope);
       await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: source.issueId,
-        runId: sourceDispatch!.runId, agentId: run.agentId, interactionIds: [source.interactionId],
+        runId: sourceDispatch!.runId, agentId: run.agentId, interactionIds: [source.interactionId], sourceReader: input.actor,
         onSourceCapture: value => { current.push(value); },
         onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); },
         onHumanReviewWithdrawalCapture: value => { continuationCurrent.push(value.continuationSource); } });

@@ -10,7 +10,7 @@ import request from "supertest";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { activityLog, agents, agentRuntimeState, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues, issueRecoveryActions,
-  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions, executionWorkspaces, workspaceOperations } from "@paperclipai/db";
+  nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions, executionWorkspaces, workspaceOperations, heartbeatRunEvents } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -453,6 +453,23 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(runs.map(run => ({ status: run.status, runtimeMode: run.runtimeMode }))).toEqual([
         { status: "succeeded", runtimeMode: "native" }, { status: "succeeded", runtimeMode: "native" },
       ]);
+      // The installed AWText controller settles in-process and owns no OS process.
+      // The retained-run projection must therefore close from its own settled event,
+      // while never recording process-start or fabricated local-stop evidence.
+      expect(runs.every(run => run.nativeProcessCleanupPending === false &&
+        run.processPid === null && run.processGroupId === null)).toBe(true);
+      const lifecycleEvents = await db.select({ runId: heartbeatRunEvents.runId, seq: heartbeatRunEvents.seq,
+        eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload })
+        .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, f.home),
+          inArray(heartbeatRunEvents.runId, runs.map(run => run.id))));
+      expect(lifecycleEvents.filter(event => event.eventType === "native.in_process_backend_admitted")).toHaveLength(2);
+      const admittedByRun = new Map(lifecycleEvents.filter(event => event.eventType === "native.in_process_backend_admitted")
+        .map(event => [event.runId, event.seq]));
+      const settledEvents = lifecycleEvents.filter(event => event.eventType === "native.in_process_backend_settled");
+      expect(settledEvents).toHaveLength(2);
+      expect(settledEvents.every(event => (event.payload as { admissionEventSeq?: number }).admissionEventSeq === admittedByRun.get(event.runId))).toBe(true);
+      expect(lifecycleEvents.some(event => event.eventType === "native.process_start_requested" ||
+        event.eventType === "native.local_process_stopped")).toBe(false);
       const attention = await issueService(db).listReviewAttention(f.home,
         [{ id: entry.task.id, companyId: f.home, status: "in_review" }]);
       expect(attention.get(entry.task.id)).toMatchObject({ state: "stalled", paths: [] });

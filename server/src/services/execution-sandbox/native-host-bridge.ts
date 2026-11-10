@@ -76,6 +76,8 @@ type NativeConformanceAdmissionCleanupClaim = Readonly<{
 type NativeConformancePolicyProofClaim = Readonly<{
   version: 1;
   conformance: NativeOpenCodeConformanceHostAuthority;
+  requesterSessionId: string;
+  verifiedCredentialExpiresAtMs: number;
 }>;
 export type StoppedNativeErasureClaim = {
   locatorDigest: string; jobId: string; jobKey: string; jobAttemptNumber: number;
@@ -171,10 +173,14 @@ function storedNativeConformancePolicyProof(value: unknown): NativeConformancePo
   if (claim === undefined) return undefined;
   if (!claim || typeof claim !== "object" || Array.isArray(claim)) throw conflict("Conformance policy proof claim is invalid");
   const row = claim as Record<string, unknown>, authority = row.conformance;
-  const expected = ["conformance", "version"].join(",");
+  const expected = ["conformance", "requesterSessionId", "verifiedCredentialExpiresAtMs", "version"].join(",");
   const authorityKeys = ["creationReceipt", "groupId", "leaseId", "manifestHash", "manifestId", "planId", "policyHash",
     "policySnapshotId", "runId", "taskId", "workspaceRoot"].sort().join(",");
-  if (Object.keys(row).sort().join(",") !== expected || row.version !== 1 || !authority || typeof authority !== "object" || Array.isArray(authority))
+  if (Object.keys(row).sort().join(",") !== expected || row.version !== 1 || !authority || typeof authority !== "object" || Array.isArray(authority) ||
+      typeof row.requesterSessionId !== "string" || row.requesterSessionId.length < 1 || row.requesterSessionId.length > 200 ||
+      /[\r\n\0]/.test(row.requesterSessionId) ||
+      typeof row.verifiedCredentialExpiresAtMs !== "number" || !Number.isSafeInteger(row.verifiedCredentialExpiresAtMs) ||
+      row.verifiedCredentialExpiresAtMs <= 0)
     throw conflict("Conformance policy proof claim is invalid");
   const input = authority as Record<string, unknown>;
   if (Object.keys(input).sort().join(",") !== authorityKeys || Object.values(input).some(value => typeof value !== "string") ||
@@ -270,7 +276,11 @@ export function nativeSandboxHostTransport(
       manifestHash: string; leaseId: string; workspaceRoot: string } | null = null;
     if (request.action === "prove_policy" && nativeConformanceProof) {
       if (!request.requesterUserId) throw forbidden("A Human requester is required for conformance policy proof");
-      const conformanceActor: AuthorizationActor = { type: "board", source: "session", userId: request.requesterUserId };
+      if (!Number.isSafeInteger(nativeConformanceProof.verifiedCredentialExpiresAtMs))
+        throw forbidden("The retained Human authentication proof is invalid");
+      const conformanceActor: AuthorizationActor = { type: "board", source: "session", userId: request.requesterUserId,
+        sessionId: nativeConformanceProof.requesterSessionId,
+        authenticatedCredentialExpiresAt: nativeConformanceProof.verifiedCredentialExpiresAtMs };
       conformanceProofOwner = await executionSandboxService(tx).assertNativeConformanceProofOwner(
         tx, conformanceActor, request.scope.companyId, nativeConformanceProof.conformance);
     }
@@ -702,17 +712,21 @@ export function nativeSandboxHostTransport(
     const admissionCleanupClaim: NativeConformanceAdmissionCleanupClaim | undefined = conformance && safetyCleanup
       ? { version: 1, conformance: structuredClone(conformance), cleanup: structuredClone(safetyCleanup), idempotencyKey }
       : undefined;
-    const conformancePolicyProofClaim: NativeConformancePolicyProofClaim | undefined =
-      conformance && action === "prove_policy" && policyProof
-        ? { version: 1, conformance: structuredClone(conformance) }
-        : undefined;
+    let conformanceAuthentication: { requesterSessionId: string; verifiedCredentialExpiresAtMs: number } | undefined;
     const authorize = async (tx?: Db, cleanup?: SandboxAdmissionCleanup) => {
       if (!conformance) return assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
       const reader = tx ?? db;
       if (cleanup) return assertNativeConformanceAdmissionCleanup(reader, actor, scope, conformance, cleanup, action, idempotencyKey,
         safetyCleanup ? { sandboxId: safetyCleanup.sandboxId, containerId: safetyCleanup.containerId } : undefined);
       if (safetyCleanup) throw forbidden("Admission cleanup authority is restricted to its exact stop and inspect commands");
-      await assertHumanAuthentication(reader, actor, { requireRecent: true, phishingResistant: false });
+      const humanProof = await assertHumanAuthentication(reader, actor, { requireRecent: true, phishingResistant: false });
+      if (actor.type !== "board" || actor.source !== "session" || !actor.sessionId || !Number.isSafeInteger(humanProof.credentialExpiresAt.getTime()))
+        throw forbidden("The authenticated Human session is required for conformance policy proof");
+      const authenticatedSource = { requesterSessionId: actor.sessionId,
+        verifiedCredentialExpiresAtMs: humanProof.credentialExpiresAt.getTime() };
+      if (conformanceAuthentication && nativeSha256(conformanceAuthentication) !== nativeSha256(authenticatedSource))
+        throw forbidden("The original Human authentication proof changed during conformance admission");
+      conformanceAuthentication = authenticatedSource;
       await assertV7Authorization(reader, actor, scope.companyId, "runtime:manage");
       const [run] = await reader.select().from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, scope.companyId), eq(heartbeatRuns.id, conformance.runId),
@@ -818,6 +832,12 @@ export function nativeSandboxHostTransport(
     // The private bootstrap lane keeps the current Human and runtime:manage
     // gates while bounding Host control to this zero-tool Run and qualified policy.
     await authorize(undefined, safetyCleanup);
+    const conformancePolicyProofClaim: NativeConformancePolicyProofClaim | undefined =
+      conformance && action === "prove_policy" && policyProof && conformanceAuthentication
+        ? { version: 1, conformance: structuredClone(conformance), ...conformanceAuthentication }
+        : undefined;
+    if (conformance && action === "prove_policy" && policyProof && !conformancePolicyProofClaim)
+      throw forbidden("The original Human authentication proof is required for conformance policy proof");
     const originalExpiry =
       action === "apply" ? admission?.expiresAt : action === "start" ? start?.expiresAt : action === "prepare" ? provisioning?.expiresAt : undefined;
     if (

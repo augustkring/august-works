@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { agentProviderBindings, companyMemberships, createDb, environmentLeases, heartbeatRunEvents, heartbeatRuns, issues, orchestrationModelReservations,
+import { agentProviderBindings, authSessions, companyMemberships, createDb, environmentLeases, heartbeatRunEvents, heartbeatRuns, issues, orchestrationModelReservations,
   orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, runtimeCells, runtimeHostCommands } from "@paperclipai/db";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import { accessService } from "../services/access.js";
@@ -88,6 +88,22 @@ const support = await getEmbeddedPostgresTestSupport();
                 await expect(context.prepareSandboxRun(invalidActor, invalidInput)).rejects.toThrow();
                 rejectedBootstrapScopes.push(name);
               }
+              if (actor.type !== "board" || actor.source !== "session" || !actor.sessionId)
+                throw new Error("conformance_negative_authentication_session_missing");
+              const [authenticatedSession] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions)
+                .where(eq(authSessions.id, actor.sessionId)).limit(1);
+              if (!authenticatedSession || authenticatedSession.expiresAt <= new Date())
+                throw new Error("conformance_negative_authentication_session_unavailable");
+              await db.update(authSessions).set({ expiresAt: new Date(0) }).where(eq(authSessions.id, actor.sessionId));
+              try {
+                await expect(context.prepareSandboxRun(actor, input)).rejects.toMatchObject({
+                  details: { code: "recent_authentication_required" },
+                });
+              } finally {
+                await db.update(authSessions).set({ expiresAt: authenticatedSession.expiresAt })
+                  .where(eq(authSessions.id, actor.sessionId));
+              }
+              rejectedBootstrapScopes.push("expired_session");
               const afterCells = await db.select({ hostId: runtimeCells.runtimeHostId }).from(runtimeCells)
                 .where(eq(runtimeCells.companyId, input.companyId));
               const afterHostIds = [...new Set(afterCells.flatMap(row => row.hostId ? [row.hostId] : []))];

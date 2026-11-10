@@ -4005,6 +4005,13 @@
       "when": 1794268800000,
       "tag": "0573_native_conversation_upload_comment_transition",
       "breakpoints": true
+    },
+    {
+      "idx": 574,
+      "version": "7",
+      "when": 1794268800001,
+      "tag": "0574_native_in_process_backend_lifecycle",
+      "breakpoints": true
     }
   ]
 }

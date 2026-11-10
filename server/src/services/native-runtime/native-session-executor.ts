@@ -24,7 +24,9 @@ import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopI
 import { stoppedCodexTurnIsTextOnly } from "./stopped-codex-turn.js";
 import { prepareVerifiedRemoteProviderPack } from "./remote-provider-pack.js";
 import { assertNativePaidTransportAdmitted } from "./paid-transport-admission.js";
-import { readNativeLocalProcessStop, PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
+import { readNativeLocalProcessStop, PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED, IN_PROCESS_BACKEND_SETTLED } from "../native-local-process-stop.js";
+import { isPreparedNativeDraftBackend } from "../orchestration/native-draft-runtime.js";
+import { awTextDraftBackendCloseSettled } from "./aw-text-draft-backend.js";
 import { REMOTE_NATIVE_ERASER_ENV, REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROBE_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT,
   REMOTE_RUNNER_FAILED_IDENTITY_CLEANUP_SCRIPT, REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT,
   REMOTE_RUNNER_PROCESS_FINGERPRINT_SCRIPT, REMOTE_NATIVE_SESSION_FENCE_ACQUIRE_SCRIPT,
@@ -8028,7 +8030,7 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
     const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
       eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
       eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
-      eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+      inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED]),
     )).for("share");
     if (!launch) throw new Error("native_model_input_launch_binding_changed");
     stage = "source_closure_match";
@@ -9219,7 +9221,7 @@ async function persistNativeToolResultSourceCapture(input: Parameters<typeof ren
       const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
         eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
         eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
-        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+        inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED]),
       )).for("share");
       if (!launch) throw new Error(bindingError);
       const profile = record(run.runnerProfileJson);
@@ -9356,7 +9358,7 @@ export async function recordNativeInputToolResultIntent(input: Parameters<typeof
       const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
         eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
         eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
-        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+        inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED]),
       )).for("share");
       if (!run || !launch || launch.seq !== input.eventSeq) throw new Error(bindingError);
       const profile = record(run.runnerProfileJson);
@@ -11358,6 +11360,7 @@ async function executePaperclipNativeSessionWithinScope(
           )).then(rows => rows[0])
       : null;
     nativeSessionExecuteStartedAtMs = Date.now();
+    const installedInProcessDraft = isPreparedNativeDraftBackend(input.db, input.execution, input.backend);
     native = await trace.measure(
       "native.session.execute",
       async () => {
@@ -11369,15 +11372,19 @@ async function executePaperclipNativeSessionWithinScope(
         const result = await trace.run(runnerSessionStartupScope, () =>
           executeNativeSession({
             onSessionAdmission: async () => {
-              // Invalidate prior stop evidence before a backend can spawn.
+              // Only a process-backed Native provider records process ownership.
+              // The installed AWText controller has no child process; its separate
+              // admission event still binds model-input source receipts.
               const launchIntent = await appendHeartbeatRunEvent(input.db, {
                 companyId: input.execution.binding.companyId,
                 runId: input.execution.binding.runId,
                 agentId: input.execution.binding.agentId,
-                eventType: PROCESS_START_REQUESTED,
+                eventType: installedInProcessDraft ? IN_PROCESS_BACKEND_ADMITTED : PROCESS_START_REQUESTED,
                 stream: "system",
                 level: "info",
-                message: "Native execution requested; prior local stop evidence no longer applies.",
+                message: installedInProcessDraft
+                  ? "Installed in-process Native draft controller admitted one turn."
+                  : "Native process-backed execution requested; prior local stop evidence no longer applies.",
               });
               launchEventSeq = launchIntent.row.seq;
               // The launch-intent transaction can wait on the run row too.
@@ -11809,6 +11816,21 @@ async function executePaperclipNativeSessionWithinScope(
         await releaseWarmNativeSession(warmSessionId, warmSessionOwnerToken, lifecyclePolicy.idleTimeoutMs, true);
       }
       await input.onLog?.("stderr", "[paperclip-runner] managed credential refresh failed; provider session retired.\n");
+    }
+    if (installedInProcessDraft && launchEventSeq !== null && awTextDraftBackendCloseSettled(input.backend)) {
+      // The exact backend's close owner joined its work promise. executeNativeSession
+      // return alone is insufficient because generic close is bounded and may
+      // retain/quarantine unfinished cleanup. This is not a local/remote stop claim.
+      await appendHeartbeatRunEvent(input.db, {
+        companyId: input.execution.binding.companyId,
+        runId: input.execution.binding.runId,
+        agentId: input.execution.binding.agentId,
+        eventType: IN_PROCESS_BACKEND_SETTLED,
+        stream: "system",
+        level: "info",
+        message: "Installed in-process Native draft controller turn settled.",
+        payload: { admissionEventSeq: launchEventSeq },
+      });
     }
     if (native.terminal.runTerminalState === "succeeded") {
       // A truncated, verified external-chat wake cannot settle from the

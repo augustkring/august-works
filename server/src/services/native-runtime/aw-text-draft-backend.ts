@@ -39,6 +39,13 @@ import { readAuthoredAgentDefinition, assertAuthoredAgentSnapshotCurrent,
   type AuthoredRuntimeAgent } from "../agents/authored-definition.js";
 
 type Gateway = ReturnType<typeof workerModelGateway>;
+const settledCloseWitnesses = new WeakMap<NativeSessionBackend, () => boolean>();
+
+/** True only after this exact backend's sole session close completed its work join. */
+export function awTextDraftBackendCloseSettled(backend: NativeSessionBackend | undefined): boolean {
+  return backend ? settledCloseWitnesses.get(backend)?.() === true : false;
+}
+
 type Input = Parameters<Gateway["issue"]>[0] & {
   outputKey: string;
   maxOutputTokens: number;
@@ -108,7 +115,8 @@ export function createAwTextDraftBackend(
   )
     throw forbidden("Invalid controller draft envelope");
   let opened = false;
-  return {
+  let closeSettled = false;
+  const backend: NativeSessionBackend = {
     async descriptor() {
       return {
         kind: "remote",
@@ -314,10 +322,13 @@ export function createAwTextDraftBackend(
         claims,
         authoredAgent,
         taskReview,
+        () => { closeSettled = true; },
         open.signal,
       );
     },
   };
+  settledCloseWitnesses.set(backend, () => closeSettled);
+  return backend;
 }
 
 function draftSession(
@@ -334,6 +345,7 @@ function draftSession(
   claims: NonNullable<ReturnType<typeof verifyRuntimeToolsToken>>,
   authoredAgent: AuthoredRuntimeAgent,
   taskReview: boolean,
+  onCloseSettled: () => void,
   parentSignal?: AbortSignal,
 ): NativeSession {
   const controller = new AbortController(),
@@ -682,6 +694,7 @@ function draftSession(
       if (!ended) revoke();
       await work;
       finish();
+      onCloseSettled();
     },
   };
 }

@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "7a1f7653ca000b0d6b7b801260934d7eb7130dd377e32d170df911fcb4cf76fa"
+      "sha256": "8f4a93ebb53fc7356a922ef8b310cdcf6abbcbca39ab45a6bc968bd55eeeb3f8"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -378,7 +378,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "012f550c36f53c332923e681ec7c64e87548ce6cb711bcda6cc93b68cc0350fa"
+      "sha256": "529d6a1a6159e19467668af769e02ed199ce5abffe6d27f91142fea96adebc91"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
@@ -390,7 +390,7 @@
     },
     {
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "80c9f57e43a461e63ecd8fd1293308d2d5517f36f7f23fbd93ad3fdb2ff3964e"
+      "sha256": "4999c60a21f364ee62cf6264a6f7796ec3a8b5d5e021e92be578ab4cc47b029e"
     },
     {
       "path": "server/src/services/process-findings.ts",

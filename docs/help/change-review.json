@@ -2021,10 +2021,10 @@
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
+      "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Local process identity is cleared only after a matching Native stop receipt; the article accurately says cleanup waits for stop confirmation."
+      "rationale": "This source adds names for the separate installed in-process admission and settled-close lifecycle. OS-backed Native stop and managed runtime-file erasure retain their original PID/group and current storage-proof owners. The existing English and Danish instructions correctly keep file cleanup pending until stop and storage removal can be verified."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
@@ -2045,10 +2045,10 @@
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "980d8bc976885c20e8c1236f46bd726b7dbd7281a83d5099c0b7373755060f2e",
+      "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Local process identity is cleared only after a matching Native stop receipt; the article accurately says cleanup waits for stop confirmation."
+      "rationale": "This source adds names for the separate installed in-process admission and settled-close lifecycle. OS-backed Native stop and managed runtime-file erasure retain their original PID/group and current storage-proof owners. The existing English and Danish instructions correctly keep file cleanup pending until stop and storage removal can be verified."
     },
     {
       "source": "server/src/services/heartbeat.ts",

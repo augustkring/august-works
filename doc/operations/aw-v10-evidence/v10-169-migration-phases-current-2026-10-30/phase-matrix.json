@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 573,
-    "latestOfficialMigration": "0573_native_conversation_upload_comment_transition",
+    "last": 574,
+    "latestOfficialMigration": "0574_native_in_process_backend_lifecycle",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -386,9 +386,10 @@
       "id": "native-process-cleanup-reconciliation",
       "migrations": [
         564,
-        569
+        569,
+        574
       ],
-      "purpose": "Native process cleanup pending marker and bounded lease lookup index for crash/restart cleanup reconciliation. 0569 extends only the original event projection to confirmed remote workload stop events; no historical rewrite.",
+      "purpose": "Native process cleanup pending marker and bounded lease lookup index for crash/restart cleanup reconciliation. 0569 extends only the original event projection to confirmed remote workload stop events; no historical rewrite. Migration 0574 records installed in-process controller admission as pending and only its exact settled close as complete; latest admission sequence and outstanding OS-process ownership remain guarded. No process stop is fabricated.",
       "authority": "heartbeat_runs native run owner is authoritative for pending cleanup; heartbeat_run_events and environment_leases are reconciled by the native cleanup worker.",
       "durableState": [
         "heartbeat_runs.native_process_cleanup_pending",
@@ -402,13 +403,15 @@
         "server/src/services/resource-governance.ts",
         "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
         "server/src/__tests__/resource-governance.integration.test.ts",
-        "packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql"
+        "packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql",
+        "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql"
       ],
       "tests": [
         "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
         "server/src/__tests__/heartbeat-native-runner-cancellation.test.ts",
         "server/src/__tests__/resource-governance.integration.test.ts",
-        "server/src/__tests__/native-remote-workload-stop-projection.integration.test.ts"
+        "server/src/__tests__/native-remote-workload-stop-projection.integration.test.ts",
+        "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts"
       ],
       "recovery": "Restart/reconciliation is exercised by current cleanup admission and Resource DB tests; physical host process disappearance and deployed host recovery remain unqualified.",
       "qualificationScope": "Existing qualificationStatus/receipts remain historical exact-bundle claims. This current-source inventory has changed owners/tests or added SQL and is not requalified by its pins. No operator/physical/provider/Human claim."
@@ -1081,12 +1084,16 @@
       "sha256": "e080a7af99be9cf74279be9848bec5182a9aac79e36a5fc93025bbc680cc5741"
     },
     {
+      "path": "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
+      "sha256": "4a6098f05c202229e8234629f7ad54f12cc8e5544851c5ea9e06660f17e2ae90"
+    },
+    {
       "path": "packages/db/src/migrations/meta/0565_snapshot.json",
       "sha256": "c28d535a3ab777a13f82cabd90ad05e0261de899a0391819fc32d7a6f121795e"
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "9f01bc3447ad64caa8d43c76407bbc657ce0f608177d8d368988df719d806f42"
+      "sha256": "1f25a898ed58f761b6a8cc666040136615fa5544a478a3a20d7c0a2ef3cf998b"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1184,6 +1191,10 @@
       "sha256": "6d0538b7698dc8e08078077746cfa0c96cd4c96eb004d5f0ba1273dbf706b610"
     },
     {
+      "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+      "sha256": "92886f6eda16b2a905674cc7a71a2e60994d443a2883177d64a910808efc5896"
+    },
+    {
       "path": "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
       "sha256": "9578f6f26db732a569ed1a86e3a6a1c6d27438f5f0208f2179c4b080666c9504"
     },
@@ -1230,7 +1241,7 @@
     },
     {
       "path": "server/src/__tests__/native-remote-workload-stop-projection.integration.test.ts",
-      "sha256": "d2da6a33582acad0709242c64578a37bbb927a145e775714fa69008d31c565a7"
+      "sha256": "c747aa0d13fc7a3fe401dfc78e604593c4e8a1525abc8d214dc01f110dd33803"
     },
     {
       "path": "server/src/__tests__/native-two-factor.integration.test.ts",
@@ -1414,11 +1425,11 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "012f550c36f53c332923e681ec7c64e87548ce6cb711bcda6cc93b68cc0350fa"
+      "sha256": "529d6a1a6159e19467668af769e02ed199ce5abffe6d27f91142fea96adebc91"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",
-      "sha256": "27e52dcf32e50f4721e16e1617b2ad53ec77a505bb6063dd67272adf00f3bc89"
+      "sha256": "49683505e76446dc54e83a5e54060c507a04ba94ee18100d4ba14e32753f1350"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.ts",
@@ -1458,16 +1469,16 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 72,
+    "currentAffectedCount": 73,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0573_native_conversation_upload_comment_transition"
+    "currentAffectedLast": "0574_native_in_process_backend_lifecycle"
   },
   "sourcePinFinality": "INTERIM PRIVATE COMPOSED INVENTORY: two approved code/test source pins and two own-documentation pins are recorded individually. The exact 28-file source manifest identifies the current code. Prior b1 checks remain historical exact-input receipts; current composed consistency requires its own capture. Runtime/SDK, fleet compatibility, rollback/restore and operator/physical/provider/Human qualification remain separately gated.",
   "latestMigrationPublication": {
-    "migration": "0573_native_conversation_upload_comment_transition",
+    "migration": "0574_native_in_process_backend_lifecycle",
     "sourceCommit": null,
     "sourceState": "Current branch source; inventory updated before the next commit. Historical migration files are unchanged.",
-    "qualificationScope": "The controlled PostgreSQL/API tests are software evidence. Runtime, fleet, rollback, restore and production migration qualification remain separate."
+    "qualificationScope": "Controlled PostgreSQL projection evidence only. Actual review continuation and external/physical cleanup qualifications require their own receipts."
   },
   "affectedMigrationReasons": {
     "0502": "Extends auth_security_events action contract with board_api_key_id, owner/user and company-null constraints, and expiry index; board-key audit rows use the existing user-auth event writer.",
@@ -1480,7 +1491,8 @@
     "0570": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding. Also inventories append-only workspace binding and Native Stage policy source transforms preserving the original Task literal and closure.",
     "0571": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding. Also inventories append-only workspace binding and Native Stage policy source transforms preserving the original Task literal and closure.",
     "0572": "Preserve all19 protected-host qualification and current stopped-cell controls; permit only exact zero-tool hidden Native OpenCode conformance policies with current Human, manifest, Plan, Run, lease and private workspace bindings.",
-    "0573": "Exact current Human conversation upload roots can transition atomically to their first comment after complete original upload/audit and current comment binding checks. No snapshot clearing, invalidation reset or legacy input promotion."
+    "0573": "Exact current Human conversation upload roots can transition atomically to their first comment after complete original upload/audit and current comment binding checks. No snapshot clearing, invalidation reset or legacy input promotion.",
+    "0574": "Append-only original-event projection for the exact installed AWText in-process admission/settled lifecycle. Settlement requires latest exact admission and cannot clear a live OS-process start or identity hold."
   },
   "revisionDate": "2026-11-03",
   "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

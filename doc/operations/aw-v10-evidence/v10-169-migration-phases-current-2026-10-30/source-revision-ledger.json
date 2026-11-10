@@ -519,14 +519,8 @@
     "qualificationBoundary": "147 selected software cases include two actual pinned managed SDK/software Host journeys, all77 gateway cases,15 Project owners,45 selected dispatch owners and eight helper cases. One legacy attachment test remains unresolved and excluded from the selected dispatch run. No migration execution, phase-status promotion, external provider, physical Host or whole-brief/release qualification."
   },
   "nativeConformanceAndSerialSourceReview20261110": {
-    "changes": [
-      {
-        "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
-        "oldSha256": "caf5e0e116a359139b2a03f12fd7f690e0413a60f2358d48a1624dad1637a7cb",
-        "newSha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada"
-      }
-    ],
-    "reason": "Retain current Human and Task authority for review withdrawal; reconcile Platform Skill inventory before governance authority hashing. Stage protected Host proof inputs as read-only binds and audit Task-root ancestors. Derive an exact provider-conformance filesystem proof maximum from the current source owner while retaining the original operator boundary and independent signed-bridge validation. Add a labeled software-only signed peer that executes the pinned prover and checks current DB ownership.",
-    "qualificationBoundary": "Source hash refresh only. Exact test windows and limits are in native-governance-and-proof-inputs-20261110. Host helper checks include actual local Docker and pinned binaries, but local vfs does not qualify the production Host. Shared governance first-result and component checks pass in their recorded windows. Native review withdrawal, actual six-probe conformance, complete SDK attachment consumption and final-head acceptance remain open. No historical migration status, physical Host, paid provider, release or merge qualification is promoted."
+    "changes": [],
+    "reason": "Append forward migration 0574 for the exact installed in-process backend admission and work-joined settled close, while retaining external process-stop ownership. Reuse current authorized readers and canonical accepted producer proof for Human review withdrawal before Native Task cache association. Retain original Human session and verified carrier deadline in the server-only conformance proof claim. Align the labeled software peer with observed CLI policy and the strict Host reply schema. Provision existing fixed Node/observer prerequisites in AW V4 and align receipt-guard test spelling with canonical SQL.",
+    "qualificationBoundary": "Source hash refresh only. Separate exact windows are retained in native-inprocess-lifecycle-and-session-proof-20261110: 39 input/SQL projection tests, selected external process seam and full server TypeScript pass. Actual Human-review continuation, complete SDK attachment staging/erasure and six-probe conformance still fail; current source hashes do not qualify them. Source/journal inventory does not execute a production migration or promote any historical 169 requirement status or owner assessment. No physical Host, paid provider, deployment, release or merge qualification."
   }
 }

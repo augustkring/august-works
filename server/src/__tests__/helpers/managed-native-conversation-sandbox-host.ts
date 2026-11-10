@@ -31,6 +31,7 @@ import {
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
+import { assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
 import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/native-direct-input.js";
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
 import { environmentService } from "../../services/environments.js";
@@ -1383,6 +1384,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const httpArchiveObservations: Array<{ root: boolean; originalContainer: boolean; status: number }> = [];
   const hostCliOperations: string[] = [];
   let observedSandboxPhase: "Ready" | "Stopped" = "Stopped";
+  let actualCliPolicyObservation: { bindingId: string; sandboxId: string; containerId: string;
+    document: unknown; hash: string } | null = null;
   const modelBrokerSessionReceipts: Array<{ phase: string; sessionKey: string; capabilityHash: string;
     expiresAt: string; sessionDeadlineAt: string; nativeSessionIdDigest: string | null;
     startBindingDigest: string | null }> = [];
@@ -2482,9 +2485,14 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       if (command[0] === "sandbox" && command[1] === "start") { sandboxPhase = "Ready"; observedSandboxPhase = sandboxPhase; fixtureSandboxPhase = sandboxPhase; return { stdout: "Started", stderr: "" }; }
       if (command[0] === "sandbox" && command[1] === "stop") { sandboxPhase = "Stopped"; observedSandboxPhase = sandboxPhase; fixtureSandboxPhase = sandboxPhase; return { stdout: "Stopped", stderr: "" }; }
       if (command[0] === "sandbox" && command[1] === "delete") { sandboxPhase = "Stopped"; observedSandboxPhase = sandboxPhase; fixtureSandboxPhase = sandboxPhase; sandboxExists = false; fixtureSandboxExists = false; return { stdout: "Deleted", stderr: "" }; }
-      if (command[0] === "policy" && command[1] === "get") return { stdout: JSON.stringify({ sandbox: scopeNow().sandboxRef,
-        status: "effective", version: policyRevision, config_revision: configRevision,
-        hash: nativeSha256(currentDocument), policy: currentDocument }), stderr: "" };
+      if (command[0] === "policy" && command[1] === "get") {
+        const hash = nativeSha256(currentDocument);
+        actualCliPolicyObservation = { bindingId: binding.id, sandboxId, containerId,
+          document: structuredClone(currentDocument), hash };
+        return { stdout: JSON.stringify({ sandbox: scopeNow().sandboxRef,
+          status: "effective", version: policyRevision, config_revision: configRevision,
+          hash, policy: currentDocument }), stderr: "" };
+      }
       if (command[0] === "policy" && command[1] === "set") {
         currentDocument = JSON.parse(readFileSync(command[command.indexOf("--policy") + 1], "utf8"));
         configRevision += 1; return { stdout: "Policy updated", stderr: "" };
@@ -2853,7 +2861,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       eq(heartbeatRuns.status, "running"))).limit(1) : [];
     const [lease] = run ? await db.select().from(environmentLeases).where(and(
       eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, run.id),
-      eq(environmentLeases.environmentId, input.preparedRegistration!.environment.id), eq(environmentLeases.status, "active"))).limit(1) : [];
+      eq(environmentLeases.environmentId, infrastructure.environment.id), eq(environmentLeases.status, "active"))).limit(1) : [];
     if (!manifest || !run || !lease?.expiresAt || lease.expiresAt <= new Date() ||
         manifest.id !== snapshot.executionManifestId ||
         !snapshot.compilation.sourcePolicyRefs.includes(`manifest:${manifest.id}:${manifest.hash}`))
@@ -2876,8 +2884,11 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       if (typeof taskId !== "string" || typeof planId !== "string" || typeof groupId !== "string" ||
           typeof taskRootCandidate !== "string" || typeof creationReceipt !== "string" ||
           !/^[a-f0-9]{64}$/.test(creationReceipt) || run.responsibleUserId !== command.requesterUserId ||
+          actor.type !== "board" || actor.source !== "session" || actor.userId !== requesterUserId || !actor.sessionId ||
           snapshot.capabilitySnapshotHash !== currentBinding.capabilitySnapshotHash)
         throw new Error("software_only_host_peer_current_authority_changed");
+      const originalHumanAuthentication = await assertHumanAuthentication(db, actor,
+        { requireRecent: true, phishingResistant: false });
       const authorityInput = { runId: run.id, taskId, planId, groupId,
         manifestId: manifest.id, manifestHash: manifest.hash, leaseId: lease.id,
         workspaceRoot: taskRootCandidate, creationReceipt, policySnapshotId: snapshot.id, policyHash: snapshot.policyHash };
@@ -2892,7 +2903,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         workspaceRoot: taskRoot, creationReceipt,
         policySnapshotId: snapshot.id, policyHash: snapshot.policyHash,
       };
-      expectedSidecar = { version: 1, conformance: currentConformanceClaim };
+      expectedSidecar = { version: 1, conformance: currentConformanceClaim,
+        requesterSessionId: actor.sessionId,
+        verifiedCredentialExpiresAtMs: originalHumanAuthentication.credentialExpiresAt.getTime() };
     } else {
       // Ordinary managed Native Task proof uses its existing exact Run/Task
       // workspace owner and the unchanged operator maximum.
@@ -3026,12 +3039,27 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     if (nativeConformanceMode) softwareOnlyPolicyProofSidecarHashes.set(commandId, nativeSha256(sidecar));
     const journal = JSON.parse(readFileSync(sessionHostJournalFile, "utf8")) as Record<string, any>;
     const currentScope = journal.scopes?.[binding.id];
-    const currentDocument = currentScope?.policy?.document;
-    if (!currentDocument || currentScope?.creation?.purpose !== "admission" ||
-        currentScope.creation.sandboxId !== proof.sandboxId || currentScope.creation.containerId !== proof.containerId ||
+    const creation = currentScope?.creation;
+    const pinned = currentScope?.policy;
+    const cliPolicy = actualCliPolicyObservation;
+    const observedPolicyMatchesTarget = cliPolicy?.bindingId === binding.id &&
+      cliPolicy.sandboxId === proof.sandboxId && cliPolicy.containerId === proof.containerId &&
+      nativeSha256(cliPolicy.document) === cliPolicy.hash;
+    const requestedPolicyMatchesCreation = Boolean(creation?.document) && observedPolicyMatchesTarget &&
+      nativeSha256(creation.document) === proof.candidateDocumentHash &&
+      nativeSha256(cliPolicy!.document) === nativeSha256(creation.document) &&
+      cliPolicy!.hash === creation.observedPolicyHash;
+    const effectivePolicyMatchesPin = Boolean(pinned?.document) && observedPolicyMatchesTarget &&
+      pinned.policyHash === proof.policyHash &&
+      nativeSha256(pinned.document) === proof.candidateDocumentHash &&
+      nativeSha256(cliPolicy!.document) === proof.candidateDocumentHash;
+    if (!currentScope || creation?.purpose !== "admission" ||
+        creation.sandboxId !== proof.sandboxId || creation.containerId !== proof.containerId ||
         currentScope.sandboxId !== proof.sandboxId || currentScope.containerId !== proof.containerId ||
         activeHostIdentity?.sandboxId !== proof.sandboxId || activeHostIdentity?.containerId !== proof.containerId ||
-        (proof.stage === "effective" && nativeSha256(currentDocument) !== proof.candidateDocumentHash))
+        !observedPolicyMatchesTarget ||
+        (proof.stage === "requested" && !requestedPolicyMatchesCreation) ||
+        (proof.stage === "effective" && !effectivePolicyMatchesPin))
       throw new Error("software_only_host_peer_effective_policy_changed");
     const executable = process.env.AW_V7_OPENSHELL_PROVER ?? "/workspace/v10-preparation/tools/openshell-prover-v0.1.2/openshell-prover";
     const executableSha256 = "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1";
@@ -3044,11 +3072,14 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const target = { hostEpoch: command.hostEpoch, imageDigest: command.imageDigest, sandboxId: proof.sandboxId,
       containerId: proof.containerId, bindingVersion: proof.bindingVersion, provisioningHash: proof.provisioningHash,
       policyHash: proof.policyHash };
-    const result = checked.result, coveredDomains = checked.coveredDomains, effectiveDocumentHash = nativeSha256(currentDocument);
+    const result = checked.result, coveredDomains = checked.coveredDomains, effectiveDocumentHash = cliPolicy!.hash;
     const proofFields = { schema: "paperclip.sandbox-host-policy-proof.v1", stage: proof.stage, result, coveredDomains,
       candidateDocumentHash: proof.candidateDocumentHash, boundaryDocumentHash: proof.boundaryDocumentHash,
       effectiveDocumentHash, proverVersion: "0.1.2", proverSha256: executableSha256, target };
-    const reply = { action: "prove_policy", ...proofFields, evidenceHash: nativeSha256(proofFields) };
+    const reply = { action: "prove_policy", stage: proof.stage, result, coveredDomains,
+      candidateDocumentHash: proof.candidateDocumentHash, boundaryDocumentHash: proof.boundaryDocumentHash,
+      effectiveDocumentHash, proverVersion: "0.1.2", proverSha256: executableSha256, target,
+      evidenceHash: nativeSha256(proofFields) };
     softwareOnlyPolicyProofObservations.push({ peer: "software_only_host_peer", physicalQualification: false, stage: proof.stage,
       persistedCompilationMatched: true, conformanceClaimPersisted: nativeConformanceMode, claimAbsentFromHostEnvelope: true,
       exactStoppedPreparedTarget: true, actualPinnedProver: true, result: "within_boundary", completedSuccessfully: false,

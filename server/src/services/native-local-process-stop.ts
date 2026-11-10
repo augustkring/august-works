@@ -3,6 +3,10 @@ import { environmentLeases, heartbeatRunEvents, heartbeatRuns, type Db } from "@
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
 
 export const PROCESS_START_REQUESTED = "native.process_start_requested";
+/** Admission for an installed in-process Native controller; it owns no OS process. */
+export const IN_PROCESS_BACKEND_ADMITTED = "native.in_process_backend_admitted";
+/** Settled in-process controller turn; this is not evidence of a local/remote process stop. */
+export const IN_PROCESS_BACKEND_SETTLED = "native.in_process_backend_settled";
 export const PROCESS_IDENTITY_RECORDED = "native.process_identity_recorded";
 const LOCAL_PROCESS_STOPPED = "native.local_process_stopped";
 

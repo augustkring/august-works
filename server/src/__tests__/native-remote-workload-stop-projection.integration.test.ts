@@ -11,8 +11,10 @@ describe("original remote workload process/resource projection (actual PostgreSQ
  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>;let counter=0;
  beforeAll(async()=>{
   database=await startEmbeddedPostgresTestDatabase("remote-stop-projection-");db=createDb(database.connectionString);
-  const forward=readFileSync(new URL("../../../packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql",import.meta.url),"utf8");
-  for(const statement of forward.split("--> statement-breakpoint"))if(statement.trim())await db.execute(sql.raw(statement));
+  for (const migration of ["0569_native_remote_workload_stop_projection.sql", "0574_native_in_process_backend_lifecycle.sql"]) {
+   const forward=readFileSync(new URL(`../../../packages/db/src/migrations/${migration}`,import.meta.url),"utf8");
+   for(const statement of forward.split("--> statement-breakpoint"))if(statement.trim())await db.execute(sql.raw(statement));
+  }
  },45000);
  afterAll(async()=>{await database?.cleanup();},30000);
  async function seed(){
@@ -23,7 +25,7 @@ describe("original remote workload process/resource projection (actual PostgreSQ
  }
  const state=async(f:Awaited<ReturnType<typeof seed>>)=>(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,f.runId)))[0]!;
  const occupancy=async(companyId:string)=>{const [row]=await db.execute<{count:string}>(sql`select public.aw_v10_resource_durable_occupancy(${companyId}::uuid)::text as count`);return Number(row!.count);};
- const event=(f:Awaited<ReturnType<typeof seed>>,eventType:string)=>appendHeartbeatRunEvent(db,{...f,eventType,stream:"system",payload:{fixture:"SQL projection only; signed API positive belongs to original Sandbox fixture"}});
+ const event=(f:Awaited<ReturnType<typeof seed>>,eventType:string,payload:Record<string,unknown>={fixture:"SQL projection only; signed API positive belongs to original Sandbox fixture"})=>appendHeartbeatRunEvent(db,{...f,eventType,stream:"system",payload});
  it("projects an original server event through the existing guard without erasing historical PID/group",async()=>{
   const f=await seed();await event(f,"native.process_start_requested");expect(await occupancy(f.companyId)).toBe(1);
   await event(f,NATIVE_REMOTE_WORKLOAD_STOPPED);expect((await state(f)).nativeProcessCleanupPending).toBe(false);expect(await occupancy(f.companyId)).toBe(0);
@@ -35,6 +37,15 @@ describe("original remote workload process/resource projection (actual PostgreSQ
  });
  it("retains original local-stop behavior",async()=>{
   const f=await seed();await event(f,"native.process_start_requested");await event(f,"native.local_process_stopped");expect((await state(f)).nativeProcessCleanupPending).toBe(false);expect(await occupancy(f.companyId)).toBe(0);
+ });
+ it("requires the exact in-process admission and never closes a live process from its settled event",async()=>{
+  const f=await seed();const admission=await event(f,"native.in_process_backend_admitted");
+  expect((await state(f)).nativeProcessCleanupPending).toBe(true);
+  await event(f,"native.process_start_requested");expect((await state(f)).nativeProcessCleanupPending).toBe(true);
+  await event(f,"native.in_process_backend_settled",{admissionEventSeq:admission.row.seq});
+  expect((await state(f)).nativeProcessCleanupPending).toBe(true);expect(await occupancy(f.companyId)).toBe(1);
+  await expect(event(f,"native.in_process_backend_settled",{admissionEventSeq:999999})).rejects.toMatchObject({cause:{code:"23514"}});
+  expect((await state(f)).nativeProcessCleanupPending).toBe(true);expect(await occupancy(f.companyId)).toBe(1);
  });
  it("ignores imported/copy source events and keeps direct projection writes fenced",async()=>{
   const f=await seed();await event(f,"native.process_start_requested");

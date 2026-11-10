@@ -196,7 +196,7 @@ export async function captureNativeAcceptedFinalizedSummaryOwner(input: {
     eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
     eq(heartbeatRuns.runtimeMode, "native"))).for("share");
   if (!source || source.run.nativeInputSourceProtocolVersion !== 1 || !source.run.finishedAt ||
-    !["succeeded", "failed", "timed_out", "cancelled"].includes(source.run.status) ||
+    source.run.status !== "succeeded" || source.run.nativePhase !== "committed" || source.run.nativeProcessCleanupPending !== false ||
     source.receiptDigestValid !== true || source.inputDigestValid !== true ||
     !await canActorReadHeartbeatRunPrivacy(input.db, input.reader, source.run)) return null;
   const [coordinator] = await input.db.select().from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.runId, source.run.id),
@@ -872,7 +872,7 @@ export async function buildExecutionContinuation(input: {
       // Every included historical outcome is selected through its actual
       // authoritative owner, not only the triggering row.
       await materializeNativeInteractionResponses({ db, companyId, issueId, runId: receiver.id, agentId: input.agentId,
-        interactionIds: materializableOutcomes.map(outcome => outcome.id),
+        interactionIds: materializableOutcomes.map(outcome => outcome.id), sourceReader: outcomeReader,
         onContinuationSourceCapture: capture => { governedInteractions.push(capture); },
         onAnsweredQuestionCapture: capture => { answeredQuestions.push(capture); },
         onHumanReviewWithdrawalCapture: capture => { humanReviewWithdrawals.push(capture); } });

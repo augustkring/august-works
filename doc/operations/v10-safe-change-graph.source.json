@@ -21,13 +21,13 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1982,
+    "sourceDeltaPathCount": 1984,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14034,
+    "fullDiffPathCount": 14071,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -16355,6 +16355,12 @@
           "sha256": null
         },
         {
+          "path": "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "packages/db/src/migrations/meta/0572_snapshot.json",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -16362,6 +16368,12 @@
         },
         {
           "path": "packages/db/src/migrations/meta/0573_snapshot.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "packages/db/src/migrations/meta/0574_snapshot.json",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
           "sha256": null
@@ -17448,8 +17460,10 @@
         "packages/adapters/pi-local/src/server/test.ts",
         "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
         "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
+        "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
         "packages/db/src/migrations/meta/0572_snapshot.json",
         "packages/db/src/migrations/meta/0573_snapshot.json",
+        "packages/db/src/migrations/meta/0574_snapshot.json",
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
@@ -17648,8 +17662,10 @@
         "packages/adapters/pi-local/src/server/test.ts",
         "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
         "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
+        "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
         "packages/db/src/migrations/meta/0572_snapshot.json",
         "packages/db/src/migrations/meta/0573_snapshot.json",
+        "packages/db/src/migrations/meta/0574_snapshot.json",
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",

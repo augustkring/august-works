@@ -8008,6 +8008,8 @@ describe("native process ownership", () => {
         onSpawn,
       }),
     );
+    expect(updates.some(update => update.values.eventType === "native.in_process_backend_admitted" ||
+      update.values.eventType === "native.in_process_backend_settled")).toBe(false);
     expect(onSpawn).toHaveBeenCalledWith(processMetadata);
   });
 
