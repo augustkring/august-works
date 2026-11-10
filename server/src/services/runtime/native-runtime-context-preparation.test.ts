@@ -10,6 +10,7 @@ import type { RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "../native-runtime/runtime-context.test-fixture.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { nativeWorkspaceSyncInternals } from "../native-runtime/native-workspace-sync.js";
 import { validateNativeManagedWorkspaceEnvironment, stageRemoteRunnerDirectory, stageRemoteRunnerFile } from "../native-runtime/native-session-executor.js";
 import { exactNativeWorkspacePrepareCommand, exactNativeRuntimeContextPreparationOwner } from "./control.js";
 
@@ -97,6 +98,36 @@ describe("Native runtime-context preparation owner", () => {
     expect(commandRequests.length).toBeGreaterThanOrEqual(4);
     for (const request of commandRequests)
       expect(exactNativeWorkspacePrepareCommand({ request, taskRoot, execution })).toBe(true);
+
+    // Capture the actual finalizer producer with an opaque URI-form lease ID.
+    const providerLeaseId = `sandbox://fake/${runId}/${randomUUID()}`;
+    const stampExecute = vi.fn(async (_commandInput: { command: string; args?: string[] }) =>
+      ({ exitCode: 0, timedOut: false, stdout: "", stderr: "" }));
+    const stamp = { schema: "paperclip.native-workspace-stamp/v1",
+      workspaceId: execution.binding.executionWorkspaceId, remoteCwd: taskRoot,
+      providerLeaseId, finalizedRunId: runId, hostSha256: "a".repeat(64) };
+    await nativeWorkspaceSyncInternals.writeRemoteStamp({ target: { kind: "remote", transport: "sandbox",
+      remoteCwd: taskRoot, shellCommand: "sh", runner: { execute: stampExecute } } as any,
+      stamp, nativeWorkspacePreparation: true });
+    const [stampInput] = stampExecute.mock.calls[0]!;
+    const stampRequest = { argv: [stampInput.command, ...(stampInput.args ?? [])], cwd: taskRoot,
+      stdinBase64: "", env: {} } as RuntimeSandboxExecRelayRequest;
+    expect(exactNativeWorkspacePrepareCommand({ request: stampRequest, taskRoot, execution,
+      expectedProviderLeaseId: providerLeaseId })).toBe(true);
+    expect(exactNativeWorkspacePrepareCommand({ request: stampRequest, taskRoot, execution })).toBe(false);
+    expect(exactNativeWorkspacePrepareCommand({ request: stampRequest, taskRoot, execution,
+      expectedProviderLeaseId: `${providerLeaseId}-different` })).toBe(false);
+    expect(exactNativeWorkspacePrepareCommand({ request: { ...stampRequest, env: { PATH: "/tmp" } },
+      taskRoot, execution, expectedProviderLeaseId: providerLeaseId })).toBe(false);
+    const invalidHashStamp = { ...stamp, hostSha256: "z" };
+    await nativeWorkspaceSyncInternals.writeRemoteStamp({ target: { kind: "remote", transport: "sandbox",
+      remoteCwd: taskRoot, shellCommand: "sh", runner: { execute: stampExecute } } as any,
+      stamp: invalidHashStamp, nativeWorkspacePreparation: true });
+    const [invalidHashInput] = stampExecute.mock.calls[1]!;
+    expect(exactNativeWorkspacePrepareCommand({ request: { ...stampRequest,
+      argv: [invalidHashInput.command, ...(invalidHashInput.args ?? [])] }, taskRoot, execution,
+      expectedProviderLeaseId: providerLeaseId })).toBe(false);
+
     const request = { ...requests[0]!, argv: ["sh", "-c", NATIVE_GIT_CONTEXT_PROBE_SCRIPT,
       "paperclip-git-context", "managed"], stdinBase64: "" };
     expect(exactNativeWorkspacePrepareCommand({ request, taskRoot, execution })).toBe(true);

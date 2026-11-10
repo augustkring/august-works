@@ -1,0 +1,52 @@
+{
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/services/runtime/native-runtime-context-preparation.test.ts",
+    "src/__tests__/native-workspace-sync.test.ts",
+    "--reporter=verbose",
+    "--bail=1"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.114200419280678e-05,
+  "sourceManifest": "native-workspace-stamp-current-lease-r304-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 16.047395772009622,
+  "stopReason": null,
+  "nodeHeapMiB": 768,
+  "ownedDescendantRssLimitBytes": 6442450944,
+  "observedPeakOwnedDescendantRssBytes": 1458507776,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 370651,
+      "parentPid": 370604,
+      "executable": "node",
+      "rssBytes": 768327680,
+      "nodeOptions": "--max-old-space-size=768"
+    },
+    {
+      "pid": 370675,
+      "parentPid": 370651,
+      "executable": "node",
+      "rssBytes": 690180096,
+      "nodeOptions": "--max-old-space-size=768"
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 3,
+  "observedPostgresRelatedPids": [],
+  "uniqueTempRoot": "/var/tmp/mpg-d783sstf",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 71,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+}

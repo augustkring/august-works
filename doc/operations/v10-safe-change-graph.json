@@ -5517,7 +5517,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-workspace-sync.ts",
-          "sha256": "294a61b8b8bea7b372ff84c8bba5596021e79a1af2b20df82585d193d8cdb962"
+          "sha256": "c2bb8fe997f47bfaca3ed5c18bc4f98811b1013658c8748daca7a12e175de27e"
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
@@ -7232,7 +7232,7 @@
         },
         {
           "path": "server/src/services/runtime/native-runtime-context-preparation.test.ts",
-          "sha256": "2fb7fd07ec96d367997c3598c45b8cea6afdedfc8a047d0dae89dada9175a40f"
+          "sha256": "0298a815c7b5dbc39a6809f437b0acedb021ed43a710d1582d22e1d97907f87b"
         }
       ],
       "kind": "safe_change_record",
@@ -10903,7 +10903,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-workspace-sync.ts",
-          "sha256": "294a61b8b8bea7b372ff84c8bba5596021e79a1af2b20df82585d193d8cdb962"
+          "sha256": "c2bb8fe997f47bfaca3ed5c18bc4f98811b1013658c8748daca7a12e175de27e"
         },
         {
           "path": "server/src/services/onboarding-seed.ts",
@@ -24008,7 +24008,7 @@
         },
         {
           "path": "server/src/services/runtime/control.ts",
-          "sha256": "cad66dfa516f84a88c89df5994c6bb05b661969a32f2fa462560e8dae96114d7"
+          "sha256": "2f2d476d103a21129fd6fda9ba427d0a6cefa08637cd083aa0f133c0b869d1f7"
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -45607,7 +45607,7 @@
       "id": "source:server/src/services/native-runtime/native-workspace-sync.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-workspace-sync.ts",
-      "sha256": "294a61b8b8bea7b372ff84c8bba5596021e79a1af2b20df82585d193d8cdb962",
+      "sha256": "c2bb8fe997f47bfaca3ed5c18bc4f98811b1013658c8748daca7a12e175de27e",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-11"
@@ -47021,7 +47021,7 @@
       "id": "source:server/src/services/runtime/native-runtime-context-preparation.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/native-runtime-context-preparation.test.ts",
-      "sha256": "2fb7fd07ec96d367997c3598c45b8cea6afdedfc8a047d0dae89dada9175a40f",
+      "sha256": "0298a815c7b5dbc39a6809f437b0acedb021ed43a710d1582d22e1d97907f87b",
       "changeIds": [
         "SCR-V10-HOTSPOT-05"
       ],
@@ -61104,7 +61104,7 @@
       "id": "source:server/src/services/runtime/control.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/control.ts",
-      "sha256": "cad66dfa516f84a88c89df5994c6bb05b661969a32f2fa462560e8dae96114d7",
+      "sha256": "2f2d476d103a21129fd6fda9ba427d0a6cefa08637cd083aa0f133c0b869d1f7",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],

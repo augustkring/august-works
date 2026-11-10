@@ -467,8 +467,8 @@ export function exactNativeWorkspacePrepareCommand(input: {
         if (body.schema === "paperclip.native-workspace-stamp/v1" &&
             body.workspaceId === input.execution.binding.executionWorkspaceId && body.remoteCwd === input.taskRoot &&
             body.finalizedRunId === input.execution.binding.runId && typeof body.providerLeaseId === "string" &&
-            /^[A-Za-z0-9._:-]{1,256}$/.test(body.providerLeaseId) &&
-            (input.expectedProviderLeaseId === undefined || body.providerLeaseId === input.expectedProviderLeaseId) &&
+            input.expectedProviderLeaseId !== undefined && body.providerLeaseId === input.expectedProviderLeaseId &&
+            Object.keys(input.request.env ?? {}).length === 0 &&
             typeof body.hostSha256 === "string" && /^[a-f0-9]{64}$/.test(body.hostSha256)) return true;
       } catch { /* malformed remote stamp is not a trusted workspace operation */ }
     }
@@ -3868,7 +3868,8 @@ export function runtimeControlService(
             ((nativeAttachmentCleanup && attachmentOperation.phase === "cleanup") ||
               (nativeAttachmentStage && attachmentOperation.phase !== "cleanup"))
           : nativeWorkspacePrepare
-          ? exactNativeWorkspacePrepareCommand({ request, taskRoot: workerPreparationRoot, execution })
+          ? exactNativeWorkspacePrepareCommand({ request, taskRoot: workerPreparationRoot, execution,
+            expectedProviderLeaseId: source.lease.providerLeaseId ?? undefined })
           : nativeRuntimeContextPrepare
             ? exactNativeRuntimeContextPreparationOwner({ request, taskRoot: workerPreparationRoot, execution,
               companyId: source.run.companyId, runId: source.run.id, agentId: source.run.agentId!,
@@ -4131,6 +4132,7 @@ export function runtimeControlService(
           : nativeWorkspacePrepare
             ? execution !== null && expectedTaskRoot !== null && exactNativeWorkspacePrepareCommand({
               request, taskRoot: expectedTaskRoot, execution,
+              expectedProviderLeaseId: source.lease.providerLeaseId ?? undefined,
             })
             : nativeRuntimeContextPrepare
               ? exactRuntimeContextOwner

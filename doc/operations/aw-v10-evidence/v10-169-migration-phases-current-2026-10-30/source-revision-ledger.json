@@ -1609,5 +1609,57 @@
     },
     "historicalRequirementStatusesPromoted": 0,
     "migrationRegisterChanged": false
+  },
+  "nativeRuntimeWorkspaceStampLeaseSourceReview20261110": {
+    "sourceHead": "89e8c9d84aec024ce56b0568c40e2caf998c84e1",
+    "worktreeDisposition": "3 exact Root-accepted stamp/lease source/test paths changed after sourceHead; hashes describe this overlay",
+    "changes": [
+      {
+        "path": "server/src/services/native-runtime/native-workspace-sync.ts",
+        "oldSha256": "294a61b8b8bea7b372ff84c8bba5596021e79a1af2b20df82585d193d8cdb962",
+        "newSha256": "c2bb8fe997f47bfaca3ed5c18bc4f98811b1013658c8748daca7a12e175de27e",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/runtime/control.ts",
+        "oldSha256": "cad66dfa516f84a88c89df5994c6bb05b661969a32f2fa462560e8dae96114d7",
+        "newSha256": "2f2d476d103a21129fd6fda9ba427d0a6cefa08637cd083aa0f133c0b869d1f7",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/runtime/native-runtime-context-preparation.test.ts",
+        "oldSha256": "2fb7fd07ec96d367997c3598c45b8cea6afdedfc8a047d0dae89dada9175a40f",
+        "newSha256": "0298a815c7b5dbc39a6809f437b0acedb021ed43a710d1582d22e1d97907f87b",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-05"
+        ]
+      }
+    ],
+    "reason": "Bind Native runtime context preparation and workspace synchronization to the exact opaque provider lease, with empty inherited environment and worker/conversation source lease supplied explicitly. Capture the actual remote workspace write stamp in regression coverage; preserve fail-closed lease validation.",
+    "qualificationBoundary": "Bounded source/software evidence only: R304: all nine Native module cases passed. R305 genuine OpenCode Task plus conversation erase SDK integration passed 139.034s of case execution and 160.855s total harness with stable source pins and no OOM. This does not qualify other SDK/provider modes, deployment, production Host, or aggregate V10 completion. R306 full server TypeScript check passed in 104.734s. Host/durable follow-up files are outside this exact three-file checkpoint.",
+    "sourceGraphOwnersVerified": {
+      "server/src/services/native-runtime/native-workspace-sync.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-11"
+      ],
+      "server/src/services/runtime/control.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/runtime/native-runtime-context-preparation.test.ts": [
+        "SCR-V10-HOTSPOT-05"
+      ]
+    },
+    "helpReviewDisposition": {
+      "updatedExistingLinkedPairs": [],
+      "affectedPairCount": 0,
+      "noNewPairsAdded": true
+    },
+    "historicalRequirementStatusesPromoted": 0,
+    "migrationRegisterChanged": false
   }
 }

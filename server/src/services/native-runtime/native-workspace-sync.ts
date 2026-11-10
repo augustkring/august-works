@@ -1136,5 +1136,6 @@ export const nativeWorkspaceSyncInternals = {
   writeDescriptor,
   readDescriptor,
   readReference: readNativeWorkspaceSyncReference,
+  writeRemoteStamp,
   sha256,
 };
