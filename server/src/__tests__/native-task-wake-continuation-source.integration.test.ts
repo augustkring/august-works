@@ -1,13 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { agentWakeupRequests, companyMemberships, createDb, heartbeatRuns, issueComments, issues, issueThreadInteractions, toolInvocations, toolActionRequests } from "@paperclipai/db";
+import { agentWakeupRequests, companyMemberships, createDb, documentRevisions, heartbeatRuns, issueComments, issues, issueThreadInteractions, toolInvocations, toolActionRequests } from "@paperclipai/db";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
+import { documentService } from "../services/documents.js";
+import { getIssueContinuationSummaryDocument, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY } from "../services/issue-continuation-summary.js";
 import { buildExecutionContinuation, type NativeTaskContinuationCapture } from "../services/execution-continuation.js";
 import { nativeRuntimeContextFixture } from "../services/native-runtime/runtime-context.test-fixture.js";
 import { buildNativeExecutionInput } from "../services/native-runtime/native-execution-input.js";
@@ -50,6 +52,7 @@ async function writeFirstReceipt(input: {
   companyId: string; issueId: string; agentId: string; runId: string; responsibleUserId: string;
   sourceSet: Exclude<ReturnType<typeof buildNativeBootstrapSourceSet>, null>;
   executionInput: ReturnType<typeof buildNativeExecutionInput>; contextSnapshot: Record<string, unknown>;
+  runnerProfileJson?: Record<string, unknown>;
 }) {
   const receiptBody = { version: 1 as const, binding: { companyId: input.companyId, issueId: input.issueId,
     agentId: input.agentId, runId: input.runId, responsibleUserId: input.responsibleUserId },
@@ -57,17 +60,26 @@ async function writeFirstReceipt(input: {
     dispatches: [], additionalInputs: [] };
   const receipt = nativeRunInputSourceReceiptSchema.parse({ ...receiptBody, digest: await jsonbSha256(receiptBody) });
   await db.update(heartbeatRuns).set({ contextSnapshot: input.contextSnapshot,
-    runnerProfileJson: { nativeExecutionInput: input.executionInput, nativeInputSourceReceipt: receipt } })
+    runnerProfileJson: { ...input.runnerProfileJson, nativeExecutionInput: input.executionInput, nativeInputSourceReceipt: receipt } })
     .where(eq(heartbeatRuns.id, input.runId));
   return receipt;
 }
 
-async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
+async function fixture(otherHumanHistory = false, deferFirstReceipt = false, summaryOnlyAssignment = false) {
   const f = await seedV5Presences(db), actor = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
   const tasks = issueService(db);
   const task = await tasks.create(f.home, { title: "Source-owner continuation Task", description: "Original Task context",
     status: "todo", assigneeAgentId: f.presence.id, responsibleUserId: f.userId, createdByUserId: f.userId }, db, undefined,
     { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+  let summaryDocument: Awaited<ReturnType<typeof getIssueContinuationSummaryDocument>> = null;
+  let summarySource: Parameters<NonNullable<Parameters<typeof getIssueContinuationSummaryDocument>[2]["onSourceCapture"]>>[0] = null;
+  if (summaryOnlyAssignment) {
+    await documentService(db).upsertIssueDocument({ issueId: task.id, key: ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
+      title: "Continuation Summary", format: "markdown", body: "A truthful, current handoff for the assigned Human.",
+      createdByUserId: f.userId, manualInputActor: actor });
+    summaryDocument = await getIssueContinuationSummaryDocument(db, task.id, { onSourceCapture: capture => { summarySource = capture; } });
+    if (!summaryDocument || !summarySource) throw new Error("component_current_summary_owner_missing");
+  }
   if (otherHumanHistory) {
     const otherUserId = `other-human-${randomUUID()}`;
     const otherActor = await seedCurrentHumanSourceActor(db, [f.home], otherUserId);
@@ -76,12 +88,14 @@ async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
     await tasks.addComment(task.id, "Earlier readable history from another Human.", { userId: otherUserId },
       { manualInputActor: otherActor });
   }
-  const comment = await tasks.addComment(task.id, "The real current Human request.", { userId: f.userId }, { manualInputActor: actor });
+  const comment = summaryOnlyAssignment ? null : await tasks.addComment(task.id, "The real current Human request.", { userId: f.userId }, { manualInputActor: actor });
+  const wakeReason = summaryOnlyAssignment ? "issue_assigned" : "issue_commented";
   const [wake] = await db.insert(agentWakeupRequests).values({ companyId: f.home, agentId: f.presence.id,
-    source: "automation", triggerDetail: "system", reason: "issue_commented", status: "claimed",
-    requestedByActorType: "user", requestedByActorId: f.userId, payload: { issueId: task.id, commentId: comment.id } }).returning();
+    source: summaryOnlyAssignment ? "assignment" : "automation", triggerDetail: "system", reason: wakeReason, status: "claimed",
+    requestedByActorType: "user", requestedByActorId: f.userId,
+    payload: { issueId: task.id, ...(comment ? { commentId: comment.id } : { mutation: "create" }) } }).returning();
   if (!wake) throw new Error("component_wake_missing");
-  const context = { issueId: task.id, wakeReason: "issue_commented", commentId: comment.id };
+  const context = { issueId: task.id, wakeReason, ...(comment ? { commentId: comment.id } : {}) };
   const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, issueId: task.id,
     nativeIssueId: task.id, runtimeMode: "native", status: "running", responsibleUserId: f.userId,
     wakeupRequestId: wake.id, nativeInputSourceProtocolVersion: 1, contextSnapshot: context }).returning();
@@ -89,14 +103,15 @@ async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
   await db.update(agentWakeupRequests).set({ runId: run.id }).where(eq(agentWakeupRequests.id, wake.id));
   let selected: NativeTaskContinuationCapture | null = null;
   const envelope = await buildExecutionContinuation({ db, companyId: f.home, issueId: task.id, agentId: f.presence.id,
-    runId: run.id, context, summary: null, exposeLowTrustRaw: false,
-    onContinuationSourceCapture: capture => { selected = capture; } });
+    runId: run.id, context, summary: summaryDocument?.body ?? null,
+    ...(summaryDocument && summarySource ? { summaryDocument: { source: summarySource, value: summaryDocument } } : {}),
+    exposeLowTrustRaw: false, onContinuationSourceCapture: capture => { selected = capture; } });
   const capture = selected as NativeTaskContinuationCapture | null;
   if (!capture) throw new Error("component_final_capture_missing");
   const [owner] = await db.select({ task: issues, version: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
     hash: sql<string>`public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))` }).from(issues).where(eq(issues.id, task.id));
   if (!owner) throw new Error("component_task_owner_missing");
-  const payload = { reason: "issue_commented", executionContinuation: envelope, attachmentOmissions: [], externalChatProvider: null,
+  const payload = { reason: wakeReason, executionContinuation: envelope, attachmentOmissions: [], externalChatProvider: null,
     recovery: null, issue: { id: task.id, identifier: task.identifier, title: task.title, description: task.description,
       descriptionTruncated: false, status: task.status, priority: task.priority, workMode: task.workMode },
     agentMessage: null, childIssueSummaries: [], childIssueSummaryTruncated: false, dispositionRepair: null,
@@ -104,11 +119,14 @@ async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
     externalChatQuestionResponse: null, externalInteractionContinuation: false, checkboxSelection: null,
     checkedOutByHarness: false, externalChatExecutionBound: false, simplifiedEnglishInteractions: false,
     dependencyBlockedInteraction: false, treeHoldInteraction: false, activeTreeHold: {}, unresolvedBlockerIssueIds: [],
-    unresolvedBlockerSummaries: [], executionStage: null, taskWatchdog: null, skillTest: null, continuationSummary: null,
+    unresolvedBlockerSummaries: [], executionStage: null, taskWatchdog: null, skillTest: null,
+    continuationSummary: summaryDocument ? { key: summaryDocument.key, title: summaryDocument.title, body: summaryDocument.body,
+      bodyTruncated: summaryDocument.body.length > 4_000, sourceTrust: summaryDocument.sourceTrust,
+      updatedAt: summaryDocument.updatedAt.toISOString() } : null,
     commentIds: [], latestCommentId: null, comments: [], annotationDeltas: [], planReviewContext: null, documentReviewContext: null,
     commentWindow: { requestedCount: 0, includedCount: 0, missingCount: 0 }, truncated: false, fallbackFetchNeeded: false };
   const wakeSource = captureNativeTaskWakeSource({ companyId: f.home, issueId: task.id, agentId: f.presence.id, runId: run.id,
-    responsibleUserId: f.userId, wakeupRequestId: wake.id, persistedWakeReason: "issue_commented", sourceVersion: owner.version,
+    responsibleUserId: f.userId, wakeupRequestId: wake.id, persistedWakeReason: wakeReason, sourceVersion: owner.version,
     task: { id: task.id, identifier: task.identifier, title: task.title, description: task.description,
       status: task.status, priority: task.priority, workMode: task.workMode }, payload, continuationCapture: capture });
   expect(wakeSource).toBeTruthy(); if (!wakeSource) throw new Error("component_wake_not_closed");
@@ -120,7 +138,10 @@ async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
       payloadSourceSnapshot: owner.task.payloadSourceSnapshot }], runtimeInputs: [], contextManifestIds: [], rolePackInputs: [],
     unsupportedInputPresent: false,
     taskWakeCommentCandidates: capture.commentSources.map(value => ({ kind: "comment", id: value.input.commentId,
-      input: value.input, payloadSourceSnapshot: value.payloadSourceSnapshot })), additionalInputs: [wakeSource] });
+      input: value.input, payloadSourceSnapshot: value.payloadSourceSnapshot })),
+    taskWakeDocumentCandidates: capture.summary ? [{ kind: "document_revision", id: capture.summary.source.input.revisionId,
+      input: capture.summary.source.input, payloadSourceSnapshot: capture.summary.source.payloadSourceSnapshot }] : [],
+    additionalInputs: [wakeSource] });
   expect(sourceSet).toBeTruthy(); if (!sourceSet) throw new Error("component_source_set_missing");
   // The DB receipt trigger requires the actual typed native execution input.
   // This component-only reader fixture does not create a dispatch intent or
@@ -130,20 +151,54 @@ async function fixture(otherHumanHistory = false, deferFirstReceipt = false) {
     taskPrompt: task.title, wakePayload: payload });
   const receipt = executionInput ? await writeFirstReceipt({ companyId: f.home, issueId: task.id,
     agentId: f.presence.id, runId: run.id, responsibleUserId: f.userId, sourceSet, executionInput,
-    contextSnapshot: { ...context, executionContinuation: envelope, paperclipWake: payload } }) : null;
+    contextSnapshot: { ...context, executionContinuation: envelope, paperclipWake: payload },
+    runnerProfileJson: { nativeBootstrapContinuationSummaryDocument: capture.summary ?? null } }) : null;
   const reader = { type: "agent" as const, source: "agent_jwt" as const, companyId: f.home,
     agentId: f.presence.id, runId: run.id, onBehalfOfUserId: f.userId };
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.home, issueId: task.id, runId: run.id,
     actor: reader, ...sourceSet });
-  return { f, actor, task, comment, run, wake, envelope, capture, validate, sourceSet, reader, payload, executionInput, receipt };
+  return { f, actor, task, comment, summaryDocument, run, wake, envelope, capture, validate, sourceSet, reader, payload, executionInput, receipt };
 }
 
 it("captures a real initial Human comment and independently revalidates its selected source rendition", async () => {
   const f = await fixture();
   expect(f.capture.envelope).toEqual(f.envelope);
-  expect(f.capture.envelope.originCommentIds).toEqual([f.comment.id]);
-  expect(f.capture.envelope.objective).toBe(f.comment.body);
+  expect(f.capture.envelope.originCommentIds).toEqual([f.comment!.id]);
+  expect(f.capture.envelope.objective).toBe(f.comment!.body);
   await expect(f.validate()).resolves.toBeUndefined();
+}, 30_000);
+
+// Source-owner component only. This does not qualify a provider, create an
+// accepted result, or claim Native admission/runtime proof.
+it("revalidates a summary-only issue assignment against current Task Human and document owners", async () => {
+  const f = await fixture(false, false, true);
+  expect(f.comment).toBeNull();
+  expect(f.capture.envelope.messages).toEqual([]);
+  expect(f.capture.envelope.originCommentIds).toEqual([]);
+  expect(f.capture.envelope.completedWork).toBe(f.summaryDocument?.body);
+  expect(f.capture.currentHumanAssignment).toEqual({ companyId: f.f.home, issueId: f.task.id,
+    agentId: f.f.presence.id, responsibleUserId: f.f.userId });
+  expect(f.wake.reason).toBe("issue_assigned");
+  await expect(f.validate()).resolves.toBeUndefined();
+
+  const [beforeWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, f.wake.id));
+  await db.update(agentWakeupRequests).set({ reason: "on_demand" }).where(eq(agentWakeupRequests.id, f.wake.id));
+  await expect(f.validate()).rejects.toBeDefined();
+  if (beforeWake) await db.update(agentWakeupRequests).set({ reason: beforeWake.reason }).where(eq(agentWakeupRequests.id, f.wake.id));
+
+  const [currentTask] = await db.select({ id: issues.id, responsibleUserId: issues.responsibleUserId })
+    .from(issues).where(eq(issues.id, f.task.id));
+  if (!currentTask) throw new Error("component_summary_task_missing");
+  await db.update(issues).set({ responsibleUserId: `foreign-human-${randomUUID()}` }).where(eq(issues.id, f.task.id));
+  await expect(f.validate()).rejects.toBeDefined();
+  await db.update(issues).set({ responsibleUserId: currentTask.responsibleUserId }).where(eq(issues.id, f.task.id));
+
+  await expect(db.update(documentRevisions).set({ payloadSourceSnapshotInvalidated: true })
+    .where(eq(documentRevisions.id, f.capture.summary!.source.input.revisionId)))
+    .rejects.toMatchObject({ cause: { code: "23514" } });
+  await expect(f.validate()).resolves.toBeUndefined();
+  await documentService(db).deleteIssueDocument(f.task.id, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY);
+  await expect(f.validate()).rejects.toBeDefined();
 }, 30_000);
 
 
@@ -187,20 +242,20 @@ it("retains another legitimate Human's readable history without promoting it to 
   const f = await fixture(true);
   expect(f.capture.envelope.messages).toHaveLength(2);
   expect(f.capture.envelope.messages[0]!.authorId).not.toBe(f.f.userId);
-  expect(f.capture.envelope.originCommentIds).toEqual([f.comment.id]);
+  expect(f.capture.envelope.originCommentIds).toEqual([f.comment!.id]);
   await expect(f.validate()).resolves.toBeUndefined();
 }, 30_000);
 
 it.each(["edit", "tombstone", "delete", "revoke", "forged_wake", "cross_company_wake"] as const)("treats %s as a current source-owner change", async mutation => {
   const f = await fixture(); await f.validate();
   if (mutation === "edit") {
-    await expect(db.update(issueComments).set({ body: "Changed original source" }).where(eq(issueComments.id, f.comment.id)))
+    await expect(db.update(issueComments).set({ body: "Changed original source" }).where(eq(issueComments.id, f.comment!.id)))
       .rejects.toMatchObject({ cause: { code: "23514" } });
     await expect(f.validate()).resolves.toBeUndefined();
     return;
   }
-  if (mutation === "tombstone") await issueService(db).tombstoneComment(f.comment.id, { actorType: "user", userId: f.f.userId });
-  else if (mutation === "delete") await issueService(db).removeComment(f.comment.id);
+  if (mutation === "tombstone") await issueService(db).tombstoneComment(f.comment!.id, { actorType: "user", userId: f.f.userId });
+  else if (mutation === "delete") await issueService(db).removeComment(f.comment!.id);
   else if (mutation === "revoke") await db.update(companyMemberships).set({ status: "inactive" })
     .where(and(eq(companyMemberships.companyId, f.f.home), eq(companyMemberships.principalId, f.f.userId)));
   else if (mutation === "forged_wake") await db.update(agentWakeupRequests)
@@ -208,7 +263,7 @@ it.each(["edit", "tombstone", "delete", "revoke", "forged_wake", "cross_company_
   else {
     const [foreignWake] = await db.insert(agentWakeupRequests).values({ companyId: f.f.guest, agentId: f.f.guestPresence.id,
       source: "automation", reason: "issue_commented", requestedByActorType: "user", requestedByActorId: f.f.userId,
-      payload: { commentId: f.comment.id } }).returning();
+      payload: { commentId: f.comment!.id } }).returning();
     if (!foreignWake) throw new Error("component_foreign_wake_missing");
     await db.update(heartbeatRuns).set({ wakeupRequestId: foreignWake.id }).where(eq(heartbeatRuns.id, f.run.id));
   }
@@ -230,7 +285,7 @@ async function pendingFixture(base?: Awaited<ReturnType<typeof fixture>>, deferF
     status: "awaiting_approval", approvalState: "pending" });
   await db.insert(issueThreadInteractions).values({ id: interactionId, companyId: f.f.home, issueId: f.task.id,
     kind: "request_confirmation", status: "pending", continuationPolicy: "wake_assignee", sourceRunId: producer.id,
-    sourceCommentId: f.comment.id, originCommentIds: [f.comment.id], createdByAgentId: f.f.presence.id,
+    sourceCommentId: f.comment!.id, originCommentIds: [f.comment!.id], createdByAgentId: f.f.presence.id,
     requestedResolverPolicy: "human_only", effectiveResolverPolicy: "human_only", resolverPolicyProvenance: "explicit",
     effectiveResolverPolicySource: "requested", payload: { version: 1, prompt: "Review the pending action.", toolAction: {
       version: 1, actionRequestId: requestId, invocationId, toolName: "railway_update_variable", toolDisplayName: "Update variable",
@@ -309,7 +364,7 @@ it("independently rejects a changed governed rendition after the actual Human de
     taskPrompt: f.task.title, wakePayload: f.payload, interactionResponses: responses });
   await writeFirstReceipt({ companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id, runId: f.run.id,
     responsibleUserId: f.f.userId, sourceSet, executionInput,
-    contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment.id,
+    contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment!.id,
       executionContinuation: f.envelope, paperclipWake: f.payload } });
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.f.home, issueId: f.task.id,
     runId: f.run.id, actor: f.reader, ...sourceSet });
@@ -322,7 +377,7 @@ it("assembles a real pending-note continuation and revalidates its unresolved ow
   const f = await pendingFixture(undefined, true);
   let captured: NativeTaskContinuationCapture | null = null;
   const envelope = await buildExecutionContinuation({ db, companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id,
-    runId: f.run.id, context: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment.id },
+    runId: f.run.id, context: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment!.id },
     summary: null, exposeLowTrustRaw: false, onContinuationSourceCapture: value => { captured = value; } });
   const capture = captured as NativeTaskContinuationCapture | null;
   if (!capture) throw new Error("component_pending_capture_missing");
@@ -347,7 +402,7 @@ it("assembles a real pending-note continuation and revalidates its unresolved ow
     taskPrompt: f.task.title, wakePayload: payload });
   await writeFirstReceipt({ companyId: f.f.home, issueId: f.task.id, agentId: f.f.presence.id, runId: f.run.id,
     responsibleUserId: f.f.userId, sourceSet, executionInput,
-    contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment.id,
+    contextSnapshot: { issueId: f.task.id, wakeReason: "issue_commented", commentId: f.comment!.id,
       executionContinuation: envelope, paperclipWake: payload } });
   const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: f.f.home, issueId: f.task.id,
     runId: f.run.id, actor: f.reader, ...sourceSet });
@@ -393,7 +448,7 @@ it("requires the exact claimed Human comment queue owner rather than an interact
   const f = await blockedHumanSourceFixture();
   const capture = await captureNativeBlockedHumanInteraction(db, f.binding);
   expect(capture).toMatchObject({ ...f.binding, wakeupRequestId: f.wake.id,
-    commentSources: [expect.objectContaining({ kind: "comment", commentId: f.comment.id })],
+    commentSources: [expect.objectContaining({ kind: "comment", commentId: f.comment!.id })],
     unresolvedBlockerIssueIds: [f.blocker.id] });
   await db.update(agentWakeupRequests).set({ requestedByActorType: "system" }).where(eq(agentWakeupRequests.id, f.wake.id));
   await expect(captureNativeBlockedHumanInteraction(db, f.binding)).rejects.toThrow();
@@ -406,7 +461,7 @@ it("rejects Human-tombstoned triggering comments and revoked current Human acces
   const f = await blockedHumanSourceFixture();
   const capture = await captureNativeBlockedHumanInteraction(db, f.binding);
   if (!capture) throw new Error("blocked_source_capture_missing");
-  await issueService(db).tombstoneComment(f.comment.id, { actorType: "user", userId: f.f.userId });
+  await issueService(db).tombstoneComment(f.comment!.id, { actorType: "user", userId: f.f.userId });
   await expect(captureNativeBlockedHumanInteraction(db, f.binding)).rejects.toThrow();
   const second = await blockedHumanSourceFixture();
   await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, second.f.home), eq(companyMemberships.principalId, second.f.userId)));

@@ -138,7 +138,7 @@ import {
   routineRevisionSnapshotV1Schema,
 } from "@paperclipai/shared";
 import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
-import { isForeignKeyViolation } from "../db-errors.js";
+import { isForeignKeyViolation, isOrchestrationCompletionGuardViolation } from "../db-errors.js";
 import { logger } from "../middleware/logger.js";
 import { DELIVERY_QUEUES, notifyDeliveryWork } from "./delivery-work-notifications.js";
 import { parseObject } from "../adapters/utils.js";
@@ -12801,9 +12801,20 @@ export function issueService(db: Db) {
         };
       };
 
-      const result = await (dbOrTx === db
-        ? db.transaction(runUpdate)
-        : runUpdate(dbOrTx));
+      let result: Awaited<ReturnType<typeof runUpdate>>;
+      try {
+        result = await (dbOrTx === db
+          ? db.transaction(runUpdate)
+          : runUpdate(dbOrTx));
+      } catch (error) {
+        if (isOrchestrationCompletionGuardViolation(error)) {
+          throw conflict(
+            "Verify the Task's active Plan before marking the Task done.",
+            { code: "orchestration_completion_requires_server_verification" },
+          );
+        }
+        throw error;
+      }
       if (dbOrTx === db && !postCommitActivityPublications) {
         for (const publication of ownedActivityPublications)
           publishActivity(publication);

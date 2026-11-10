@@ -539,17 +539,22 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           policy: parsed.policy, inputs: parsed.inputs.slice(0, dispatchIndex) });
         replaySourceChecked = true;
         const firstReplay = await replay() as Record<string, unknown>;
+        const originalResult = (initialResult as Record<string, unknown>).result as Record<string, unknown>;
+        // The canonical Memory owner reports duplicate instead of the original
+        // creation status, while retaining the exact same record and result.
+        const expectedMemoryData = { ...originalResult.data as Record<string, unknown>, status: "duplicate" };
+        const expectedReplayResult = { ...originalResult, data: expectedMemoryData, content: JSON.stringify(expectedMemoryData) };
         console.info("managed_source_exact_replay_facts", JSON.stringify({
           status: typeof firstReplay.status === "string" && ["completed", "replayed", "denied", "approval_required", "failed"].includes(firstReplay.status)
             ? firstReplay.status : "other",
           toolMatches: firstReplay.tool === "paperclip-self:remember",
           invocationMatches: firstReplay.invocationId === invocationId,
-          resultMatchesOriginal: JSON.stringify(firstReplay.result) === JSON.stringify((initialResult as Record<string, unknown>).result),
+          resultMatchesCanonicalReplay: nativeSha256(firstReplay.result) === nativeSha256(expectedReplayResult),
           originalResultPresent: Object.prototype.hasOwnProperty.call(initialResult, "result"),
           replayResultPresent: Object.prototype.hasOwnProperty.call(firstReplay, "result"),
         }));
-        expect(firstReplay).toMatchObject({ invocationId, tool: "paperclip-self:remember", status: "replayed",
-          result: (initialResult as Record<string, unknown>).result });
+        expect(firstReplay).toMatchObject({ invocationId, tool: "paperclip-self:remember", status: "replayed" });
+        expect(firstReplay.result).toEqual(expectedReplayResult);
         const invocationKey = `aw-native-tool:${currentRunId}:${callId}`;
         const [beforeRevoke] = await db.select().from(toolInvocations).where(and(
           eq(toolInvocations.companyId, companyId), eq(toolInvocations.idempotencyKey, invocationKey)));
@@ -560,7 +565,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           { reason: "Human revoked this output during its exact managed replay check." }, humanMemoryActor!);
         await assertNativePayloadSourceSetCurrent(db, { companyId, issueId: currentIssueId, runId: currentRunId, actor: agentActor,
           policy: parsed.policy, inputs: parsed.inputs.slice(0, dispatchIndex) });
-        await expect(replay()).rejects.toMatchObject({ reasonCode: "native_memory_capture_invalid" });
+        await expect(replay()).rejects.toMatchObject({ status: 409, reasonCode: "memory_operation_record_unavailable" });
         const invocations = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
           eq(toolInvocations.companyId, companyId), eq(toolInvocations.idempotencyKey, invocationKey)));
         expect(invocations).toHaveLength(1);

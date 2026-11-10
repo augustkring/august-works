@@ -81,6 +81,21 @@ export function ensureFixtureNamespaceSymlink(path: string, target: string): voi
     throw new Error("native_fixture_proc_namespace_link_conflict");
 }
 
+/** Closed completed-span projection; it does not identify a currently active phase. */
+export function projectCompletedNativeStartupSpans(payloads: readonly unknown[]) {
+  const startupSpanNames = new Set(["runner.session.startup", "stage.sync", "runner.runtime.stage",
+    "runner.process.dispatch", "runner.process.launch", "session.checkpoint.restore", "stage.asset.home"]);
+  return payloads.slice(0, 32).flatMap(value => {
+    if (!value || typeof value !== "object") return [];
+    const payload = value as Record<string, unknown>;
+    if (payload.schema !== "paperclip.run-performance-span.v1" || typeof payload.span !== "string" ||
+      !startupSpanNames.has(payload.span) || typeof payload.durationMs !== "number" ||
+      !Number.isFinite(payload.durationMs) || payload.durationMs < 0 ||
+      (payload.outcome !== "ok" && payload.outcome !== "failed" && payload.outcome !== "cancelled")) return [];
+    return [{ span: payload.span, durationMs: Math.min(86_400_000, Math.trunc(payload.durationMs)), outcome: payload.outcome }];
+  }).slice(0, 7);
+}
+
 const hostAgentRequire = createRequire(import.meta.url);
 const { openShellHostEngine, NATIVE_SESSION_UPPER_ERASE_SCRIPT } = hostAgentRequire("../../../../deploy/v6/host-agent/openshell.mjs") as {
   openShellHostEngine: (input: Record<string, unknown>) => any;
@@ -183,6 +198,8 @@ function qualifiedFixtureImageNode(configured: string | undefined): string {
 
 type ManagedSandboxHostInput = {
   db: ReturnType<typeof createDb>;
+  /** Independent one-connection read-only diagnostic pool, never a runtime owner. */
+  diagnosticDb?: ReturnType<typeof createDb>;
   actor: AuthorizationActor;
   companyId: string;
   agentId: string;
@@ -1134,6 +1151,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   };
   let nativeRunnerClosureWitness: NativeRunnerClosureWitness | null = null;
   let activeHostExecStreams = 0;
+  let nextRuntimeExecuteStreamId = 0;
+  const activeRuntimeExecuteStreams = new Map<number, number>();
+  let nextHostOperationId = 0;
+  const activeHostOperations = new Map<number, { operation: string; startedAtMs: number }>();
   const nativeSessionBackingByKey = new Map<string, { sessionKey: string; sessionDigest: string; taskRoot: string;
     runId: string; runnerInstanceId: string; leaseId: string; startBindingDigest: string;
     sandboxId: string; containerId: string; sourceSessions: string; upperSessions: string; originalTreeDigest: string;
@@ -2006,7 +2027,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       await new Promise<void>((resolve, reject) => passthroughServer.close(error => error ? reject(error) : resolve()));
     }
 
-    const hostRun = async (file: string, args: string[], options: { env?: NodeJS.ProcessEnv }) => {
+    const hostRunImpl = async (file: string, args: string[], options: { env?: NodeJS.ProcessEnv }) => {
       if (file === "docker") {
         if (args[0] === "info" && args.includes("{{.ID}}")) return { stdout: "fixture-docker-engine\n", stderr: "" };
         if (args[0] === "info" && args.includes("{{.DockerRootDir}}")) return { stdout: `${dockerRoot}\n`, stderr: "" };
@@ -2234,6 +2255,22 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       }
       throw new Error(`fixture_openshell_command_${command.slice(0, 2).join("_")}`);
     };
+    const safeHostOperation = (file: string, args: string[]) => {
+      const command = file === "docker" ? args : args.slice(4);
+      const operation = command[0] ?? "unknown";
+      if (file === "docker") return new Set(["info", "version", "image", "ps", "inspect", "create", "start", "wait", "logs", "rm", "kill", "update", "exec", "cp"]).has(operation)
+        ? `docker:${operation}` : "docker:other";
+      const named = new Set(["sandbox:list", "sandbox:get", "sandbox:create", "sandbox:start", "sandbox:stop", "sandbox:delete",
+        "profile:describe", "policy:get", "policy:set", "provider:list", "provider:get", "provider:create", "provider:delete"]);
+      const label = `${operation}:${command[1] ?? ""}`;
+      return named.has(label) ? label : new Set(["--version", "version"]).has(operation) ? "version" : "other";
+    };
+    const hostRun = async (file: string, args: string[], options: { env?: NodeJS.ProcessEnv }) => {
+      const id = ++nextHostOperationId;
+      activeHostOperations.set(id, { operation: safeHostOperation(file, args), startedAtMs: Date.now() });
+      try { return await hostRunImpl(file, args, options); }
+      finally { activeHostOperations.delete(id); }
+    };
     const spawnSandboxWorkload = (_file: string, args: string[], options: { env?: NodeJS.ProcessEnv; cwd?: string;
       stdio?: unknown; shell?: boolean; windowsHide?: boolean }) => {
       const separator = args.indexOf("--");
@@ -2295,9 +2332,13 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     await sessionHostEngine.initialize();
     const originalExecuteStream = sessionHostEngine.executeStream.bind(sessionHostEngine);
     sessionHostEngine.executeStream = async (hostInput: any, onOutput: any, signal?: AbortSignal) => {
+      const runtimeExecuteStreamId = ++nextRuntimeExecuteStreamId;
+      let runtimeExecuteStreamStarted = false;
       try {
         const artifactPin = serialTransport && hostInput?.request?.modelBrokerSession?.phase === "start"
           ? await captureOriginalStartArtifact(hostInput) : undefined;
+        activeRuntimeExecuteStreams.set(runtimeExecuteStreamId, Date.now());
+        runtimeExecuteStreamStarted = true;
         return await verifiedSpawnScope.run({ ...hostInput, artifactPin }, () => originalExecuteStream(hostInput, onOutput, signal));
       } catch (error) {
         const request = hostInput?.request;
@@ -2416,6 +2457,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           monitorLabel: argv[0] === "sh" && argv[1] === "-c" && argv[2] === "paperclip-runner-monitor", sourceFrames,
           ...(refreshCredentialFacts ? { refreshCredentialFacts } : {}) });
         throw error;
+      } finally {
+        if (runtimeExecuteStreamStarted) activeRuntimeExecuteStreams.delete(runtimeExecuteStreamId);
       }
     };
   };
@@ -3082,11 +3125,12 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   let hostHeartbeatInFlight: Promise<void> | null = null;
   const postgresLockSnapshots: Array<Record<string, unknown>> = [];
   let postgresLockProbeInFlight = false;
+  let lastPostgresBackendSnapshotAt = 0;
   const probePostgresLocks = async () => {
-    if (process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS !== "1" || postgresLockProbeInFlight || postgresLockSnapshots.length >= 20) return;
+    if (process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS !== "1" || postgresLockProbeInFlight) return;
     postgresLockProbeInFlight = true;
     try {
-      const [sample] = await db.execute(sql`
+      const [sample] = await (input.diagnosticDb ?? db).execute(sql`
         select coalesce(json_agg(json_build_object(
           'pid', activity.pid,
           'applicationName', left(regexp_replace(coalesce(activity.application_name, ''), '[^A-Za-z0-9_.-]', '', 'g'), 64),
@@ -3124,7 +3168,19 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
               'transactionId', lock.transactionid)), '[]'::json)
             from pg_locks lock where lock.pid = activity.pid and
               (lock.locktype in ('advisory', 'transactionid') or lock.relation = 'heartbeat_runs'::regclass))
-        ) order by activity.xact_start asc nulls last), '[]'::json) as sessions
+        ) order by activity.xact_start asc nulls last), '[]'::json) as sessions,
+        coalesce((select json_agg(json_build_object(
+          'pid', activity.pid,
+          'applicationName', left(regexp_replace(coalesce(activity.application_name, ''), '[^A-Za-z0-9_.-]', '', 'g'), 64),
+          'state', coalesce(activity.state, 'unknown'),
+          'waitEventType', activity.wait_event_type,
+          'waitEvent', activity.wait_event,
+          'xactAgeMs', case when activity.xact_start is null then null
+            else greatest(0, (extract(epoch from clock_timestamp() - activity.xact_start) * 1000)::int) end,
+          'queryAgeMs', case when activity.query_start is null then null
+            else greatest(0, (extract(epoch from clock_timestamp() - activity.query_start) * 1000)::int) end
+        ) order by activity.xact_start asc nulls last) from pg_stat_activity activity
+          where activity.datname = current_database() and activity.pid <> pg_backend_pid()), '[]'::json) as backends
         from pg_stat_activity activity
         where activity.datname = current_database() and activity.pid <> pg_backend_pid()
           and (cardinality(pg_blocking_pids(activity.pid)) > 0 or activity.pid = any(
@@ -3134,10 +3190,19 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           ) or (activity.xact_start < clock_timestamp() - interval '2 seconds' and exists (
             select 1 from pg_locks held where held.pid = activity.pid and held.relation = 'heartbeat_runs'::regclass
           )))
-      `) as unknown as Array<{ sessions: unknown }>;
+      `) as unknown as Array<{ sessions: unknown; backends: unknown }>;
       const sessions = sample?.sessions;
-      if (Array.isArray(sessions) && sessions.length > 0 && postgresLockSnapshots.length < 20)
-        postgresLockSnapshots.push({ at: new Date().toISOString(), sessions });
+      const backends = sample?.backends;
+      const hasLockEvidence = Array.isArray(sessions) && sessions.length > 0;
+      const backendSampleDue = Array.isArray(backends) && backends.length > 0 && Date.now() - lastPostgresBackendSnapshotAt >= 4_000;
+      if (hasLockEvidence || backendSampleDue) {
+        lastPostgresBackendSnapshotAt = Date.now();
+        const snapshot = { at: new Date().toISOString(), sessions, backends };
+        postgresLockSnapshots.push(snapshot);
+        if (postgresLockSnapshots.length > 20) postgresLockSnapshots.shift();
+        if (input.diagnosticDb)
+          console.info("conversation_postgres_backend_observation", JSON.stringify(snapshot));
+      }
     } catch {
       // The bounded diagnostic must never alter or mask runtime behavior.
     } finally {
@@ -3182,14 +3247,27 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const reportProgress = async () => {
     if (!expectedRunId) return;
     try {
-      const [run] = await db.select({status:heartbeatRuns.status,errorCode:heartbeatRuns.errorCode})
+      const diagnosticDb = input.diagnosticDb ?? db;
+      const [run] = await diagnosticDb.select({status:heartbeatRuns.status,errorCode:heartbeatRuns.errorCode})
         .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,expectedRunId)));
-      const events = await db.select({type:heartbeatRunEvents.eventType,seq:heartbeatRunEvents.seq})
+      const events = await diagnosticDb.select({type:heartbeatRunEvents.eventType,seq:heartbeatRunEvents.seq})
         .from(heartbeatRunEvents).where(eq(heartbeatRunEvents.runId,expectedRunId)).orderBy(desc(heartbeatRunEvents.seq)).limit(5);
-      const reservations = await db.select({status:orchestrationModelReservations.status,purpose:orchestrationModelReservations.purpose,
+      const spanEvents = await diagnosticDb.select({type:heartbeatRunEvents.eventType,seq:heartbeatRunEvents.seq,payload:heartbeatRunEvents.payload})
+        .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.runId,expectedRunId),eq(heartbeatRunEvents.eventType,"run.performance.span")))
+        .orderBy(desc(heartbeatRunEvents.seq)).limit(32);
+      const completedStartupSpans = projectCompletedNativeStartupSpans(spanEvents.map(event => event.payload));
+      const runtimeExecuteStream = activeRuntimeExecuteStreams.size ? {
+        activeCount: activeRuntimeExecuteStreams.size,
+        elapsedMs: Math.min(86_400_000, Date.now() - Math.min(...activeRuntimeExecuteStreams.values())),
+        activeSafeOperations: [...activeHostOperations.values()].slice(0, 4).map(operation => ({
+          operation: operation.operation, elapsedMs: Math.min(86_400_000, Date.now() - operation.startedAtMs),
+        })),
+      } : { activeCount: 0, elapsedMs: null, activeSafeOperations: [] };
+      const reservations = await diagnosticDb.select({status:orchestrationModelReservations.status,purpose:orchestrationModelReservations.purpose,
         responsePresent:sql<boolean>`${orchestrationModelReservations.providerResponseHash} is not null`})
         .from(orchestrationModelReservations).where(eq(orchestrationModelReservations.conversationRunId,expectedRunId));
-      const snapshot=JSON.stringify({stage:preparationStage,run,events,reservations,
+      const snapshot=JSON.stringify({stage:preparationStage,run,events:events.map(({type,seq})=>({type,seq})),
+        completedStartupSpans,runtimeExecuteStream,reservations,
         hostAction:safeDriveHostObservation(),postgresLockSampleCount:postgresLockSnapshots.length,
         postgresLockSnapshots:postgresLockSnapshots.slice(-4)});
       if(snapshot!==lastProgressSnapshot){lastProgressSnapshot=snapshot;console.info("conversation_software_host_progress",snapshot);}

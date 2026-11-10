@@ -1891,11 +1891,20 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const liveTask = (await db.select().from(issues).where(eq(issues.id, task.id)))[0];
     const manifestBody = liveManifest?.manifest as Record<string, unknown> | undefined;
     const manifestPrincipal = manifestBody?.responsibleUserId;
+    const modelCapabilitySource = input.sandboxRelay ? "sandbox_relay" : minted ? "local_issue_for_run" : "unavailable";
+    const expectedPlanVersion = Number.isSafeInteger(workerModelClaims.expectedPlanVersion)
+      ? workerModelClaims.expectedPlanVersion as number : null;
+    const livePlanVersion = Number.isSafeInteger(livePlan?.version) ? livePlan!.version : null;
     diagnostics.push(`governance fixture predicates: ${JSON.stringify({
+      modelCapabilityPresent: minted !== null,
+      modelCapabilitySource,
+      expectedPlanVersion,
+      livePlanVersion,
+      planVersionMatchesCapability: expectedPlanVersion !== null && livePlanVersion !== null
+        ? livePlanVersion === expectedPlanVersion : null,
       planStatus: livePlan?.status, planActionClass: livePlan?.actionClass, planRiskClass: livePlan?.riskClass,
       planStarted: livePlan?.startedAt instanceof Date, planUnexpired: livePlan?.startedAt instanceof Date &&
         Date.now() < livePlan.startedAt.getTime() + Number(livePlan.budgets.maxWallClockSeconds) * 1000,
-      planVersionMatchesCapability: livePlan?.version === workerModelClaims.expectedPlanVersion,
       budgetCostAvailable: livePlan?.budgets.maxModelCostMinor !== null && livePlan?.budgets.maxModelCostMinor !== undefined,
       workerRunning: liveWorker?.status === "running", workerAgentMatches: liveWorker?.agentId === agentId,
       attemptRunning: liveAttempt?.status === "running", attemptAgentMatches: liveAttempt?.agentId === agentId,

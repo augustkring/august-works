@@ -359,6 +359,9 @@ export interface NativeCommentSourceCapture {
   readonly input: Extract<NativePayloadSourceInput, { kind: "comment" }>;
   // Preserve unknown history. A rendition hash is not a completeness proof.
   readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+  /** Narrow owner for an actual finalized Native presentation comment whose
+   * historical row predates comment Source Snapshot capture. */
+  readonly acceptedPresentationOwner?: import("./execution-continuation.js").NativeAcceptedFinalizedPresentationCommentOwner;
 }
 
 export async function conversationReplay(

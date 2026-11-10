@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createDb, agents, heartbeatRuns, orchestrationModelReservations, orchestrationWorkerAttempts,
-  issueDocuments, documents, environmentLeases } from "@paperclipai/db";
+  issueDocuments, documents, documentRevisions, environmentLeases } from "@paperclipai/db";
 import { verifyNativeCleanupRuntimeState } from "../services/execution-sandbox/run-lease-cleanup.js";
 import { issueService } from "../services/issues.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
@@ -20,7 +20,7 @@ beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "heartbeat-managed-scheduler-"));
   vi.stubEnv("PAPERCLIP_HOME", home);
   database = await startEmbeddedPostgresTestDatabase("heartbeat-managed-scheduler-");
-  db = createDb(database.connectionString);
+  db = createDb(database.connectionString, { maxConnections: 3 });
 }, 60000);
 afterAll(async () => {
   await database?.cleanup();
@@ -314,12 +314,34 @@ it("answers a current Human dependency comment through capped read-only SDK admi
       expect((await db.select().from(issues).where(eq(issues.id, blocker.id)))[0]).toMatchObject({ status: "todo" });
       expect(await db.select().from(issueRelations).where(and(eq(issueRelations.issueId, blocker.id), eq(issueRelations.relatedIssueId, task.id))))
         .toEqual([expect.objectContaining({ type: "blocks" })]);
-      expect(await db.select().from(issueDocuments).where(eq(issueDocuments.issueId, task.id))).toEqual([]);
+      const retainedDocuments = await db.select({ link: issueDocuments, revision: documentRevisions })
+        .from(issueDocuments).innerJoin(documents, eq(documents.id, issueDocuments.documentId))
+        .innerJoin(documentRevisions, eq(documentRevisions.id, documents.latestRevisionId))
+        .where(eq(issueDocuments.issueId, task.id));
+      // The server retains its own continuation record; no work document was
+      // created through the read-only model catalog.
+      expect(retainedDocuments).toHaveLength(1);
+      expect(retainedDocuments[0]).toMatchObject({ link: { key: "continuation-summary" },
+        revision: { createdByRunId: run.id, createdByAgentId: agentId } });
       // Current Human history reads use the original API owners. Retained
       // producer proof must remain readable after the actual Run terminates.
       await assertV7Authorization(db, actor, companyId, "issue:read", { type: "issue", companyId, issueId: task.id });
       await assertAnalyticalContextPayloadAccess(db, companyId, actor, { issueId: task.id });
       const receipt = nativeRunInputSourceReceiptSchema.parse(run.runnerProfileJson?.nativeInputSourceReceipt);
+      const modelDispatches = receipt.dispatches.flatMap(entry => entry.inputs)
+        .filter(source => source.kind === "worker_model_dispatch");
+      expect(modelDispatches).toHaveLength(1);
+      const dispatch = modelDispatches[0]!;
+      const intents = run.runnerProfileJson?.nativeAwModelWireIntents as Array<Record<string, unknown>>;
+      const matchingIntents = intents.filter(intent => intent.reservationId === dispatch.reservationId);
+      expect(matchingIntents).toHaveLength(1);
+      expect(matchingIntents[0]!.responseContentHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(matchingIntents[0]!.responseContentHash).not.toBe(dispatch.responseHash);
+      const [settled] = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.id, dispatch.reservationId));
+      expect(settled).toMatchObject({ purpose: "worker_model", status: "completed",
+        inputHash: dispatch.requestHash, providerResponseHash: dispatch.responseHash,
+        providerWireReceipt: { callId: dispatch.callId, bodySha256: dispatch.wireBodyHash } });
       await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id, runId: run.id,
         actor, ...receipt.bootstrap })).resolves.toBeUndefined();
       const comments = await issueService(db).listComments(task.id);

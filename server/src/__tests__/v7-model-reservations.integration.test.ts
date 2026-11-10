@@ -179,6 +179,7 @@ const support = await getEmbeddedPostgresTestSupport();
   () => {
     let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,
       db: ReturnType<typeof createDb>,
+      diagnosticDb: ReturnType<typeof createDb>,
       f: Awaited<ReturnType<typeof seedV5Presences>>,
       plan: typeof orchestrationPlans.$inferSelect,
       price: ModelTariffCeiling | null,
@@ -199,6 +200,7 @@ const support = await getEmbeddedPostgresTestSupport();
       // Global expiry and offboarding workers must not consume earlier tests’ companies.
       database = await startEmbeddedPostgresTestDatabase("aw-v7-model-budget-");
       db = createDb(database.connectionString, { maxConnections: 3 });
+      diagnosticDb = createDb(database.connectionString, { maxConnections: 1, applicationName: "native12_pg_observer" });
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
@@ -208,12 +210,15 @@ const support = await getEmbeddedPostgresTestSupport();
       } finally {
         cleanupOffboardingProviderFixture = null;
         try {
-          await db?.$client.end({ timeout: 0 });
+          await diagnosticDb?.$client.end({ timeout: 0 });
         } finally {
-          try { await database?.cleanup(); }
+          try { await db?.$client.end({ timeout: 0 }); }
           finally {
-            if (priorRuntimeLockDiagnostics === undefined) delete process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS;
-            else process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS = priorRuntimeLockDiagnostics;
+            try { await database?.cleanup(); }
+            finally {
+              if (priorRuntimeLockDiagnostics === undefined) delete process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS;
+              else process.env.PAPERCLIP_RUNTIME_LOCK_DIAGNOSTICS = priorRuntimeLockDiagnostics;
+            }
           }
         }
       }
@@ -351,10 +356,10 @@ const support = await getEmbeddedPostgresTestSupport();
       catch { return null; }
     };
     const itNativeConversation = it.skipIf(!conversationBinary());
-    // This suite drives a real authenticated Native conversation through the
-    // local runner and broker. Keep Vitest's test watchdog above the bounded
-    // fixture startup/teardown duration without changing any product deadline.
-    const conversationFrameTestTimeoutMs = 120_000;
+    // The managed-conversation fixture can poll for its 180s Run deadline.
+    // Keep Vitest above that bound and allow 60s for setup/cleanup; product,
+    // Plan, lease, and provider deadlines remain unchanged.
+    const conversationFrameTestTimeoutMs = 240_000;
     async function conversationReservationFixture(
       beforeProviderResponse?: (facts: ConversationFrameFacts) => Promise<void>,
       budgetMonthlyCents = 2000,
@@ -364,7 +369,7 @@ const support = await getEmbeddedPostgresTestSupport();
     ) {
       const opencodeBinary = conversationBinary();
       if (!opencodeBinary) throw new Error("qualified_opencode_binary_unavailable");
-      const result = await runManagedNativeConversationFrame({ db, root: os.tmpdir(), opencodeBinary,
+      const result = await runManagedNativeConversationFrame({ db, diagnosticDb, root: os.tmpdir(), opencodeBinary,
         budgetMonthlyCents, ...(conversationTariff ? { tariff: conversationTariff } : {}), beforeProviderResponse,
         afterRunSettledBeforeTeardown, prepareNativeRuntimeContext });
       if (result.providerCallCount < 1) throw new Error(`conversation_provider_request_missing:${JSON.stringify({

@@ -365,6 +365,134 @@ describe("native bootstrap rendered-source closure", () => {
       responsibleUserId: humanId, wakeupRequestId: wakeId, sourceVersion: "1", persistedWakeReason: "on_demand", task,
       payload: { ...commentWake, executionContinuation: capture.envelope }, commentSources: [commentSource], continuationCapture: capture });
     expect(captureInitial()).toMatchObject({ kind: "native_task_wake", runId, issueId });
+
+    // A fresh assignment may have no comments or delivered history. Admit only
+    // the exact, owner-captured current summary and canonical Human assignment.
+    const summaryBody = "Current canonical continuation summary.";
+    const assignmentSummary = { rawTrustHash: nativeSha256(null), source: { input: {
+      kind: "document_revision" as const, issueId, documentId: randomUUID(), revisionId: randomUUID(), contentHash: hash,
+    }, payloadSourceSnapshot: null }, rendition: { key: "continuation-summary", title: "Continuation Summary",
+      body: summaryBody, sourceTrust: null, updatedAt: "2026-10-01T00:00:00.000Z" } };
+    const assignmentContinuation: NativeTaskContinuationCapture["envelope"] = { ...emptyContinuation, version: 1,
+      trigger: { reason: "issue_assigned", interactionId: null, sourceRunId: null },
+      objective: task.description ?? task.title, completedWork: summaryBody,
+      coverage: { kind: "full_task_history", throughCommentId: null, summaryThroughCommentId: null } };
+    const assignmentCapture: NativeTaskContinuationCapture = { companyId, issueId, agentId, runId,
+      responsibleUserId: humanId, wakeupRequestId: wakeId, envelope: assignmentContinuation, commentSources: [],
+      currentHumanAssignment: { companyId, issueId, agentId, responsibleUserId: humanId }, summary: assignmentSummary,
+      wake: { requestedByActorType: "user", requestedByActorId: humanId, reason: "issue_assigned", originCommentIds: [] } };
+    const assignmentPayload: Record<string, unknown> = { ...payload, reason: "issue_assigned", executionContinuation: assignmentContinuation,
+      continuationSummary: { key: assignmentSummary.rendition.key, title: assignmentSummary.rendition.title,
+        body: summaryBody, bodyTruncated: false, sourceTrust: null, updatedAt: assignmentSummary.rendition.updatedAt } };
+    const captureAssignment = (capture = assignmentCapture, currentPayload: Record<string, unknown> = assignmentPayload,
+      persistedWakeReason = "issue_assigned") => captureNativeTaskWakeSource({ companyId, runId, issueId, agentId,
+        responsibleUserId: humanId, wakeupRequestId: wakeId, sourceVersion: "1", persistedWakeReason, task,
+        payload: { ...currentPayload, executionContinuation: capture.envelope }, continuationCapture: capture,
+        commentSources: capture.commentSources.map(source => source.input) });
+    expect(captureAssignment()).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const acceptedSummaryRunId = randomUUID(), acceptedSummaryCommentId = randomUUID();
+    const finalizedAssignment = structuredClone(assignmentCapture);
+    delete finalizedAssignment.summary;
+    finalizedAssignment.envelope.trigger.sourceRunId = acceptedSummaryRunId;
+    const acceptedSummaryMessage = { id: acceptedSummaryCommentId, authorId: agentId, authorType: "agent" as const,
+      body: summaryBody, createdAt: "2026-10-01T00:00:02.000Z", updatedAt: "2026-10-01T00:00:02.000Z",
+      deleted: false, createdByRunId: acceptedSummaryRunId, sourceTrust: null };
+    finalizedAssignment.envelope.messages = [acceptedSummaryMessage];
+    finalizedAssignment.envelope.coverage = { kind: "full_task_history",
+      throughCommentId: acceptedSummaryCommentId, summaryThroughCommentId: null };
+    const acceptedSummaryCommentSource = { kind: "comment" as const, issueId, commentId: acceptedSummaryCommentId,
+      sourceVersion: "1", contentHash: nativeContinuationMessageHash(acceptedSummaryMessage) };
+    finalizedAssignment.commentSources = [{ input: acceptedSummaryCommentSource, payloadSourceSnapshot: null }];
+    finalizedAssignment.finalizedSummary = { companyId, issueId, agentId, receiverRunId: runId,
+      sourceRunId: acceptedSummaryRunId, resultId: randomUUID(), resultCanonicalSha256: "sha256:" + "f".repeat(64),
+      resultCreatedAt: "2026-10-01T00:00:00.000Z", finalizationVersion: "2026-10-01T00:00:01.000Z",
+      assessmentId: randomUUID(), decisionId: randomUUID(), decisionDigest: "a".repeat(64), decisionSnapshotHash: "d".repeat(64),
+      parentReceipt: { version: 1, binding: { companyId, issueId, agentId, runId: acceptedSummaryRunId, responsibleUserId: humanId },
+        bootstrap: { executionInputDigest: "b".repeat(64), policy, inputs: [{ kind: "task", issueId, sourceVersion: "1", contentHash: hash }] },
+        dispatches: [], additionalInputs: [], digest: "c".repeat(64) }, body: summaryBody };
+    const { receiverRunId: _receiverRunId, ...acceptedSummaryOwner } = finalizedAssignment.finalizedSummary;
+    finalizedAssignment.commentSources = [{ input: acceptedSummaryCommentSource, payloadSourceSnapshot: null,
+      acceptedPresentationOwner: { commentSourceIdentity: acceptedSummaryCommentSource, acceptedSummaryOwner } }];
+    const finalizedAssignmentPayload = { ...assignmentPayload, continuationSummary: null };
+    expect(captureAssignment(finalizedAssignment, finalizedAssignmentPayload)).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const forgedPresentationIdentity = structuredClone(finalizedAssignment);
+    forgedPresentationIdentity.commentSources[0]!.acceptedPresentationOwner!.commentSourceIdentity.commentId = randomUUID();
+    expect(captureAssignment(forgedPresentationIdentity, finalizedAssignmentPayload)).toBeNull();
+    const expiredConfirmationId = randomUUID();
+    const expiredConfirmationResult = { version: 1, outcome: "issue_closed", reason: null };
+    const expiredConfirmationOutcome = { id: expiredConfirmationId, kind: "request_confirmation", status: "expired",
+      result: expiredConfirmationResult };
+    const expiredConfirmationProjection: NonNullable<NativeTaskContinuationCapture["adminExpiredInteractions"]>[number]["projection"] = { version: 1, companyId, issueId, interactionId: expiredConfirmationId,
+      sourceVersion: "1", kind: "request_confirmation", status: "expired", result: expiredConfirmationResult,
+      sourceRunId: acceptedSummaryRunId, createdByAgentId: null, resolvedByUserId: humanId, resolvedByAgentId: null,
+      resolvedByRunId: null, resolvedAt: "2026-10-01T00:00:02.000Z", activityId: randomUUID(),
+      activityCreatedAt: "2026-10-01T00:00:01.000Z", activityActorType: "user", activityActorId: humanId,
+      activityAgentId: null, activityRunId: null };
+    const adminExpiryAssignment = structuredClone(finalizedAssignment);
+    adminExpiryAssignment.envelope.interactionOutcomes = [expiredConfirmationOutcome];
+    adminExpiryAssignment.adminExpiredInteractions = [{ companyId, issueId, runId, agentId,
+      projection: expiredConfirmationProjection, interactionOutcome: expiredConfirmationOutcome,
+      source: { kind: "interaction", issueId, interactionId: expiredConfirmationId, sourceVersion: "1",
+        contentHash: nativeSha256({ rendition: "native_issue_closed_interaction_v1", projection: expiredConfirmationProjection,
+          interactionOutcome: expiredConfirmationOutcome }) } }];
+    expect(captureAssignment(adminExpiryAssignment, finalizedAssignmentPayload)).toMatchObject({ kind: "native_task_wake", runId, issueId });
+    const surplusAdminOutcome = structuredClone(adminExpiryAssignment);
+    surplusAdminOutcome.envelope.interactionOutcomes.push({ id: randomUUID(), kind: "request_confirmation", status: "expired",
+      result: expiredConfirmationResult });
+    expect(captureAssignment(surplusAdminOutcome, finalizedAssignmentPayload)).toBeNull();
+    const nullAdminOutcome = structuredClone(adminExpiryAssignment);
+    nullAdminOutcome.envelope.interactionOutcomes = [null as unknown as typeof expiredConfirmationOutcome];
+    expect(captureAssignment(nullAdminOutcome, finalizedAssignmentPayload)).toBeNull();
+    const forgedExpiryActor = structuredClone(adminExpiryAssignment);
+    forgedExpiryActor.adminExpiredInteractions![0]!.projection.activityActorId = "forged-human";
+    forgedExpiryActor.adminExpiredInteractions![0]!.source.contentHash = nativeSha256({ rendition: "native_issue_closed_interaction_v1",
+      projection: forgedExpiryActor.adminExpiredInteractions![0]!.projection,
+      interactionOutcome: forgedExpiryActor.adminExpiredInteractions![0]!.interactionOutcome });
+    expect(captureAssignment(forgedExpiryActor, finalizedAssignmentPayload)).toBeNull();
+    const changedFinalizedBody = structuredClone(finalizedAssignment);
+    changedFinalizedBody.finalizedSummary!.body = "Different finalized summary.";
+    expect(captureAssignment(changedFinalizedBody, finalizedAssignmentPayload)).toBeNull();
+    const changedFinalizedRunBinding = structuredClone(finalizedAssignment);
+    changedFinalizedRunBinding.finalizedSummary!.sourceRunId = randomUUID();
+    expect(captureAssignment(changedFinalizedRunBinding, finalizedAssignmentPayload)).toBeNull();
+    const changedFinalizedReceiverBinding = structuredClone(finalizedAssignment);
+    changedFinalizedReceiverBinding.finalizedSummary!.receiverRunId = randomUUID();
+    expect(captureAssignment(changedFinalizedReceiverBinding, finalizedAssignmentPayload)).toBeNull();
+    const missingSummary = structuredClone(assignmentCapture); delete missingSummary.summary;
+    expect(captureAssignment(missingSummary, { ...assignmentPayload, continuationSummary: null })).toBeNull();
+    const wrongSummaryTask = structuredClone(assignmentCapture); wrongSummaryTask.summary!.source.input.issueId = randomUUID();
+    expect(captureAssignment(wrongSummaryTask)).toBeNull();
+    const wrongSummaryBody = structuredClone(assignmentCapture); wrongSummaryBody.summary!.rendition.body = "different source bytes";
+    expect(captureAssignment(wrongSummaryBody)).toBeNull();
+    const wrongCompletedWork = structuredClone(assignmentCapture); wrongCompletedWork.envelope.completedWork = "unowned content";
+    expect(captureAssignment(wrongCompletedWork)).toBeNull();
+    const forgedObjective = structuredClone(assignmentCapture); forgedObjective.envelope.objective = summaryBody;
+    expect(captureAssignment(forgedObjective)).toBeNull();
+    const forgedReason = structuredClone(assignmentCapture); forgedReason.wake.reason = "on_demand";
+    expect(captureAssignment(forgedReason)).toBeNull();
+    expect(captureAssignment(assignmentCapture, assignmentPayload, "on_demand")).toBeNull();
+    const forgedActor = structuredClone(assignmentCapture); forgedActor.wake.requestedByActorType = "agent";
+    expect(captureAssignment(forgedActor)).toBeNull();
+    const machineWake = structuredClone(assignmentCapture); machineWake.wake.requestedByActorType = "system";
+    machineWake.wake.requestedByActorId = null;
+    expect(captureAssignment(machineWake)).toBeNull();
+    const differentInitiator = structuredClone(assignmentCapture); differentInitiator.wake.requestedByActorId = "different-human";
+    expect(captureAssignment(differentInitiator)).toBeNull();
+    const missingAssignment = structuredClone(assignmentCapture); delete missingAssignment.currentHumanAssignment;
+    expect(captureAssignment(missingAssignment)).toBeNull();
+    const foreignHumanAssignment = structuredClone(assignmentCapture); foreignHumanAssignment.currentHumanAssignment!.responsibleUserId = "other-human";
+    expect(captureAssignment(foreignHumanAssignment)).toBeNull();
+    const injectedCommentSource = structuredClone(assignmentCapture); injectedCommentSource.commentSources.push({
+      input: { kind: "comment", issueId, commentId: randomUUID(), sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: null,
+    });
+    expect(captureAssignment(injectedCommentSource)).toBeNull();
+    const injectedResume = structuredClone(assignmentCapture);
+    injectedResume.envelope.resumeDelta = { baseRunId: randomUUID(), messages: [] };
+    injectedResume.previousContext = { runId: injectedResume.envelope.resumeDelta.baseRunId, messages: [] };
+    injectedResume.retainedSource = { kind: "retained_run", runId: injectedResume.envelope.resumeDelta.baseRunId,
+      inputDigest: hash, dispatchDigest: hash };
+    expect(captureAssignment(injectedResume)).toBeNull();
+
     // These are two independent read profiles; neither is a plan approval or a
     // governed tool-action response. Production reconstructs every owner.
     const questionId = randomUUID();

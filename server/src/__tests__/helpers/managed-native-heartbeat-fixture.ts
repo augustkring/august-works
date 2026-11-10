@@ -29,7 +29,7 @@ import { hashContextPolicySnapshot } from "../../services/context/context-manife
 import { enableV5ForTest, seedV5Presences } from "./v5-fixtures.js";
 import { seedNativePasskeyActor } from "./native-authentication-fixtures.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
-import { heartbeatService } from "../../services/heartbeat.js";
+import { heartbeatService, nativeExecutionFailureLogFields } from "../../services/heartbeat.js";
 import { issueRoutes } from "../../routes/issues.js";
 import { runtimeConnectionIntentRoutes } from "../../routes/connection-intents.js";
 import { errorHandler } from "../../middleware/error-handler.js";
@@ -140,9 +140,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     closeManagedAgentHostForRun: (runId: string) => Promise<void>;
     humanApi: { app: ExpressApp; humanCookie: string };
     managedSignoff: { app: ExpressApp; humanCookie: string; agentApiTokens: { executor: string; reviewer: string } } | null;
-    facts: () => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
+    facts: () => { providerCallCount: number; providerCredentialFacts: { requestCount: number; everyRequestMatchedConfiguredApiKey: boolean }; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
       sandboxRuntimeFacts: Record<string, unknown> | null };
-    factsForRun: (runId: string) => { providerCallCount: number; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
+    factsForRun: (runId: string) => { providerCallCount: number; providerCredentialFacts: { requestCount: number; everyRequestMatchedConfiguredApiKey: boolean }; issuerFacts: Array<{ scope: string; runId: string; manifestId: string }>;
       sandboxRuntimeFacts: Record<string, unknown> | null } }) => Promise<T>;
 }): Promise<T> {
   if (input.sandboxRelay === false) throw new Error("scheduler_fixture_requires_managed_sandbox");
@@ -302,8 +302,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   type ProviderHookFailure = { name: "AssertionError" | "Error" | "TypeError" | "RangeError" | "AbortError" | "UnknownError";
     sourceFrames: ReturnType<typeof managedModelRepositorySourceFrames> };
   type ProviderStubFailure = { stage: string; code: string };
+  type ProviderReplyFailure = { callIndex: number; name: ProviderHookFailure["name"];
+    messageLength: number; messageSha256Prefix: string; sourceFrames: ReturnType<typeof managedModelRepositorySourceFrames> };
   let providerHookFailure: ProviderHookFailure | null = null;
   let providerStubFailure: ProviderStubFailure | null = null;
+  let providerReplyFailure: ProviderReplyFailure | null = null;
   let providerToolNames: string[] = [];
   const brokerRequestFacts: Array<{ requestHash: string; status: number; code?: string; stage?: string;
     sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
@@ -354,11 +357,26 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       // and yields to the next Human message; it does not need a Worker
       // paperclip_finish result.
       const usage = { input_tokens: 100, output_tokens: 32 };
-      const reply=input.providerReply({body,callIndex: input.schedulerMode === "serial"
-        ? providerCalls.filter(call => call.runId === runId).length : providerCalls.length,execution,runId,issueId:issueId ?? null})??{
-        stop_reason:"end_turn",content:[{type:"text",text:"I’ve received your message and am ready to continue."}]};
+      const callIndex = input.schedulerMode === "serial"
+        ? providerCalls.filter(call => call.runId === runId).length : providerCalls.length;
+      let reply: ReturnType<typeof input.providerReply>;
+      try {
+        reply = input.providerReply({ body, callIndex, execution, runId, issueId: issueId ?? null });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const messagePrefix = Buffer.from(message, "utf8").subarray(0, 4096);
+        const name = error instanceof Error && ["AssertionError", "Error", "TypeError", "RangeError", "AbortError"].includes(error.name)
+          ? error.name as ProviderHookFailure["name"] : "UnknownError";
+        providerReplyFailure ??= { callIndex, name, messageLength: Buffer.byteLength(message),
+          messageSha256Prefix: createHash("sha256").update(messagePrefix).digest("hex"),
+          sourceFrames: managedModelRepositorySourceFrames(error) };
+        throw error;
+      }
+      const resolvedReply = reply ?? {
+        stop_reason: "end_turn", content: [{ type: "text", text: "I’ve received your message and am ready to continue." }],
+      };
       const responseBody = JSON.stringify({ id: `msg_conversation_${providerCalls.length}`, type: "message", role: "assistant", model,
-        ...reply, usage });
+        ...resolvedReply, usage });
       const response = new Response(responseBody,
       { status: 200, headers: { "content-type": "application/json" } });
       if (input.observeModelOriginDenials && runId && !originHttpDenials.has(runId)) {
@@ -1019,6 +1037,18 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   app.use(express.json());
   app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession }));
   app.use("/api", issueRoutes(db, createStorageService(createLocalDiskStorageProvider(join(runHome, "signoff-api-storage"))), { heartbeat }));
+  app.use((error: unknown, _req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    const status = error && typeof error === "object" ? (error as { status?: unknown }).status : null;
+    if (typeof status !== "number" || status >= 500) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.info("managed_fixture_human_http_failure", {
+        ...nativeExecutionFailureLogFields({ error, runId: "fixture", failureCode: "human_http_failed" }),
+        sourceFrames: managedModelRepositorySourceFrames(error), messageLength: Buffer.byteLength(message),
+        messageSha256Prefix: createHash("sha256").update(Buffer.from(message).subarray(0, 4096)).digest("hex"),
+      });
+    }
+    next(error);
+  });
   app.use(errorHandler);
   const humanApi = { app, humanCookie };
   let managedSignoff: { app: ExpressApp; humanCookie: string;
@@ -1034,13 +1064,15 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   try {
     return await input.driveScheduler({ db, actor: human, companyId, agentId, managedAgentIds,
       closeManagedAgentHostForRun, humanApi, managedSignoff, gateway, heartbeat,
-      facts: () => ({ providerCallCount: providerCalls.length, issuerFacts: structuredClone(issuerFacts),
+      facts: () => ({ providerCallCount: providerCalls.length, providerCredentialFacts: { requestCount: providerCalls.length, everyRequestMatchedConfiguredApiKey: providerCalls.every(call => call.keyMatches) }, issuerFacts: structuredClone(issuerFacts),
         sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.facts?.(),
           originHttpDenials: Object.fromEntries(originHttpDenials), authenticatedModelTunnels, appliedModelProfileInjections: structuredClone(appliedModelProfileInjections) }
           : sandboxHeartbeat?.facts?.() ?? null }),
       factsForRun: runId => {
         if (!executionsByRun.has(runId)) throw new Error("scheduler_fixture_run_not_observed");
-        return { providerCallCount: providerCalls.filter(call => call.runId === runId).length,
+        const runProviderCalls = providerCalls.filter(call => call.runId === runId);
+        return { providerCallCount: runProviderCalls.length,
+          providerCredentialFacts: { requestCount: runProviderCalls.length, everyRequestMatchedConfiguredApiKey: runProviderCalls.every(call => call.keyMatches) },
           issuerFacts: structuredClone(issuerFacts.filter(fact => fact.runId === runId)),
           sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.factsForRun?.(runId),
             originHttpDenials: originHttpDenials.get(runId) ?? null,
@@ -1080,6 +1112,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         // Awaited provider callbacks can assign these after their initial null value.
         const hookFailure = providerHookFailure as ProviderHookFailure | null;
         const stubFailure = providerStubFailure as ProviderStubFailure | null;
+        const replyFailure = providerReplyFailure as ProviderReplyFailure | null;
         if (brokerFailures.length > 0) console.info("managed_scheduler_fixture_broker_failure_projection", JSON.stringify({
           fixtureTotalBrokerFailures: brokerFailures.length,
           intentionalOriginDenialsEnabled: input.observeModelOriginDenials === true,
@@ -1090,6 +1123,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
               ? stubFailure.stage : "unrecognized",
             code: ["unexpected_provider_url", "completion_contract_missing", "active_run_or_issue_missing"].includes(stubFailure.code)
               ? stubFailure.code : "unrecognized",
+          } : null,
+          providerReplyFailure: replyFailure ? {
+            callIndex: replyFailure.callIndex, name: replyFailure.name, messageLength: replyFailure.messageLength,
+            messageSha256Prefix: replyFailure.messageSha256Prefix, sourceFrames: replyFailure.sourceFrames,
           } : null,
           failures: brokerFailures.slice(0, 8).map(fact => ({
             status: fact.status,

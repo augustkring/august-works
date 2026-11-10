@@ -925,6 +925,12 @@ export function sanitizeRecord(
       redacted[key] = redactSensitiveText(value);
       continue;
     }
+    // This public lifecycle discriminator is emitted by the Task owner; its
+    // dotted shape must not erase the administrative-expiry audit proof.
+    if (key === "source" && value === "issue.status_transition.issue_closed") {
+      redacted[key] = value;
+      continue;
+    }
     if (
       typeof value === "string" &&
       JWT_VALUE_RE.test(value) &&

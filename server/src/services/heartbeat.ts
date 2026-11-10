@@ -21073,6 +21073,8 @@ export function heartbeatService(
       const issueAncestors = issueRef
         ? await issuesSvc.getAncestors(issueRef.id, { onSourceCapture: capture => ancestorSourceCaptures.push(capture) })
         : [];
+      const useFinalizedSummaryForAssignment = agent.adapterType === "paperclip_runner" &&
+        context.wakeReason === "issue_assigned";
       if (continuationSummary) {
         context.paperclipContinuationSummary = {
           key: safeContinuationSummary!.key,
@@ -21113,6 +21115,7 @@ export function heartbeatService(
               summary: safeContinuationSummary?.body ?? null,
               ...(safeContinuationSummary && continuationSummarySource ? { summaryDocument: {
                 source: continuationSummarySource, value: safeContinuationSummary } } : {}),
+              useFinalizedSummaryForAssignment,
               exposeLowTrustRaw,
               onCommentSourceCapture: agent.adapterType === "paperclip_runner"
                 ? capture => continuationCommentSources.push(capture) : undefined,
@@ -21122,6 +21125,7 @@ export function heartbeatService(
                 ? trigger => { nativeStageContinuationTrigger.value = trigger; } : undefined,
             })
           : null;
+      if (nativeTaskContinuationCapture.value?.finalizedSummary) delete context.paperclipContinuationSummary;
       context.executionContinuation = executionContinuation;
       const inlineWakeCommentSourceCaptures: NativeCommentSourceCapture[] = [];
       const paperclipWakePayload = await buildPaperclipWakePayload({
@@ -21132,7 +21136,7 @@ export function heartbeatService(
         contextSnapshot: context,
         onInlineCommentSourceCapture: agent.adapterType === "paperclip_runner"
           ? capture => inlineWakeCommentSourceCaptures.push(capture) : undefined,
-        continuationSummary,
+        continuationSummary: nativeTaskContinuationCapture.value?.finalizedSummary ? null : continuationSummary,
         issueSummary: issueRef
           ? {
               id: issueRef.id,
@@ -24453,6 +24457,8 @@ export function heartbeatService(
               companyId: agent.companyId, issueId: issueRef.id, runId: run.id, agentId: agent.id,
               responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
               wakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
+              taskObjective: paperclipWakePayload?.issue
+                ? paperclipWakePayload.issue.description ?? paperclipWakePayload.issue.title : undefined,
               capture: continuationCaptureForWake }) : null;
             nativeBootstrapContinuationCapture = closedTaskContinuation;
             const blockedHumanInteraction = issueRef && parseObject(context.paperclipWake).dependencyBlockedInteraction === true
@@ -24549,7 +24555,21 @@ export function heartbeatService(
               ?.flatMap(capture => capture.owner.sourceRunId ? [capture.owner.sourceRunId] : []) ?? [])];
             const questionRunPolicy: NativePayloadSourcePolicy | null = questionSourceRunIds.length
               ? { issueIds: [], projectIds: [], runIds: questionSourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
-            const additionalPolicyParts = [retainedRunPolicy, nativeProjectAdditionalPolicy, questionRunPolicy]
+            const administrativeExpirySourceRunIds = [...new Set(closedTaskContinuation?.adminExpiredInteractions
+              ?.flatMap(capture => capture.projection.sourceRunId ? [capture.projection.sourceRunId] : []) ?? [])];
+            const administrativeExpiryRunPolicy: NativePayloadSourcePolicy | null = administrativeExpirySourceRunIds.length
+              ? { issueIds: [], projectIds: [], runIds: administrativeExpirySourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
+            const presentationSourceRunIds = [...new Set(nativeBootstrapContinuationCapture?.currentHumanAssignment
+              ? [...nativeBootstrapContinuationCapture.envelope.messages.flatMap(message =>
+                  message.authorType === "agent" && message.createdByRunId ? [message.createdByRunId] : []),
+                  ...(nativeBootstrapContinuationCapture.finalizedSummary ?
+                    [nativeBootstrapContinuationCapture.finalizedSummary.sourceRunId] : [])] : [])].sort();
+            if (presentationSourceRunIds.length > 64)
+              throw new Error("native_presentation_source_history_exceeds_bound");
+            const presentationRunPolicy: NativePayloadSourcePolicy | null = presentationSourceRunIds.length
+              ? { issueIds: [], projectIds: [], runIds: presentationSourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
+            const additionalPolicyParts = [retainedRunPolicy, nativeProjectAdditionalPolicy, questionRunPolicy,
+              administrativeExpiryRunPolicy, presentationRunPolicy]
               .filter((part): part is NativePayloadSourcePolicy => part !== null);
             const additionalPolicy: NativePayloadSourcePolicy | null = additionalPolicyParts.length ? {
               issueIds: [...new Set(additionalPolicyParts.flatMap(part => part.issueIds))].sort(),
@@ -24586,12 +24606,14 @@ export function heartbeatService(
                 ],
                 taskWakeCommentCandidates: nativeTaskWakeSource && closedTaskContinuation
                   ? closedTaskContinuation.commentSources.map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
-                      input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) : [],
+                      input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot,
+                      ...(capture.acceptedPresentationOwner ? { acceptedPresentationOwner: capture.acceptedPresentationOwner } : {}) })) : [],
                 ...(blockedHumanInteraction ? { taskWakeCommentCandidates: [
                   ...(nativeTaskWakeSource && closedTaskContinuation ? closedTaskContinuation.commentSources : []),
                   ...(nativeTaskWakeSource ? blockedHumanInteraction.commentSourceSnapshots : []),
-                ].map(capture => ({ kind: "comment" as const, id: capture.input.commentId,
-                  input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot })) } : {}),
+                ].map((capture: NativeCommentSourceCapture) => ({ kind: "comment" as const, id: capture.input.commentId,
+                  input: capture.input, payloadSourceSnapshot: capture.payloadSourceSnapshot,
+                  ...(capture.acceptedPresentationOwner ? { acceptedPresentationOwner: capture.acceptedPresentationOwner } : {}) })) } : {}),
                 taskWakeDocumentCandidates: nativeTaskWakeSource ? [
                   ...(closedTaskContinuation?.summary ? [{ kind: "document_revision" as const, id: closedTaskContinuation.summary.source.input.revisionId,
                     input: closedTaskContinuation.summary.source.input, payloadSourceSnapshot: closedTaskContinuation.summary.source.payloadSourceSnapshot }] : []),
@@ -24601,6 +24623,7 @@ export function heartbeatService(
                 taskWakeInteractionSources: nativeTaskWakeSource && closedTaskContinuation
                   ? [...(closedTaskContinuation.governedInteractions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
                     ...(closedTaskContinuation.answeredQuestions?.flatMap(capture => [capture.nativeSource, capture.continuationSource]) ?? []),
+                    ...(closedTaskContinuation.adminExpiredInteractions?.map(capture => capture.source) ?? []),
                     ...(closedTaskContinuation.pendingInteractions?.map(capture => capture.source) ?? []),
                     ...(closedTaskContinuation.acceptedPlanReview ? [closedTaskContinuation.acceptedPlanReview.interactionSource] : []),
                     ...(closedTaskContinuation.delivery ? [closedTaskContinuation.delivery.source] : [])] : [],

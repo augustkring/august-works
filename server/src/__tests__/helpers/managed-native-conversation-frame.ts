@@ -71,6 +71,8 @@ export async function makeConversationFixtureTreeWritable(path: string): Promise
  * available only for unsupported-transport denial checks. */
 export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
+  /** Independent read-only observer pool; never used for runtime operations. */
+  diagnosticDb?: ReturnType<typeof createDb>;
   root: string;
   opencodeBinary: string;
   /** Constructor-only controlled HTTP transport; no tool or admission authority. */
@@ -116,6 +118,7 @@ export async function runManagedNativeConversationFrame(input: {
   }) => Promise<void>;
   configureHeartbeat?: (context: {
     db: ReturnType<typeof createDb>;
+    diagnosticDb?: ReturnType<typeof createDb>;
     actor: AuthorizationActor;
     companyId: string;
     agentId: string;
@@ -515,7 +518,7 @@ export async function runManagedNativeConversationFrame(input: {
     runnerPublicUrl.protocol = "wss:";
     process.env.PAPERCLIP_RUNNER_PUBLIC_URL = runnerPublicUrl.origin;
   }
-  sandboxHeartbeat = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId,
+  sandboxHeartbeat = await input.configureHeartbeat?.({ db, diagnosticDb: input.diagnosticDb, actor: human, companyId, agentId,
     providerBindingId: provider.provider.id, gateway, profile, runHome, opencodeBinary: input.opencodeBinary,
     brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest, observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,

@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "c352951cbbc93da2ffa598c793808db34b86d8b33f8e23b08fb73623e313aeca"
+      "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -358,7 +358,7 @@
     },
     {
       "path": "server/src/services/issues.ts",
-      "sha256": "71dcd72d72e49c3de8ce4d4b6b23c52c7702510bdd35287907a5c0ce15fb003f"
+      "sha256": "b5cfb8748cbda3ebcaa96390985ce5c8165ed381c1075fca10ab483e2bfff04e"
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",
@@ -370,11 +370,11 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "669a72919c0c7eaa1fce53f5c8893cd9803df620e13df988d19df36c333ff93a"
+      "sha256": "4b3f3c3cd665895526f2cca5e80fdd0b760c5bfc484ce98082ae6fefcc265dcf"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-      "sha256": "a55509a80b8d7fc8c2de1645cd60a989664d722c534e08cc0e883afb385f2b91"
+      "sha256": "7f11ad2e25e35f374ac6b9c092e998b6885d5b356e0b4d472f23297e4b80dba0"
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",

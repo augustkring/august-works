@@ -14,6 +14,7 @@ import {
   nativeRunResults,
   statusDecisions,
   workAssessments,
+  activityLog,
 } from "@paperclipai/db";
 import { getAgentWorkEligibility, askUserQuestionsPayloadSchema, askUserQuestionsResultSchema, requestConfirmationResultSchema, type ExecutionContinuationEnvelope, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
@@ -61,6 +62,23 @@ export type NativeAnsweredQuestionContinuationCapture = {
   interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number];
 };
 
+/** An administrative issue-close outcome is historical context, not a Human
+ * answer. Its Activity row owns why the interaction was expired; the exact
+ * result remains low-trust data and never becomes a Native response. */
+export type NativeAdministrativeInteractionExpiryCapture = {
+  companyId: string; issueId: string; runId: string; agentId: string;
+  source: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  projection: {
+    version: 1; companyId: string; issueId: string; interactionId: string; sourceVersion: string;
+    kind: "request_confirmation"; status: "expired"; result: Record<string, unknown>;
+    sourceRunId: string | null; createdByAgentId: string | null; resolvedByUserId: string | null;
+    resolvedByAgentId: string | null; resolvedByRunId: string | null; resolvedAt: string;
+    activityId: string; activityCreatedAt: string; activityActorType: string; activityActorId: string;
+    activityAgentId: string | null; activityRunId: string | null;
+  };
+  interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number];
+};
+
 export type NativeGovernedPendingInteractionCapture = {
   companyId: string; issueId: string; runId: string; agentId: string;
   source: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
@@ -79,6 +97,87 @@ function nativeGovernedPendingProjection(input: { companyId: string; issueId: st
     sourceCommentId: input.interaction.sourceCommentId ?? null, originCommentIds: [...(input.interaction.originCommentIds ?? [])],
     actionRequestId: input.request.id, invocationId: input.invocation.id, argumentsHash: input.request.canonicalArgumentsHash,
     requestStatus: "pending", invocationStatus: "awaiting_approval", expiresAt: input.request.expiresAt?.toISOString() ?? null };
+}
+
+/** Reconstructs only a canonical Task-close expiration. This never projects
+ * the row into an interaction response or Human response. */
+export async function captureNativeAdministrativeInteractionExpiries(input: {
+  db: Db; companyId: string; issueId: string; runId: string; agentId: string;
+  interactionIds: string[]; reader?: import("../authorization.js").AuthorizationActor;
+}): Promise<NativeAdministrativeInteractionExpiryCapture[]> {
+  if (input.interactionIds.length === 0) return [];
+  if (input.interactionIds.length > 64 || new Set(input.interactionIds).size !== input.interactionIds.length ||
+    input.interactionIds.some(id => typeof id !== "string" || !id))
+    throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Administrative interaction selection is invalid");
+  const [run] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId))).limit(1);
+  const [task] = await input.db.select().from(issues).where(and(eq(issues.id, input.issueId),
+    eq(issues.companyId, input.companyId))).limit(1);
+  const reader = input.reader ?? { type: "agent" as const, source: "agent_jwt" as const, companyId: input.companyId,
+    agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run?.responsibleUserId ?? null };
+  const { canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, isCurrentTaskPrivacyPrincipal } =
+    await import("../authorization.js");
+  if (!run || !task || !run.responsibleUserId || ![run.issueId, run.nativeIssueId, record(run.contextSnapshot).issueId].includes(input.issueId) ||
+    !await isCurrentTaskPrivacyPrincipal(input.db, reader, input.companyId) ||
+    !await canActorReadHeartbeatRunPrivacy(input.db, reader, run) || !await canActorReadIssuePrivacy(input.db, reader, task))
+    throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Administrative interaction reader is unavailable");
+  const versions = new Map<string, string>();
+  const rows = await issueThreadInteractionService(input.db).listForIssue(input.issueId,
+    { onSourceVersionSelected: (id, version) => { versions.set(id, version); } });
+  const captures: NativeAdministrativeInteractionExpiryCapture[] = [];
+  for (const id of input.interactionIds) {
+    const interaction = rows.find(value => value.id === id), sourceVersion = versions.get(id);
+    const result = interaction?.result;
+    if (!interaction || !sourceVersion || interaction.companyId !== input.companyId || interaction.issueId !== input.issueId ||
+      interaction.kind !== "request_confirmation" || interaction.status !== "expired" || !interaction.resolvedAt ||
+      !result || Object.keys(result).sort().join(",") !== "outcome,reason,version" ||
+      result.version !== 1 || result.outcome !== "issue_closed" || result.reason !== null || interaction.resolvedByRunId ||
+      !interaction.sourceRunId)
+      throw new NativeInteractionBridgeError("native_interaction_unresolved", "Administrative issue-close outcome changed");
+    const [producer] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, interaction.sourceRunId),
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.nativeIssueId, input.issueId))).limit(1);
+    if (!producer || !producer.finishedAt || !["succeeded", "failed", "timed_out", "interrupted", "cancelled"].includes(producer.status) ||
+      producer.nativeInputSourceProtocolVersion !== 1 || !await canActorReadHeartbeatRunPrivacy(input.db, reader, producer) ||
+      ![producer.issueId, producer.nativeIssueId, record(producer.contextSnapshot).issueId].includes(input.issueId))
+      throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Administrative interaction producer changed");
+    const events = await input.db.select().from(activityLog).where(and(
+      eq(activityLog.companyId, input.companyId), eq(activityLog.action, "issue.thread_interaction_expired"),
+      eq(activityLog.entityType, "issue"), eq(activityLog.entityId, input.issueId),
+      sql`${activityLog.details}->>'interactionId' = ${id}`)).limit(2);
+    const event = events.length === 1 ? events[0] : null;
+    if (!event || event.companyId !== input.companyId || event.action !== "issue.thread_interaction_expired" ||
+      event.entityType !== "issue" || event.entityId !== input.issueId || !event.details ||
+      Object.keys(event.details).sort().join(",") !== "identifier,interactionId,interactionKind,interactionStatus,result,source" ||
+      event.details.identifier !== (task.identifier ?? null) || event.details.interactionId !== id || event.details.interactionKind !== interaction.kind ||
+      event.details.interactionStatus !== "expired" || event.details.source !== "issue.status_transition.issue_closed" ||
+      !isDeepStrictEqual(event.details.result, result) || event.runId !== null)
+      throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Administrative interaction lifecycle owner changed");
+    const resolverMatches = interaction.resolvedByUserId
+      ? event.actorType === "user" && event.actorId === interaction.resolvedByUserId && event.agentId === null
+      : interaction.resolvedByAgentId
+        ? event.actorType === "agent" && event.actorId === interaction.resolvedByAgentId && event.agentId === interaction.resolvedByAgentId
+        : event.actorType === "system" && event.actorId === "issue_service" && event.agentId === null;
+    if (!resolverMatches || (interaction.resolvedByUserId && interaction.resolvedByAgentId))
+      throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Administrative interaction actor changed");
+    const interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number] = {
+      id, kind: interaction.kind, status: interaction.status, result: structuredClone(result),
+    };
+    const projection: NativeAdministrativeInteractionExpiryCapture["projection"] = {
+      version: 1, companyId: input.companyId, issueId: input.issueId, interactionId: id, sourceVersion,
+      kind: "request_confirmation", status: "expired", result: { ...result },
+      sourceRunId: interaction.sourceRunId ?? null, createdByAgentId: interaction.createdByAgentId ?? null,
+      resolvedByUserId: interaction.resolvedByUserId ?? null, resolvedByAgentId: interaction.resolvedByAgentId ?? null,
+      resolvedByRunId: interaction.resolvedByRunId ?? null, resolvedAt: new Date(interaction.resolvedAt).toISOString(),
+      activityId: event.id, activityCreatedAt: event.createdAt.toISOString(), activityActorType: event.actorType,
+      activityActorId: event.actorId, activityAgentId: event.agentId ?? null, activityRunId: event.runId ?? null,
+    };
+    captures.push({ companyId: input.companyId, issueId: input.issueId, runId: input.runId, agentId: input.agentId,
+      projection, interactionOutcome,
+      source: { kind: "interaction", issueId: input.issueId, interactionId: id, sourceVersion,
+        contentHash: nativeSha256({ rendition: "native_issue_closed_interaction_v1", projection, interactionOutcome }) } });
+  }
+  return captures;
 }
 
 /** Read-only unresolved-ID witness. It never projects a pending request into a

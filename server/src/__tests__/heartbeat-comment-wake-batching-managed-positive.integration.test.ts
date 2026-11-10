@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, agentWakeupRequests, createDb, heartbeatRuns, issueComments, issues, issueWorkProducts, activityLog, nativeRunFinalizations, statusDecisions, workAssessments } from "@paperclipai/db";
+import { agents, agentWakeupRequests, createDb, heartbeatRuns, issueComments, issues, issueWorkProducts, issueThreadInteractions, activityLog, nativeRunFinalizations, statusDecisions, statusDecisionEffects, workAssessments } from "@paperclipai/db";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { issueService } from "../services/issues.js";
@@ -27,7 +27,7 @@ beforeAll(async () => {
   vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
   vi.stubEnv("PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS", "1");
   database = await startEmbeddedPostgresTestDatabase("heartbeat-comment-managed-positive-", { preserveDataOnFailure: () => completedTests !== 4 });
-  db = createDb(database.connectionString);
+  db = createDb(database.connectionString, { maxConnections: 3 });
 }, 60_000);
 afterAll(async () => {
   await database?.cleanup();
@@ -99,7 +99,7 @@ async function acceptExactDocumentWorkProduct(input: {
 
 function realTaskCompletion(body: Record<string, unknown>, callIndex: number,
   execution: NativeExecutionInput,
-  prefix: string, acceptedEvidenceRef: string | null, intentionallyIncomplete = false) {
+  prefix: string, acceptedEvidenceRef: string | null, intentionallyIncomplete = false, requestHumanCompletionReview = false) {
   if (callIndex === 1) return toolUse(body, "write_document", `${prefix}-document`, {
     idempotencyKey: `${prefix}-document`, key: `${prefix}-document`, title: "Managed comment wake result",
     body: managedDocumentBody, baseRevisionId: null,
@@ -108,11 +108,12 @@ function realTaskCompletion(body: Record<string, unknown>, callIndex: number,
     if (!acceptedEvidenceRef && !intentionallyIncomplete) throw new Error("managed_comment_human_evidence_missing");
     const contract = execution.completionContract.contract;
     return toolUse(body, "paperclip_finish", `${prefix}-finish`, { schema: "paperclip.run_result.v1",
-      reportedWorkDisposition: "done", summary: "Completed the actual managed comment wake task.",
+      reportedWorkDisposition: requestHumanCompletionReview ? "needs_review" : "done", summary: "Completed the actual managed comment wake task.",
       completionClaim: { contractRevision: contract.revision, objectiveSatisfied: true,
         criteria: contract.criteria.map(criterion => ({ criterionId: criterion.id, status: "satisfied", evidenceRefs: acceptedEvidenceRef ? [acceptedEvidenceRef] : [] })),
         remainingWork: [] }, evidence: [], verification: acceptedEvidenceRef ? [{ commandOrCheck: "Current Human reviewed the exact retained document revision",
-        status: "passed", artifactRef: acceptedEvidenceRef }] : [], attentionRequests: [], artifacts: [] });
+        status: "passed", artifactRef: acceptedEvidenceRef }] : [], attentionRequests: requestHumanCompletionReview
+        ? [{ kind: "review", ownerClass: "human", summary: "Review the exact completed result before approving task completion." }] : [], artifacts: [] });
   }
   return { stop_reason: "end_turn" as const, content: [{ type: "text", text: "The managed task is complete." }] };
 }
@@ -239,6 +240,7 @@ async function projectUnexpectedRunWakeRows(input: {
     "issue_assigned", "issue_execution_deferred", "issue_execution_promoted", "issue_status_changed",
     "issue_commented", "issue_reopened_via_comment", "issue_comment_mentioned",
     "issue_continuation_needed", "issue_children_completed", "issue_blockers_resolved",
+    "native_completion_review", "goal_control", "monitor_due", "retry_failed_run", "issue_monitor_due",
   ]);
   const knownStatuses = new Set([
     "queued", "claimed", "coalesced", "skipped", "completed", "failed",
@@ -264,12 +266,15 @@ async function projectUnexpectedRunWakeRows(input: {
       runIdSha256: digest(run.id),
       wakeIdSha256: digest(wake?.id),
       reason: closed(wake?.reason ?? null, knownReasons),
+      reasonSha256: digest(wake?.reason),
+      reasonLength: wake?.reason === null || wake?.reason === undefined ? null : Buffer.byteLength(wake.reason, "utf8"),
       source: closed(wake?.source ?? null, knownSources),
       trigger: closed(wake?.triggerDetail ?? null, knownTriggers),
       status: closed(wake?.status ?? null, knownStatuses),
       runSource: closed(run.invocationSource, knownSources),
       runTrigger: closed(run.triggerDetail, knownTriggers),
       contextReason: closed(typeof run.contextSnapshot?.wakeReason === "string" ? run.contextSnapshot.wakeReason : null, knownReasons),
+      contextReasonSha256: digest(typeof run.contextSnapshot?.wakeReason === "string" ? run.contextSnapshot.wakeReason : null),
       sameTask: runIssueId === input.taskId,
       requestedByHuman: wake?.requestedByActorType === "user",
       originWasDeferred: wake?.reason === "issue_execution_promoted" ||
@@ -296,7 +301,7 @@ describe("heartbeat comment wake batching", () => {
 
     try {
       await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
-        providerReply: ({ body, callIndex, execution }) => realTaskCompletion(body, callIndex, execution, "empty-deferred", acceptedEvidenceRef),
+        providerReply: ({ body, callIndex, execution }) => realTaskCompletion(body, callIndex, execution, "empty-deferred", acceptedEvidenceRef, false, true),
         beforeManagedModelRequest: async ({ runId }) => {
           if (firstRunId && runId !== firstRunId) throw new Error("empty_deferred_unexpected_second_run");
           authenticatedRequests++;
@@ -358,6 +363,48 @@ describe("heartbeat comment wake batching", () => {
           expect(finalWake).toMatchObject({ id: deferredWake!.id, status: "cancelled", source: "automation",
             reason: "issue_execution_deferred", requestedByActorType: "user", requestedByActorId: actor.userId });
           expect(finalWake?.payload?._paperclipWakeContext).toMatchObject({ wakeReason: "issue_commented" });
+
+          // The run explicitly requested Human completion review. Prove the
+          // Native status decision committed its actual review card, and that
+          // this current Human resolves it only after the source run settles.
+          const [reviewDecision] = await db.select().from(statusDecisions).where(and(
+            eq(statusDecisions.companyId, companyId), eq(statusDecisions.issueId, task.id),
+            eq(statusDecisions.runId, firstRunId))).orderBy(desc(statusDecisions.createdAt)).limit(1);
+          expect(reviewDecision).toMatchObject({ applicationState: "applied", toStatus: "in_review",
+            reasonCode: "actionable_attention_pending" });
+          const [reviewEffect] = await db.select().from(statusDecisionEffects).where(and(
+            eq(statusDecisionEffects.companyId, companyId), eq(statusDecisionEffects.issueId, task.id),
+            eq(statusDecisionEffects.decisionId, reviewDecision!.id), eq(statusDecisionEffects.effectKind, "bind_reviewer"),
+            eq(statusDecisionEffects.targetType, "issue_thread_interaction"))).limit(1);
+          expect(reviewEffect?.targetId).toEqual(expect.any(String));
+          const [completionReview] = await db.select().from(issueThreadInteractions).where(and(
+            eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.issueId, task.id),
+            eq(issueThreadInteractions.id, reviewEffect!.targetId!)));
+          expect(completionReview).toMatchObject({ kind: "request_confirmation", status: "pending",
+            sourceRunId: firstRunId, addresseeUserId: actor.userId, continuationPolicy: "wake_assignee",
+            payload: { target: { type: "custom", key: "native_completion_review", revisionId: reviewDecision!.id } } });
+          const reviewAttention = await issueService(db).listReviewAttention(companyId, [{ id: task.id, companyId, status: "in_review" }]);
+          expect(reviewAttention.get(task.id)).toMatchObject({ state: "covered",
+            paths: [expect.objectContaining({ kind: "interaction", ref: completionReview!.id })] });
+          await expect(issueService(db).update(task.id, {
+            status: "done", actorUserId: actor.userId!, privacyActor: actor,
+          })).rejects.toMatchObject({ status: 409,
+            details: { code: "orchestration_completion_requires_server_verification" } });
+          const rejectedCompletionReview = await request(humanApi.app)
+            .post(`/api/issues/${task.id}/interactions/${completionReview!.id}/accept`)
+            .set("Cookie", humanApi.humanCookie).send({});
+          expect(rejectedCompletionReview.status).toBe(409);
+          expect(rejectedCompletionReview.body.details).toMatchObject({
+            code: "orchestration_completion_requires_server_verification",
+          });
+          const [stillPendingCompletionReview] = await db.select({ status: issueThreadInteractions.status })
+            .from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId, companyId),
+              eq(issueThreadInteractions.issueId, task.id), eq(issueThreadInteractions.id, completionReview!.id)));
+          expect(stillPendingCompletionReview).toMatchObject({ status: "pending" });
+          const [notYetPlanVerifiedTask] = await db.select({ status: issues.status, completedAt: issues.completedAt })
+            .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, task.id)));
+          expect(notYetPlanVerifiedTask).toMatchObject({ status: "in_review", completedAt: null });
+
           const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
           if (runs.length !== 1) await projectUnexpectedRunWakeRows({ runs, companyId, taskId: task.id });
           expect(runs).toHaveLength(1);
@@ -375,6 +422,11 @@ describe("heartbeat comment wake batching", () => {
           expect(cancelled[0]?.id).toBe(deferredWake!.id);
           await expectHumanVerifiedTaskDone({ actor, companyId, taskId, runId: firstRunId, planId: plan.id,
             drain: () => heartbeat.drainActiveRunExecutions(), providerCallCount: () => facts().providerCallCount });
+          const [closedCompletionReview] = await db.select({ status: issueThreadInteractions.status,
+            result: issueThreadInteractions.result }).from(issueThreadInteractions).where(and(
+              eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.issueId, task.id),
+              eq(issueThreadInteractions.id, completionReview!.id)));
+          expect(closedCompletionReview).toMatchObject({ status: "expired", result: { outcome: "issue_closed" } });
           } finally { releaseProvider(); }
         },
       });

@@ -1,0 +1,1597 @@
+{
+  "uniquePassingCases": 121,
+  "invocations": [
+    {
+      "label": "native-history-source-owner-regression-r21",
+      "passingCases": 91,
+      "tests": [
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "captures a real initial Human comment and independently revalidates its selected source rendition"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "revalidates a summary-only issue assignment against current Task Human and document owners"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "revalidates the original admitted wake after a status-control wake coalesces into current Run context"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects original admitted wake reason changes despite unchanged sealed payload and input receipt"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects original admitted wake missing_run_binding changes despite unchanged sealed payload and input receipt"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects original admitted wake foreign_company changes despite unchanged sealed payload and input receipt"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects original admitted wake foreign_agent changes despite unchanged sealed payload and input receipt"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects original admitted wake foreign_run changes despite unchanged sealed payload and input receipt"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "retains another legitimate Human's readable history without promoting it to this trigger"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "treats edit as a current source-owner change"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "treats tombstone as a current source-owner change"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "treats delete as a current source-owner change"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "treats revoke as a current source-owner change"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "treats forged_wake as a current source-owner change"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "treats cross_company_wake as a current source-owner change"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "binds an unresolved reference to its real pending request, invocation and original Run without granting a response"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "allows a current Human reader with Task access to inspect a pending read-only interaction"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects pending owner arguments mutations"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects pending owner expiry mutations"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects pending owner deleted mutations"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects pending owner revoked_reader mutations"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects pending owner changed_run mutations"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects pending owner resolved mutations"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "captures distinct Native and continuation renditions only after the actual Human decline owner commits"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "independently rejects a changed governed rendition after the actual Human decline"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "assembles a real pending-note continuation and revalidates its unresolved owner through the complete source reader"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "retains an unchanged live pending sibling when a Human resolves the other governed request"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "requires the exact claimed Human comment queue owner rather than an interaction flag"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "rejects Human-tombstoned triggering comments and revoked current Human access"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "enforces the read-only tool ceiling before hidden mutation dispatch and rejects a done result"
+        },
+        {
+          "path": "server/src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "test": "does not transfer an old Human interaction capture to a separately owned new Human wake"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves the exact authored Agent schema only as a schema discriminator"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction keeps the discriminator allowlist in exact PRP v1 schema parity"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction keeps the v2 additions in parity with the canonical v2 schema"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves every discriminator in the cross-language replay stream"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves current PRP v2 session discriminators"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts unknown or mismatched PRP discriminators"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts sensitive keys and nested secret values"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts jwt-looking values even when key name is not sensitive"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves only the Task-close audit source while withholding JWT-shaped source data"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves Paperclip protocol schema identifiers"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves only known PRP v1 event discriminators inside validated envelopes"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts unknown dotted event values even in a PRP-shaped envelope"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction does not trust discriminators inside a forged unknown schema"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves native run span identities without weakening hostname redaction"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts payload objects while preserving null"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts credentials in ordinary nested diagnostic strings"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction preserves authorization decision reasons in audit payloads"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction keeps numeric removal-receipt counts but still redacts non-numeric values on the same keys"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts common secret shapes from unstructured text"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts authorization variants and standalone bearer credentials from diagnostic text"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts raw and escaped quote-delimited authorization values without leaking nested content"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts raw and serialized standalone bearer values without leaking quoted content"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts token tails attached to raw and escaped closing credential quotes"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts inline secrets from command metadata without hiding safe command text"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts non-string command args after secret flags"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction does not treat bare args payloads as command args"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts every plaintext agent env binding while preserving secret references"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts non-env adapter keys while leaving env binding shapes intact"
+        },
+        {
+          "path": "server/src/__tests__/redaction.test.ts",
+          "test": "redaction redacts adapter configs that have no env block"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "test": "synthetic Host proc namespace links reuses only exact existing symlinks and rejects conflicting entries"
+        },
+        {
+          "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "test": "projects only bounded completed startup span facts"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure identifies missing bootstrap witnesses using closed codes without admitting their input"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure keeps the complete Stage thread under a distinct persisted-owner trigger"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure keeps accepted-plan agent origins and a Task objective in the closed continuation"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure keeps later readable Human history distinct from the admitted trigger author"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure binds completed Stage actions to their distinct producer and exact retained rendition"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure requires a nonempty Task root and exact company, renderer identity and candidate input binding"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure retains only exact Role Pack version inputs and fails closed on missing or foreign-family role inputs"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure admits only the exact rendered attachment owner after byte verification"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure includes only interaction envelopes matched to unique exact current captures"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure closes a Task-only wake or comments whose exact rendered bodies have owner captures"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure closes distinct governed Native/Human renditions and preserves pending references, summary and actual retained history"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native bootstrap rendered-source closure adds only an exact server-minted approved Context closure bound to the native run and rendered markdown"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "LCA-05 explicit native work mode title and description cannot override standard mode"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "LCA-05 explicit native work mode title and description cannot override planning mode"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "LCA-05 explicit native work mode title and description cannot override ask mode"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "LCA-05 explicit native work mode places governed context between runtime controls and the current task"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing projects the authoritative selected answer into an attested native chat prompt (resumed: false)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing projects the authoritative selected answer into an attested native chat prompt (resumed: true)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing uses neutral framing and real question tools for authenticated overflow chat (resumed: false)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing uses neutral framing and real question tools for authenticated overflow chat (resumed: true)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps GitHub's task-only files and service-owned recovery navigation in the closed native input (resumed: false)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps GitHub's task-only files and service-owned recovery navigation in the closed native input (resumed: true)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps question documentation in the tool on 'codex' (resumed: false)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps question documentation in the tool on 'codex' (resumed: true)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps question documentation in the tool on 'acpx' (resumed: false)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps question documentation in the tool on 'acpx' (resumed: true)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps question documentation in the tool on 'opencode' (resumed: false)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "native execution input external-chat framing keeps question documentation in the tool on 'opencode' (resumed: true)"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+          "test": "follow-up context size keeps old messages out of resume deltas while retaining scoped human answers"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/services/native-runtime/native-execution-input.test.ts",
+          "src/__tests__/native-task-wake-continuation-source.integration.test.ts",
+          "src/__tests__/redaction.test.ts",
+          "src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/native-history-source-owner-regression-r21.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.31139997090213e-05,
+        "sourceManifest": "native-history-source-owner-regression-r21-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 53.02634748399578,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2871361536,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 200529,
+            "parentPid": 200505,
+            "executable": "node",
+            "rssBytes": 822431744,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 200505,
+            "parentPid": 200457,
+            "executable": "node",
+            "rssBytes": 801148928,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 200574,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 477544448
+          },
+          {
+            "pid": 200600,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 364568576
+          },
+          {
+            "pid": 200608,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 322220032
+          },
+          {
+            "pid": 200560,
+            "parentPid": 200529,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 200561,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 13217792
+          },
+          {
+            "pid": 200567,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 9129984
+          },
+          {
+            "pid": 200568,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 7888896
+          },
+          {
+            "pid": 200569,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 7204864
+          },
+          {
+            "pid": 200565,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 6496256
+          },
+          {
+            "pid": 200564,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 5419008
+          },
+          {
+            "pid": 200562,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 5091328
+          },
+          {
+            "pid": 200563,
+            "parentPid": 200560,
+            "executable": "postgres",
+            "rssBytes": 4411392
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 21,
+        "observedPostgresRelatedPids": [
+          200547,
+          200557,
+          200560,
+          200561,
+          200562,
+          200563,
+          200564,
+          200565,
+          200567,
+          200568,
+          200569,
+          200572,
+          200574,
+          200600,
+          200608
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-8mfr02mm",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 245,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "native-controller-history-regression-a-r22",
+      "passingCases": 12,
+      "tests": [
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller captures first-bootstrap Task, plan, and wake sources without secret redaction before provider dispatch"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller captures first-bootstrap Task, plan, and wake sources with secret redaction before provider dispatch"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller holds a completed Native Text result for canonical Human Plan verification"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps a one-document Task idle while blocked, then completes one scheduler Run for Human review"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller adopts another Human's retained comment queue only through the installed Native startup owner: manual"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller adopts another Human's retained comment queue only through the installed Native startup owner: forged_payload"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps the Task owner as Native Run responsibility for a canonical automated wake requested by another Human"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller contains a queued second Human Run after canonical membership withdrawal (withdraw: false)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller contains a queued second Human Run after canonical membership withdrawal (withdraw: true)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: false)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller keeps a paused Native Text Task run-free for ordinary and forged wakes, then admits the current Human comment (trigger question: true)"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller runs unrelated assigned Native Text tasks concurrently under separate issue claims"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "-t",
+          "captures first-bootstrap|holds a completed|keeps a one-document|adopts another|keeps the Task owner|contains a queued|keeps a paused|runs unrelated",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/native-controller-history-regression-a-r22.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 3.943900082958862e-05,
+        "sourceManifest": "native-controller-history-regression-a-r22-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 114.49002153799665,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 3121651712,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 200732,
+            "parentPid": 200708,
+            "executable": "node",
+            "rssBytes": 867905536,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 200708,
+            "parentPid": 200661,
+            "executable": "node",
+            "rssBytes": 839294976,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 200845,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 509243392
+          },
+          {
+            "pid": 200846,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 421130240
+          },
+          {
+            "pid": 200847,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 399495168
+          },
+          {
+            "pid": 200828,
+            "parentPid": 200732,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 200830,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 13049856
+          },
+          {
+            "pid": 200835,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 9019392
+          },
+          {
+            "pid": 200836,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 8073216
+          },
+          {
+            "pid": 200837,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 7127040
+          },
+          {
+            "pid": 200833,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 6656000
+          },
+          {
+            "pid": 200829,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 5640192
+          },
+          {
+            "pid": 200832,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 5431296
+          },
+          {
+            "pid": 200831,
+            "parentPid": 200828,
+            "executable": "postgres",
+            "rssBytes": 4997120
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 28,
+        "observedPostgresRelatedPids": [
+          200792,
+          200800,
+          200802,
+          200815,
+          200823,
+          200825,
+          200828,
+          200829,
+          200830,
+          200831,
+          200832,
+          200833,
+          200835,
+          200836,
+          200837,
+          200840,
+          200845,
+          200846,
+          200847,
+          201232
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-iy0x240i",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 528,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "native-controller-history-regression-b-r23",
+      "passingCases": 14,
+      "tests": [
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller resumes a reopened Task from its captured continuation summary on a fresh Human assignment wake"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller repairs clean Native Text branch drift before successful workspace finalization"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller adopts a Native Text forward branch with commits without persisting the workspace branch"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller allows Native Text finalization after the branch transition is persisted"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller coalesces two durable status-wake domain inputs into one real installed-controller Run"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a genuinely queued Task after a Human adds its blocker, repairs its stale pointer, and completes ready work"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller persists and consumes the chat-control admission marker on a real Native Text C0 Plan: intact"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller persists and consumes the chat-control admission marker on a real Native Text C0 Plan: lost"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller persists and consumes the chat-control admission marker on a real Native Text C0 Plan: copied"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller pauses an installed Native Text Run through the canonical Human Agent-pause owner before selection"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at before_selection without dispatching its model"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at after_selection without dispatching its model"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller cancels a real installed-controller Run at before_selection_row_lock without dispatching its model"
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "test": "dependency scheduling through the installed Native text draft controller aborts the dispatched Native text HTTP call on canonical Run cancellation and retains its unknown charge"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+          "-t",
+          "resumes a reopened Task|repairs clean|adopts a Native Text forward|allows Native Text finalization|coalesces two|cancels a genuinely|persists and consumes|pauses an installed|cancels a real installed|aborts the dispatched",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/native-controller-history-regression-b-r23.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.108099528821185e-05,
+        "sourceManifest": "native-controller-history-regression-b-r23-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 143.77265482700022,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 3126616064,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 201369,
+            "parentPid": 201322,
+            "executable": "node",
+            "rssBytes": 863539200,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 201393,
+            "parentPid": 201369,
+            "executable": "node",
+            "rssBytes": 848355328,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 201468,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 567816192
+          },
+          {
+            "pid": 201467,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 451653632
+          },
+          {
+            "pid": 201472,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 311721984
+          },
+          {
+            "pid": 201453,
+            "parentPid": 201393,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 201454,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 12738560
+          },
+          {
+            "pid": 201460,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 8978432
+          },
+          {
+            "pid": 201461,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 7892992
+          },
+          {
+            "pid": 201462,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 7208960
+          },
+          {
+            "pid": 201458,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 6438912
+          },
+          {
+            "pid": 201455,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 5394432
+          },
+          {
+            "pid": 201457,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 5300224
+          },
+          {
+            "pid": 201456,
+            "parentPid": 201453,
+            "executable": "postgres",
+            "rssBytes": 4988928
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 31,
+        "observedPostgresRelatedPids": [
+          201417,
+          201425,
+          201427,
+          201440,
+          201448,
+          201450,
+          201453,
+          201454,
+          201455,
+          201456,
+          201457,
+          201458,
+          201460,
+          201461,
+          201462,
+          201465,
+          201466,
+          201467,
+          201468,
+          201472,
+          202133
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-onhunekz",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 663,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "local-managed-blocked-human-r4",
+      "passingCases": 1,
+      "tests": [
+        {
+          "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+          "test": "answers a current Human dependency comment through capped read-only SDK admission without doing blocked work"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+          "-t",
+          "answers a current Human dependency comment",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/local-managed-blocked-human-r4.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 3.895899862982333e-05,
+        "sourceManifest": "local-managed-blocked-human-r4-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 143.6531551309963,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2994855936,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 165417,
+            "parentPid": 165393,
+            "executable": "node",
+            "rssBytes": 887640064,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 165393,
+            "parentPid": 165346,
+            "executable": "node",
+            "rssBytes": 810795008,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 165529,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 436006912
+          },
+          {
+            "pid": 165536,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 289058816
+          },
+          {
+            "pid": 165507,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 279339008
+          },
+          {
+            "pid": 166276,
+            "parentPid": 165417,
+            "executable": "opencode.exe",
+            "rssBytes": 206520320
+          },
+          {
+            "pid": 165493,
+            "parentPid": 165417,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 165494,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 15020032
+          },
+          {
+            "pid": 165500,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 9166848
+          },
+          {
+            "pid": 165501,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 8085504
+          },
+          {
+            "pid": 165502,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 7221248
+          },
+          {
+            "pid": 165498,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 6529024
+          },
+          {
+            "pid": 165497,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 5304320
+          },
+          {
+            "pid": 165495,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 5275648
+          },
+          {
+            "pid": 165496,
+            "parentPid": 165493,
+            "executable": "postgres",
+            "rssBytes": 4304896
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 29,
+        "observedPostgresRelatedPids": [
+          165480,
+          165490,
+          165493,
+          165494,
+          165495,
+          165496,
+          165497,
+          165498,
+          165500,
+          165501,
+          165502,
+          165505,
+          165506,
+          165507,
+          165529,
+          165536,
+          166389
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-7ed_gn0m",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 670,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "local-managed-memory-replay-r2",
+      "passingCases": 1,
+      "tests": [
+        {
+          "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+          "test": "managed OpenCode source-closure binary integration replays the exact scoped Gateway Memory call once, then rejects after the Human revokes its output"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+          "-t",
+          "replays the exact scoped Gateway Memory call once",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/local-managed-memory-replay-r2.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.00200005969964e-05,
+        "sourceManifest": "local-managed-memory-replay-r2-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 140.64666642800148,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2831331328,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 171404,
+            "parentPid": 171380,
+            "executable": "node",
+            "rssBytes": 1167048704,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 171380,
+            "parentPid": 171333,
+            "executable": "node",
+            "rssBytes": 848842752,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 171455,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 283852800
+          },
+          {
+            "pid": 171449,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 253779968
+          },
+          {
+            "pid": 171456,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 194596864
+          },
+          {
+            "pid": 171435,
+            "parentPid": 171404,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 171436,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 13066240
+          },
+          {
+            "pid": 171442,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 9232384
+          },
+          {
+            "pid": 171443,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 7905280
+          },
+          {
+            "pid": 171444,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 7221248
+          },
+          {
+            "pid": 171440,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 5931008
+          },
+          {
+            "pid": 171439,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 5431296
+          },
+          {
+            "pid": 171437,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 5402624
+          },
+          {
+            "pid": 171438,
+            "parentPid": 171435,
+            "executable": "postgres",
+            "rssBytes": 4431872
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 27,
+        "observedPostgresRelatedPids": [
+          171422,
+          171430,
+          171432,
+          171435,
+          171436,
+          171437,
+          171438,
+          171439,
+          171440,
+          171442,
+          171443,
+          171444,
+          171445,
+          171447,
+          171449,
+          171455,
+          171456,
+          172366
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-qra3_fqo",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 655,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "local-managed-project-worktree-selected-r3",
+      "passingCases": 1,
+      "tests": [
+        {
+          "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+          "test": "runs a real capped Project Worker in its realized worktree without changing the base repository"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+          "-t",
+          "runs a real capped Project Worker",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/local-managed-project-worktree-selected-r3.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.483800148591399e-05,
+        "sourceManifest": "local-managed-project-worktree-selected-r3-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 169.3970502919983,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2823704576,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 183351,
+            "parentPid": 183281,
+            "executable": "node",
+            "rssBytes": 1156694016,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 183281,
+            "parentPid": 183234,
+            "executable": "node",
+            "rssBytes": 805056512,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 183464,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 273993728
+          },
+          {
+            "pid": 183413,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 254980096
+          },
+          {
+            "pid": 183429,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 249659392
+          },
+          {
+            "pid": 183399,
+            "parentPid": 183351,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 183400,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 12484608
+          },
+          {
+            "pid": 183406,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 9039872
+          },
+          {
+            "pid": 183407,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 7778304
+          },
+          {
+            "pid": 183408,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 7073792
+          },
+          {
+            "pid": 183404,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 6393856
+          },
+          {
+            "pid": 183401,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 5787648
+          },
+          {
+            "pid": 183403,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 5308416
+          },
+          {
+            "pid": 183402,
+            "parentPid": 183399,
+            "executable": "postgres",
+            "rssBytes": 4866048
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 30,
+        "observedPostgresRelatedPids": [
+          183386,
+          183394,
+          183396,
+          183399,
+          183400,
+          183401,
+          183402,
+          183403,
+          183404,
+          183406,
+          183407,
+          183408,
+          183411,
+          183413,
+          183429,
+          183464,
+          184417
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-xg912byv",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 784,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    },
+    {
+      "label": "local-deferred-comment-empty-r7",
+      "passingCases": 1,
+      "tests": [
+        {
+          "path": "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
+          "test": "heartbeat comment wake batching cancels an empty deferred comment wake instead of promoting deleted input"
+        }
+      ],
+      "resourceReceipt": {
+        "command": [
+          "node",
+          "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+          "run",
+          "--config",
+          "vitest.config.ts",
+          "src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
+          "-t",
+          "cancels an empty deferred comment wake",
+          "--maxWorkers=1",
+          "--no-file-parallelism",
+          "--reporter=default",
+          "--reporter=json",
+          "--outputFile=/workspace/v10-preparation/combined-source-20261109/local-deferred-comment-empty-r7.json"
+        ],
+        "cwd": "/workspace/blentera-v10/server",
+        "leaseWaitSeconds": 4.005999653600156e-05,
+        "sourceManifest": "local-deferred-comment-empty-r7-source-manifest.json",
+        "filesystemFloorBytes": {
+          "/workspace": 122880000,
+          "/tmp": 1073741824
+        },
+        "globalMemoryReserveBytes": 2147483648,
+        "exit": 0,
+        "seconds": 147.4824305459988,
+        "stopReason": null,
+        "nodeHeapMiB": 768,
+        "ownedDescendantRssLimitBytes": 4294967296,
+        "observedPeakOwnedDescendantRssBytes": 2828038144,
+        "processRssAtObservedPeak": [
+          {
+            "pid": 192215,
+            "parentPid": 192191,
+            "executable": "node",
+            "rssBytes": 912359424,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 192191,
+            "parentPid": 192144,
+            "executable": "node",
+            "rssBytes": 808509440,
+            "nodeOptions": "--max-old-space-size=768"
+          },
+          {
+            "pid": 192271,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 262094848
+          },
+          {
+            "pid": 192994,
+            "parentPid": 192215,
+            "executable": "node",
+            "rssBytes": 256741376,
+            "nodeOptions": ""
+          },
+          {
+            "pid": 192277,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 253337600
+          },
+          {
+            "pid": 192261,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 250392576
+          },
+          {
+            "pid": 192247,
+            "parentPid": 192215,
+            "executable": "postgres",
+            "rssBytes": 24588288
+          },
+          {
+            "pid": 192248,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 13086720
+          },
+          {
+            "pid": 192254,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 8859648
+          },
+          {
+            "pid": 192255,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 8089600
+          },
+          {
+            "pid": 192256,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 7204864
+          },
+          {
+            "pid": 192252,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 6791168
+          },
+          {
+            "pid": 192251,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 5496832
+          },
+          {
+            "pid": 192249,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 5439488
+          },
+          {
+            "pid": 192250,
+            "parentPid": 192247,
+            "executable": "postgres",
+            "rssBytes": 5046272
+          }
+        ],
+        "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+        "trackedPidCount": 28,
+        "observedPostgresRelatedPids": [
+          192233,
+          192241,
+          192243,
+          192247,
+          192248,
+          192249,
+          192250,
+          192251,
+          192252,
+          192254,
+          192255,
+          192256,
+          192259,
+          192261,
+          192271,
+          192277,
+          193176
+        ],
+        "uniqueTempRoot": "/var/tmp/mpg-3jovvpox",
+        "samplingIntervalSeconds": 0.2,
+        "samples": 680,
+        "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+        "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+      }
+    }
+  ],
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 91.51561866100383,
+        "peakGroupRssBytes": 6190047232,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "limits": [
+    "All 26 installed Native Text controller cases pass across two disjoint selected invocations. The reopened-Task case performs three actual bounded C0 model Runs, two Human reopens and independent Plan verification, and retains the complete comment history and earlier document revision access.",
+    "The four SDK cases use pinned real managed OpenCode/runnerd binaries and deterministic HTTP with a local software Host. Their separate earlier source windows remain explicit. No paid provider or physical Host qualification is claimed.",
+    "Native12 conversation startup still reaches its test watchdog without a passing provider/reservation proof. Independent backend diagnostics now survive timeout. The temporal second journey, serial managed lifecycle and broader CI failures still need completion; this packet is not whole-suite or release acceptance.",
+    "No requirement or migration phase status is promoted. Failed/resource-stopped exploratory attempts remain private diagnostics."
+  ]
+}

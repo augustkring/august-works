@@ -30,7 +30,7 @@ import { issueThreadInteractionService } from "../services/issue-thread-interact
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { issueTreeControlService } from "../services/issue-tree-control.js";
-import { heartbeatService } from "../services/heartbeat.js";
+import { heartbeatService, nativeExecutionFailureLogFields } from "../services/heartbeat.js";
 import { agentPauseService } from "../services/experience/agent-pause.js";
 import {
   CHAT_CONTROL_RECOVERY_ADMISSION_KEY,
@@ -355,6 +355,220 @@ describe("dependency scheduling through the installed Native text draft controll
       } finally {
         await settings.updateExperimental({ supervision_v7: priorFeatures.supervision_v7, verifier_v7: priorFeatures.verifier_v7 });
       }
+    });
+  }, 60_000);
+
+  it("resumes a reopened Task from its captured continuation summary on a fresh Human assignment wake", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    const outputs = ["First ordinary Native Text draft for Human review.", "Second ordinary Native Text draft after reopening.",
+      "Third ordinary Native Text draft retaining the earlier Source history."];
+    let calls = 0;
+    const providerBodies: string[] = [];
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      const index = ++calls;
+      expect(index).toBeLessThanOrEqual(3);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(new Headers(init.headers).get("x-api-key")).toBe(credential);
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      expect(String(init.body)).not.toContain(credential);
+      providerBodies.push(String(init.body));
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: outputs[index - 1] }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const verifyByHuman = async (entry: Awaited<ReturnType<typeof createDraftPlan>>) => {
+      const settings = instanceSettingsService(db), priorFeatures = await settings.getExperimental();
+      try {
+        await settings.updateExperimental({ supervision_v7: true, verifier_v7: true });
+        const verifier = verificationService(db), packet = await verifier.packet(fixture.human, f.home, entry.plan.id);
+        expect(packet.deterministicFailures).toEqual([]);
+        expect(packet.policy.workerSelfCertification).toBe(false);
+        const evidenceRefs = packet.evidence.map(item => item.ref);
+        const review = await verifier.review(fixture.human, f.home, entry.plan.id, {
+          expectedPlanVersion: packet.planVersion, workerId: packet.workerId, expectedResultHash: packet.resultHash,
+          result: "pass", rationale: "The Human reviewed the retained Native Text result against the current Plan contract.",
+          objectiveSatisfied: true,
+          businessInvariants: packet.contract.businessInvariants.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+          evidenceRequirements: packet.contract.evidenceRequirements.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+          prohibitedOutcomes: packet.contract.prohibitedOutcomes.map((_, index) => ({ index, satisfied: true, evidenceRefs })),
+        });
+        expect(review).toMatchObject({ reviewerType: "human", result: "pass" });
+      } finally {
+        await settings.updateExperimental({ supervision_v7: priorFeatures.supervision_v7, verifier_v7: priorFeatures.verifier_v7 });
+      }
+    };
+
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const first = await createDraftPlan(fixture, "First Native Text draft for continuation-summary regression");
+      const firstWake = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: first.task.id }, contextSnapshot: { issueId: first.task.id, wakeReason: "issue_assigned" } });
+      if (!firstWake) throw new Error("summary_only_first_human_wake_missing");
+      await heartbeat.drainActiveRunExecutions();
+      expect(calls).toBe(1);
+      await assertCompletedDraft(fixture, first, firstWake.id, outputs[0]!);
+      expect((await db.select().from(issues).where(eq(issues.id, first.task.id)))[0]?.status).toBe("in_review");
+      const firstSummary = await documentService(db).getIssueDocumentByKey(first.task.id, "continuation-summary");
+      expect(firstSummary?.latestRevisionId).toBeTruthy();
+      const [summaryLink] = await db.select({ documentId: issueDocuments.documentId }).from(issueDocuments)
+        .where(and(eq(issueDocuments.issueId, first.task.id), eq(issueDocuments.key, "continuation-summary")));
+      expect(summaryLink?.documentId).toBeTruthy();
+      const [capturedSummaryRevision] = await db.select({ revision: documentRevisions })
+        .from(documentRevisions).where(and(eq(documentRevisions.id, firstSummary!.latestRevisionId), eq(documentRevisions.documentId, summaryLink!.documentId)));
+      expect(capturedSummaryRevision?.revision.createdByRunId).toBe(firstWake.id);
+      expect(capturedSummaryRevision?.revision.payloadSourceSnapshot).toBeNull();
+      expect(capturedSummaryRevision?.revision.payloadSourceSnapshotInvalidated).toBe(false);
+
+      await verifyByHuman(first);
+      expect((await db.select().from(issues).where(eq(issues.id, first.task.id)))[0]?.status).toBe("done");
+
+      const reopened = await issueService(db).update(first.task.id, { status: "todo", actorUserId: f.userId, privacyActor: fixture.human });
+      expect(reopened?.status).toBe("todo");
+      const task = reopened!;
+      const secondPlan = await orchestrationService(db).create(fixture.human, f.home, {
+        issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Second Native Text draft after reopening", requiredOutputs: [{ kind: "task_document", key: "result" }],
+          businessInvariants: ["Human review remains required"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }],
+      });
+      await orchestrationService(db).decide(fixture.human, f.home, secondPlan.id, { expectedVersion: secondPlan.version,
+        action: "start", rationale: "Admit the reopened Task's second ordinary Native Text draft for Human review" });
+      const priorComments = await db.select().from(issueComments).where(eq(issueComments.issueId, task.id));
+      const [priorRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, firstWake.id));
+      const priorResult = (priorRun?.resultJson as Record<string, unknown> | null)?.nativeResult as Record<string, unknown> | undefined;
+      expect(priorComments).toHaveLength(1);
+      expect(priorComments[0]).toMatchObject({ createdByRunId: firstWake.id, authorAgentId: f.presence.id,
+        authorType: "agent", payloadSourceProtocolVersion: 0, payloadSourceSnapshot: null,
+        payloadSourceSnapshotInvalidated: false, body: priorResult?.summary });
+      const administrativeRows = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
+      console.info("reopened_assignment_interaction_owner", administrativeRows.map(row => ({
+        kind: row.kind, status: row.status, result: row.result, sourceRunMatches: row.sourceRunId === firstWake.id,
+        createdByAgentMatches: row.createdByAgentId === f.presence.id, resolvedByHumanMatches: row.resolvedByUserId === f.userId,
+        resolvedByAgentPresent: Boolean(row.resolvedByAgentId), resolvedByRunPresent: Boolean(row.resolvedByRunId),
+        resolvedAtPresent: Boolean(row.resolvedAt) })));
+      const second = { task, plan: secondPlan };
+      const secondWake = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: task.id }, contextSnapshot: { issueId: task.id, wakeReason: "issue_assigned" } });
+      if (!secondWake) throw new Error("summary_only_second_human_wake_missing");
+      await heartbeat.drainActiveRunExecutions();
+      if (calls !== 2) {
+        const [failed] = await db.select({ status: heartbeatRuns.status, errorCode: heartbeatRuns.errorCode,
+          error: heartbeatRuns.error }).from(heartbeatRuns).where(eq(heartbeatRuns.id, secondWake.id));
+        console.info("reopened_assignment_failure", { ...nativeExecutionFailureLogFields({ error: new Error(failed?.error ?? ""),
+          runId: "fixture", failureCode: failed?.errorCode ?? "unknown" }), status: failed?.status,
+          errorCodeSha256: createHash("sha256").update(failed?.errorCode ?? "").digest("hex"),
+          errorSha256: createHash("sha256").update(failed?.error ?? "").digest("hex"), errorLength: failed?.error?.length ?? 0 });
+      }
+      expect(calls).toBe(2);
+      await assertCompletedDraft(fixture, second, secondWake.id, outputs[1]!);
+      const [secondRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, secondWake.id));
+      const [firstRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, firstWake.id));
+      const firstNativeResult = (firstRun?.resultJson as Record<string, unknown> | null)?.nativeResult as Record<string, unknown> | undefined;
+      const acceptedSummary = typeof firstNativeResult?.summary === "string" ? firstNativeResult.summary : null;
+      const selectedSummary = (secondRun?.runnerProfileJson as Record<string, unknown> | null)?.nativeBootstrapFinalizedContinuationSummary as
+        { sourceRunId?: string; body?: string } | null;
+      const capturedCommentSources = (secondRun?.runnerProfileJson as Record<string, unknown> | null)?.nativeBootstrapContinuationCommentSources as
+        Array<{ input?: { commentId?: string }; acceptedPresentationOwner?: {
+          commentSourceIdentity?: { commentId?: string }; acceptedSummaryOwner?: { sourceRunId?: string; body?: string };
+        } }> | undefined;
+      const selectedContinuation = (secondRun?.contextSnapshot as Record<string, unknown> | null)?.executionContinuation as
+        { coverage?: { kind?: string; throughCommentId?: string | null; summaryThroughCommentId?: string | null } } | undefined;
+      const issueInteractions = await issueThreadInteractionService(db).listForIssue(task.id);
+      const issueClosedInteraction = issueInteractions.filter(value => value.kind === "request_confirmation" && value.status === "expired" &&
+        value.result?.outcome === "issue_closed");
+      expect(issueClosedInteraction).toHaveLength(1);
+      expect(issueClosedInteraction[0]).toMatchObject({ sourceRunId: firstWake.id, createdByAgentId: null,
+        resolvedByUserId: f.userId, resolvedByAgentId: null, resolvedByRunId: null, result: { version: 1, outcome: "issue_closed", reason: null } });
+      const issueClosedActivity = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home),
+        eq(activityLog.action, "issue.thread_interaction_expired"), eq(activityLog.entityType, "issue"),
+        eq(activityLog.entityId, task.id), sql`${activityLog.details}->>'interactionId' = ${issueClosedInteraction[0]!.id}`));
+      expect(issueClosedActivity).toHaveLength(1);
+      expect(issueClosedActivity[0]!.details).toMatchObject({ interactionId: issueClosedInteraction[0]!.id,
+        interactionKind: "request_confirmation", interactionStatus: "expired", source: "issue.status_transition.issue_closed",
+        result: issueClosedInteraction[0]!.result });
+      const sourceReceipt = nativeRunInputSourceReceiptSchema.parse(
+        (secondRun?.runnerProfileJson as Record<string, unknown> | null)?.nativeInputSourceReceipt);
+      expect(sourceReceipt.bootstrap.policy.runIds).toContain(firstWake.id);
+      expect(sourceReceipt.bootstrap.inputs).toContainEqual(expect.objectContaining({ kind: "interaction", issueId: task.id,
+        interactionId: issueClosedInteraction[0]!.id }));
+      const secondContinuation = (secondRun?.contextSnapshot as Record<string, unknown> | null)?.executionContinuation as
+        { humanResponses?: Array<{ id: string }>; interactionOutcomes: Array<{ id: string; kind: string; status: string; result: unknown }> } | undefined;
+      expect(secondContinuation?.interactionOutcomes).toContainEqual({ id: issueClosedInteraction[0]!.id, kind: "request_confirmation",
+        status: "expired", result: issueClosedInteraction[0]!.result });
+      expect(secondContinuation?.humanResponses ?? []).not.toContainEqual(expect.objectContaining({ id: issueClosedInteraction[0]!.id }));
+      expect(acceptedSummary).toBeTruthy();
+      expect(selectedSummary).toMatchObject({ sourceRunId: firstWake.id, body: acceptedSummary });
+      expect(capturedCommentSources).toHaveLength(1);
+      expect(capturedCommentSources?.[0]).toMatchObject({ input: { commentId: priorComments[0]!.id },
+        acceptedPresentationOwner: { commentSourceIdentity: { commentId: priorComments[0]!.id },
+          acceptedSummaryOwner: { sourceRunId: firstWake.id, body: acceptedSummary } } });
+      expect(selectedContinuation?.coverage).toEqual({ kind: "full_task_history",
+        throughCommentId: priorComments[0]!.id, summaryThroughCommentId: null });
+      expect(providerBodies[1]).toContain(acceptedSummary!);
+      expect(providerBodies[1]).not.toContain("# Continuation Summary");
+      const resultDocument = await documentService(db).getIssueDocumentByKey(task.id, "result");
+      if (!resultDocument?.latestRevisionId) throw new Error("reopened_task_result_revision_missing");
+      const sourceRead = () => assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: f.home,
+        issueId: task.id, revisionId: resultDocument.latestRevisionId!, actor: fixture.human, requireLatest: false });
+      await expect(sourceRead()).resolves.toBeUndefined();
+      expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]?.status).toBe("in_review");
+      await verifyByHuman(second);
+      expect((await db.select().from(issues).where(eq(issues.id, task.id)))[0]?.status).toBe("done");
+      await expect(sourceRead()).resolves.toBeUndefined();
+      const reopenedAgain = await issueService(db).update(task.id, { status: "todo", actorUserId: f.userId, privacyActor: fixture.human });
+      if (!reopenedAgain) throw new Error("third_native_task_reopen_missing");
+      const thirdPlan = await orchestrationService(db).create(fixture.human, f.home, {
+        issueId: task.id, expectedIssueUpdatedAt: reopenedAgain.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Third Native Text draft with retained Source history",
+          requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"] },
+        budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }],
+      });
+      await orchestrationService(db).decide(fixture.human, f.home, thirdPlan.id, { expectedVersion: thirdPlan.version,
+        action: "start", rationale: "Admit the third bounded Native Text draft after independent Human review" });
+      const thirdHistory = await db.select().from(issueComments).where(eq(issueComments.issueId, task.id));
+      const thirdWake = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system", reason: "issue_assigned",
+        requestedByActorType: "user", requestedByActorId: f.userId, payload: { issueId: task.id },
+        contextSnapshot: { issueId: task.id, wakeReason: "issue_assigned" } });
+      if (!thirdWake) throw new Error("third_native_task_wake_missing");
+      await heartbeat.drainActiveRunExecutions();
+      expect(calls).toBe(3);
+      const third = { task: reopenedAgain, plan: thirdPlan };
+      await assertCompletedDraft(fixture, third, thirdWake.id, outputs[2]!);
+      const [thirdRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, thirdWake.id));
+      const thirdReceipt = nativeRunInputSourceReceiptSchema.parse(thirdRun?.runnerProfileJson?.nativeInputSourceReceipt);
+      expect(thirdReceipt.bootstrap.policy.runIds).toEqual(expect.arrayContaining([firstWake.id, secondWake.id]));
+      expect(thirdRun?.runnerProfileJson?.nativeBootstrapFinalizedContinuationSummary).toMatchObject({ sourceRunId: secondWake.id });
+      const thirdContinuation = thirdRun?.contextSnapshot?.executionContinuation as
+        { messages: Array<{ id: string }>; interactionOutcomes: Array<{ id: string }> };
+      expect(thirdContinuation.messages.map(value => value.id).sort()).toEqual(thirdHistory.map(value => value.id).sort());
+      expect(thirdContinuation.interactionOutcomes).toHaveLength(2);
+      const thirdDocument = await documentService(db).getIssueDocumentByKey(task.id, "result");
+      if (!thirdDocument?.latestRevisionId) throw new Error("third_native_output_revision_missing");
+      const thirdSourceRead = () => assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId: f.home,
+        issueId: task.id, revisionId: thirdDocument.latestRevisionId!, actor: fixture.human });
+      await verifyByHuman(third);
+      await expect(sourceRead()).resolves.toBeUndefined();
+      await expect(thirdSourceRead()).resolves.toBeUndefined();
+      const savedActivityDetails = issueClosedActivity[0]!.details!;
+      await db.update(activityLog).set({ details: { ...savedActivityDetails, source: "forged_issue_close" } })
+        .where(and(eq(activityLog.companyId, f.home), eq(activityLog.id, issueClosedActivity[0]!.id)));
+      await expect(sourceRead()).rejects.toMatchObject({ status: 403 });
+      await db.update(activityLog).set({ details: savedActivityDetails })
+        .where(and(eq(activityLog.companyId, f.home), eq(activityLog.id, issueClosedActivity[0]!.id)));
+      await expect(sourceRead()).resolves.toBeUndefined();
+      await db.update(heartbeatRuns).set({ resultJson: sql`coalesce(${heartbeatRuns.resultJson}, '{}'::jsonb) ||
+        jsonb_build_object('nativeResult', jsonb_build_object('summary', 'withdrawn parent result'))` })
+        .where(eq(heartbeatRuns.id, firstWake.id));
+      await expect(sourceRead()).rejects.toMatchObject({ status: 403 });
+      const attempts = await db.select().from(orchestrationWorkerAttempts).where(inArray(orchestrationWorkerAttempts.planId,
+        [first.plan.id, second.plan.id, third.plan.id]));
+      const reservations = await db.select().from(orchestrationModelReservations).where(inArray(orchestrationModelReservations.planId,
+        [first.plan.id, second.plan.id, third.plan.id]));
+      expect(new Set(attempts.map(row => row.runId)).size).toBe(3);
+      expect(new Set(reservations.map(row => row.id)).size).toBe(3);
     });
   }, 60_000);
 

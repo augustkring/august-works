@@ -199,6 +199,16 @@ describe("redaction", () => {
     expect(result.normal).toBe("plain");
   });
 
+  it("preserves only the Task-close audit source while withholding JWT-shaped source data", () => {
+    const source = "issue.status_transition.issue_closed";
+    expect(sanitizeRecord({ source, nested: { source }, arbitrary: source })).toEqual({
+      source, nested: { source }, arbitrary: REDACTED_EVENT_VALUE,
+    });
+    expect(sanitizeRecord({ source: "aaa.bbb.ccc" })).toEqual({ source: REDACTED_EVENT_VALUE });
+    expect(sanitizeRecord({ source: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature" }))
+      .toEqual({ source: REDACTED_EVENT_VALUE });
+  });
+
   it("preserves Paperclip protocol schema identifiers", () => {
     expect(
       sanitizeRecord({

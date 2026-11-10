@@ -32,7 +32,7 @@ beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "heartbeat-managed-project-workspace-"));
   vi.stubEnv("PAPERCLIP_HOME", home);
   database = await startEmbeddedPostgresTestDatabase("heartbeat-managed-project-workspace-");
-  db = createDb(database.connectionString);
+  db = createDb(database.connectionString, { maxConnections: 3 });
 }, 60_000);
 afterAll(async () => {
   await database?.cleanup();
@@ -208,9 +208,9 @@ it("runs a real capped Project Worker in its realized worktree without changing 
         leases[0]!.metadata?.remoteExecutionTermination)).toMatchObject({ state: "stopped", runId: wake!.id });
       expect(providerSourceChecks).toBe(reservations.length);
       expect(facts().providerCallCount).toBe(reservations.length);
+      expect(facts().providerCredentialFacts).toEqual({ requestCount: reservations.length, everyRequestMatchedConfiguredApiKey: true });
       expect(facts().issuerFacts).toEqual([{ scope: "worker_model", runId: wake!.id, manifestId: attempts[0]!.executionManifestId }]);
       expect(facts().sandboxRuntimeFacts?.relayAuthenticated).toBe(true);
-      expect(facts().sandboxRuntimeFacts?.brokerTokenSubstitutionCount).toBe(0);
       expect(facts().sandboxRuntimeFacts?.attachedModelBrokerProviderCount).toBe(0);
       expect((facts().sandboxRuntimeFacts?.modelBrokerSessionReceipts as Array<{ phase: string }>).at(-1)?.phase).toBe("stop");
       expect(git(selected.repositoryRoot, "branch", "--show-current")).toBe("main");
@@ -521,6 +521,7 @@ it("accepts a real plan confirmation and executes its managed Native workspace r
         leases[0]!.metadata?.remoteExecutionTermination)).toMatchObject({ state: "stopped", runId: run!.id });
       expect(providerSourceChecks).toBe(reservations.length);
       expect(facts().providerCallCount).toBe(reservations.length);
+      expect(facts().providerCredentialFacts).toEqual({ requestCount: reservations.length, everyRequestMatchedConfiguredApiKey: true });
       expect(factsForRun(firstPersistedRun!.id).issuerFacts).toEqual([{ scope: "worker_model",
         runId: firstPersistedRun!.id, manifestId: attempts.find(attempt => attempt.runId === firstPersistedRun!.id)!.executionManifestId }]);
       expect(factsForRun(run!.id).issuerFacts).toEqual([{ scope: "worker_model", runId: run!.id,
@@ -528,7 +529,10 @@ it("accepts a real plan confirmation and executes its managed Native workspace r
       for (const completedRun of [firstPersistedRun!, run!]) {
         const runtime = factsForRun(completedRun.id).sandboxRuntimeFacts;
         expect(runtime?.relayAuthenticated).toBe(true);
-        expect(runtime?.brokerTokenSubstitutionCount).toBe(0);
+        const runAttempt = attempts.find(attempt => attempt.runId === completedRun.id)!;
+        const runReservations = reservations.filter(row => row.workerAttemptId === runAttempt.id);
+        expect(factsForRun(completedRun.id).providerCredentialFacts).toEqual({
+          requestCount: runReservations.length, everyRequestMatchedConfiguredApiKey: true });
         expect(runtime?.attachedModelBrokerProviderCount).toBe(0);
         expect((runtime?.modelBrokerSessionReceipts as Array<{ phase: string }>).at(-1)?.phase).toBe("stop");
       }

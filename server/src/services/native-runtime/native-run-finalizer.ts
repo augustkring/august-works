@@ -749,6 +749,11 @@ export async function acceptedResponseDigestMatches(
     )
     .limit(17);
   if (sources.length > 16) return false;
+  const internalDraftSourceInstanceId = run.driverKind === "aw_text_messages" &&
+    record(record(record(run.runnerProfileJson).nativeExecutionInput).provider).kind === "aw_text_only"
+    ? `aw-draft:${run.id}` : null;
+  if (internalDraftSourceInstanceId && !sources.some(source => source.sourceInstanceId === internalDraftSourceInstanceId))
+    return false;
   return sources.some(
     ({ sourceInstanceId }) =>
       typeof sourceInstanceId === "string" &&
@@ -763,6 +768,7 @@ export async function acceptedResponseDigestMatches(
           completionContractSha256: run.completionContractSha256,
           sourceInstanceId: run.runnerInstanceId,
           controlPlaneSourceInstanceId: sourceInstanceId,
+          ...(internalDraftSourceInstanceId ? { internalDraftSourceInstanceId } : {}),
         },
         ...canonical,
       }) === accepted.canonicalSha256,
