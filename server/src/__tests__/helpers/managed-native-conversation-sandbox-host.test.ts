@@ -39,5 +39,10 @@ it("projects only bounded completed startup span facts", () => {
     { ...span, durationMs: Infinity }, { ...span, durationMs: -1 }, { ...span, outcome: "private-outcome" }, null]))
     .toEqual([{ span: "runner.process.launch", durationMs: 1234, outcome: "ok" }]);
   expect(projectCompletedNativeStartupSpans([{ ...span, durationMs: 99_999_999 }])[0]?.durationMs).toBe(86_400_000);
-  expect(projectCompletedNativeStartupSpans(Array.from({ length: 40 }, () => span))).toHaveLength(7);
+  expect(projectCompletedNativeStartupSpans(Array.from({ length: 40 }, () => span))).toHaveLength(20);
+  const completed = ["runner.process.dispatch", "runner.process.launch", "runner.transport.resolve",
+    "runner.transport.activation", "runner.transport.ready", "runner.session.bootstrap", "runner.turn.submit"]
+    .map(name => ({ ...span, span: name }));
+  expect(projectCompletedNativeStartupSpans(completed)).toEqual(completed.map(({ span: name }) =>
+    ({ span: name, durationMs: 1234, outcome: "ok" })));
 });

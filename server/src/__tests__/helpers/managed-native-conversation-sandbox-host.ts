@@ -83,8 +83,17 @@ export function ensureFixtureNamespaceSymlink(path: string, target: string): voi
 
 /** Closed completed-span projection; it does not identify a currently active phase. */
 export function projectCompletedNativeStartupSpans(payloads: readonly unknown[]) {
-  const startupSpanNames = new Set(["runner.session.startup", "stage.sync", "runner.runtime.stage",
-    "runner.process.dispatch", "runner.process.launch", "session.checkpoint.restore", "stage.asset.home"]);
+  const startupSpanNames = new Set([
+    "runner.session.startup", "stage.sync", "runner.runtime.stage",
+    "runner.artifact.discover", "runner.artifact.link", "runner.artifact.prepare",
+    "runner.artifact.verify", "runner.artifact.verify_preinstalled", "runner.artifact.verify_retained",
+    "runner.process.dispatch", "runner.process.identity_failure_cleanup", "runner.process.launch",
+    "runner.ingress.acquire", "runner.ingress.wait_for_process",
+    "runner.transport.activation", "runner.transport.connect", "runner.transport.ready",
+    "runner.transport.resolve", "runner.transport.selected",
+    "session.checkpoint.restore", "stage.asset.home",
+    "runner.session.bootstrap", "runner.session.resume", "runner.turn.submit",
+  ]);
   return payloads.slice(0, 32).flatMap(value => {
     if (!value || typeof value !== "object") return [];
     const payload = value as Record<string, unknown>;
@@ -93,7 +102,7 @@ export function projectCompletedNativeStartupSpans(payloads: readonly unknown[])
       !Number.isFinite(payload.durationMs) || payload.durationMs < 0 ||
       (payload.outcome !== "ok" && payload.outcome !== "failed" && payload.outcome !== "cancelled")) return [];
     return [{ span: payload.span, durationMs: Math.min(86_400_000, Math.trunc(payload.durationMs)), outcome: payload.outcome }];
-  }).slice(0, 7);
+  }).slice(0, 20);
 }
 
 const hostAgentRequire = createRequire(import.meta.url);

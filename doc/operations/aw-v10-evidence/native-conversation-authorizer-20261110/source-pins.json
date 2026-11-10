@@ -1,0 +1,11 @@
+{
+  "parentCommit": "91cd1b62caceb4c15df58b3225f18358e9530252",
+  "files": {
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts": "4c78b242c8374c9b56d1a2e74a2717ce97e2995ffc51df6e26b71959b33b44c4",
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": "90dfd27a3296ef23ec8c7ce29ce0539d64b86751ddae3d306667ebfa5995f5be",
+    "server/src/__tests__/redaction.test.ts": "2f745b7a2e7b90b33328889ea710520ec847546a60cc911722b3de5a1d3e1876",
+    "server/src/redaction.ts": "0aa2fd52c4bc4e47ef1174973fcfc138007c09a1623a3becbccc7529f300f012",
+    "server/src/services/runtime/control.ts": "38183bd5d380ac4ae84c4abda400d384abd5b0af98117a4a19249b212d6059b0"
+  },
+  "scope": "Exact current source leaves; invocation manifests retain separate source/input/resource/cleanup windows."
+}

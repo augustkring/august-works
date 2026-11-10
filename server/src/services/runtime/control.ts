@@ -3732,7 +3732,7 @@ export function runtimeControlService(
           !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
         const generation = typeof contextSnapshot.conversationSessionGeneration === "number"
           ? contextSnapshot.conversationSessionGeneration : null;
-        const workspaceScope = generation !== null ? await findNativeChatWorkspaceScope(db, {
+        const workspaceScope = generation !== null ? await findNativeChatWorkspaceScope(tx, {
           adapterType: source.source.agent.adapterType, environmentDriver: "sandbox", companyId: claims.company_id,
           agentId: source.run.agentId!, issueId: task.id, runId: source.run.id,
           responsibleUserId: source.run.responsibleUserId, conversationSessionGeneration: generation,
@@ -3851,7 +3851,7 @@ export function runtimeControlService(
           !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
         const generation = typeof contextSnapshot.conversationSessionGeneration === "number"
           ? contextSnapshot.conversationSessionGeneration : null;
-        const workspaceScope = generation !== null ? await findNativeChatWorkspaceScope(db, {
+        const workspaceScope = generation !== null ? await findNativeChatWorkspaceScope(tx, {
           adapterType: source.source.agent.adapterType, environmentDriver: "sandbox", companyId: claims.company_id,
           agentId: source.run.agentId!, issueId: task.id, runId: source.run.id,
           responsibleUserId: source.run.responsibleUserId, conversationSessionGeneration: generation,

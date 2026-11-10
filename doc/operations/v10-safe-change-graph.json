@@ -17,7 +17,7 @@
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13946,
+    "fullDiffPathCount": 13951,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
@@ -4039,7 +4039,7 @@
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 13946,
+        "fullDiffPathCount": 13951,
         "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
       },
       "sourceAfterGeneration": "Private exact reviewed composed overlay anchored at b1; no final runtime, release or capability qualification."
@@ -23600,7 +23600,7 @@
         },
         {
           "path": "server/src/services/runtime/control.ts",
-          "sha256": "61d832f7f3b70cb476ea36c578af47bf5ef102291ff20828753f4f3533ede6be"
+          "sha256": "38183bd5d380ac4ae84c4abda400d384abd5b0af98117a4a19249b212d6059b0"
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -29317,11 +29317,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
-          "sha256": "67791a2105b224bd246849abc20aa0d826dbe26498bb5f245b14c2d3977a4784"
+          "sha256": "4c78b242c8374c9b56d1a2e74a2717ce97e2995ffc51df6e26b71959b33b44c4"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "2afa0feb40fd7bc883d90dd60f6d4cbf698fcd77814307a46aa11fdd6047daea"
+          "sha256": "90dfd27a3296ef23ec8c7ce29ce0539d64b86751ddae3d306667ebfa5995f5be"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -60206,7 +60206,7 @@
       "id": "source:server/src/services/runtime/control.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/runtime/control.ts",
-      "sha256": "61d832f7f3b70cb476ea36c578af47bf5ef102291ff20828753f4f3533ede6be",
+      "sha256": "38183bd5d380ac4ae84c4abda400d384abd5b0af98117a4a19249b212d6059b0",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -66506,7 +66506,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.test.ts",
-      "sha256": "67791a2105b224bd246849abc20aa0d826dbe26498bb5f245b14c2d3977a4784",
+      "sha256": "4c78b242c8374c9b56d1a2e74a2717ce97e2995ffc51df6e26b71959b33b44c4",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -66521,7 +66521,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "2afa0feb40fd7bc883d90dd60f6d4cbf698fcd77814307a46aa11fdd6047daea",
+      "sha256": "90dfd27a3296ef23ec8c7ce29ce0539d64b86751ddae3d306667ebfa5995f5be",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
