@@ -1277,6 +1277,7 @@ async function assertNativeProjectSourceCurrentInScope(db: Db | Transaction, inp
   companyId: string; actor: AuthorizationActor; projectId: string;
   sources?: Extract<NativePayloadSourceInput, { kind: "project" }>[];
   workspaceSources?: Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[];
+  rendition?: unknown;
 }, scope: NativeSourceReadScope): Promise<void> {
   const activeKey = `native-project-owner:${input.companyId}:${input.projectId}`;
   if (scope.active.has(activeKey)) throw forbidden("A Native source Project graph contains a cycle");
@@ -1306,6 +1307,7 @@ async function assertNativeProjectSourceCurrentInScopeBody(db: Db | Transaction,
   companyId: string; actor: AuthorizationActor; projectId: string;
   sources?: Extract<NativePayloadSourceInput, { kind: "project" }>[];
   workspaceSources?: Extract<NativePayloadSourceInput, { kind: "project_workspace" }>[];
+  rendition?: unknown;
 }, scope: NativeSourceReadScope): Promise<void> {
   const projectId = input.projectId;
   nativeSourceReadWork(scope);
@@ -1329,6 +1331,10 @@ async function assertNativeProjectSourceCurrentInScopeBody(db: Db | Transaction,
   const currentPublicProjection = currentProjection ? publicNativePayloadRow(currentProjection) : null;
   const currentPublicHash = currentPublicProjection
     ? createHash("sha256").update(JSON.stringify(currentPublicProjection), "utf8").digest("hex") : null;
+  // The original public DTO hash stays exact. A provider may reorder JSON
+  // object keys; compare its wire value against that same still-current owner.
+  const invalidRendition = Object.hasOwn(input, "rendition") && (!currentPublicProjection ||
+    !isDeepStrictEqual(input.rendition, JSON.parse(JSON.stringify(currentPublicProjection))));
   const projectionRecord = currentProjection as unknown as Record<string, unknown> | null;
   const projectedWorkspaces = Array.isArray(projectionRecord?.workspaces)
     ? projectionRecord!.workspaces.filter((value): value is Record<string, unknown> =>
@@ -1357,7 +1363,7 @@ async function assertNativeProjectSourceCurrentInScopeBody(db: Db | Transaction,
   const actualForeignProjectSourceIds = [...new Set(foreignProjectSources.map(source => source.projectId))].sort();
   if (project.payloadSourceProtocolVersion !== 1 || project.payloadSourceSnapshotInvalidated || !owner.success ||
     owner.data.owner.kind !== "project" || owner.data.owner.companyId !== input.companyId || owner.data.owner.id !== projectId || !hash ||
-    owner.data.owner.contentHash !== hash.hash || invalidSources || invalidWorkspaceSources || !currentProjection ||
+    owner.data.owner.contentHash !== hash.hash || invalidSources || invalidWorkspaceSources || invalidRendition || !currentProjection ||
     project.sourceProvenanceQualified !== true ||
     // sourceIssueIds is constructor-owned provenance metadata. The sealed
     // owner hash pins its exact current value, while the original constructor
@@ -1416,6 +1422,7 @@ async function assertNativeProjectApiToolResultCurrentInScope(db: Db | Transacti
     !managedProjectSourceResult.success || managedProjectSourceResult.data.kind !== "project" ||
     !isDeepStrictEqual(managedProjectSourceResult.data, projectSourceResult.data) ||
     !/^[0-9a-f]{64}$/.test(String(original.requestHash ?? "")) ||
+    !/^[0-9a-f]{64}$/.test(String(original.apiResultDigest ?? "")) ||
     original.projectId !== projectSourceResult.data.projectId ||
     original.pathAndQuery !== `/api/projects/${projectSourceResult.data.projectId}` ||
     original.turnId !== managed.turnId || original.eventSeq !== managed.eventSeq || original.attempt !== managed.attempt ||
@@ -1427,13 +1434,14 @@ async function assertNativeProjectApiToolResultCurrentInScope(db: Db | Transacti
   const apiReceipts = nativeSourceRecord(nativeSourceRecord(input.run.resultJson).apiToolReceipts);
   const apiReceipt = nativeSourceRecord(apiReceipts[receiptKey]);
   const expectedReceiptKeys = ["callId", "turnId", "eventSeq", "attempt", "operationId", "method", "pathAndQuery",
-    "requestHash", "argumentsHash", "state", "status", "resultDigest"].sort();
+    "requestHash", "argumentsHash", "state", "status", "resultDigest", "providerResultDigest"].sort();
   if (!isDeepStrictEqual(Object.keys(apiReceipt).sort(), expectedReceiptKeys) ||
     apiReceipt.callId !== source.callId || apiReceipt.turnId !== original.turnId ||
     apiReceipt.eventSeq !== original.eventSeq || apiReceipt.attempt !== original.attempt ||
     apiReceipt.operationId !== "GET /api/projects/{id}" || apiReceipt.method !== "GET" ||
     apiReceipt.pathAndQuery !== original.pathAndQuery || apiReceipt.requestHash !== original.requestHash ||
-    apiReceipt.state !== "completed" || apiReceipt.status !== 200 || apiReceipt.resultDigest !== source.contentHash)
+    apiReceipt.state !== "completed" || apiReceipt.status !== 200 ||
+    apiReceipt.resultDigest !== original.apiResultDigest || apiReceipt.providerResultDigest !== source.contentHash)
     throw forbidden("A Native Project API receipt no longer matches its exact result capture");
 
   const associations = Array.isArray(input.profile.nativeToolCallDispatchAssociations)
@@ -1509,11 +1517,13 @@ export async function captureNativeProjectSource(db: Db, input: {
  * at a tool-result publication boundary. The caller holds its privacy locks. */
 export async function assertNativeProjectSourceCurrent(db: Db | Transaction, input: {
   companyId: string; actor: AuthorizationActor; source: Extract<NativePayloadSourceInput, { kind: "project" }>;
+  rendition?: unknown;
 }): Promise<void> {
   return inNativeSourceReadTransaction(db, tx => withNativeSourceReadScope(tx, input.actor, input.companyId, async scope => {
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
     await assertNativeProjectSourceCurrentInScope(tx, { companyId: input.companyId, actor: input.actor,
-      projectId: input.source.projectId, sources: [input.source] }, scope);
+      projectId: input.source.projectId, sources: [input.source],
+      ...(Object.hasOwn(input, "rendition") ? { rendition: input.rendition } : {}) }, scope);
   }));
 }
 

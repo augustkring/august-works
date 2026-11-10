@@ -160,7 +160,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         "private-fixture-signing-master-123456789",
       );
       database = await startEmbeddedPostgresTestDatabase("aw-v7-worker-model-");
-      db = createDb(database.connectionString);
+      db = createDb(database.connectionString, { maxConnections: 3 });
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
@@ -1715,6 +1715,13 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       ).toMatchObject({ toolActionsUsed: 1, status: "running" });
     });
     it("keeps unknown/material Native API paths and undeclared document keys outside the draft qualification", async () => {
+      for (const argumentsValue of [
+        { operationId: "GET /api/projects/{id}", pathParams: { id: randomUUID() } },
+        { operationId: "GET /api/projects/{id}", pathParams: { id: randomUUID() }, query: {} },
+        { operationId: "GET /api/projects/{id}", pathParams: { id: randomUUID(), companyId: f.home } },
+        { operationId: "POST /api/companies/{companyId}/projects", pathParams: { companyId: f.home }, body: {} },
+      ]) await expect(nativeTools().execute({ tool: "call_api", callId: `unqualified-project-${randomUUID()}`,
+        arguments: argumentsValue })).rejects.toMatchObject({ status: 403 });
       for (const tool of [
         "call_api",
         "hire_agent",

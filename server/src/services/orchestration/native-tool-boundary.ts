@@ -362,7 +362,7 @@ export async function assertNativeToolPlanCurrent(
       throw forbidden("Native tool accepted decomposition changed");
   }
   await retainedOrchestrationContract(db, b.companyId, b.issueId);
-  return bound;
+  return { ...bound, task };
 }
 
 async function fence(db: Db, b: Binding, planId: string, reasonCode: string) {
@@ -444,12 +444,21 @@ export async function withOrchestrationNativeTool(
   if (!preliminary) return effect();
   if (!/^[\x21-\x7e]{1,240}$/.test(call.callId))
     throw badRequest("Native tool call identity must be bounded");
+  const args = call.arguments && typeof call.arguments === "object" && !Array.isArray(call.arguments)
+    ? call.arguments as Record<string, unknown> : {};
+  const path = args.pathParams && typeof args.pathParams === "object" && !Array.isArray(args.pathParams)
+    ? args.pathParams as Record<string, unknown> : {};
+  const projectReadId = call.tool === "call_api" &&
+    Object.keys(args).sort().join(",") === "operationId,pathParams" && args.operationId === "GET /api/projects/{id}" &&
+    Object.keys(path).join(",") === "id" && typeof path.id === "string" &&
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(path.id) ? path.id : null;
   // Assigned MCP execution retains its own qualified classification, approval
   // and native invocation charge. Other generic APIs/connectors are not an
   // escape from the plan's current scope or material-action contract.
   if (
     !externallyMetered &&
     !reads.has(call.tool) &&
+    !projectReadId &&
     !draftWrites.has(call.tool)
   )
     throw forbidden(
@@ -474,6 +483,8 @@ export async function withOrchestrationNativeTool(
       draftWrites.has(call.tool),
     );
     if (!bound) throw forbidden("Native tool plan disappeared during dispatch");
+    if (projectReadId && bound.task.projectId !== projectReadId)
+      throw forbidden("Bounded Project reads require the current Task's exact Project");
     if (externallyMetered) return null;
     if (draftWrites.has(call.tool)) {
       if (
@@ -585,7 +596,9 @@ export async function withOrchestrationNativeTool(
     await db.transaction(async (tx) => {
       const t = tx as unknown as Db;
       await lockNativeToolPlan(t, b);
-      await assertNativeToolPlanCurrent(t, b, draftWrites.has(call.tool));
+      const current = await assertNativeToolPlanCurrent(t, b, draftWrites.has(call.tool));
+      if (projectReadId && current?.task.projectId !== projectReadId)
+        throw forbidden("Bounded Project reads require the current Task's exact Project");
     });
     failureStage = "persist_success";
     if (reservation)

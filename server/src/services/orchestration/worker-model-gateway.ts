@@ -66,7 +66,7 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
-import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent } from "../native-direct-input.js";
+import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent, assertNativeProjectSourceCurrent } from "../native-direct-input.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import {
@@ -834,6 +834,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           const projectRead = projectReadCaptures[0]!;
           const projectReadSource = nativePayloadSourceInputSchema.safeParse(projectRead.source);
           const resultRecord = managedRecord(apiResult);
+          const { apiOperationId: _apiOperationId, ...apiResponseBody } = resultRecord;
+          const apiResultDigest = nativeSha256({ ...apiResponseBody, operationId: "GET /api/projects/{id}" });
           const projectResult = managedRecord(resultRecord.data);
           const apiReceipts = managedRecord(managedRecord(run.resultJson).apiToolReceipts);
           const apiReceipt = managedRecord(apiReceipts[createHash("sha256").update(block.tool_use_id, "utf8").digest("hex")]);
@@ -846,21 +848,34 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             entry.inputs.filter((input) => input.kind === "tool_result" && isDeepStrictEqual(input, source)).length, 0);
           const conflictingProjectToolResults = receipt.data.additionalInputs.some((entry) => entry.inputs.some((input) =>
             input.kind === "tool_result" && input.callId === source.callId && !isDeepStrictEqual(input, source)));
-          if (!projectReadSource.success || projectReadSource.data.kind !== "project" ||
-            !isDeepStrictEqual(projectReadSource.data, projectSource) ||
-            projectRead.projectId !== projectSource.projectId || projectRead.requestHash !== apiReceipt.requestHash ||
-            !apiEnvelopeIdentity || resultRecord.ok !== true || resultRecord.status !== 200 ||
-            resultRecord.apiOperationId !== "GET /api/projects/{id}" ||
-            projectResult.id !== projectSource.projectId || projectResult.updatedAt !== projectSource.sourceVersion ||
-            createHash("sha256").update(JSON.stringify(projectResult), "utf8").digest("hex") !== projectSource.contentHash ||
-            apiReceipt.callId !== block.tool_use_id || apiReceipt.turnId !== association.turnId ||
-            apiReceipt.eventSeq !== association.eventSeq || apiReceipt.attempt !== association.attempt ||
-            apiReceipt.operationId !== "GET /api/projects/{id}" || apiReceipt.method !== "GET" ||
-            apiReceipt.pathAndQuery !== `/api/projects/${projectSource.projectId}` ||
-            apiReceipt.argumentsHash !== providerUse.argumentsHash || apiReceipt.requestHash !== projectRead.requestHash ||
-            apiReceipt.state !== "completed" || apiReceipt.status !== 200 || apiReceipt.resultDigest !== sourceResultDigest ||
-            projectEntries.length !== 1 || exactProjectToolResultCopies !== 1 || conflictingProjectToolResults)
+          const projectReadFacts = {
+            originalSourceValid: projectReadSource.success && projectReadSource.data.kind === "project",
+            originalSourceMatches: projectReadSource.success && isDeepStrictEqual(projectReadSource.data, projectSource),
+            originalProjectMatches: projectRead.projectId === projectSource.projectId,
+            originalRequestMatches: projectRead.requestHash === apiReceipt.requestHash,
+            envelopeIdentityValid: apiEnvelopeIdentity,
+            responseSucceeded: resultRecord.ok === true && resultRecord.status === 200,
+            responseOperationMatches: resultRecord.apiOperationId === "GET /api/projects/{id}",
+            projectIdMatches: projectResult.id === projectSource.projectId,
+            projectVersionMatches: projectResult.updatedAt === projectSource.sourceVersion,
+            apiCallMatches: apiReceipt.callId === block.tool_use_id && apiReceipt.turnId === association.turnId,
+            apiDispatchMatches: apiReceipt.eventSeq === association.eventSeq && apiReceipt.attempt === association.attempt,
+            apiOperationMatches: apiReceipt.operationId === "GET /api/projects/{id}" && apiReceipt.method === "GET",
+            apiPathMatches: apiReceipt.pathAndQuery === `/api/projects/${projectSource.projectId}`,
+            apiArgumentsMatch: apiReceipt.argumentsHash === providerUse.argumentsHash && apiReceipt.requestHash === projectRead.requestHash,
+            apiCompleted: apiReceipt.state === "completed" && apiReceipt.status === 200,
+            originalHttpResultMatches: projectRead.apiResultDigest === apiResultDigest,
+            apiHttpResultMatches: apiReceipt.resultDigest === apiResultDigest,
+            apiProviderResultMatches: apiReceipt.providerResultDigest === sourceResultDigest,
+            exactSourceSetPresent: projectEntries.length === 1 && exactProjectToolResultCopies === 1 && !conflictingProjectToolResults,
+          };
+          if (Object.values(projectReadFacts).some(valid => !valid)) {
+            if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1")
+              console.info("managed_project_read_receipt_miss", JSON.stringify(projectReadFacts));
             throw forbidden("Managed OpenCode Project API result does not match its exact source receipt");
+          }
+          await assertNativeProjectSourceCurrent(db, { companyId: claims.company_id, actor: sourceActor,
+            source: projectSource, rendition: projectResult });
           const projectSet = projectEntries[0]!;
           consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: projectSet.responsibleUserId,
             policy: projectSet.policy, inputs: projectSet.inputs });

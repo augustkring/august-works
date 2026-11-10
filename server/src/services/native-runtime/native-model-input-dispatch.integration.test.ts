@@ -716,6 +716,7 @@ describe("native model input dispatch intent", () => {
     expect(run!.runnerProfileJson!.nativeToolResultSourceCaptures).toEqual([expect.objectContaining({
       eventSeq: seeded.eventSeq, attempt: seeded.attempt, turnId, callId, tool: "call_api",
       operationId: "GET /api/projects/{id}", projectId, responsibleUserId,
+      apiResultDigest: capture.apiResultDigest, resultDigest: capture.resultDigest,
       nativeInputDispatch: { dispatchId, eventSeq: seeded.eventSeq, attempt: seeded.attempt, turnId, callId },
       source: null,
     })]);

@@ -68,6 +68,19 @@ import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT, REMOTE_RUNNER_CHILD_LAUNCH_SCRIPT } from "../../services/native-runtime/remote-runner-identity.js";
 import { assertManagedNativeProjectWorkspace, type ManagedNativeProjectWorkspaceScope } from "./managed-native-project-workspace-fixture.js";
 
+/** Creates a synthetic proc namespace link, accepting only an exact prior fixture entry. */
+export function ensureFixtureNamespaceSymlink(path: string, target: string): void {
+  try {
+    symlinkSync(target, path);
+    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+  }
+  const existing = lstatSync(path);
+  if (!existing.isSymbolicLink() || readlinkSync(path) !== target)
+    throw new Error("native_fixture_proc_namespace_link_conflict");
+}
+
 const hostAgentRequire = createRequire(import.meta.url);
 const { openShellHostEngine, NATIVE_SESSION_UPPER_ERASE_SCRIPT } = hostAgentRequire("../../../../deploy/v6/host-agent/openshell.mjs") as {
   openShellHostEngine: (input: Record<string, unknown>) => any;
@@ -1864,9 +1877,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     mkdirSync(join(hostProcRoot, "1", "ns"), { recursive: true, mode: 0o700 });
     mkdirSync(join(hostProcRoot, "100", "ns"), { recursive: true, mode: 0o700 });
     mkdirSync(join(hostProcRoot, "101", "ns"), { recursive: true, mode: 0o700 });
-    symlinkSync(mountNamespace, join(hostProcRoot, "1", "ns", "mnt"));
-    symlinkSync(mountNamespace, join(hostProcRoot, "100", "ns", "mnt"));
-    symlinkSync("mnt:[4026531999]", join(hostProcRoot, "101", "ns", "mnt"));
+    ensureFixtureNamespaceSymlink(join(hostProcRoot, "1", "ns", "mnt"), mountNamespace);
+    ensureFixtureNamespaceSymlink(join(hostProcRoot, "100", "ns", "mnt"), mountNamespace);
+    ensureFixtureNamespaceSymlink(join(hostProcRoot, "101", "ns", "mnt"), "mnt:[4026531999]");
     writeFileSync(join(hostProcRoot, "100", "comm"), "dockerd\n");
     writeFileSync(join(hostProcRoot, "101", "comm"), "dockerd\n");
     const hostMountInfo = "36 25 0:32 / / rw - overlay fixture rw\n";

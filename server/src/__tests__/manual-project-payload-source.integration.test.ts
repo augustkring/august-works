@@ -14,6 +14,7 @@ import type { AuthorizationActor } from "../services/authorization.js";
 import { projectService } from "../services/projects.js";
 import { lockIssuePrivacyTree } from "../services/issues.js";
 import { nativeCallApiResultEnvelope, nativeSha256 } from "../services/native-runtime/canonical.js";
+import { assertNativeProjectSourceCurrent } from "../services/native-direct-input.js";
 import { captureNativeProjectToolResult } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 
 describe("manual Human Project payload source capture", () => {
@@ -145,6 +146,18 @@ describe("manual Human Project payload source capture", () => {
       data: selected.body, apiOperationId: "GET /api/projects/{id}" };
     expect(capture.resultDigest).toBe(nativeSha256(nativeCallApiResultEnvelope("actual-project-read-result", modelResult)));
     expect(capture.apiResultDigest).toBe(nativeSha256(result));
+    if (!capture.source) throw new Error("qualified_project_source_missing");
+    const reorderedRendition = Object.fromEntries(Object.entries(selected.body).reverse());
+    await expect(assertNativeProjectSourceCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: capture.source, rendition: reorderedRendition })).resolves.toBeUndefined();
+    for (const rendition of [{ ...reorderedRendition, name: "Changed provider Project" },
+      { ...reorderedRendition, unexpected: true }])
+      await expect(assertNativeProjectSourceCurrent(db, { companyId: f.companyId, actor: f.actor,
+        source: capture.source, rendition })).rejects.toThrow("A Native source Project changed");
+    const changed = await http.patch(`/api/projects/${created.body.id}`).send({ name: "Changed owner Project" }).expect(200);
+    expect(changed.body.id).toBe(created.body.id);
+    await expect(assertNativeProjectSourceCurrent(db, { companyId: f.companyId, actor: f.actor,
+      source: capture.source, rendition: reorderedRendition })).rejects.toThrow("A Native source Project changed");
     expect(JSON.stringify(capture)).not.toContain("Direct Human project description");
   });
 

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { nativeSha256 } from "./canonical.js";
 import express from "express";
 import request from "supertest";
 import { createServer } from "node:http";
@@ -44,7 +45,7 @@ beforeAll(async () => {
   vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
   root = await mkdtemp(join(tmpdir(), "managed-opencode-source-scheduler-")); await chmod(root, 0o700);
   vi.stubEnv("PAPERCLIP_HOME", root);
-  database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-scheduler-"); db = createDb(database.connectionString);
+  database = await startEmbeddedPostgresTestDatabase("managed-opencode-source-scheduler-"); db = createDb(database.connectionString, { maxConnections: 3 });
   await enableV5ForTest(db);
   await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true, readiness_engine_v7: true,
     orchestration_v7: true, role_packs_v5: false, skill_resolver_v5: false });
@@ -616,7 +617,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           const serialized = JSON.stringify(parsed);
           expect(serialized).toContain(projectFixture.project().projectId);
           expect(serialized).toContain(projectFixture.project().projectWorkspaceId);
-          projectResultDigest = createHash("sha256").update(JSON.stringify(parsed), "utf8").digest("hex");
+          projectResultDigest = nativeSha256(parsed);
           consumedExactProjectResult = true;
           return toolUse(body, "write_document", "managed-project-read-summary", { idempotencyKey: randomUUID(),
             key: "managed-project-read", title: "Project read summary", body: "The exact current Project projection was consumed.", baseRevisionId: null });
@@ -642,8 +643,13 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           const sets = [receipt.bootstrap, ...receipt.dispatches, ...receipt.additionalInputs];
           const resultSources = sets.flatMap(sourceSet => sourceSet.inputs).filter(source =>
             source.kind === "tool_result" && source.callId === callId);
-          expect(resultSources).toHaveLength(1);
-          expect(resultSources[0]).toMatchObject({ contentHash: projectResultDigest, toolName: "call_api" });
+          const originalResultSources = receipt.additionalInputs.flatMap(sourceSet => sourceSet.inputs)
+            .filter(source => source.kind === "tool_result" && source.callId === callId);
+          expect(originalResultSources).toHaveLength(1);
+          expect(originalResultSources[0]).toMatchObject({ contentHash: projectResultDigest, toolName: "call_api" });
+          // Subsequent dispatches consume the same original source again.
+          expect(resultSources.length).toBeGreaterThanOrEqual(1);
+          for (const source of resultSources) expect(source).toEqual(originalResultSources[0]);
           const projectSources = receipt.bootstrap.inputs.filter(source => source.kind === "project" &&
             source.projectId === projectFixture.project().projectId);
           expect(projectSources).toHaveLength(1);
@@ -665,11 +671,25 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
               .includes(result.run.errorCode) ? result.run.errorCode : "other",
           providerResponses: Math.min(999, providerResponses), observedToolResult, consumedExactProjectResult }));
         expect(result.run).toMatchObject({ status: "succeeded", nativeIssueId: result.task.id });
-        const [row] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+        const [row] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson, resultJson: heartbeatRuns.resultJson })
           .from(heartbeatRuns).where(eq(heartbeatRuns.id, result.wake.id));
         const profile = row?.runnerProfileJson && typeof row.runnerProfileJson === "object" ? row.runnerProfileJson as Record<string, unknown> : {};
         const receipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
         expect(receipt.bootstrap.inputs.some(value => value.kind === "project" && value.projectId === project.projectId)).toBe(true);
+        const captures = (Array.isArray(profile.nativeToolResultSourceCaptures)
+          ? profile.nativeToolResultSourceCaptures : []) as Array<Record<string, unknown>>;
+        const originalCaptures = captures.filter(value => value.callId === callId && value.tool === "call_api" &&
+          value.managedOpenCode !== true);
+        expect(originalCaptures).toHaveLength(1);
+        const originalCapture = originalCaptures[0]!;
+        expect(originalCapture.apiResultDigest).toMatch(/^[0-9a-f]{64}$/);
+        expect(originalCapture.resultDigest).toMatch(/^[0-9a-f]{64}$/);
+        expect(originalCapture.apiResultDigest).not.toBe(originalCapture.resultDigest);
+        const apiReceipts = (row?.resultJson?.apiToolReceipts ?? {}) as Record<string, unknown>;
+        expect(apiReceipts[createHash("sha256").update(callId).digest("hex")]).toMatchObject({
+          callId, operationId: "GET /api/projects/{id}", method: "GET", state: "completed", status: 200,
+          resultDigest: originalCapture.apiResultDigest, providerResultDigest: originalCapture.resultDigest,
+        });
         return { ...result, receipt, projectApiServer: api.server };
       },
     });
@@ -687,7 +707,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
     const projectFixture = managedNativeProjectWorkspaceFixture({ root });
     const callId = `managed-project-stale-read-${randomUUID()}`;
     let api: Awaited<ReturnType<typeof projectApi>> | null = null;
-    let edited = false, providerReplies = 0;
+    let edited = false, providerReplies = 0, sdkFollowupContainsExactProjectResult = false;
     const oldApiUrl = process.env.PAPERCLIP_API_URL;
     const outcome = await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 240,
       prepareNativeRuntimeContext: projectFixture.prepareNativeRuntimeContext,
@@ -698,18 +718,90 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
           pathParams: { id: projectFixture.project().projectId } });
         throw new Error("managed_project_stale_source_provider_was_reached");
       },
-      beforeManagedModelRequest: async ({ body }) => {
+      beforeManagedModelRequest: async ({ body, runId }) => {
         if (edited) return;
         const messages = body && typeof body === "object" && Array.isArray((body as Record<string, unknown>).messages)
           ? (body as Record<string, unknown>).messages as Array<Record<string, unknown>> : [];
         const result = messages.flatMap(message => Array.isArray(message.content) ? message.content as Array<Record<string, unknown>> : [])
           .find(block => block.type === "tool_result" && block.tool_use_id === callId && block.is_error !== true);
-        if (!result) return;
+        if (!result || typeof result.content !== "string") return;
+
+        // The SDK has put the successful call_api result into its next managed
+        // request. Bind those exact bytes to the durable dispatch, native
+        // Project capture, API receipt, and source receipt before changing the
+        // workspace; a missing receipt can no longer make this a false pass.
+        const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson,
+          resultJson: heartbeatRuns.resultJson, agentId: heartbeatRuns.agentId,
+          responsibleUserId: heartbeatRuns.responsibleUserId, nativeIssueId: heartbeatRuns.nativeIssueId })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+        expect(run?.nativeIssueId).toBeTruthy();
+        expect(run?.responsibleUserId).toBeTruthy();
+        const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object"
+          ? run.runnerProfileJson as Record<string, unknown> : {};
+        const captures = Array.isArray(profile.nativeToolResultSourceCaptures)
+          ? profile.nativeToolResultSourceCaptures as Array<Record<string, unknown>> : [];
+        const matchingCaptures = captures.filter(capture => capture.callId === callId && capture.tool === "call_api" &&
+          capture.operationId === "GET /api/projects/{id}");
+        expect(matchingCaptures).toHaveLength(1);
+        const capture = matchingCaptures[0]!;
+        const associations = Array.isArray(profile.nativeToolCallDispatchAssociations)
+          ? profile.nativeToolCallDispatchAssociations as Array<Record<string, unknown>> : [];
+        const matchingAssociations = associations.filter(association => association.callId === callId &&
+          association.tool === "call_api" && association.turnId === capture.turnId &&
+          association.dispatchId === (capture.nativeInputDispatch as Record<string, unknown> | null)?.dispatchId &&
+          association.eventSeq === capture.eventSeq && association.attempt === capture.attempt);
+        expect(matchingAssociations).toHaveLength(1);
+        const association = matchingAssociations[0]!;
+        expect(association.argumentsHash).toMatch(/^[0-9a-f]{64}$/);
+        expect(capture).toMatchObject({ pathAndQuery: `/api/projects/${projectFixture.project().projectId}`,
+          projectId: projectFixture.project().projectId, requestHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+          resultDigest: expect.stringMatching(/^[0-9a-f]{64}$/), source: expect.objectContaining({
+            kind: "project", projectId: projectFixture.project().projectId }) });
+
+        const apiReceipts = (run?.resultJson && typeof run.resultJson === "object"
+          ? (run.resultJson as Record<string, unknown>).apiToolReceipts : null) as Record<string, Record<string, unknown>> | null;
+        const apiReceiptKey = createHash("sha256").update(callId, "utf8").digest("hex");
+        expect(apiReceipts?.[apiReceiptKey]).toMatchObject({ callId, turnId: capture.turnId,
+          eventSeq: capture.eventSeq, attempt: capture.attempt, operationId: "GET /api/projects/{id}",
+          method: "GET", pathAndQuery: capture.pathAndQuery, requestHash: capture.requestHash,
+          argumentsHash: association.argumentsHash, state: "completed", status: 200,
+          resultDigest: expect.stringMatching(/^[0-9a-f]{64}$/), providerResultDigest: capture.resultDigest });
+
+        const sourceReceipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
+        const resultSourceSets = sourceReceipt.additionalInputs.filter(entry => entry.inputs.some(input =>
+          input.kind === "tool_result" && input.callId === callId && input.toolName === "call_api" &&
+          input.contentHash === capture.resultDigest));
+        expect(resultSourceSets).toHaveLength(1);
+        const resultSourceSet = resultSourceSets[0]!;
+        expect(resultSourceSet.inputs).toEqual(expect.arrayContaining([
+          expect.objectContaining({ kind: "tool_result", runId, callId, toolName: "call_api", contentHash: capture.resultDigest }),
+          expect.objectContaining({ kind: "project", projectId: projectFixture.project().projectId }),
+        ]));
         const project = projectFixture.project();
+        const actor = { type: "agent" as const, source: "none" as const, companyId: project.companyId,
+          agentId: run!.agentId, runId, onBehalfOfUserId: run!.responsibleUserId! };
+        await assertNativePayloadSourceSetCurrent(db, { companyId: project.companyId, issueId: run!.nativeIssueId!,
+          runId, actor, policy: resultSourceSet.policy, inputs: resultSourceSet.inputs });
+
+        const decodedResult = JSON.parse(result.content) as Record<string, unknown>;
+        expect(nativeSha256(decodedResult)).toBe(capture.resultDigest);
+        expect(decodedResult).toMatchObject({ ok: true, operationId: "call_api", callId,
+          result: { ok: true, status: 200, apiOperationId: "GET /api/projects/{id}" } });
+        const apiResult = decodedResult.result as Record<string, unknown>;
+        const projectData = apiResult.data && typeof apiResult.data === "object"
+          ? apiResult.data as Record<string, unknown> : {};
+        expect(projectData.id).toBe(project.projectId);
+        expect(JSON.stringify(projectData)).toContain(project.projectWorkspaceId);
+        sdkFollowupContainsExactProjectResult = true;
+
         const editRoot = join(root, "project-workspace-edited"); await mkdir(editRoot, { recursive: true, mode: 0o700 });
         const editedResponse = await request(api!.app).patch(`/api/projects/${project.projectId}/workspaces/${project.projectWorkspaceId}`)
           .set("cookie", api!.humanCookie).send({ cwd: editRoot }).expect(200);
-        expect(editedResponse.body.cwd).toBe(editRoot); edited = true;
+        expect(editedResponse.body.cwd).toBe(editRoot);
+        await expect(assertNativePayloadSourceSetCurrent(db, { companyId: project.companyId, issueId: run!.nativeIssueId!,
+          runId, actor, policy: resultSourceSet.policy, inputs: resultSourceSet.inputs }))
+          .rejects.toThrow("A Native source Project changed");
+        edited = true;
       },
       driveScheduler: async context => {
         api = await projectApi(db, context.actor); process.env.PAPERCLIP_API_URL = api.origin;
@@ -728,6 +820,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode source-closure bi
       },
     });
     expect(edited).toBe(true);
+    expect(sdkFollowupContainsExactProjectResult).toBe(true);
     expect(providerReplies).toBe(1);
     expect(outcome.run.status).not.toBe("succeeded");
     expect(outcome.providerCallCount).toBe(1);

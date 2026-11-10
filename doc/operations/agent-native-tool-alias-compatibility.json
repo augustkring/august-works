@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "6c902714ab68225dff7738541cd74932fb43300231ec2f1489f70a0baddae539"
+      "sha256": "c352951cbbc93da2ffa598c793808db34b86d8b33f8e23b08fb73623e313aeca"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -370,15 +370,15 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "6cddb4f80d6d8b4d108f56112ef48953ee5d15bd77f54d83c892f834f52604a8"
+      "sha256": "669a72919c0c7eaa1fce53f5c8893cd9803df620e13df988d19df36c333ff93a"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
-      "sha256": "0da37b2dd28292dec87edaa38fd84078df0b4e37944865649be46fb38c6e0ca7"
+      "sha256": "a55509a80b8d7fc8c2de1645cd60a989664d722c534e08cc0e883afb385f2b91"
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "5d14633538b52cb177c3133445dbe7da3eeb4933ebf05af75ad5b8a4b4c877b3"
+      "sha256": "4a1e1cd0163d3e87c3f1ca8e877b51eadafbd2a51f4d0cffae141f0f1b5c93f4"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
@@ -390,7 +390,7 @@
     },
     {
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "1554b625817f17fefb5d9f8a37f7900ef1240c4021708cf4751165358dd1a7a2"
+      "sha256": "b9cf660bc20fe3b1d6550c4b51d9826adf7bbc64deaaa5d05ce1e4e667969a60"
     },
     {
       "path": "server/src/services/process-findings.ts",

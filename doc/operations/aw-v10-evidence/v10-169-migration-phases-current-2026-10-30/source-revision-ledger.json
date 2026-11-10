@@ -506,5 +506,16 @@
     ],
     "reason": "Use one fail-closed credential predicate during sandbox admission and Task execution. Brokered policies require one exact nonnull executable shared by all bindings, an advertised host broker executable and every existing scope/lifetime/revocation dimension including binary. Preserve none/legacy policy handling, qualification, source, expiry, capacity and Stop gates.",
     "qualificationBoundary": "All 112 existing sandbox policy, signed host protocol and sandbox integration cases pass with the final shared predicate; exact local source/resource/cleanup receipts identify the proof. Signed Host replies are explicitly controlled CI simulation, not physical Host/provider or release qualification. No migration execution or phase/status promotion."
+  },
+  "nativeProjectReadSourceReview20261110": {
+    "changes": [
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "5d14633538b52cb177c3133445dbe7da3eeb4933ebf05af75ad5b8a4b4c877b3",
+        "newSha256": "4a1e1cd0163d3e87c3f1ca8e877b51eadafbd2a51f4d0cffae141f0f1b5c93f4"
+      }
+    ],
+    "reason": "Retain original raw HTTP result hash separately from the provider call_api envelope hash; require both original receipt bindings before result publication. Current Project rendition checks retain original owner/version/hash/privacy/ACL/workspace checks and tolerate only JSON object-key order.",
+    "qualificationBoundary": "147 selected software cases include two actual pinned managed SDK/software Host journeys, all77 gateway cases,15 Project owners,45 selected dispatch owners and eight helper cases. One legacy attachment test remains unresolved and excluded from the selected dispatch run. No migration execution, phase-status promotion, external provider, physical Host or whole-brief/release qualification."
   }
 }

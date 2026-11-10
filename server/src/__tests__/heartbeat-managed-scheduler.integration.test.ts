@@ -11,6 +11,7 @@ import { orchestrationService } from "../services/orchestration/orchestration-se
 import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { projectManagedNativeCompletionDiagnostic } from "./helpers/managed-native-completion-diagnostic.js";
 
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>;
@@ -208,8 +209,9 @@ async function assertDomainSdkResult(context: ManagedSchedulerContext, runId: st
       .from(nativeRunFinalizations).where(and(eq(nativeRunFinalizations.companyId, context.companyId),
         eq(nativeRunFinalizations.runId, runId)));
     // The finalizer owns this closed projection; omit its raw message/next action.
-    console.info("dependency_sdk_finalization_failure", JSON.stringify({ phase: finalization?.phase,
-      failureCode: finalization?.failureCode, safeCause: finalization?.failureDetail?.safeCause }));
+    console.info("dependency_sdk_finalization_failure", JSON.stringify(projectManagedNativeCompletionDiagnostic({
+      finalization, assessment: null, decision: null,
+    }).finalization));
   }
   expect(run).toMatchObject({ companyId: context.companyId, agentId: context.agentId, nativeIssueId: issueId,
     responsibleUserId: context.actor.userId, status: "succeeded", runtimeMode: "native", nativePhase: "committed", nativeProcessCleanupPending: false });

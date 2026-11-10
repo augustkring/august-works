@@ -8381,7 +8381,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
   if (input.tool === "call_api" && !projectCreate && !stageComment && (!projectRead?.source || projectRead.tool !== "call_api" ||
     projectRead.operationId !== "GET /api/projects/{id}" || projectRead.callId !== input.callId ||
     projectRead.turnId !== input.turnId || !/^[0-9a-f]{64}$/.test(projectRead.requestHash) ||
-    !/^[0-9a-f]{64}$/.test(projectRead.resultDigest))) throw new Error("managed_opencode_tool_result_binding_invalid");
+    !/^[0-9a-f]{64}$/.test(projectRead.resultDigest) || !/^[0-9a-f]{64}$/.test(projectRead.apiResultDigest)))
+    throw new Error("managed_opencode_tool_result_binding_invalid");
   const digest = stageComment?.resultDigest ?? projectRead?.resultDigest ?? (projectCreate && input.tool === "call_api"
     ? nativeSha256({ ok: true, operationId: "call_api", callId: input.callId, result: input.result })
     : nativeSha256(input.result));
@@ -8549,8 +8550,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         const source = projectRead?.source;
         const response = record(input.result);
         const { apiOperationId: _apiOperationId, ...responseBody } = response;
-        const responseDigest = createHash("sha256").update(JSON.stringify({ ...responseBody,
-          apiOperationId: "GET /api/projects/{id}" }), "utf8").digest("hex");
+        const responseDigest = nativeSha256(nativeCallApiResultEnvelope(input.callId, response));
+        const apiResultDigest = nativeSha256({ ...responseBody, operationId: "GET /api/projects/{id}" });
         const projectDto = record(response.data);
         const projectSource = source ? nativePayloadSourceInputSchema.safeParse(source) : null;
         const apiReceipts = record(record(run.resultJson).apiToolReceipts);
@@ -8560,8 +8561,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         const matchingCaptures = Array.isArray(profile.nativeToolResultSourceCaptures)
           ? profile.nativeToolResultSourceCaptures.map(record).filter(capture => capture.callId === input.callId &&
             capture.turnId === input.turnId && capture.tool === "call_api" && capture.operationId === "GET /api/projects/{id}" &&
-            capture.resultDigest === digest && capture.requestHash === projectRead!.requestHash &&
-            capture.pathAndQuery === projectRead!.pathAndQuery && isDeepStrictEqual(capture.source, source)) : [];
+            capture.resultDigest === digest && capture.apiResultDigest === apiResultDigest &&
+            capture.requestHash === projectRead!.requestHash && capture.pathAndQuery === projectRead!.pathAndQuery && isDeepStrictEqual(capture.source, source)) : [];
         const matchingAssociation = Array.isArray(associations) ? associations.map(record).filter(value =>
           value.callId === input.callId && value.turnId === input.turnId && value.tool === "call_api" &&
           value.argumentsHash === input.argumentsHash && value.dispatchId === call[0]!.dispatchId &&
@@ -8569,7 +8570,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         if (!source || !projectSource?.success || projectSource.data.kind !== "project" ||
           projectSource.data.projectId !== projectRead!.projectId || projectRead!.resultDigest !== digest ||
           matchingCaptures.length !== 1 || matchingAssociation.length !== 1 ||
-          responseDigest !== digest || response.apiOperationId !== "GET /api/projects/{id}" || response.ok !== true ||
+          responseDigest !== digest || projectRead.apiResultDigest !== apiResultDigest ||
+          response.apiOperationId !== "GET /api/projects/{id}" || response.ok !== true ||
           response.status !== 200 || projectDto.id !== projectSource.data.projectId ||
           createHash("sha256").update(JSON.stringify(projectDto), "utf8").digest("hex") !== projectSource.data.contentHash ||
           apiReceipt.callId !== input.callId || apiReceipt.turnId !== input.turnId ||
@@ -8578,7 +8580,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           apiReceipt.pathAndQuery !== `/api/projects/${projectSource.data.projectId}` ||
           apiReceipt.pathAndQuery !== projectRead!.pathAndQuery ||
           apiReceipt.requestHash !== projectRead!.requestHash || apiReceipt.argumentsHash !== input.argumentsHash ||
-          apiReceipt.state !== "completed" || apiReceipt.status !== 200 || apiReceipt.resultDigest !== digest)
+          apiReceipt.state !== "completed" || apiReceipt.status !== 200 || apiReceipt.resultDigest !== apiResultDigest ||
+          apiReceipt.providerResultDigest !== digest)
           throw new Error("managed_opencode_tool_result_binding_invalid");
         const projectActor: AuthorizationActor = { type: "agent", source: "none", companyId: input.companyId,
           agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId ?? undefined };
@@ -9161,7 +9164,7 @@ async function persistNativeToolResultSourceCapture(input: Parameters<typeof ren
         ? selectedDispatch : null;
       const projectBinding = capture.tool === "call_api"
         ? { operationId: capture.operationId, projectId: capture.projectId, requestHash: capture.requestHash,
-          pathAndQuery: capture.pathAndQuery } : {};
+          pathAndQuery: capture.pathAndQuery, apiResultDigest: capture.apiResultDigest } : {};
       const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt, turnId: capture.turnId,
         nativeInputDispatch, responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId,
         tool: capture.tool, ...projectBinding, resultDigest: capture.resultDigest, source: capture.source }];
@@ -9357,6 +9360,7 @@ export async function recordNativeProjectToolResultIntent(input: Parameters<type
     if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "call_api" ||
       capture.operationId !== "GET /api/projects/{id}" || !/^[\x21-\x7e]{1,240}$/.test(capture.callId) ||
       !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
+      !/^[0-9a-f]{64}$/.test(capture.apiResultDigest) ||
       !/^[0-9a-f]{64}$/.test(capture.requestHash) ||
       !/^\/api\/projects\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(capture.pathAndQuery) ||
       capture.pathAndQuery !== `/api/projects/${capture.projectId}` ||

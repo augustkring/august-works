@@ -3241,7 +3241,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         attempt: originalCapture.attempt, operationId: "GET /api/projects/{id}", method: "GET",
         pathAndQuery: `/api/projects/${fixtureProjectId}`, requestHash: captureRequestHash,
         argumentsHash: managedCapture.argumentsHash, state: "completed", status: 200,
-        resultDigest: originalCapture.resultDigest });
+        resultDigest: originalCapture.apiResultDigest, providerResultDigest: originalCapture.resultDigest });
       expect(matchingAssociations).toHaveLength(1);
       expect(matchingSourceSets).toHaveLength(1);
       expect(policy).toEqual({ issueIds: [], projectIds: [fixtureProjectId], runIds: [], memoryIds: [],
