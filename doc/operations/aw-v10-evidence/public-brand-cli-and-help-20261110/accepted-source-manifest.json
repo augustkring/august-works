@@ -975,6 +975,32 @@
         "articleId": "developer-and-advanced-da",
         "decision": "no_change",
         "rationale": "Gennemgået de fire CLI-hjælpetekster mod denne danske artikel: kommandoer, flag, API-adressevalg, kompatibilitetsalias og adgangskontrol er uændrede; artiklens Blentera-navn og migrationsvejledning er fortsat korrekte."
+      },
+      {
+        "source": "cli/src/commands/client/company.ts",
+        "articleId": "company-import-export",
+        "decision": "updated",
+        "rationale": "Reviewed the branded import-selection prompt and English company guide together. The .paperclip.yaml identifier, selection groups, preview/confirmation, paused defaults, source authorization and recovery contract stay unchanged; the guide now uses Blentera for the product."
+      },
+      {
+        "source": "cli/src/commands/client/company.ts",
+        "articleId": "company-import-export-da",
+        "decision": "updated",
+        "rationale": "Gennemgået den omdøbte importvælger og den danske virksomhedsvejledning sammen. .paperclip.yaml, valgmuligheder, forhåndsvisning, bekræftelse, pausestandard, kildeadgang og genopretning er uændrede; vejledningen bruger nu Blentera og undlader en ekstra specifikationshenvisning."
+      }
+    ],
+    "pairedCopyReviews": [
+      {
+        "articleId": "company-import-export",
+        "path": "docs/guides/board-operator/importing-and-exporting.md",
+        "sha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+        "rationale": "Reviewed the exact product-name change, retained technical sidecar identifier and unchanged import/recovery guidance in this locale; Danish also removes the additional specification link."
+      },
+      {
+        "articleId": "company-import-export-da",
+        "path": "docs/da/guides/board-operator/importing-and-exporting.md",
+        "sha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+        "rationale": "Reviewed the exact product-name change, retained technical sidecar identifier and unchanged import/recovery guidance in this locale; Danish also removes the additional specification link."
       }
     ]
   }

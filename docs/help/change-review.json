@@ -309,16 +309,16 @@
     {
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "sourceSha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
-      "rationale": "Both locale editions now use the canonical `blentera` command, retain the `paperclipai` compatibility note, and point to the migration guide; the command implementation and import/export options are unchanged."
+      "rationale": "Reviewed the branded import-selection prompt and English company guide together. The .paperclip.yaml identifier, selection groups, preview/confirmation, paused defaults, source authorization and recovery contract stay unchanged; the guide now uses Blentera for the product."
     },
     {
       "source": "packages/db/src/schema/customer_operations.ts",
       "articleId": "company-import-export",
       "sourceSha256": "220479f1d5cc046f310e38606c40cf74c1257b9fe0388c87f36620501f6197b6",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "The schema now stores durable import lease and checkpoint state; the article explains operation history, restart recovery, and unknown outcomes without treating cached detail as authority."
     },
@@ -326,7 +326,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfer.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -334,7 +334,7 @@
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export",
       "sourceSha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
       "rationale": "Reviewed customer-operations.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -342,7 +342,7 @@
       "source": "packages/shared/src/types/company-portability.ts",
       "articleId": "company-import-export",
       "sourceSha256": "36116b7f941b2b01a77653de504c50aa953cd0a182cdb6aa7cd4c63293dfad52",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
@@ -350,7 +350,7 @@
       "source": "packages/shared/src/validators/company-portability.ts",
       "articleId": "company-import-export",
       "sourceSha256": "fc6b9ea92e68affd56d649be89d31aecd922c219a2213766dcdfe5612119ff87",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
@@ -358,7 +358,7 @@
       "source": "server/src/errors.ts",
       "articleId": "company-import-export",
       "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "Reviewed native preflight error identity: the guide distinguishes verified rejection before effects from an unknown import outcome after effects may have started."
     },
@@ -366,7 +366,7 @@
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
       "sourceSha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "Current routes read durable requester-bound operation records and recheck current authorization at history and cancellation boundaries. The article already explains requester-only receipts, reconciliation for unknown outcomes, and current access checks."
     },
@@ -374,7 +374,7 @@
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export",
       "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
       "rationale": "The OpenAPI change adds model-monitor operations and their authorization classification. It does not change the import/export operations or the article\u2019s direction to use the current API reference and verify authorization."
     },
@@ -382,7 +382,7 @@
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export",
       "sourceSha256": "b3f4465c7764012b3bdd1d806b49ee51946d8e935e1c2634e08bb749f5fb9432",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "Server-generated package guidance now uses Blentera identity and the canonical blentera import command; both import/export articles show that command and the temporary alias migration link."
     },
@@ -390,7 +390,7 @@
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export",
       "sourceSha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "The job service persists checkpoints, leases, cancellation, and reconciliation state; the article distinguishes confirmed pre-effect cancellation from uncertain post-effect outcomes and disallows automatic replay."
     },
@@ -398,7 +398,7 @@
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfers.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -406,7 +406,7 @@
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
       "sourceSha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
       "rationale": "The portability path rechecks native source access, ownership, privacy, and target authority, and records effect checkpoints; the article describes those checks and the external-package fingerprint attestation."
     },
@@ -414,7 +414,7 @@
       "source": "server/src/services/github-fetch.ts",
       "articleId": "company-import-export",
       "sourceSha256": "9b65647b3ee53f51eeff5ac130ae7a5f26f7b345e5303d05cea07564280d54fb",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "Reviewed GitHub and Enterprise API/raw transport URL owners: the guide describes commit-bound package reads and preserves unsupported source limits."
     },
@@ -422,7 +422,7 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
       "rationale": "Current routing exposes the company import/export settings pages described in the article; the route changes add no different import authority or recovery behavior."
     },
@@ -430,7 +430,7 @@
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
@@ -438,23 +438,23 @@
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
-      "articleSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+      "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "updated",
       "rationale": "The guide matches saved history receipts and explains confirmed pre-effect cancellation versus unknown outcomes requiring reconciliation."
     },
     {
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "sourceSha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
-      "rationale": "Both locale editions now use the canonical `blentera` command, retain the `paperclipai` compatibility note, and point to the migration guide; the command implementation and import/export options are unchanged."
+      "rationale": "Gennemg\u00e5et den omd\u00f8bte importv\u00e6lger og den danske virksomhedsvejledning sammen. .paperclip.yaml, valgmuligheder, forh\u00e5ndsvisning, bekr\u00e6ftelse, pausestandard, kildeadgang og genopretning er u\u00e6ndrede; vejledningen bruger nu Blentera og undlader en ekstra specifikationshenvisning."
     },
     {
       "source": "packages/db/src/schema/customer_operations.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "220479f1d5cc046f310e38606c40cf74c1257b9fe0388c87f36620501f6197b6",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: the schema now stores durable import lease and checkpoint state; the article explains operation history, restart recovery, and unknown outcomes without treating cached detail as authority."
     },
@@ -462,7 +462,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -470,7 +470,7 @@
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -478,7 +478,7 @@
       "source": "packages/shared/src/types/company-portability.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "36116b7f941b2b01a77653de504c50aa953cd0a182cdb6aa7cd4c63293dfad52",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
@@ -486,7 +486,7 @@
       "source": "packages/shared/src/validators/company-portability.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "fc6b9ea92e68affd56d649be89d31aecd922c219a2213766dcdfe5612119ff87",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
@@ -494,7 +494,7 @@
       "source": "server/src/errors.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -502,7 +502,7 @@
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Den danske artikel beskriver allerede anmodningsbundne kvitteringer, afstemning ved ukendt resultat og aktuelle adgangskontroller for historik og annullering."
     },
@@ -510,7 +510,7 @@
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "no_change",
       "rationale": "OpenAPI-\u00e6ndringen tilf\u00f8jer modeloverv\u00e5gningshandlinger og deres autorisationsklassifikation. Den \u00e6ndrer ikke import-/eksporthandlingerne eller artiklens vejledning om at bruge den aktuelle API-reference og kontrollere autorisation."
     },
@@ -518,7 +518,7 @@
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "b3f4465c7764012b3bdd1d806b49ee51946d8e935e1c2634e08bb749f5fb9432",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish guidance checked against the same source behavior. Server-generated package guidance now uses Blentera identity and the canonical blentera import command; both import/export articles show that command and the temporary alias migration link."
     },
@@ -526,7 +526,7 @@
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: the job service persists checkpoints, leases, cancellation, and reconciliation state; the article distinguishes confirmed pre-effect cancellation from uncertain post-effect outcomes and disallows automatic replay."
     },
@@ -534,7 +534,7 @@
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -542,7 +542,7 @@
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "no_change",
       "rationale": "Danish version checked against the same source delta: the portability path rechecks native source access, ownership, privacy, and target authority, and records effect checkpoints; the article describes those checks and the external-package fingerprint attestation."
     },
@@ -550,7 +550,7 @@
       "source": "server/src/services/github-fetch.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "9b65647b3ee53f51eeff5ac130ae7a5f26f7b345e5303d05cea07564280d54fb",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -558,7 +558,7 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export-da",
       "sourceSha256": "1716e9619c28aec2529902c201a8b45cd641c7327705bf005bcc0ecb2b7589c8",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish version checked against the same source delta: current routing exposes the company import/export settings pages described in the article; the route changes add no different import authority or recovery behavior."
     },
@@ -566,7 +566,7 @@
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export-da",
       "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
@@ -574,7 +574,7 @@
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export-da",
       "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
-      "articleSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+      "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "updated",
       "rationale": "Danish guide reviewed against the current implementation. The guide matches saved history receipts and explains confirmed pre-effect cancellation versus unknown outcomes requiring reconciliation."
     },

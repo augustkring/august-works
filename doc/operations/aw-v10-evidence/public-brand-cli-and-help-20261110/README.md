@@ -4,7 +4,7 @@ The accepted R8 batch reconciles 87 source, test and documentation paths. It use
 
 The brand check inventories UI and CLI strings, the exact shared startup notice, configured public documentation, all current bundled Help articles, announcement JSON, public text assets, email/notification sources and published package READMEs. Exceptions bind exact full source literals, rendered Markdown lines or complete visible SVG text nodes, with individual reasons. A changed literal or stale exception fails the check.
 
-English and Danish advanced Help source pairs were reviewed separately against the four CLI help-text replacements. Article bytes and current command, option, routing, compatibility and authority guidance remain accurate. The existing source hashes were refreshed without rewriting Help articles.
+English and Danish advanced Help source pairs were reviewed separately against the four CLI help-text replacements. Article bytes and current command, option, routing, compatibility and authority guidance remain accurate. The existing source hashes were refreshed without rewriting those Help articles. The English and Danish company import/export guides were also reviewed against their product-name changes and the import-selection prompt. Their 34 existing article references and the two changed CLI source references were refreshed through the canonical Help map. No new review rows were added.
 
 ## Qualification
 

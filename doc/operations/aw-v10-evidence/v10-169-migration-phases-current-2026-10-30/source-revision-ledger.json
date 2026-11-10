@@ -2633,5 +2633,13 @@
       "acceptanceStatusesChanged": 0,
       "historicalRequirementRowsPreserved": 169
     }
+  },
+  "publicBrandCompanyImportHelpCopyReview20261110": {
+    "sourceHead": "23b48164baab4e6fb742f530289c9f62f8808a24",
+    "reason": "Canonical Help discovery includes company-import/export guides outside docs/help; review the paired product copy and changed import-selection prompt, refresh exact existing hashes without new rows or blanket decisions.",
+    "reviewArtifact": "doc/operations/aw-v10-evidence/public-brand-cli-and-help-20261110/help-import-export-copy-review.json",
+    "existingArticleReferencesRefreshed": 34,
+    "changedSourcePairsReviewed": 2,
+    "historicalRequirementStatusesPromoted": 0
   }
 }
