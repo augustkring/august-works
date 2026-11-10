@@ -1,0 +1,229 @@
+{
+  "invocation": "bound-binary-sandbox-full-r2",
+  "uniquePassingCases": 112,
+  "suites": {
+    "signedHostProtocol": 54,
+    "policyCompiler": 39,
+    "sandboxIntegration": 19
+  },
+  "testReceipt": {
+    "command": [
+      "node",
+      "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+      "run",
+      "--config",
+      "vitest.config.ts",
+      "src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "src/__tests__/v7-sandbox-policy.test.ts",
+      "src/__tests__/v7-sandbox.integration.test.ts",
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/workspace/v10-preparation/combined-source-20261109/bound-binary-sandbox-full-r2.json"
+    ],
+    "cwd": "/workspace/blentera-v10/server",
+    "leaseWaitSeconds": 4.0810999053064734e-05,
+    "sourceManifest": "bound-binary-sandbox-full-r2-source-manifest.json",
+    "filesystemFloorBytes": {
+      "/workspace": 122880000,
+      "/tmp": 1073741824
+    },
+    "globalMemoryReserveBytes": 2147483648,
+    "exit": 0,
+    "seconds": 75.36769079099759,
+    "stopReason": null,
+    "nodeHeapMiB": 768,
+    "ownedDescendantRssLimitBytes": 4294967296,
+    "observedPeakOwnedDescendantRssBytes": 3508371456,
+    "processRssAtObservedPeak": [
+      {
+        "pid": 129878,
+        "parentPid": 129854,
+        "executable": "node",
+        "rssBytes": 829444096,
+        "nodeOptions": "--max-old-space-size=768"
+      },
+      {
+        "pid": 129854,
+        "parentPid": 129744,
+        "executable": "node",
+        "rssBytes": 817233920,
+        "nodeOptions": "--max-old-space-size=768"
+      },
+      {
+        "pid": 129948,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 320888832
+      },
+      {
+        "pid": 129946,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 298016768
+      },
+      {
+        "pid": 129942,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 278171648
+      },
+      {
+        "pid": 129947,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 226504704
+      },
+      {
+        "pid": 129944,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 223465472
+      },
+      {
+        "pid": 129943,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 216920064
+      },
+      {
+        "pid": 129945,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 214503424
+      },
+      {
+        "pid": 129928,
+        "parentPid": 129878,
+        "executable": "postgres",
+        "rssBytes": 24588288
+      },
+      {
+        "pid": 129929,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 12898304
+      },
+      {
+        "pid": 129935,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 9084928
+      },
+      {
+        "pid": 129936,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 7761920
+      },
+      {
+        "pid": 129937,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 7077888
+      },
+      {
+        "pid": 129933,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 6377472
+      },
+      {
+        "pid": 129932,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 5296128
+      },
+      {
+        "pid": 129930,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 5259264
+      },
+      {
+        "pid": 129931,
+        "parentPid": 129928,
+        "executable": "postgres",
+        "rssBytes": 4878336
+      }
+    ],
+    "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+    "trackedPidCount": 52,
+    "observedPostgresRelatedPids": [
+      129892,
+      129902,
+      129905,
+      129915,
+      129925,
+      129928,
+      129929,
+      129930,
+      129931,
+      129932,
+      129933,
+      129935,
+      129936,
+      129937,
+      129940,
+      129941,
+      129942,
+      129943,
+      129944,
+      129945,
+      129946,
+      129947,
+      129948,
+      129976,
+      129984,
+      129986,
+      129999,
+      130007,
+      130009,
+      130012,
+      130013,
+      130014,
+      130015,
+      130016,
+      130017,
+      130019,
+      130020,
+      130021,
+      130024,
+      130026,
+      130027,
+      130028
+    ],
+    "uniqueTempRoot": "/var/tmp/mpg-v_k9ps1d",
+    "samplingIntervalSeconds": 0.2,
+    "samples": 360,
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+  },
+  "serverTypecheck": {
+    "steps": [
+      {
+        "command": [
+          "node",
+          "../node_modules/typescript/bin/tsc",
+          "--noEmit",
+          "--singleThreaded"
+        ],
+        "exit": 0,
+        "seconds": 93.32679857800395,
+        "peakGroupRssBytes": 6113378304,
+        "stopped": null
+      }
+    ],
+    "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+    "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+  },
+  "limits": [
+    "Controlled local software and signed Host protocol simulation; no physical Host, live provider, deployment or release qualification.",
+    "The protocol fixture supplies explicit synthetic Host observations. It tests canonical signed command, credential, policy, lifecycle and recovery owners; it cannot establish physical enforcement.",
+    "No provider conformance or V10 requirement/migration status promotion is claimed. Managed OpenCode bootstrap conformance remains a separate implementation gap.",
+    "The raw protocol stdout stays private; the archive contains exact test reports, commands, source/resource/cleanup receipts and TypeScript output.",
+    "Earlier failing qualification-expiry and broker-binary attempts are diagnostic records, not passing evidence."
+  ]
+}

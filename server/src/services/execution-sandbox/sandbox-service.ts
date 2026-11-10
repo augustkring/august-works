@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { SandboxQualificationCredentialClaim } from "../../agent-auth-jwt.js";
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, runtimeOperations, sandboxQualificationRuns, type Db } from "@paperclipai/db";
-import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture } from "@paperclipai/shared";
+import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture, type SandboxPolicy, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import type { AuthorizationActor } from "../authorization.js";
@@ -23,6 +23,18 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
+
+function sandboxCredentialsSupported(credentials: SandboxPolicy["credentials"] | undefined, capability: SandboxCapabilitySnapshot | null) {
+  if (credentials?.mode === "none") return credentials.bindings.length === 0;
+  if (credentials?.mode !== "brokered" || !credentials.bindings.length) return false;
+  const binary = credentials.bindings[0]!.binary;
+  return typeof binary === "string" &&
+    credentials.bindings.every(binding => binding.binary === binary && binding.methods.includes("POST")) &&
+    capability?.credentialBrokerProviderProfile?.binaries?.includes(binary) === true &&
+    (["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"] as const)
+      .every(dimension => capability.credentialBindingDimensions.includes(dimension));
+}
+
 export function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapshotSchema.parse>) {
   const { testedAt: _testedAt, expiresAt: _expiresAt, qualificationHash: _qualificationHash, qualificationTarget, ...facts } = value;
   // A fresh native provision has a different sandbox/container UUID and
@@ -189,11 +201,9 @@ export function executionSandboxService(db: Db, options: {
       eq(runtimePolicySnapshots.executionManifestId, manifest.id),
     )).orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1).for("share");
     const credentials = policy?.compilation.compiledPolicy.credentials;
-    const brokerDimensions = ["company", "presence", "host", "port", "method", "path", "expiry", "revocation"] as const;
     if (!policy || policy.status !== "qualified" || policy.expiresAt <= now || policy.authorityHash !== source.authorityHash ||
       policy.capabilitySnapshotHash !== sandboxBinding.capabilitySnapshotHash || !credentials ||
-      credentials.mode === "legacy_injected" || (credentials.mode === "none" && credentials.bindings.length !== 0) ||
-      (credentials.mode === "brokered" && (!credentials.bindings.length || !capability.credentialBrokerProviderProfile || brokerDimensions.some(dimension => !capability.credentialBindingDimensions.includes(dimension)))) ||
+      !sandboxCredentialsSupported(credentials, capability) ||
       policy.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:")) !== `manifest:${manifest.id}:${manifest.hash}`)
       throw conflict("Current unexpired OpenShell policy is not bound to this exact Task manifest");
     const [attempt] = await tx.select().from(orchestrationWorkerAttempts).where(and(
@@ -263,13 +273,7 @@ export function executionSandboxService(db: Db, options: {
       .for("share");
     const capability = row.capabilitySnapshot ? sandboxCapabilitySnapshotSchema.parse(row.capabilitySnapshot) : null;
     const credentials = snapshot?.compilation.compiledPolicy.credentials;
-    const brokerDimensions = ["company", "presence", "host", "port", "method", "path", "expiry", "revocation"] as const;
-    const supportedCredentials = credentials?.mode === "none"
-      ? credentials.bindings.length === 0
-      : credentials?.mode === "brokered" && credentials.bindings.length > 0 &&
-        credentials.bindings.every(binding => binding.binary === null && binding.methods.includes("POST")) &&
-        Boolean(capability?.credentialBrokerProviderProfile) &&
-        brokerDimensions.every(dimension => capability?.credentialBindingDimensions.includes(dimension));
+    const supportedCredentials = sandboxCredentialsSupported(credentials, capability);
     if (
       !snapshot ||
       snapshot.status !== "qualified" ||

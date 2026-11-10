@@ -774,6 +774,12 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
     const testTargets = new Map<string, Record<string, any>>();
     const testQualificationSamples = new Map<string, Record<string, any>>();
     const testQualificationTarget = (command: Record<string, any>, provisioning: Record<string, any>) => {
+      // The signed qualification attempt fixes its original expiry. A cached
+      // fixture report must not outlive that attempt when the target is created.
+      const snapshot = testCapabilitySnapshots.get(`${command.scope.bindingId}:${command.imageDigest}`);
+      if (snapshot && provisioning.purpose === "qualification")
+        snapshot.expiresAt = new Date(Math.min(Date.parse(String(snapshot.expiresAt)),
+          Date.parse(provisioning.expiresAt))).toISOString();
       const sandboxId = "f3a4f0a0-cd95-4fd2-8f4c-2b5223309a17";
       const containerId = "b".repeat(64);
       const target = {
@@ -799,7 +805,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       if (!snapshot) {
         const preflight = Boolean(scope && !target);
         const probeFixture = preflight ? qualificationProbeFixtureForTest : undefined;
-        snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, !preflight])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-kernel", sandboxImageDigest: digest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: !preflight, policyProverBoundaryCheck: !preflight, policyProverCoverage: preflight ? [] : [...SANDBOX_CONTROLS], credentialBindingDimensions: preflight ? [] : ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64), origin: "https://paperclip.example.test" }, testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), qualificationHash: probeFixture?.fixtureHash ?? "a".repeat(64), evidenceKind: "protected_host_report",
+        snapshot = { ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, !preflight])), backend: "openshell", backendVersion: "0.1.2", hostKernelVersion: "fixture-kernel", sandboxImageDigest: digest, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: !preflight, policyProverBoundaryCheck: !preflight, policyProverCoverage: preflight ? [] : [...SANDBOX_CONTROLS], credentialBindingDimensions: preflight ? [] : ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64), origin: "https://paperclip.example.test", binaries: ["/usr/bin/node"] }, testedAt: new Date(Date.now() - 1000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString(), qualificationHash: probeFixture?.fixtureHash ?? "a".repeat(64), evidenceKind: "protected_host_report",
           ...(probeFixture ? { qualificationProbeFixture: probeFixture, qualificationCredentialFixture: probeFixture.credential } : {}) };
         testCapabilitySnapshots.set(cacheKey, snapshot);
       }
@@ -1523,7 +1529,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       expect(noCapability.body.reasonCode).toBe("sandbox_qualification_credential_required");
       const initialBrokerBinding = {
         connectionId: connection!.id, grantVersionHash: "0".repeat(64), hostname: new URL(RAILWAY_MCP_URL).hostname, port: 443,
-        methods: ["POST"] as const, pathPrefixes: [new URL(RAILWAY_MCP_URL).pathname], binary: null, ttlSeconds: 120,
+        methods: ["POST"] as const, pathPrefixes: [new URL(RAILWAY_MCP_URL).pathname], binary: "/usr/bin/node", ttlSeconds: 120,
       };
       const initialBrokerResolution = await gateway.resolveSandboxCredentialBrokerPolicyBindings({
         companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId,
@@ -1531,6 +1537,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       });
       expect(initialBrokerResolution.bindings[0]?.allowedTools).toContain(expectedBrokerToolName);
       const boundary = supportedPolicy();
+      boundary.filesystem.readPaths.push("/usr/bin/node");
       boundary.riskClass = "C3";
       boundary.credentials = { mode: "brokered", bindings: [{ ...initialBrokerBinding, grantVersionHash: initialBrokerResolution.authorizedConnectionGrantHashes[connection!.id]! }] };
       const sandboxBinding = await executionSandboxService(db, { operatorUserIds: [f.userId] }).create(f.actor, f.home, { runtimeCellId: admissionCell!.id, expectedCellGeneration: admissionCell!.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy: boundary });
@@ -1850,7 +1857,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           const execution = environmentRuntime.execute({
           environment: executionEnvironment,
           lease: lease as any,
-          command: "node", args: ["-e", "process.stdout.write('fixture')"], cwd: "/workspace", timeoutMs: 60000,
+          command: "/usr/bin/node", args: ["-e", "process.stdout.write('fixture')"], cwd: "/work/output", timeoutMs: 60000,
           onLog: async (stream, chunk) => { streamed.push([stream, chunk]); },
           });
           adapterExecutionDrains.push(execution.then(() => undefined, () => undefined));

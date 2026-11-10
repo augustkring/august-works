@@ -1,0 +1,15 @@
+{
+  "parentCommit": "7f2ef380b6d31f31e1edfb237644c37f7635447b",
+  "files": {
+    "server/src/services/execution-sandbox/sandbox-service.ts": "613d7a004361e49cda6ccee71156280ab88ff7feff4a982529e3f272ac8d4bb1",
+    "server/src/services/execution-sandbox/policy-compiler.ts": "cdb3d1e46c35556a081ef96f19eaa7dc214f3db6629e4704712bf67e4402e202",
+    "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts": "5e7838e3821ea77cb3c8582a62e939712be81fa87a98144e20408b58c00f8cc6",
+    "server/src/__tests__/v7-sandbox-policy.test.ts": "4f5874fdadaea377b0603b86a306453ab3a61a743f6d5260b3f44594947035a4",
+    "server/src/__tests__/v7-sandbox.integration.test.ts": "be0c3b45ceadf903205e6234526d6404f12730112070c91a74652673e5e7862a",
+    "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+    "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+    "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+    "packages/db/src/migrations/meta/_journal.json": "a1c07a3d5293a29a66a97997b7fc75e126f838e91009826a5735ea41d35c17c3"
+  },
+  "scope": "Final sandbox production/test inputs and unchanged dependency/journal inputs. The invocation manifest separately identifies every recorded input and the original test environment."
+}
