@@ -24520,6 +24520,10 @@ export function heartbeatService(
               capturedTaskSource?.input.kind === "task" && issueRef ? {
                 companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
                 sourceVersion: capturedTaskSource.input.sourceVersion, agentId: agent.id,
+                externalChatProvider: paperclipWakePayload?.externalChatProvider ?? null,
+                canonicalInitialGuidance: "initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance
+                  ? readNonEmptyString(issueContext?.chatCommunicationGuidance) : null,
+                nativeInitialGuidance: "initialCommunicationGuidance" in nativeExecution ? nativeExecution.initialCommunicationGuidance ?? null : null,
                 workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
                 workspaceCoordinationCapture: originalCoordinationCapture, blockedHumanInteraction, treeHoldInteractionSource,
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
@@ -24572,7 +24576,8 @@ export function heartbeatService(
               previousRun: Boolean(previousNativeRun && nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
               persistedInput: Boolean(persistedNativeExecutionInput),
               resume: Boolean(nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
-              initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
+              initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance &&
+                !nativeTaskWakeSource?.initialGuidanceHash),
               continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
               planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
               // Replay is qualified only when each exact rendered JSON line

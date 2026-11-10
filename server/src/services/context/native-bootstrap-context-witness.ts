@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput, type NativePayloadSourcePolicy } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
+import { EMPTY_CONTEXT_PACKET_MARKDOWN } from "./context-packet-rendering.js";
 
 type Manifest = { id: string; companyId: string; runId: string | null; agentId: string; issueId: string | null;
   projectId: string | null; queryHash: string; policySnapshotHash: string; createdAt: Date };
@@ -16,7 +17,6 @@ const witnesses = new WeakMap<object, WitnessData>();
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const emptyPolicy = (): NativePayloadSourcePolicy => ({ issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] });
 const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
-
 /** Called only by the Context manifest owner while its source-verification transaction is active. */
 export function captureNativeBootstrapContextWitness(input: { companyId: string; runId: string; agentId: string; issueId: string;
   actor: AuthorizationActor; renderedMarkdown: string; manifest: Manifest; items: Item[]; roots: Root[] }): NativeBootstrapContextWitness | null {
@@ -28,12 +28,13 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
   };
   try {
   const { manifest } = input;
+  const sourceFreeContext = input.items.length === 0 && input.roots.length === 0 && input.renderedMarkdown === EMPTY_CONTEXT_PACKET_MARKDOWN;
   if (!uuid.test(input.companyId) || !uuid.test(input.runId) || !uuid.test(input.agentId) || !uuid.test(input.issueId) ||
     manifest.companyId !== input.companyId || manifest.runId !== input.runId || manifest.agentId !== input.agentId ||
     manifest.issueId !== input.issueId || input.actor.type !== "agent" ||
     (input.actor.source !== "agent_jwt" && input.actor.source !== "none") ||
     input.actor.companyId !== input.companyId || input.actor.agentId !== input.agentId || input.actor.runId !== input.runId ||
-    !input.actor.onBehalfOfUserId || input.items.length === 0 || input.items.length > 256 || input.roots.length > 256 ||
+    !input.actor.onBehalfOfUserId || (input.items.length === 0 && !sourceFreeContext) || input.items.length > 256 || input.roots.length > 256 ||
     input.items.some(item => item.companyId !== input.companyId || item.manifestId !== manifest.id) ||
     input.roots.some(root => root.companyId !== input.companyId || root.manifestId !== manifest.id))
     return reject("identity_or_shape");

@@ -21,7 +21,7 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1985,
+    "sourceDeltaPathCount": 1987,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
@@ -15049,6 +15049,12 @@
           "sha256": "8e828d9181229e3d24365a988dc3807ae651b49e461d5a1295662dbbaf851b8c"
         },
         {
+          "path": "server/src/services/context/context-packet-rendering.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/services/context/context-runtime.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -15319,6 +15325,7 @@
         "server/src/services/context/context-engine.test.ts",
         "server/src/services/context/context-engine.ts",
         "server/src/services/context/context-manifest.test.ts",
+        "server/src/services/context/context-packet-rendering.ts",
         "server/src/services/context/context-runtime.test.ts",
         "server/src/services/context/context-runtime.ts",
         "server/src/services/context/delegated-context-binding.ts",
@@ -15406,6 +15413,7 @@
         "server/src/services/context/context-engine.test.ts",
         "server/src/services/context/context-engine.ts",
         "server/src/services/context/context-manifest.test.ts",
+        "server/src/services/context/context-packet-rendering.ts",
         "server/src/services/context/context-runtime.test.ts",
         "server/src/services/context/context-runtime.ts",
         "server/src/services/context/delegated-context-binding.ts",
@@ -16356,6 +16364,12 @@
         },
         {
           "path": "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
           "sha256": null
@@ -17467,6 +17481,7 @@
         "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
         "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
         "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
+        "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
         "packages/db/src/migrations/meta/0572_snapshot.json",
         "packages/db/src/migrations/meta/0573_snapshot.json",
         "packages/db/src/migrations/meta/0574_snapshot.json",
@@ -17670,6 +17685,7 @@
         "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
         "packages/db/src/migrations/0573_native_conversation_upload_comment_transition.sql",
         "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
+        "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
         "packages/db/src/migrations/meta/0572_snapshot.json",
         "packages/db/src/migrations/meta/0573_snapshot.json",
         "packages/db/src/migrations/meta/0574_snapshot.json",

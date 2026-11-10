@@ -4105,13 +4105,13 @@ describe.sequential("issue comment reopen routes", () => {
         lastDecisionOutcome: null,
       },
     };
-    mockIssueService.getById.mockResolvedValue(issue);
+    let currentIssue = issue;
+    mockIssueService.getById.mockImplementation(async () => currentIssue);
     mockIssueService.update.mockImplementation(
-      async (_id: string, patch: Record<string, unknown>) => ({
-        ...issue,
-        ...patch,
-        updatedAt: new Date(),
-      }),
+      async (_id: string, patch: Record<string, unknown>) => {
+        currentIssue = { ...currentIssue, ...patch, updatedAt: new Date() } as typeof issue;
+        return currentIssue;
+      },
     );
 
     const res = await request(
@@ -4129,6 +4129,47 @@ describe.sequential("issue comment reopen routes", () => {
       });
 
     expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: "in_progress",
+      assigneeAgentId: "22222222-2222-4222-8222-222222222222",
+      executionState: expect.objectContaining({
+        status: "changes_requested",
+        currentStageId: policy.stages[0].id,
+        currentStageType: "review",
+        lastDecisionOutcome: "changes_requested",
+      }),
+    });
+    // This mock-backed route test asserts the transaction write contract; it
+    // does not claim a PostgreSQL-persisted receipt. The Native integration
+    // suite separately exercises the actual review owner lifecycle.
+    expect(mockIssueService.update).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      expect.objectContaining({
+        status: "in_progress",
+        assigneeAgentId: "22222222-2222-4222-8222-222222222222",
+        executionState: expect.objectContaining({
+          status: "changes_requested",
+          currentStageId: policy.stages[0].id,
+          currentStageType: "review",
+          lastDecisionOutcome: "changes_requested",
+        }),
+      }),
+      mockTx,
+    );
+    expect(mockTxInsertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "company-1",
+        issueId: "11111111-1111-4111-8111-111111111111",
+        stageId: policy.stages[0].id,
+        stageType: "review",
+        actorAgentId: "33333333-3333-4333-8333-333333333333",
+        actorUserId: null,
+        outcome: "changes_requested",
+        body: "Needs another pass",
+        createdByRunId: "run-2",
+      }),
+    );
+    expect(mockTxInsertValues).toHaveBeenCalledTimes(1);
     await waitForWakeup(() =>
       expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
         "22222222-2222-4222-8222-222222222222",
@@ -4141,6 +4182,64 @@ describe.sequential("issue comment reopen routes", () => {
               stageType: "review",
               lastDecisionOutcome: "changes_requested",
               allowedActions: ["address_changes", "resubmit"],
+            }),
+          }),
+        }),
+      ),
+    );
+
+    // Re-submit through the same route as the returned executor. This verifies
+    // the policy moves the task back to the same reviewer stage; it asserts a
+    // control-plane transition only and makes no claim that a model ran.
+    const resubmit = await request(
+      await installActor(createApp(), {
+        type: "agent",
+        agentId: "22222222-2222-4222-8222-222222222222",
+        companyId: "company-1",
+        runId: "run-3",
+      }),
+    )
+      .patch("/api/issues/11111111-1111-4111-8111-111111111111")
+      .send({ status: "done", comment: "Fixed the edge cases" });
+
+    expect(resubmit.status).toBe(200);
+    expect(resubmit.body).toMatchObject({
+      status: "in_review",
+      assigneeAgentId: "33333333-3333-4333-8333-333333333333",
+      executionState: expect.objectContaining({
+        status: "pending",
+        currentStageId: policy.stages[0].id,
+        currentStageType: "review",
+      }),
+    });
+    const resubmitPatch = mockIssueService.update.mock.calls[1]?.[1];
+    expect(resubmitPatch).toEqual(
+      expect.objectContaining({
+        status: "in_review",
+        assigneeAgentId: "33333333-3333-4333-8333-333333333333",
+        executionState: expect.objectContaining({
+          status: "pending",
+          currentStageId: policy.stages[0].id,
+          currentStageType: "review",
+          currentParticipant: {
+            type: "agent",
+            agentId: "33333333-3333-4333-8333-333333333333",
+            userId: null,
+          },
+        }),
+      }),
+    );
+    await waitForWakeup(() =>
+      expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(
+        "33333333-3333-4333-8333-333333333333",
+        expect.objectContaining({
+          reason: "execution_review_requested",
+          payload: expect.objectContaining({
+            issueId: "11111111-1111-4111-8111-111111111111",
+            executionStage: expect.objectContaining({
+              wakeRole: "reviewer",
+              stageType: "review",
+              allowedActions: ["approve", "request_changes"],
             }),
           }),
         }),

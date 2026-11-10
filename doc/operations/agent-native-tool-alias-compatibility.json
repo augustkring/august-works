@@ -358,7 +358,7 @@
     },
     {
       "path": "server/src/services/issues.ts",
-      "sha256": "5f4b7e6c8021c3c4af3538e9daa5254cb1293b48ac123047cc9db82a75d7e334"
+      "sha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421"
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",
@@ -378,7 +378,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5"
+      "sha256": "c6f4b148fe69653985b26a8068d02bcf8958e406c9400b1766966bbc2c4e2945"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",

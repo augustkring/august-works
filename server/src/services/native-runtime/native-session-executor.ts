@@ -78,7 +78,7 @@ import type {
 import { conversationModelBindingSchema, nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, unionNativePayloadSourceInputs,
   type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import type { NativeBootstrapSourceClosure, NativeConsumedSourceComponent, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
-import { exactNativeInteractionSourceInputs } from "./native-execution-input.js";
+import { exactNativeInteractionSourceInputs, nativeTaskWakeGuidanceSourceMatches } from "./native-execution-input.js";
 import { isCurrentWorkerConversationRoot } from "./worker-conversation-root.js";
 import type {
   HarnessRuntimeRequestResolution,
@@ -7856,6 +7856,7 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   const wakeInputs = closure.sourceSet.inputs.filter((input): input is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
     input.kind === "native_task_wake");
   if (wakeInputs.length > 1 || wakeInputs.some(input => input.runId !== run.id || input.issueId !== run.nativeIssueId)) return no("wake_binding");
+  if (!nativeTaskWakeGuidanceSourceMatches(wakeInputs, "initialCommunicationGuidance" in parsedExecution ? parsedExecution.initialCommunicationGuidance : null)) return no("wake_binding");
   // The Task source was checked against its current payload-only owner hash
   // immediately above. Bind the wake to that captured Task source version;
   // `issues.updatedAt` also changes for operational conversation activity.
@@ -9810,6 +9811,7 @@ export async function recordNativeSessionExecutionFailure(input: {
           .from(heartbeatRuns)
           .where(eq(heartbeatRuns.id, input.execution.binding.runId))
           .for("update");
+        if (!runBeforeWrite || !["running", "failed"].includes(runBeforeWrite.status)) return;
         const [updatedRun] = await tx
           .update(heartbeatRuns)
           .set({
@@ -9830,7 +9832,8 @@ export async function recordNativeSessionExecutionFailure(input: {
               : sourceFailureCode,
             updatedAt: now,
           })
-          .where(eq(heartbeatRuns.id, input.execution.binding.runId))
+          .where(and(eq(heartbeatRuns.id, input.execution.binding.runId),
+            inArray(heartbeatRuns.status, ["running", "failed"])))
           .returning();
         if (
           updatedRun &&
@@ -10041,6 +10044,19 @@ export async function executePaperclipNativeSession(input: {
   nativeSessionStartups.set(runId, startup);
   let preparedInput: typeof input = input;
   let cleanupStagedAttachments: () => Promise<void> = async () => undefined;
+  let cleanupStagedAttachmentsComplete = false;
+  let cleanupStagedAttachmentsInFlight: Promise<void> | null = null;
+  const cleanupStagedAttachmentsOnce = async () => {
+    if (cleanupStagedAttachmentsComplete) return;
+    if (cleanupStagedAttachmentsInFlight) return cleanupStagedAttachmentsInFlight;
+    const cleanup = (async () => {
+      await cleanupStagedAttachments();
+      cleanupStagedAttachmentsComplete = true;
+    })();
+    cleanupStagedAttachmentsInFlight = cleanup;
+    try { await cleanup; }
+    finally { if (cleanupStagedAttachmentsInFlight === cleanup) cleanupStagedAttachmentsInFlight = null; }
+  };
   let sessionScopeId: string | null = null;
   let ownsSessionScope = false;
   let executionFailure: unknown;
@@ -10180,7 +10196,7 @@ export async function executePaperclipNativeSession(input: {
       preparedInput = { ...preparedInput, bootstrapSourceClosure: attachmentSourceClosure };
     }
     return await executePaperclipNativeSessionWithinScope(preparedInput, attachmentStage.sourceCaptures,
-      attachmentStage.attachments, input.execution, attachmentStage.remoteStageReceipts);
+      attachmentStage.attachments, input.execution, attachmentStage.remoteStageReceipts, cleanupStagedAttachmentsOnce);
   } catch (error) {
     executionFailure = error;
     throw error;
@@ -10198,7 +10214,7 @@ export async function executePaperclipNativeSession(input: {
       executingRunnerdSessionScopes.delete(sessionScopeId);
     }
     try {
-      await cleanupStagedAttachments();
+      await cleanupStagedAttachmentsOnce();
     } catch (cleanupError) {
       // Cleanup is a confidentiality incident, but it occurs after the native
       // provider may already have completed the turn. Reclassifying that turn
@@ -10528,6 +10544,7 @@ async function executePaperclipNativeSessionWithinScope(
   stagedAttachments?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["attachments"],
   baseExecution?: NativeExecutionInput,
   remoteStageReceipts?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["remoteStageReceipts"],
+  cleanupBeforeFailure?: () => Promise<void>,
 ): Promise<AdapterExecutionResult> {
   const runId = input.execution.binding.runId;
   if (
@@ -11971,6 +11988,15 @@ async function executePaperclipNativeSessionWithinScope(
         }
         await trace.finish("ok");
         throw error;
+      }
+      // Remote attachment staging is still owned by the live run/lease here.
+      // Clean its exact nonce paths before failure settlement removes that
+      // authority. Integrity and ownership failures keep the existing outer
+      // fallback only; they do not authorize a pre-settlement write.
+      if (!ownershipUnverified && protocolIntegrityFailure === null && cleanupBeforeFailure) {
+        await boundedExecutionCleanup(async () => {
+          try { await cleanupBeforeFailure(); } catch { /* outer finally retries and records a cleanup incident */ }
+        });
       }
       const terminalRunToReport = await recordNativeSessionExecutionFailure({
         db: input.db,

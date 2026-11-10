@@ -48,6 +48,8 @@ import {
   chatActions,
   chatConversations,
   chatDeliveries,
+  chatExternalPrincipals,
+  chatIdentityLinks,
   chatEndpoints,
   chatMessageLinks,
   chatPublications,
@@ -10306,6 +10308,7 @@ export function issueService(db: Db) {
       dbOrTx: Db | DbTransaction = db,
       postCommitActivityPublications?: ActivityPublication[],
       options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor; sourceAccessActor?: AuthorizationActor;
+        verifiedChatHumanInput?: { userId: string; endpointId: string; principalId: string };
         nativeEffectClaim?: NativeToolEffectClaim; nativeModelOutputCapture?: NativeModelOutputCapture;
         nativeModelOutputToolName?: string } = {},
     ) => {
@@ -10313,6 +10316,7 @@ export function issueService(db: Db) {
       const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
       // This carrier is supplied by the original HTTP owner, never the DTO.
       const manualActor = options.manualInputActor ? { ...options.manualInputActor } : null;
+      const verifiedChatHumanInput = options.verifiedChatHumanInput ?? null;
       const suppliedPrivacyActor = options.privacyActor ? { ...options.privacyActor } : null;
       const suppliedSourceAccessActor = options.sourceAccessActor ? { ...options.sourceAccessActor } : null;
       const nativeEffectClaim = options.nativeEffectClaim ?? null;
@@ -10331,6 +10335,13 @@ export function issueService(db: Db) {
       if (manualActor && data.visibility === "private" &&
           data.responsibleUserId !== manualActor.userId)
         throw forbidden("Private manual Task sources require the authenticated Human as responsible user");
+      if (verifiedChatHumanInput && (!verifiedChatHumanInput.userId || !verifiedChatHumanInput.endpointId ||
+          !verifiedChatHumanInput.principalId ||
+          data.originKind !== "chat_channel" || data.createdByUserId !== verifiedChatHumanInput.userId ||
+          data.responsibleUserId !== verifiedChatHumanInput.userId || data.createdByAgentId ||
+          data.parentId || data.projectId || data.payloadSourceSnapshot || data.payloadSourceSnapshotInvalidated ||
+          data.payloadSourceProtocolVersion != null && data.payloadSourceProtocolVersion !== 0))
+        throw forbidden("The verified chat Human Task source is unavailable");
       if (suppliedPrivacyActor && (
         suppliedPrivacyActor.type === "none" ||
         (suppliedPrivacyActor.type === "board" && suppliedPrivacyActor.source === "local_implicit" && data.createdByAgentId) ||
@@ -10400,6 +10411,19 @@ export function issueService(db: Db) {
         let sourceAccessActorExpiresAt: number | null = null;
         let sourceAccessActorPinned = false;
         let currentSourceAccessActor = suppliedSourceAccessActor;
+        if (verifiedChatHumanInput) {
+          const [linkedHuman] = await tx.select({ id: chatIdentityLinks.id }).from(chatIdentityLinks)
+            .innerJoin(chatExternalPrincipals, and(eq(chatExternalPrincipals.id, chatIdentityLinks.principalId),
+              eq(chatExternalPrincipals.companyId, chatIdentityLinks.companyId)))
+            .innerJoin(chatEndpoints, and(eq(chatEndpoints.id, chatIdentityLinks.endpointId),
+              eq(chatEndpoints.companyId, chatIdentityLinks.companyId)))
+            .where(and(eq(chatIdentityLinks.companyId, companyId), eq(chatIdentityLinks.endpointId, verifiedChatHumanInput.endpointId),
+              eq(chatIdentityLinks.principalId, verifiedChatHumanInput.principalId),
+              eq(chatIdentityLinks.paperclipUserId, verifiedChatHumanInput.userId), eq(chatIdentityLinks.status, "linked"),
+              eq(chatExternalPrincipals.kind, "user"), eq(chatExternalPrincipals.isBot, false)))
+            .for("share");
+          if (!linkedHuman) throw forbidden("The verified chat Human Task source is unavailable");
+        }
         const finishManualInput = async <T>(result: T) => {
           if (captureManualInput && manualActor && manualExpiresAt !== null) {
             if (captureManualRelated) await assertManualRelatedSourcesCurrent(tx, companyId,
@@ -10982,10 +11006,21 @@ export function issueService(db: Db) {
         if (captureManualInput) Object.assign(values, {
           payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
         });
+        if (verifiedChatHumanInput) Object.assign(values, {
+          payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
+        });
         if (freezeTemporalContext || freezeNativeEffectPrefix) Object.assign(values, {
           payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
         });
         let [issue] = await tx.insert(issues).values(values).returning();
+        if (verifiedChatHumanInput) {
+          const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue") })
+            .where(and(eq(issues.companyId, companyId), eq(issues.id, issue.id), eq(issues.payloadSourceProtocolVersion, 1),
+              isNull(issues.payloadSourceSnapshot), eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
+          if (!captured?.payloadSourceSnapshot) throw conflict("Verified chat Human Task source capture was not stored");
+          nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+          issue = captured;
+        }
         await retainIssuePrivacySources(tx, issue, privacy.sources);
         if (freezeTemporalContext || freezeNativeEffectPrefix) {
           const snapshotInputs = nativeEffectPrefix?.inputs ?? privacy.temporalContextInputs!;

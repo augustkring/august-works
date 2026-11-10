@@ -1774,25 +1774,17 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("does not queue immediate recovery when the failed run's issue is hidden", async () => {
-    mockAdapterExecute.mockResolvedValueOnce({
-      exitCode: 1,
-      signal: null,
-      timedOut: false,
-      errorMessage: null,
-      provider: "test",
-      model: "test-model",
-    });
-
     const { runId, issueId } = await seedQueuedIssueRunFixture();
     await db
       .update(issues)
       .set({ hiddenAt: new Date("2026-03-19T00:05:00.000Z") })
       .where(eq(issues.id, issueId));
+    // Persist the terminal recovery input directly. This case exercises the
+    // issue visibility decision, not paid adapter behavior.
+    await db.update(heartbeatRuns).set({ status: "failed", completedAt: new Date() })
+      .where(eq(heartbeatRuns.id, runId));
     const heartbeat = heartbeatService(db);
-
-    await heartbeat.resumeQueuedRuns();
-    await waitForRunToSettle(heartbeat, runId);
-    await heartbeat.waitForRunExecutionDrain(runId);
+    await heartbeat.reconcileStrandedAssignedIssues();
 
     const run = await heartbeat.getRun(runId);
     const recoveryRuns = await db

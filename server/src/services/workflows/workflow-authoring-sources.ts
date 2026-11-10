@@ -158,7 +158,7 @@ async function inspectWorkflowRunPayloadSourceAccess(db: Db, companyId: string, 
   const [run] = await db.select({ id: workflowRuns.id, companyId: workflowRuns.companyId, workflowId: workflowRuns.workflowId,
     revisionId: workflowRuns.workflowRevisionId,
     authoringSourceWorkflowIds: workflowRuns.authoringSourceWorkflowIds, memoryRecordIds: workflowRuns.memoryRecordIds })
-    .from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId))).for("share", { noWait: true });
+    .from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId))).for("share");
   if (!run) throw forbidden("The workflow run source owner is unavailable");
   const authoringIds = sources.safeParse(run.authoringSourceWorkflowIds);
   const runMemoryIds = memorySources.safeParse(run.memoryRecordIds);

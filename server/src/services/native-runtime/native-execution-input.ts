@@ -861,6 +861,11 @@ export function captureNativeTaskWakeSource(input: {
   runId: string;
   issueId: string;
   sourceVersion: string;
+  /** Resolved by the canonical inbound-chat owner, never copied from the wake payload. */
+  externalChatProvider?: import("@paperclipai/shared").ChatProvider | null;
+  /** Both values come from the loaded canonical chat conversation and the exact Native input. */
+  canonicalInitialGuidance?: string | null;
+  nativeInitialGuidance?: string | null;
   agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null;
   continuationCapture?: NativeTaskContinuationCapture | null;
   ordinaryPlanRead?: NativeOrdinaryPlanReadCapture | null;
@@ -897,6 +902,8 @@ export function captureNativeTaskWakeSource(input: {
   if (!uuid.test(input.runId) || !uuid.test(input.issueId) || !/^\d+(?:\.\d+)?$/.test(input.sourceVersion) ||
     input.task.id !== input.issueId) return reject("identity_invalid");
   if (!input.payload || typeof input.payload !== "object" || Array.isArray(input.payload)) return reject("payload_shape");
+  if (input.canonicalInitialGuidance !== input.nativeInitialGuidance ||
+    Boolean(input.nativeInitialGuidance) && !input.externalChatProvider) return reject("wake_fields_invalid", ["initialGuidance"]);
   const payload = input.payload as Record<string, unknown>;
   const keys = ["reason", "executionContinuation", "attachmentOmissions", "externalChatProvider", "recovery", "issue",
     "agentMessage", "childIssueSummaries", "childIssueSummaryTruncated", "dispositionRepair", "livenessContinuation",
@@ -959,7 +966,8 @@ export function captureNativeTaskWakeSource(input: {
       capture: input.continuationCapture,
       stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources }) !== null,
     attachmentOmissions: Array.isArray(payload.attachmentOmissions) && payload.attachmentOmissions.length === 0,
-    externalChatProvider: payload.externalChatProvider === null, recovery: payload.recovery === null,
+    externalChatProvider: payload.externalChatProvider === (input.externalChatProvider ?? null),
+    recovery: payload.recovery === null,
     agentMessage: isDeepStrictEqual(payload.agentMessage, closedContinuation?.delivery?.projection.agentMessage ?? null),
     childIssueSummaries: Array.isArray(payload.childIssueSummaries) && payload.childIssueSummaries.length === 0,
     childIssueSummaryTruncated: payload.childIssueSummaryTruncated === false,
@@ -1087,8 +1095,20 @@ export function captureNativeTaskWakeSource(input: {
     ? (coordination ? { wake: sourcePayload, manualQueueAdoption, workspaceCoordination: coordination }
       : { wake: sourcePayload, manualQueueAdoption })
     : coordination ? { wake: sourcePayload, workspaceCoordination: coordination } : sourcePayload;
+  const initialGuidanceHash = input.nativeInitialGuidance ? nativeSha256(input.nativeInitialGuidance) : undefined;
   return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId,
-    sourceVersion: input.sourceVersion, contentHash: nativeSha256(content) };
+    sourceVersion: input.sourceVersion, contentHash: nativeSha256(content),
+    ...(input.externalChatProvider ? { externalChatProvider: input.externalChatProvider } : {}),
+    ...(initialGuidanceHash ? { initialGuidanceHash } : {}) };
+}
+
+export function nativeTaskWakeGuidanceSourceMatches(
+  wakeInputs: readonly Extract<NativePayloadSourceInput, { kind: "native_task_wake" }>[],
+  guidance: string | null | undefined,
+): boolean {
+  const expectedHash = typeof guidance === "string" && guidance.length > 0 ? nativeSha256(guidance) : undefined;
+  return !(expectedHash && wakeInputs.length !== 1) &&
+    (wakeInputs.length !== 1 || wakeInputs[0]!.initialGuidanceHash === expectedHash);
 }
 
 /** Resolve only references emitted by the real Markdown renderer. Missing,

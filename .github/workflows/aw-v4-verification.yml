@@ -473,6 +473,52 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Install root-owned Node for runtime asset erasure tests
+        if: contains(fromJSON(needs.security-regression-plan.outputs.selectors_json), 'server/src/services/native-runtime/runtime-asset-retention.test.ts')
+        shell: bash
+        run: |
+          set -euo pipefail
+          node_source="$(command -v node)"
+          node_real="$(/usr/bin/readlink -f -- "$node_source")"
+          case "$node_real" in
+            "$RUNNER_TOOL_CACHE"/node/*/bin/node) ;;
+            *) echo "setup-node executable is outside RUNNER_TOOL_CACHE" >&2; exit 1 ;;
+          esac
+          expected_version="v$(/usr/bin/tr -d '\r\n' < .nvmrc)"
+          source_version="$("$node_real" --version)"
+          test "$source_version" = "$expected_version"
+          source_sha="$(/usr/bin/sha256sum -- "$node_real" | /usr/bin/cut -d ' ' -f 1)"
+          trusted_dir=/usr/local/libexec/paperclip-erasure-test-node
+          trusted_node="$trusted_dir/node"
+          check_root_chain() {
+            local current="$1" mode
+            while [[ ! -e "$current" && ! -L "$current" ]]; do current=${current%/*}; done
+            while :; do
+              test "$(/usr/bin/readlink -f -- "$current")" = "$current"
+              test "$(/usr/bin/stat -Lc %u -- "$current")" = 0
+              mode="$(/usr/bin/stat -Lc %a -- "$current")"
+              (( (8#$mode & 8#6022) == 0 ))
+              test "$current" = / && break
+              current=${current%/*}; test -n "$current" || current=/
+            done
+          }
+          check_root_chain "$trusted_node"
+          if [[ -e "$trusted_node" || -L "$trusted_node" ]]; then
+            test -f "$trusted_node"
+            test "$(/usr/bin/stat -Lc %u -- "$trusted_node")" = 0
+            /usr/bin/cmp -s -- "$node_real" "$trusted_node"
+          else
+            if [[ ! -d "$trusted_dir" ]]; then sudo install -d -o root -g root -m 0755 "$trusted_dir"; fi
+            check_root_chain "$trusted_node"
+            sudo install -o root -g root -m 0755 -- "$node_real" "$trusted_node"
+          fi
+          test "$(/usr/bin/stat -Lc %u -- "$trusted_node")" = 0
+          test "$(/usr/bin/stat -Lc %a -- "$trusted_node")" = 755
+          test "$("$trusted_node" --version)" = "$source_version"
+          test "$(/usr/bin/sha256sum -- "$trusted_node" | /usr/bin/cut -d ' ' -f 1)" = "$source_sha"
+          check_root_chain "$trusted_node"
+          echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: |
           pnpm install --frozen-lockfile

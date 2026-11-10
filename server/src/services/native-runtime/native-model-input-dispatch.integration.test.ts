@@ -26,6 +26,7 @@ import {
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   heartbeatRunEvents,
   heartbeatRuns,
+  issueAttachments,
   activityLog,
   issueComments,
   issues,
@@ -1317,6 +1318,83 @@ describe("native model input dispatch intent", () => {
     } finally {
       await reader.close();
     }
+  });
+
+  it("binds optional remote stage receipts in the SQL owner matcher without model dispatch", async () => {
+    const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Stage SQL Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "member" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 3_600_000) });
+    const actor = { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [companyId],
+      memberships: [{ companyId, membershipRole: "member", status: "active" as const }] };
+    const issue = await issueService(db).create(companyId, { title: "SQL stage owner fixture",
+      description: "Owner matcher fixture", createdByUserId: userId }, db, undefined, { manualInputActor: actor });
+    const seeded = await seed({ existingIssueId: issue.id, responsibleUserId: userId, attempt: 1 });
+    await db.update(issues).set({ status: "in_progress", assigneeAgentId: agentId, executionRunId: seeded.runId })
+      .where(and(eq(issues.companyId, companyId), eq(issues.id, issue.id)));
+    const comment = await issueService(db).addComment(issue.id, "Source attachments for the SQL guard.",
+      { userId }, { manualInputActor: actor });
+    const captures: Array<Record<string, unknown>> = [];
+    const attachmentRows: Array<{ id: string; sha256: string; byteSize: number }> = [];
+    for (const label of ["one", "two"]) {
+      const bytes = Buffer.from(`SQL matcher source ${label}`, "utf8");
+      const stored = await storage.putFile({ companyId, namespace: `issues/${issue.id}`, originalFilename: `${label}.txt`,
+        contentType: "text/plain", body: bytes });
+      const attachment = await issueService(db).createAttachment({ issueId: issue.id, issueCommentId: comment.id,
+        provider: stored.provider, objectKey: stored.objectKey, contentType: stored.contentType, byteSize: stored.byteSize,
+        sha256: stored.sha256, originalFilename: stored.originalFilename, createdByUserId: userId }, { actor, bytes });
+      const [owner] = await db.select().from(issueAttachments).where(eq(issueAttachments.id, attachment.id));
+      if (!owner?.payloadSourceSnapshot) throw new Error("The fixture attachment owner snapshot is unavailable");
+      const input = { kind: "attachment", issueId: issue.id, attachmentId: attachment.id, commentId: comment.id,
+        assetId: owner.assetId, sha256: stored.sha256, byteSize: stored.byteSize, disposition: "delivered" };
+      captures.push({ input, payloadSourceSnapshot: owner.payloadSourceSnapshot });
+      attachmentRows.push({ id: attachment.id, sha256: stored.sha256, byteSize: stored.byteSize });
+    }
+    const task = { task: "fixture" }, baseTaskDigest = nativeSha256(task), finalTaskDigest = "f".repeat(64);
+    const descriptorHash = "d".repeat(64);
+    const execution = { binding: { companyId, runId: seeded.runId, issueId: issue.id, agentId }, task };
+    const intent = { eventSeq: seeded.eventSeq, attempt: seeded.attempt, responsibleUserId: userId };
+    const receipts = attachmentRows.map(row => ({ attachmentId: row.id, stageNonce: randomUUID(), sha256: row.sha256,
+      byteSize: row.byteSize }));
+    const stageFor = (sourceCaptures = captures, remoteStageReceipts?: unknown) => {
+      const stage: Record<string, unknown> = { eventSeq: seeded.eventSeq, attempt: seeded.attempt,
+        responsibleUserId: userId, baseTaskDigest, finalTaskDigest, sourceCaptureHash: nativeSha256(sourceCaptures),
+        descriptorHash, sourceCaptures, ...(remoteStageReceipts === undefined ? {} : { remoteStageReceipts }) };
+      stage.stageHash = nativeSha256({ eventSeq: stage.eventSeq, attempt: stage.attempt,
+        responsibleUserId: stage.responsibleUserId, baseTaskDigest, finalTaskDigest,
+        sourceCaptureHash: stage.sourceCaptureHash, descriptorHash,
+        ...(remoteStageReceipts === undefined ? {} : { remoteStageReceipts }) });
+      return stage;
+    };
+    await db.execute(sql`update native_run_finalizations set lease_expires_at=clock_timestamp()+interval '30 minutes'
+      where company_id=${companyId}::uuid and run_id=${seeded.runId}::uuid and attempt=${seeded.attempt}`);
+    const matches = async (stage: Record<string, unknown>) => {
+      const profile = { nativeExecutionInput: execution, nativeAttachmentStageSources: [stage] };
+      const bootstrapInputs = (stage.sourceCaptures as Array<Record<string, unknown>>).map(value => value.input);
+      const [row] = await db.execute<{ matches: boolean }>(sql`select public.aw_native_current_attachment_stage_matches(
+        ${JSON.stringify(profile)}::jsonb, ${companyId}::uuid, ${seeded.runId}::uuid, ${agentId}::uuid,
+        ${issue.id}::uuid, ${userId}, ${JSON.stringify(bootstrapInputs)}::jsonb,
+        ${JSON.stringify(intent)}::jsonb) as matches`);
+      return row?.matches;
+    };
+    expect(await matches(stageFor())).toBe(true); // legacy nine-key contract
+    expect(await matches(stageFor(captures, receipts))).toBe(true);
+    expect(await matches(stageFor(captures, null))).toBe(false);
+    expect(await matches(stageFor(captures, [{ ...receipts[0]!, unexpected: true }]))).toBe(false);
+    expect(await matches(stageFor(captures, [{ ...receipts[0]!, byteSize: 1.5 }]))).toBe(false);
+    expect(await matches(stageFor(captures, [{ ...receipts[0]!, byteSize: 2 ** 31 }]))).toBe(false);
+    expect(await matches(stageFor(captures, [{ ...receipts[0]!, sha256: null }]))).toBe(false);
+    expect(await matches(stageFor(captures, [receipts[0], { ...receipts[1]!, stageNonce: receipts[0]!.stageNonce }]))).toBe(false);
+    expect(await matches(stageFor(captures, [{ ...receipts[0]!, attachmentId: randomUUID() }]))).toBe(false);
+    const tamperedCaptures = structuredClone(captures);
+    (tamperedCaptures[0]!.input as Record<string, unknown>).sha256 = "e".repeat(64);
+    const tamperedReceipts = receipts.map(value => ({ ...value }));
+    tamperedReceipts[0]!.sha256 = "e".repeat(64);
+    expect(await matches(stageFor(tamperedCaptures, tamperedReceipts))).toBe(false);
+    expect(await matches(stageFor(captures, Array.from({ length: 21 }, (_, index) => ({ ...receipts[index % 2]!,
+      attachmentId: attachmentRows[index % 2]!.id, stageNonce: randomUUID() }))))).toBe(false);
   });
 
   it("qualifies only the current PG attachment bytes staged by executor admission", async () => {

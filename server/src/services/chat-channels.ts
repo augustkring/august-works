@@ -16077,6 +16077,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         taskTx: DbOrTransaction,
         taskEndpoint: EndpointRow,
         taskUserId: string | null,
+        verifiedChatHumanUserId: string | null,
       ) => {
         let conversation = existingConversation;
         if (!conversation) {
@@ -16103,6 +16104,11 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
               idempotencyKey: `chat:${endpoint.id}:${thread.id}:${sessionGeneration}`,
             },
             taskTx,
+            undefined,
+            verifiedChatHumanUserId && verifiedChatHumanUserId === taskUserId
+              ? { verifiedChatHumanInput: { userId: verifiedChatHumanUserId, endpointId: taskEndpoint.id,
+                  principalId: principalResolution.principal.id } }
+              : undefined,
           );
           await taskTx
             .insert(chatConversations)
@@ -16435,6 +16441,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             currentEndpoint,
             principalResolution.principal.id,
           );
+        // Keep the linked principal's current Human identity separate from
+        // later GitHub automatic-admission attribution.
+        const linkedHumanUserId = currentPrincipalAuthorization.userId;
         const automaticAdmission = githubAutomatic ? await githubAutomaticAdmission(tx, currentEndpoint, githubAutomatic.context) : null;
         if (githubAutomatic && !automaticAdmission?.allowed) currentPrincipalAuthorization.allowed = false;
         if (automaticAdmission?.allowed) currentPrincipalAuthorization.userId = automaticAdmission.responsibleUserId ?? null;
@@ -16528,6 +16537,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
           tx,
           currentPrincipalAuthorization.sponsorUserId ? { ...currentEndpoint, sponsorUserId: currentPrincipalAuthorization.sponsorUserId } : currentEndpoint,
           currentPrincipalAuthorization.userId,
+          !githubAutomatic && !githubManual && linkedHumanUserId === currentPrincipalAuthorization.userId
+            ? linkedHumanUserId : null,
         );
       });
       if (!taskMutation) return;

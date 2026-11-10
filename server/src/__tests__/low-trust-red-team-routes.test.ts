@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createServer } from "node:http";
 import express from "express";
 import request from "supertest";
-import { WebSocketServer } from "ws";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -47,15 +45,14 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { parseWakePayloadFromMessage } from "./helpers/wake-message.js";
 import { drainHeartbeatRunsToQuiescence } from "./helpers/drain-heartbeat-runs.js";
 import { errorHandler } from "../middleware/index.js";
 import { agentRoutes } from "../routes/agents.js";
 import { issueRoutes } from "../routes/issues.js";
 import { createCanonicalHumanProject, seedCurrentHumanSourceActor, updateCanonicalHumanProject } from "./helpers/current-human-source-fixture.js";
-import { heartbeatService } from "../services/heartbeat.js";
+import { buildPaperclipWakePayload, heartbeatService } from "../services/heartbeat.js";
+import { buildExecutionContinuation } from "../services/execution-continuation.js";
 import { LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
-import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
@@ -72,19 +69,6 @@ if (!embeddedPostgresSupport.supported) {
 
 type Db = ReturnType<typeof createDb>;
 type Fixture = Awaited<ReturnType<typeof seedLowTrustFixture>>;
-
-async function waitFor(
-  condition: () => boolean | Promise<boolean>,
-  timeoutMs = 10_000,
-  intervalMs = 50,
-) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    if (await condition()) return;
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  throw new Error("Timed out waiting for condition");
-}
 
 function isHeartbeatCleanupFkError(error: unknown) {
   const message =
@@ -218,188 +202,6 @@ function createApp(
   app.use("/api", issueRoutes(db, {} as any, heartbeat ? { heartbeat } : {}));
   app.use(errorHandler);
   return app;
-}
-
-async function createControlledGatewayServer() {
-  const server = createServer();
-  const wss = new WebSocketServer({ server });
-  const agentPayloads: Array<Record<string, unknown>> = [];
-  let firstWaitRelease: (() => void) | null = null;
-  let firstWaitGate = new Promise<void>((resolve) => {
-    firstWaitRelease = resolve;
-  });
-  let waitCount = 0;
-  let skillInstalled = false;
-  let uploadedSkillArchive = Buffer.alloc(0);
-  let installedSkillText = "";
-  let currentPaperclipRunId: string | null = null;
-  const currentToolCount = 7;
-  const currentToolsHash = "b".repeat(64);
-
-  wss.on("connection", (socket) => {
-    socket.send(
-      JSON.stringify({
-        type: "event",
-        event: "connect.challenge",
-        payload: { nonce: "nonce-123" },
-      }),
-    );
-
-    socket.on("message", async (raw) => {
-      const text = Buffer.isBuffer(raw) ? raw.toString("utf8") : String(raw);
-      const frame = JSON.parse(text) as {
-        type: string;
-        id: string;
-        method: string;
-        params?: Record<string, unknown>;
-      };
-
-      if (frame.type !== "req") return;
-
-      if (frame.method === "connect") {
-        socket.send(
-          JSON.stringify({
-            type: "res",
-            id: frame.id,
-            ok: true,
-            payload: {
-              type: "hello-ok",
-              protocol: 3,
-              server: { version: "test", connId: "conn-1" },
-              features: {
-                methods: ["connect", "agent", "agent.wait", "skills.status", "skills.files.get", "skills.upload.begin", "skills.upload.chunk", "skills.upload.commit", "skills.install", "blentera.platform.bind.v1", "blentera.platform.status.v1", "blentera.platform.unbind.v1"],
-                events: ["agent"],
-              },
-              snapshot: { version: 1, ts: Date.now() },
-              policy: {
-                maxPayload: 1_000_000,
-                maxBufferedBytes: 1_000_000,
-                tickIntervalMs: 30_000,
-              },
-            },
-          }),
-        );
-        return;
-      }
-
-      if (frame.method === "agent") {
-        agentPayloads.push((frame.params ?? {}) as Record<string, unknown>);
-        socket.send(
-          JSON.stringify({
-            type: "res",
-            id: frame.id,
-            ok: true,
-            payload: {
-              runId:
-                typeof frame.params?.idempotencyKey === "string"
-                  ? frame.params.idempotencyKey
-                  : `run-${agentPayloads.length}`,
-              status: "accepted",
-              acceptedAt: Date.now(),
-            },
-          }),
-        );
-        return;
-      }
-
-      if (frame.method === "skills.status") {
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: {
-          managedSkillsDir: "/remote/agent/skills",
-          skills: skillInstalled ? [{ name: "Blentera platform", skillKey: "blentera-platform",
-            filePath: "/remote/agent/skills/blentera-platform/SKILL.md", eligible: true, blockedByAgentFilter: false }] : [],
-        } }));
-        return;
-      }
-
-      if (frame.method === "skills.upload.begin") {
-        uploadedSkillArchive = Buffer.alloc(0);
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { uploadId: "11111111-1111-4111-8111-111111111111", receivedBytes: 0 } }));
-        return;
-      }
-      if (frame.method === "skills.upload.chunk") {
-        const chunk = Buffer.from(String(frame.params?.dataBase64 ?? ""), "base64");
-        uploadedSkillArchive = Buffer.concat([uploadedSkillArchive, chunk]);
-        const bytes = chunk.byteLength;
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { receivedBytes: Number(frame.params?.offset ?? 0) + bytes } }));
-        return;
-      }
-      if (frame.method === "skills.upload.commit") {
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { sha256: frame.params?.sha256 } }));
-        return;
-      }
-      if (frame.method === "skills.install") {
-        skillInstalled = true;
-        const name = uploadedSkillArchive.subarray(0, 100).toString("utf8").replace(/\0.*$/s, "");
-        const size = Number.parseInt(uploadedSkillArchive.subarray(124, 136).toString("ascii").replace(/\0.*$/s, "").trim() || "0", 8);
-        if (name === "SKILL.md" && Number.isSafeInteger(size) && size >= 0) {
-          installedSkillText = uploadedSkillArchive.subarray(512, 512 + size).toString("utf8");
-        }
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { ok: true, sha256: frame.params?.sha256 } }));
-        return;
-      }
-      if (frame.method === "skills.files.get") {
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { content: installedSkillText } }));
-        return;
-      }
-      if (frame.method === "blentera.platform.bind.v1") {
-        currentPaperclipRunId = typeof frame.params?.paperclipRunId === "string" ? frame.params.paperclipRunId : null;
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { protocolVersion: 1, pluginVersion: "1.0.0", toolCount: currentToolCount, toolsHash: currentToolsHash } }));
-        return;
-      }
-      if (frame.method === "blentera.platform.status.v1") {
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { protocolVersion: 1, ready: true,
-          paperclipRunId: currentPaperclipRunId, toolCount: currentToolCount, toolsHash: currentToolsHash,
-          expiresAt: new Date(Date.now() + 60_000).toISOString() } }));
-        return;
-      }
-      if (frame.method === "blentera.platform.unbind.v1") {
-        currentPaperclipRunId = null;
-        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { ok: true } }));
-        return;
-      }
-
-      if (frame.method === "agent.wait") {
-        waitCount += 1;
-        if (waitCount === 1) await firstWaitGate;
-        socket.send(
-          JSON.stringify({
-            type: "res",
-            id: frame.id,
-            ok: true,
-            payload: {
-              runId: frame.params?.runId,
-              status: "ok",
-              startedAt: 1,
-              endedAt: 2,
-            },
-          }),
-        );
-      }
-    });
-  });
-
-  await new Promise<void>((resolve) => {
-    server.listen(0, "127.0.0.1", () => resolve());
-  });
-
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    throw new Error("Failed to resolve test server address");
-  }
-
-  return {
-    url: `ws://127.0.0.1:${address.port}`,
-    getAgentPayloads: () => agentPayloads,
-    releaseFirstWait: () => {
-      firstWaitRelease?.();
-      firstWaitRelease = null;
-      firstWaitGate = Promise.resolve();
-    },
-    close: async () => {
-      await new Promise<void>((resolve) => wss.close(() => resolve()));
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    },
-  };
 }
 
 async function snapshot(db: Db) {
@@ -1997,86 +1799,54 @@ describeEmbeddedPostgres(
 
     it("redacts quarantined low-trust output from higher-trust wake and continuation contexts", async () => {
       const fixture = await seedLowTrustFixture(db);
-      const restoreApiUrl = installHeartbeatApiUrlFixture();
       const lowTrustApp = createApp(db, agentActor(fixture));
       const standardApp = createApp(db, standardReportActor(fixture));
-      const gateway = await createControlledGatewayServer();
-      const heartbeat = heartbeatService(db, {
-        runtimeEnv: {
-          ...process.env,
-          PAPERCLIP_IN_WORKTREE: "false",
-          PAPERCLIP_DATABASE_RESTORE_IN_PROGRESS: "false",
-          PAPERCLIP_RESTORE_IN_PROGRESS: "false",
-        },
-      });
 
-      try {
-        const comment = await request(lowTrustApp)
-          .post(`/api/issues/${fixture.issues.assignedReview.id}/comments`)
-          .send({
-            body: `malicious result ${fixture.canaries.raw}`,
-          });
-        expect(comment.status, JSON.stringify(comment.body)).toBe(201);
-        await db
-          .update(issueComments)
-          .set({
-            metadata: { canary: fixture.canaries.raw },
-            presentation: { markdown: fixture.canaries.raw },
-          })
-          .where(eq(issueComments.id, comment.body.id));
+      const comment = await request(lowTrustApp)
+        .post(`/api/issues/${fixture.issues.assignedReview.id}/comments`)
+        .send({
+          body: `malicious result ${fixture.canaries.raw}`,
+        });
+      expect(comment.status, JSON.stringify(comment.body)).toBe(201);
+      await db
+        .update(issueComments)
+        .set({
+          metadata: { canary: fixture.canaries.raw },
+          presentation: { markdown: fixture.canaries.raw },
+        })
+        .where(eq(issueComments.id, comment.body.id));
 
-        await createQuarantinedContinuationSummary(
-          db,
-          fixture,
-          fixture.issues.standardReportParent.id,
-        );
+      const rawContinuationSummary = await createQuarantinedContinuationSummary(
+        db,
+        fixture,
+        fixture.issues.standardReportParent.id,
+      );
+      expect(rawContinuationSummary.latestBody).toContain(fixture.canaries.raw);
 
-        const lowTrustContext = await request(lowTrustApp)
-          .get(
-            `/api/issues/${fixture.issues.assignedReview.id}/heartbeat-context`,
-          )
-          .query({ wakeCommentId: comment.body.id });
-        expect(
-          lowTrustContext.status,
-          JSON.stringify(lowTrustContext.body),
-        ).toBe(200);
-        expect(JSON.stringify(lowTrustContext.body.wakeComment)).toContain(
-          fixture.canaries.raw,
-        );
+      const lowTrustContext = await request(lowTrustApp)
+        .get(`/api/issues/${fixture.issues.assignedReview.id}/heartbeat-context`)
+        .query({ wakeCommentId: comment.body.id });
+      expect(
+        lowTrustContext.status,
+        JSON.stringify(lowTrustContext.body),
+      ).toBe(200);
+      expect(JSON.stringify(lowTrustContext.body.wakeComment)).toContain(
+        fixture.canaries.raw,
+      );
 
-        // Higher-trust wakes may only hydrate comments on the exact task. Seed a
-        // quarantined same-task comment to preserve the raw-output redaction
-        // assertion without relying on a cross-task comment lookup.
-        const scopedComment = await db
-          .insert(issueComments)
-          .values({
-            companyId: fixture.company.id,
-            issueId: fixture.issues.standardReportParent.id,
-            authorAgentId: fixture.agents.lowTrust.id,
-            createdByRunId: fixture.runs.lowTrust.id,
-            body: `malicious scoped result ${fixture.canaries.raw}`,
-            metadata: { canary: fixture.canaries.raw },
-            presentation: { markdown: fixture.canaries.raw },
-            sourceTrust: {
-              preset: LOW_TRUST_REVIEW_PRESET,
-              disposition: "quarantined",
-              sourceIssueId: fixture.issues.assignedReview.id,
-              sourceRunId: fixture.runs.lowTrust.id,
-              sourceAgentId: fixture.agents.lowTrust.id,
-            },
-          })
-          .returning()
-          .then((rows) => rows[0]!);
-
-        const higherTrustContext = await request(standardApp).get(
-          `/api/issues/${fixture.issues.standardReportParent.id}/heartbeat-context`,
-        );
-        expect(
-          higherTrustContext.status,
-          JSON.stringify(higherTrustContext.body),
-        ).toBe(200);
-        expect(higherTrustContext.body.continuationSummary).toMatchObject({
-          body: LOW_TRUST_QUARANTINED_BODY,
+      // Higher-trust wakes may only hydrate comments on the exact task. Store
+      // the quarantined producer output on the same parent so the real wake
+      // payload owner can select and redact it from current database rows.
+      const scopedComment = await db
+        .insert(issueComments)
+        .values({
+          companyId: fixture.company.id,
+          issueId: fixture.issues.standardReportParent.id,
+          authorAgentId: fixture.agents.lowTrust.id,
+          createdByRunId: fixture.runs.lowTrust.id,
+          body: `malicious scoped result ${fixture.canaries.raw}`,
+          metadata: { canary: fixture.canaries.raw },
+          presentation: { markdown: fixture.canaries.raw },
           sourceTrust: {
             preset: LOW_TRUST_REVIEW_PRESET,
             disposition: "quarantined",
@@ -2084,175 +1854,197 @@ describeEmbeddedPostgres(
             sourceRunId: fixture.runs.lowTrust.id,
             sourceAgentId: fixture.agents.lowTrust.id,
           },
-        });
-        expectNoCanary(higherTrustContext.body, fixture.canaries.raw);
+        })
+        .returning()
+        .then((rows) => rows[0]!);
+      expect(scopedComment.body).toContain(fixture.canaries.raw);
+      expect(scopedComment.sourceTrust).toMatchObject({
+        preset: LOW_TRUST_REVIEW_PRESET,
+        disposition: "quarantined",
+        sourceRunId: fixture.runs.lowTrust.id,
+      });
 
-        const bogusRunStandardApp = createApp(db, {
-          ...agentActor(fixture, fixture.agents.standard.id),
-          runId: randomUUID(),
-        });
-        const bogusRunContext = await request(bogusRunStandardApp).get(
-          `/api/issues/${fixture.issues.standardReportParent.id}/heartbeat-context`,
-        );
-        expect(
-          bogusRunContext.status,
-          JSON.stringify(bogusRunContext.body),
-        ).toBe(200);
-        expect(bogusRunContext.body.continuationSummary).toMatchObject({
+      const higherTrustContext = await request(standardApp).get(
+        `/api/issues/${fixture.issues.standardReportParent.id}/heartbeat-context`,
+      );
+      expect(
+        higherTrustContext.status,
+        JSON.stringify(higherTrustContext.body),
+      ).toBe(200);
+      expect(higherTrustContext.body.continuationSummary).toMatchObject({
+        body: LOW_TRUST_QUARANTINED_BODY,
+        sourceTrust: {
+          preset: LOW_TRUST_REVIEW_PRESET,
+          disposition: "quarantined",
+          sourceIssueId: fixture.issues.assignedReview.id,
+          sourceRunId: fixture.runs.lowTrust.id,
+          sourceAgentId: fixture.agents.lowTrust.id,
+        },
+      });
+      expectNoCanary(higherTrustContext.body, fixture.canaries.raw);
+
+      const bogusRunStandardApp = createApp(db, {
+        ...agentActor(fixture, fixture.agents.standard.id),
+        runId: randomUUID(),
+      });
+      const bogusRunContext = await request(bogusRunStandardApp).get(
+        `/api/issues/${fixture.issues.standardReportParent.id}/heartbeat-context`,
+      );
+      expect(
+        bogusRunContext.status,
+        JSON.stringify(bogusRunContext.body),
+      ).toBe(200);
+      expect(bogusRunContext.body.continuationSummary).toMatchObject({
+        body: LOW_TRUST_QUARANTINED_BODY,
+        sourceTrust: {
+          preset: LOW_TRUST_REVIEW_PRESET,
+          disposition: "quarantined",
+        },
+      });
+      expectNoCanary(bogusRunContext.body, fixture.canaries.raw);
+
+      // Exercise the production DB-backed wake projection without dispatching
+      // to a provider. This keeps the real selected comment, sourceTrust, and
+      // continuation document in scope while asserting exactly what a higher-
+      // trust consumer receives.
+      const wake = await buildPaperclipWakePayload({
+        db,
+        companyId: fixture.company.id,
+        agentId: fixture.agents.standard.id,
+        contextSnapshot: {
+          issueId: fixture.issues.standardReportParent.id,
+          wakeReason: "issue_commented",
+          wakeCommentId: scopedComment.id,
+          wakeCommentIds: [scopedComment.id],
+          livenessContinuationAttempt: 1,
+          livenessContinuationMaxAttempts: 2,
+          livenessContinuationSourceRunId: fixture.runs.lowTrust.id,
+          livenessContinuationState: "quarantined_low_trust_handoff",
+          livenessContinuationReason:
+            "Low-trust review output requires sanitized follow-up.",
+          livenessContinuationInstruction:
+            "Continue from the sanitized quarantine stub only.",
+        },
+        continuationSummary: {
+          key: ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
+          title: rawContinuationSummary.title,
+          body: rawContinuationSummary.latestBody ?? "",
+          sourceTrust: rawContinuationSummary.sourceTrust,
+          updatedAt: rawContinuationSummary.updatedAt,
+        },
+      });
+
+      expect(wake).not.toBeNull();
+      expect(wake).toMatchObject({
+        reason: "issue_commented",
+        issue: {
+          id: fixture.issues.standardReportParent.id,
+          title: fixture.issues.standardReportParent.title,
+        },
+        latestCommentId: scopedComment.id,
+        commentIds: [scopedComment.id],
+        comments: [
+          {
+            id: scopedComment.id,
+            issueId: fixture.issues.standardReportParent.id,
+            body: LOW_TRUST_QUARANTINED_BODY,
+            presentation: null,
+            metadata: null,
+            sourceTrust: {
+              preset: LOW_TRUST_REVIEW_PRESET,
+              disposition: "quarantined",
+              sourceIssueId: fixture.issues.assignedReview.id,
+              sourceRunId: fixture.runs.lowTrust.id,
+              sourceAgentId: fixture.agents.lowTrust.id,
+            },
+          },
+        ],
+        continuationSummary: {
           body: LOW_TRUST_QUARANTINED_BODY,
           sourceTrust: {
             preset: LOW_TRUST_REVIEW_PRESET,
             disposition: "quarantined",
           },
-        });
-        expectNoCanary(bogusRunContext.body, fixture.canaries.raw);
+        },
+        livenessContinuation: {
+          attempt: 1,
+          maxAttempts: 2,
+          sourceRunId: fixture.runs.lowTrust.id,
+          state: "quarantined_low_trust_handoff",
+          reason: "Low-trust review output requires sanitized follow-up.",
+          instruction: "Continue from the sanitized quarantine stub only.",
+        },
+      });
+      expectNoCanary(wake, fixture.canaries.raw);
 
-        await db
-          .update(heartbeatRuns)
-          .set({
-            status: "succeeded",
-            finishedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(heartbeatRuns.id, fixture.runs.standard.id));
-        await db
-          .update(agents)
-          .set({
-            status: "idle",
-            adapterType: "openclaw_gateway",
-            adapterConfig: {
-              url: gateway.url,
-              agentId: "main",
-              headers: {
-                "x-openclaw-token": "gateway-token",
-              },
-              payloadTemplate: {
-                message: "wake now",
-              },
-              waitTimeoutMs: 2_000,
-            },
-            runtimeConfig: { heartbeat: { wakeOnDemand: true } },
-          })
-          .where(eq(agents.id, fixture.agents.standard.id));
-        await db
-          .update(heartbeatRuns)
-          .set({
-            status: "succeeded",
-            finishedAt: new Date("2026-05-14T12:02:00.000Z"),
-          })
-          .where(eq(heartbeatRuns.id, fixture.runs.standardReport.id));
-        await db
-          .update(issues)
-          .set({ checkoutRunId: null, executionRunId: null })
-          .where(eq(issues.id, fixture.issues.standardReportTask.id));
-
-        const run = await heartbeat.wakeup(fixture.agents.standard.id, {
-          source: "automation",
-          triggerDetail: "system",
-          reason: "issue_commented",
-          payload: {
-            issueId: fixture.issues.standardReportParent.id,
-            commentId: scopedComment.id,
-          },
-          contextSnapshot: {
-            issueId: fixture.issues.standardReportParent.id,
-            taskId: fixture.issues.standardReportParent.id,
-            wakeCommentId: scopedComment.id,
-            wakeCommentIds: [scopedComment.id],
-            wakeReason: "issue_commented",
-            livenessContinuationAttempt: 1,
-            livenessContinuationMaxAttempts: 2,
-            livenessContinuationSourceRunId: fixture.runs.lowTrust.id,
-            livenessContinuationState: "quarantined_low_trust_handoff",
-            livenessContinuationReason:
-              "Low-trust review output requires sanitized follow-up.",
-            livenessContinuationInstruction:
-              "Continue from the sanitized quarantine stub only.",
-          },
-          requestedByActorType: "system",
-          requestedByActorId: null,
-        });
-
-        expect(run).not.toBeNull();
-        await waitFor(async () => {
-          if (gateway.getAgentPayloads().length === 1) return true;
-          const [currentRun] = await db
-            .select({ status: heartbeatRuns.status })
-            .from(heartbeatRuns)
-            .where(eq(heartbeatRuns.id, run!.id));
-          return currentRun?.status === "failed" || currentRun?.status === "cancelled";
-        }, 30_000);
-        if (gateway.getAgentPayloads().length !== 1) {
-          const [failedRun] = await db
-            .select({ status: heartbeatRuns.status, error: heartbeatRuns.error, errorCode: heartbeatRuns.errorCode })
-            .from(heartbeatRuns)
-            .where(eq(heartbeatRuns.id, run!.id));
-          throw new Error(`Gateway wake ended before delivery: ${JSON.stringify(failedRun)}`);
-        }
-        const payload = gateway.getAgentPayloads()[0] ?? {};
-        // The gateway rejects unknown root params, so the wake context rides in the
-        // generated message rather than a top-level `paperclip` field.
-        expect(payload.paperclip).toBeUndefined();
-        const wake = parseWakePayloadFromMessage(payload.message);
-        // Security-critical: low-trust quarantined output is redacted to the sanitized
-        // stub before it reaches the higher-trust wake/continuation context. The raw
-        // body must never appear (asserted by expectNoCanary below). The sourceTrust
-        // provenance is intentionally not carried in the agent-facing message form; its
-        // recording is covered by the route-response assertions earlier in this suite.
-        expect(wake).toMatchObject({
-          reason: "issue_commented",
-          issue: {
-            id: fixture.issues.standardReportParent.id,
-            title: fixture.issues.standardReportParent.title,
-          },
-          latestCommentId: scopedComment.id,
-          commentIds: [scopedComment.id],
-          comments: [
-            {
-              id: scopedComment.id,
-              issueId: fixture.issues.standardReportParent.id,
-              body: LOW_TRUST_QUARANTINED_BODY,
-            },
-          ],
-          continuationSummary: {
-            body: LOW_TRUST_QUARANTINED_BODY,
-          },
-          livenessContinuation: {
-            attempt: 1,
-            maxAttempts: 2,
+      // The continuation owner independently reloads the assigned task and its
+      // current comment rows. Use the standard agent's actually assigned task
+      // so this exercises the real ownership gate rather than a fabricated run.
+      await createQuarantinedContinuationSummary(
+        db,
+        fixture,
+        fixture.issues.standardReportTask.id,
+      );
+      const taskComment = await db
+        .insert(issueComments)
+        .values({
+          companyId: fixture.company.id,
+          issueId: fixture.issues.standardReportTask.id,
+          authorAgentId: fixture.agents.lowTrust.id,
+          createdByRunId: fixture.runs.lowTrust.id,
+          body: `malicious task result ${fixture.canaries.raw}`,
+          metadata: { canary: fixture.canaries.raw },
+          presentation: { markdown: fixture.canaries.raw },
+          sourceTrust: {
+            preset: LOW_TRUST_REVIEW_PRESET,
+            disposition: "quarantined",
+            sourceIssueId: fixture.issues.assignedReview.id,
             sourceRunId: fixture.runs.lowTrust.id,
-            state: "quarantined_low_trust_handoff",
-            reason: "Low-trust review output requires sanitized follow-up.",
-            instruction: "Continue from the sanitized quarantine stub only.",
+            sourceAgentId: fixture.agents.lowTrust.id,
           },
-        });
-        expect(String(payload.message ?? "")).toContain(
-          "## Paperclip Wake Payload",
-        );
-        expectNoCanary(payload, fixture.canaries.raw);
-        gateway.releaseFirstWait();
-        await waitFor(async () => {
-          const status = await db
-            .select({ status: heartbeatRuns.status })
-            .from(heartbeatRuns)
-            .where(eq(heartbeatRuns.id, run!.id))
-            .then((rows) => rows[0]?.status ?? null);
-          return (
-            status === "succeeded" ||
-            status === "failed" ||
-            status === "cancelled"
-          );
-        }, 30_000);
-      } finally {
-        gateway.releaseFirstWait();
-        try {
-          await heartbeat.drainActiveRunExecutions();
-        } finally {
-          await gateway.close();
-          restoreApiUrl();
-        }
-      }
-    }, 120_000);
+        })
+        .returning()
+        .then((rows) => rows[0]!);
+      const taskContext = await request(standardApp).get(
+        `/api/issues/${fixture.issues.standardReportTask.id}/heartbeat-context`,
+      );
+      expect(taskContext.status, JSON.stringify(taskContext.body)).toBe(200);
+      expect(taskContext.body.continuationSummary).toMatchObject({
+        body: LOW_TRUST_QUARANTINED_BODY,
+        sourceTrust: { preset: LOW_TRUST_REVIEW_PRESET, disposition: "quarantined" },
+      });
+      const continuation = await buildExecutionContinuation({
+        db,
+        companyId: fixture.company.id,
+        issueId: fixture.issues.standardReportTask.id,
+        agentId: fixture.agents.standard.id,
+        context: {
+          wakeReason: "issue_commented",
+          wakeCommentIds: [taskComment.id],
+        },
+        summary: taskContext.body.continuationSummary.body,
+        exposeLowTrustRaw: false,
+      });
+      expect(continuation).toMatchObject({
+        trigger: { reason: "issue_commented" },
+        originCommentIds: [taskComment.id],
+        messages: [
+          expect.objectContaining({
+            id: taskComment.id,
+            body: LOW_TRUST_QUARANTINED_BODY,
+            sourceTrust: {
+              preset: LOW_TRUST_REVIEW_PRESET,
+              disposition: "quarantined",
+              sourceRunId: fixture.runs.lowTrust.id,
+              sourceIssueId: fixture.issues.assignedReview.id,
+              sourceAgentId: fixture.agents.lowTrust.id,
+            },
+          }),
+        ],
+        completedWork: LOW_TRUST_QUARANTINED_BODY,
+      });
+      expectNoCanary(continuation, fixture.canaries.raw);
+    });
 
     it("keeps board positive controls for issue-linked approvals and sanitized promotion", async () => {
       const fixture = await seedLowTrustFixture(db);

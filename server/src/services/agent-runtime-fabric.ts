@@ -192,7 +192,7 @@ export function agentRuntimeFabricService(db: Db, decisionShadow?: { sourceSha: 
       includeFoundation: !taskOnly, ...(taskOnly ? { sourceScope: "task_only" as const } : {}), sensitivityCeiling: "internal" });
     if (!result.packet.manifest) throw conflict("Runtime context requires persisted provenance");
     return { refs: [{ companyId: scope.primaryCompanyId, contextManifestId: result.packet.manifest.id }], markdown: result.markdown,
-      sourceMarkdown: result.decisions.length ? result.markdown : null,
+      sourceMarkdown: nativeBootstrap || result.decisions.length ? result.markdown : null,
       sourceWitness: result.nativeBootstrapWitness, warnings: [] as string[] };
   }
   return {

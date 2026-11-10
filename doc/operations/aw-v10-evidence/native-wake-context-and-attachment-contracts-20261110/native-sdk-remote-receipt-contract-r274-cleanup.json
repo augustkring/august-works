@@ -1,0 +1,13 @@
+{
+  "remainingOwnedPostgresProcesses": [],
+  "normalTestProcessExit": -9,
+  "observedDetachedFixtureRuntimeProcesses": [
+    357397,
+    357461,
+    357474
+  ],
+  "remainingOwnedRuntimeProcesses": [],
+  "postRunKillsPerformed": true,
+  "tempRoot": "/var/tmp/mpg-jili_438",
+  "emptyOuterTempRootRemoved": false
+}

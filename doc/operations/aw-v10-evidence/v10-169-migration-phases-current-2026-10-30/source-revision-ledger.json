@@ -1035,5 +1035,400 @@
       "sourceBaseSha256": "dc91fee9c9de51020f3c144c7bac18cc7bf14b49ea21e89c069bd9968f74f454",
       "sourceDeltaPathCount": 1985
     }
+  },
+  "nativeWakeProjectionAndContextPrivacyReview20261110": {
+    "sourceHead": "7dd8ea74754f8d3d66a9e8c4d7940a7aff4b1fa4",
+    "worktreeDisposition": "19 exact source/test paths changed after sourceHead; hashes describe the current uncommitted overlay",
+    "changes": [
+      {
+        "path": ".github/workflows/aw-v4-verification.yml",
+        "oldSha256": "25eca98d189f0162f01a164ab0b66dd6975f235b95335fefcaaa927be61dc137",
+        "newSha256": "99918a6300d2471384bbfee0a490ec56001e68e20bac4fa3f59a6b61148ef626",
+        "sourceGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
+        "oldSha256": null,
+        "newSha256": "1877bea892b7924b1f2ea03c33fbab6371fba6a45bd06ea09ab7a0945f8bb5c5",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "packages/db/src/migrations/meta/_journal.json",
+        "oldSha256": "1f25a898ed58f761b6a8cc666040136615fa5544a478a3a20d7c0a2ef3cf998b",
+        "newSha256": "45bb579c1ca68df6973c82f1f08dcfd9fc569016b1caa13c52cb781bc7a1e16c",
+        "sourceGroups": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ]
+      },
+      {
+        "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
+        "oldSha256": "9a9fb84494608990bb5f3835ec8f7443e15c1cb3ce9b1c00459665735a3c1754",
+        "newSha256": "356d7db6c29d23f9ea66bbe4bfc370a1cfa87dc6d38bfe596ad805760c5e5b92",
+        "sourceGroups": [
+          "SCR-V10-SHARED-CONTRACTS"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+        "oldSha256": "a90529e45012737cd3b0c4a952e5a27a49aafa9d5ec8e721a94ff82634afb98c",
+        "newSha256": "4d9ecc6aff9ab49d536185db1d355aabeebdab9fd8a94d6fb6f2e9fe75e96009",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/issue-comment-reopen-routes.test.ts",
+        "oldSha256": "4b4bf26cc357605705401736771a35fc030ae48e5ca03325975277de62b4e851",
+        "newSha256": "ab5249437e0cd8412135a0440dbe2e39f9beabcaa0ab5629e3dee44349faa806",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-04"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/low-trust-red-team-routes.test.ts",
+        "oldSha256": "944bf09303a156a82c47624352a2e832ff7b0a5161717fb9d7b4e76220f0142a",
+        "newSha256": "be8588d7ee6efcf06c181bfcc013803a3f28be6c401bd98a8cb7f88e72af85a9",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-09"
+        ]
+      },
+      {
+        "path": "server/src/services/agent-runtime-fabric.ts",
+        "oldSha256": "fef6b1e0228a7af9a224285e9943ec2a66b14db71972530ec8ed8f91a0b060fb",
+        "newSha256": "af0dcf0f7485a53b6dee4d345a2a3d590712b1bd827f0199b9c7c51460d57977",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-07",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/chat-channels.ts",
+        "oldSha256": "f167ce1ed44dd346e6d6b8d70e43595c45d61af985f8ff2929319e8b9e031bf8",
+        "newSha256": "134f6eaf485b78ef3df02d200ac634bbf4e5db9838a914e5466a9e430ab3b4c9",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/context/context-engine.ts",
+        "oldSha256": "9e4b012c8b77f7d66c8d39a1976046bd72018ec9292b8a4b4faf85919d522879",
+        "newSha256": "3c87eeef23b240e8b1fb0359cc475a7df3703db1c2a689e459ae9208f7e73d7d",
+        "sourceGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/services/context/context-packet-rendering.ts",
+        "oldSha256": null,
+        "newSha256": "9b1ee61414d07a90c68f4c7ba026301b84ce2bceff57d60741a23ddfe5bac661",
+        "sourceGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/services/context/native-bootstrap-context-witness.ts",
+        "oldSha256": "e27e1735459b8e19fe67078e008a69957555aceeb9e0b275a4112d7a554f40a2",
+        "newSha256": "50490fd238ce96d6e1e13cb85426ef9f08dcaa1286011b608eecdc94f9093520",
+        "sourceGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/services/heartbeat.ts",
+        "oldSha256": "893cb7aa50833e5fd2f8c9762ff2c2c72251d38d58c898f31b7aff6de7cfd807",
+        "newSha256": "e50c91d0cb70888e6469485f2d6d3024a07d391710626e305260fce10c3089df",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07",
+          "SCR-V10-HOTSPOT-08",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/issues.ts",
+        "oldSha256": "5f4b7e6c8021c3c4af3538e9daa5254cb1293b48ac123047cc9db82a75d7e334",
+        "newSha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-12"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+        "oldSha256": "56d183c427aecb7375d3f91c7da29bed41b56a18cfd6756094c8f44a67d32d3e",
+        "newSha256": "088c536e1bddb065321c727583d5638ded1bb01c8ee52bc7ba3ae68be27132e3",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-execution-input.ts",
+        "oldSha256": "2024700cca39af654a717c0bd658e2eb66f87407bf2f6255c05e3923ad81a429",
+        "newSha256": "a62cce635cb155f613ef51ae4bc6adee59eb1f233c6c0e9aea257933db3af106",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+        "oldSha256": "f3a23f27879c2cecdab9264b1b2b65e565d01cc30c65712078403ff96def5c57",
+        "newSha256": "91b166ca68f8f6912c7eb0aa9e21d5b086801554087ec38d37b85cbafdf9ab74",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5",
+        "newSha256": "c6f4b148fe69653985b26a8068d02bcf8958e406c9400b1766966bbc2c4e2945",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/workflows/workflow-authoring-sources.ts",
+        "oldSha256": "f08530105f0e662ff389814e9238fec847fa10e2ce1353aa1cfecce94457966e",
+        "newSha256": "5a24a8e5c7099abe498c91ea537a4e6bbaae521fedd87c94c4a5a1df6bf0795c",
+        "sourceGroups": [
+          "SCR-V10-AUTH-IDENTITY"
+        ]
+      }
+    ],
+    "reason": "Current source delta covers Native wake input ownership and context rendering, and adds the forward 0575 remote attachment-stage receipt contract. Preserve typed source-provenance admission and exact dispatch ownership; receipts must match current delivered attachment captures and cannot create provider or Host qualification. For direct Slack Human Task creation, preserve the linked non-bot external principal identity separately from GitHub automatic/manual sponsorship attribution, recheck that exact active link in the transaction, and capture the direct-Human payload snapshot atomically; do not synthesize a Context source. The new context renderer and migration SQL are mapped to their existing source owners with absent-at-sourceBase creation pins. No unreviewed Task snapshot producer is included.",
+    "qualificationBoundary": "Source/hash inventory and migration disposition only. This checkpoint records no aggregate all-green CI, provider, production Host, rollback/restore, customer/Human, storage, staffed support, or completed erasure claim. Exact final receipts are still required: the Native channel Task snapshot path has an unresolved next-builder `unknown_rendered_source` consumer, SDK qualification is incomplete (r274 was inconclusive under its RSS cap), and Root must record the exact channel/context and other pending receipts separately. Preserve all 169 historical phase statuses and assessment records; no historical status is promoted by this metadata update.",
+    "reviewedExistingGroupPins": {
+      ".github/workflows/aw-v4-verification.yml": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "packages/db/src/migrations/meta/_journal.json": [
+        "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+      ],
+      "packages/shared/src/validators/native-payload-source-snapshot.ts": [
+        "SCR-V10-SHARED-CONTRACTS"
+      ],
+      "server/src/__tests__/heartbeat-process-recovery.test.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07"
+      ],
+      "server/src/__tests__/issue-comment-reopen-routes.test.ts": [
+        "SCR-V10-HOTSPOT-04"
+      ],
+      "server/src/__tests__/low-trust-red-team-routes.test.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-04",
+        "SCR-V10-HOTSPOT-09"
+      ],
+      "server/src/services/agent-runtime-fabric.ts": [
+        "SCR-V10-HOTSPOT-01",
+        "SCR-V10-HOTSPOT-07",
+        "SCR-V10-HOTSPOT-11"
+      ],
+      "server/src/services/chat-channels.ts": [
+        "SCR-V10-HOTSPOT-01",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07"
+      ],
+      "server/src/services/context/context-engine.ts": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "server/src/services/context/context-packet-rendering.ts": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "server/src/services/context/native-bootstrap-context-witness.ts": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "server/src/services/heartbeat.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-03",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07",
+        "SCR-V10-HOTSPOT-08",
+        "SCR-V10-HOTSPOT-11"
+      ],
+      "server/src/services/issues.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-12"
+      ],
+      "server/src/services/native-runtime/native-execution-input.test.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-execution-input.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-04",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06"
+      ],
+      "server/src/services/native-runtime/native-session-executor.ts": [
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06"
+      ],
+      "server/src/services/workflows/workflow-authoring-sources.ts": [
+        "SCR-V10-AUTH-IDENTITY"
+      ]
+    },
+    "helpReviewDisposition": {
+      "updatedExistingLinkedPairs": [
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work"
+        },
+        {
+          "source": "server/src/services/issues.ts",
+          "articleId": "recovering-work"
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work-da"
+        },
+        {
+          "source": "server/src/services/issues.ts",
+          "articleId": "recovering-work-da"
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete"
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete-da"
+        }
+      ],
+      "frontmatterLinkedPairsFound": [
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete"
+        },
+        {
+          "source": "server/src/services/issues.ts",
+          "articleId": "recovering-work"
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work"
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete-da"
+        },
+        {
+          "source": "server/src/services/issues.ts",
+          "articleId": "recovering-work-da"
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work-da"
+        }
+      ],
+      "noNewPairsAdded": true,
+      "unlinkedSourceRationales": [
+        {
+          "sourcePaths": [
+            ".github/workflows/aw-v4-verification.yml",
+            "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
+            "packages/db/src/migrations/meta/_journal.json",
+            "packages/shared/src/validators/native-payload-source-snapshot.ts",
+            "server/src/__tests__/heartbeat-process-recovery.test.ts",
+            "server/src/__tests__/issue-comment-reopen-routes.test.ts",
+            "server/src/__tests__/low-trust-red-team-routes.test.ts",
+            "server/src/services/agent-runtime-fabric.ts",
+            "server/src/services/chat-channels.ts",
+            "server/src/services/context/context-engine.ts",
+            "server/src/services/context/context-packet-rendering.ts",
+            "server/src/services/context/native-bootstrap-context-witness.ts",
+            "server/src/services/native-runtime/native-execution-input.test.ts",
+            "server/src/services/native-runtime/native-execution-input.ts",
+            "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+            "server/src/services/native-runtime/native-session-executor.ts",
+            "server/src/services/workflows/workflow-authoring-sources.ts"
+          ],
+          "disposition": "No linked Help source/article pair applies to these internal contract, migration, and test changes; no Help row, article link, customer instruction, or copy change is inferred."
+        }
+      ]
+    },
+    "compatibilityPinsUpdated": [
+      {
+        "path": "server/src/services/issues.ts",
+        "oldSha256": "5f4b7e6c8021c3c4af3538e9daa5254cb1293b48ac123047cc9db82a75d7e334",
+        "newSha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421"
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5",
+        "newSha256": "c6f4b148fe69653985b26a8068d02bcf8958e406c9400b1766966bbc2c4e2945"
+      }
+    ],
+    "phaseMatrixPinsUpdated": [
+      {
+        "path": "packages/db/src/migrations/meta/_journal.json",
+        "oldSha256": "1f25a898ed58f761b6a8cc666040136615fa5544a478a3a20d7c0a2ef3cf998b",
+        "newSha256": "45bb579c1ca68df6973c82f1f08dcfd9fc569016b1caa13c52cb781bc7a1e16c"
+      },
+      {
+        "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
+        "oldSha256": "9a9fb84494608990bb5f3835ec8f7443e15c1cb3ce9b1c00459665735a3c1754",
+        "newSha256": "356d7db6c29d23f9ea66bbe4bfc370a1cfa87dc6d38bfe596ad805760c5e5b92"
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5",
+        "newSha256": "c6f4b148fe69653985b26a8068d02bcf8958e406c9400b1766966bbc2c4e2945"
+      }
+    ],
+    "phaseMatrixPinsAdded": [
+      {
+        "path": "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
+        "sha256": "1877bea892b7924b1f2ea03c33fbab6371fba6a45bd06ea09ab7a0945f8bb5c5"
+      },
+      {
+        "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+        "sha256": "91b166ca68f8f6912c7eb0aa9e21d5b086801554087ec38d37b85cbafdf9ab74"
+      }
+    ],
+    "sourceGraphMappingsAdded": [
+      {
+        "path": "server/src/services/context/context-packet-rendering.ts",
+        "group": "SCR-V10-PRIVATE-DATA-ERASURE",
+        "sourceBaseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "sourceBaseSha256": null,
+        "sourceDeltaPathCount": 1987
+      },
+      {
+        "path": "packages/db/src/migrations/0575_native_attachment_stage_remote_receipt_contract.sql",
+        "group": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+        "sourceBaseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "sourceBaseSha256": null,
+        "sourceDeltaPathCount": 1987
+      }
+    ]
   }
 }

@@ -5,11 +5,14 @@ import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, nativeAnsweredQuestionContinuationSource, exactNativeInitialTaskContinuation, exactNativeTaskContinuation } from "./native-execution-input.js";
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource, nativeTaskWakeGuidanceSourceMatches,
+  nativeAnsweredQuestionContinuationSource, exactNativeInitialTaskContinuation, exactNativeTaskContinuation } from "./native-execution-input.js";
 import type { NativeRenderedSourceReference } from "./native-execution-input.js";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
-import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
+import { captureNativeBootstrapContextWitness, readNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
+import { serializeContextPacket } from "../context/context-engine.js";
+import { EMPTY_CONTEXT_PACKET_MARKDOWN } from "../context/context-packet-rendering.js";
 import { nativeStageContinuationOwnerMatches, nativeStageContinuationReaderMatches } from "../native-stage-wake-source.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeContinuationCommentProjection, nativeContinuationMessageHash, nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
@@ -380,6 +383,29 @@ describe("native bootstrap rendered-source closure", () => {
       contentHash: nativeCommentProjectionHash({ body: "Please finish this task.", presentation: null, metadata: null }) };
     const comment = { id: commentId, issueId, authorType: "user", body: "Please finish this task.", bodyTruncated: false,
       presentation: null, metadata: null, deletedAt: null };
+    const chatWake = { ...payload, reason: "External chat message received", externalChatProvider: "slack",
+      commentIds: [commentId], latestCommentId: commentId, comments: [comment],
+      commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 } };
+    const chatSource = captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1",
+      persistedWakeReason: "External chat message received", externalChatProvider: "slack", task,
+      canonicalInitialGuidance: "Frozen Slack instructions.", nativeInitialGuidance: "Frozen Slack instructions.",
+      payload: chatWake, commentSources: [commentSource] });
+    expect(chatSource).toMatchObject({ kind: "native_task_wake", externalChatProvider: "slack",
+      initialGuidanceHash: nativeSha256("Frozen Slack instructions.") });
+    expect(nativeTaskWakeGuidanceSourceMatches([chatSource!], "Frozen Slack instructions.")).toBe(true);
+    expect(nativeTaskWakeGuidanceSourceMatches([chatSource!], "Changed instructions.")).toBe(false);
+    expect(nativeTaskWakeGuidanceSourceMatches([], "Frozen Slack instructions.")).toBe(false);
+    expect(nativeTaskWakeGuidanceSourceMatches([chatSource!], null)).toBe(false);
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1",
+      persistedWakeReason: "External chat message received", externalChatProvider: "discord", task,
+      payload: chatWake, commentSources: [commentSource] })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1",
+      persistedWakeReason: "External chat message received", task,
+      payload: chatWake, commentSources: [commentSource] })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1",
+      persistedWakeReason: "External chat message received", externalChatProvider: "slack", task,
+      canonicalInitialGuidance: "Frozen Slack instructions.", nativeInitialGuidance: "Changed instructions.",
+      payload: chatWake, commentSources: [commentSource] })).toBeNull();
     const commentWake = { ...payload, commentIds: [commentId], latestCommentId: commentId, comments: [comment],
       commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 } };
     const humanId = "actual-selected-human", wakeId = randomUUID();
@@ -1066,6 +1092,31 @@ describe("native bootstrap rendered-source closure", () => {
     expect(check(summary)).toBe(summary);
     const forgedHistory = structuredClone(summary); forgedHistory.envelope.resumeDelta!.baseRunId = randomUUID(); expect(check(forgedHistory)).toBeNull();
     const droppedHistory = structuredClone(summary); droppedHistory.envelope.resumeDelta!.messages = []; expect(check(droppedHistory)).toBeNull();
+  });
+
+  it("binds source-free Context to the canonical empty rendering and exact manifest owner", () => {
+    const manifest = { id: randomUUID(), companyId, runId, agentId, issueId, projectId: null,
+      queryHash: hash, policySnapshotHash: "b".repeat(64), createdAt: new Date("2026-11-10T00:00:00.000Z") };
+    const markdown = serializeContextPacket({ governance: { sensitivityCeiling: "internal", asOf: manifest.createdAt.toISOString() },
+      foundation: [], connectedEvidence: [], sharedMemory: [], privateMemory: [], taskContext: [], artifacts: [],
+      warnings: [], citations: [], manifest, selectedEstimatedTokens: 0 });
+    expect(markdown).toBe(EMPTY_CONTEXT_PACKET_MARKDOWN);
+    const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId, runId, onBehalfOfUserId: "user-1" };
+    const capture: Parameters<typeof captureNativeBootstrapContextWitness>[0] = {
+      companyId, runId, agentId, issueId, actor, renderedMarkdown: markdown, manifest, items: [], roots: [] };
+    const witness = captureNativeBootstrapContextWitness(capture);
+    const expected = { companyId, runId, agentId, issueId, renderedMarkdown: markdown,
+      manifestIds: [{ companyId, contextManifestId: manifest.id }] };
+    expect(readNativeBootstrapContextWitness(witness, expected)).toMatchObject({ actor,
+      contextInput: { kind: "context", manifestId: manifest.id },
+      policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] });
+    expect(captureNativeBootstrapContextWitness({ ...capture, renderedMarkdown: `${markdown}\nUnverified source text.` })).toBeNull();
+    expect(captureNativeBootstrapContextWitness({ ...capture, actor: { ...actor, onBehalfOfUserId: null } })).toBeNull();
+    expect(captureNativeBootstrapContextWitness({ ...capture, actor: { ...actor, runId: randomUUID() } })).toBeNull();
+    expect(readNativeBootstrapContextWitness(witness, { ...expected, runId: randomUUID() })).toBeNull();
+    expect(readNativeBootstrapContextWitness(witness, { ...expected,
+      manifestIds: [{ companyId, contextManifestId: randomUUID() }] })).toBeNull();
+    expect(readNativeBootstrapContextWitness(witness, { ...expected, renderedMarkdown: `${markdown}\nUnverified source text.` })).toBeNull();
   });
 
   it("adds only an exact server-minted approved Context closure bound to the native run and rendered markdown", () => {

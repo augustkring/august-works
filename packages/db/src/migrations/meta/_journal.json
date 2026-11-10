@@ -4012,6 +4012,13 @@
       "when": 1794268800001,
       "tag": "0574_native_in_process_backend_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 575,
+      "version": "7",
+      "when": 1794268800002,
+      "tag": "0575_native_attachment_stage_remote_receipt_contract",
+      "breakpoints": true
     }
   ]
 }
