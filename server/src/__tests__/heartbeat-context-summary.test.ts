@@ -27,14 +27,35 @@ describe("buildPaperclipTaskMarkdown", () => {
     for (const extra of [
       { interaction: { kind: "ask_user_questions", status: "pending" } },
       { interaction: { kind: "request_confirmation", status: "accepted" } },
-      { interaction: answered, planReview: { status: "rejected", reason: "Revise the plan." } },
-      { interaction: answered, externalChatProvider: "slack" },
+      { interaction: answered, planReview: { status: "rejected", reason: "Revise the plan." }, externalChatProvider: "slack" },
       { interaction: answered, acceptedPlanContinuation: true },
     ]) {
       const references: Array<{ kind: string; id: string }> = [];
       buildPaperclipTaskMarkdown({ ...base, ...extra }, { onRenderedSource: reference => { references.push(reference); } });
       expect(references).toContainEqual({ kind: "unknown", id: "task" });
     }
+  });
+  it("binds external chat guidance to the provider wake source and keeps withdrawal ownership separate", () => {
+    const base = { issue: { id: "task", identifier: null, title: "Draft", description: null, workMode: "standard" } };
+    const references: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ ...base, externalChatProvider: "slack" },
+      { onRenderedSource: reference => { references.push(reference); } });
+    expect(references).toContainEqual({ kind: "task", id: "task" });
+    expect(references).toContainEqual({ kind: "external_chat_context", id: "task", provider: "slack" });
+    expect(references).not.toContainEqual({ kind: "unknown", id: "task" });
+
+    const withdrawalReferences: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ ...base, externalChatProvider: "slack",
+      interaction: { id: "interaction", kind: "ask_user_questions", status: "cancelled" } },
+    { onRenderedSource: reference => { withdrawalReferences.push(reference); } });
+    expect(withdrawalReferences).toContainEqual({ kind: "external_chat_context", id: "task", provider: "slack" });
+    expect(withdrawalReferences).toContainEqual(expect.objectContaining({ kind: "task_wake_interaction_state", id: "interaction" }));
+    expect(withdrawalReferences).not.toContainEqual({ kind: "unknown", id: "task" });
+
+    const unboundReferences: Array<{ kind: string; id: string }> = [];
+    buildPaperclipTaskMarkdown({ issue: null, wakeComment: { id: "comment", body: "Continue" }, externalChatProvider: "slack" },
+      { onRenderedSource: reference => { unboundReferences.push(reference); } });
+    expect(unboundReferences).toContainEqual({ kind: "unknown", id: "unbound-task-markdown-source" });
   });
   it.each(["standard", "planning", "ask"])("selects directives only from explicit %s mode, even when a plan is requested", (workMode) => {
     for (const prose of [

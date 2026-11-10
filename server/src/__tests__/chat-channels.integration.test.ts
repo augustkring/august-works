@@ -955,6 +955,7 @@ function makeMessage(input: {
   raw?: unknown;
   text: string;
   mentioned?: boolean;
+  isBot?: boolean;
   userId?: string;
   userName?: string;
 }) {
@@ -969,7 +970,7 @@ function makeMessage(input: {
       userId: input.userId ?? "U-EXTERNAL",
       userName: input.userName ?? "alex",
       fullName: "Alex External",
-      isBot: false,
+      isBot: input.isBot ?? false,
       isMe: false,
       isSystem: false,
     } satisfies Author,
@@ -2585,6 +2586,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         responsibleUserId: "owner-user",
         originKind: "chat_channel",
       });
+      expect(task.payloadSourceSnapshot).toBeNull();
       const [conversation] = await db.select().from(chatConversations).where(eq(chatConversations.issueId, task.id));
       expect(conversation.providerUrl).toBe("https://github.com/paperclipai/paperclip/pull/81");
       expect(reviews[0].event.sender.id).toBe("77");
@@ -4029,6 +4031,67 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     expect((await service.get(endpoint.id)).communicationInstructions).toBe("");
     const github = await service.create(fixture.companyId, { provider: "github", assignedAgentId: fixture.assignedAgentId });
     await request(app).patch(`/api/chat-endpoints/${github.id}`).send({ communicationInstructions: "Not enabled" }).expect(422);
+  });
+
+  it("captures a Slack Task source only from its current linked nonbot Human", async () => {
+    const fixture = await seedCompany();
+    const addLinkedPrincipal = async (externalId: string, endpointId: string, userId = "owner-user") => {
+      const [principal] = await db.insert(chatExternalPrincipals).values({ companyId: fixture.companyId,
+        provider: "slack", providerAccountId: "T-PAPERCLIP", externalId, kind: "user", isBot: false }).returning();
+      await db.insert(chatIdentityLinks).values({ companyId: fixture.companyId, endpointId, principalId: principal!.id,
+        paperclipUserId: userId, status: "linked", confirmedAt: new Date() });
+      return principal!;
+    };
+    const send = async (configured: Awaited<ReturnType<typeof configuredSlackEndpoint>>, externalId: string,
+      options: { isBot?: boolean } = {}) => {
+      const id = randomUUID();
+      const channel = makeThread({ channelId: `C-SOURCE-${id}`, id: `slack:C-SOURCE-${id}:${Date.now()}.1`, name: "source" });
+      await deliverMessage({ callbacks: configured.callbacks, endpointId: configured.endpoint.id, thread: channel.thread,
+        message: makeMessage({ id, text: "@maya inspect this source", mentioned: true, userId: externalId, isBot: options.isBot }),
+        trigger: "mention" });
+      return db.select().from(chatConversations).where(eq(chatConversations.endpointId, configured.endpoint.id))
+        .then(rows => rows[0] ?? null);
+    };
+    const task = async (conversation: typeof chatConversations.$inferSelect | null) => conversation
+      ? db.select().from(issues).where(eq(issues.id, conversation.issueId)).then(rows => rows[0] ?? null) : null;
+
+    const linked = await configuredSlackEndpoint(fixture, { allowUnlinkedPeople: false });
+    await addLinkedPrincipal("U-SOURCE-HUMAN", linked.endpoint.id);
+    const linkedConversation = await send(linked, "U-SOURCE-HUMAN");
+    const linkedTask = await task(linkedConversation);
+    expect(linkedTask?.payloadSourceSnapshot).toMatchObject({ version: 1,
+      owner: { kind: "issue", companyId: fixture.companyId, id: linkedConversation!.issueId } });
+    const [linkedComment] = await db.select().from(issueComments).where(eq(issueComments.issueId, linkedConversation!.issueId));
+    expect(linkedComment?.payloadSourceSnapshot).toMatchObject({ version: 1,
+      owner: { kind: "comment", companyId: fixture.companyId, id: linkedComment!.id } });
+
+    const sponsored = await configuredSlackEndpoint(fixture, { allowUnlinkedPeople: true });
+    const sponsoredConversation = await send(sponsored, "U-SOURCE-GUEST");
+    const sponsoredTask = await task(sponsoredConversation);
+    expect(sponsoredTask?.payloadSourceSnapshot).toBeNull();
+    if (sponsoredTask) {
+      const [sponsoredComment] = await db.select().from(issueComments).where(eq(issueComments.issueId, sponsoredTask.id));
+      expect(sponsoredComment?.payloadSourceSnapshot).toBeNull();
+    }
+
+    const bot = await configuredSlackEndpoint(fixture, { allowUnlinkedPeople: false });
+    await addLinkedPrincipal("U-SOURCE-BOT", bot.endpoint.id);
+    const botConversation = await send(bot, "U-SOURCE-BOT", { isBot: true });
+    expect(botConversation).toBeNull();
+    expect(await task(botConversation)).toBeNull();
+
+    const otherUserId = randomUUID();
+    await db.insert(authUsers).values({ id: otherUserId, name: "Unlinked User",
+      email: `${otherUserId}@example.com`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    for (const link of ["revoked", "other_user"] as const) {
+      const denied = await configuredSlackEndpoint(fixture, { allowUnlinkedPeople: false });
+      const externalId = `U-SOURCE-DENIED-${link.toUpperCase()}`;
+      const principal = await addLinkedPrincipal(externalId, denied.endpoint.id,
+        link === "other_user" ? otherUserId : "owner-user");
+      if (link === "revoked") await db.update(chatIdentityLinks).set({ status: "revoked" }).where(and(
+        eq(chatIdentityLinks.endpointId, denied.endpoint.id), eq(chatIdentityLinks.principalId, principal.id)));
+      expect(await send(denied, externalId)).toBeNull();
+    }
   });
 
   it("mirrors Paperclip messages with user attribution and returns only the selected Slack reply", async () => {

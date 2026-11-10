@@ -8843,10 +8843,16 @@ export function buildPaperclipTaskMarkdown(input: {
         interactionKind: input.interaction.kind as "ask_user_questions" | "request_confirmation" | "request_checkbox_confirmation",
         interactionStatus: input.interaction.status as "cancelled" | "rejected" } : null;
   const interactionStateIsOnlyUnsupportedReference = Boolean(renderedWithdrawalInteraction && !input.planReview?.status &&
-    !input.externalChatProvider && !input.acceptedPlanContinuation && !input.acceptedPlan?.revisionId);
+    !input.acceptedPlanContinuation && !input.acceptedPlan?.revisionId);
+  if (input.externalChatProvider && issue) options.onRenderedSource?.({
+    kind: "external_chat_context", id: issue.id, provider: input.externalChatProvider,
+  });
+  else if (input.externalChatProvider) options.onRenderedSource?.({
+    kind: "unknown", id: "unbound-task-markdown-source",
+  });
   if (((input.interaction?.kind || input.interaction?.status) &&
       !(input.interaction?.kind === "ask_user_questions" && input.interaction.status === "answered")) ||
-    input.planReview?.status || input.externalChatProvider || input.acceptedPlanContinuation || input.acceptedPlan?.revisionId) {
+    input.planReview?.status || input.acceptedPlanContinuation || input.acceptedPlan?.revisionId) {
     options.onRenderedSource?.(input.acceptedPlan?.revisionId
       ? { kind: "document_revision", id: input.acceptedPlan.revisionId }
       : interactionStateIsOnlyUnsupportedReference ? renderedWithdrawalInteraction!

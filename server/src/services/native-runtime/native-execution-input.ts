@@ -49,6 +49,12 @@ export type NativeRenderedSourceReference = {
   contentType?: string;
   byteSize?: number;
 } | {
+  /** Server-rendered external-chat guidance is bound to the exact captured
+   * wake source, which carries its provider and initial-guidance hash. */
+  kind: "external_chat_context";
+  id: string;
+  provider: string;
+} | {
   kind: "task_wake_interaction_state";
   id: string;
   interactionKind: "ask_user_questions" | "request_confirmation" | "request_checkbox_confirmation";
@@ -1224,6 +1230,15 @@ export function buildNativeBootstrapSourceSet(input: {
       policy[key] = [...new Set([...policy[key], ...incoming[key]])].sort();
   };
   for (const reference of input.references) {
+    if (reference.kind === "external_chat_context") {
+      const wakeSources = (input.additionalInputs ?? []).filter(source => source.kind === "native_task_wake" &&
+        source.runId === input.runId && source.issueId === input.issueId);
+      const parsed = wakeSources.length === 1 ? nativePayloadSourceInputSchema.safeParse(wakeSources[0]) : null;
+      if (reference.id !== input.issueId || !parsed?.success || parsed.data.kind !== "native_task_wake" ||
+        parsed.data.externalChatProvider !== reference.provider) return reject("reference_source_mismatch");
+      append(parsed.data);
+      continue;
+    }
     if (reference.kind === "task_wake_interaction_state") {
       const owner = input.taskWakeInteractionStateOwner;
       const ownerCapture = owner?.capture;

@@ -50,6 +50,28 @@ describe("native bootstrap rendered-source closure", () => {
     }
   });
 
+  it("binds external chat guidance to one exact Task wake source and keeps other unknowns closed", () => {
+    const wake: NativePayloadSourceInput = { kind: "native_task_wake", runId, issueId, sourceVersion: "1",
+      contentHash: hash, externalChatProvider: "slack" };
+    const references: NativeRenderedSourceReference[] = [{ kind: "task", id: issueId },
+      { kind: "external_chat_context", id: issueId, provider: "slack" }];
+    expect(input({ references, additionalInputs: [wake] })?.inputs).toContainEqual(wake);
+
+    const cases: Array<[Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]>, string]> = [
+      [{ additionalInputs: [] }, "reference_source_mismatch"],
+      [{ additionalInputs: [wake, wake] }, "reference_source_mismatch"],
+      [{ references: [{ kind: "task", id: issueId }, { kind: "external_chat_context", id: randomUUID(), provider: "slack" }],
+        additionalInputs: [wake] }, "reference_source_mismatch"],
+      [{ additionalInputs: [{ ...wake, externalChatProvider: "telegram" }] }, "reference_source_mismatch"],
+      [{ references: [...references, { kind: "unknown", id: issueId }], additionalInputs: [wake] }, "unknown_rendered_source"],
+    ];
+    for (const [change, expected] of cases) {
+      const codes: string[] = [];
+      expect(input({ references, additionalInputs: [wake], ...change, onDiagnostic: reason => codes.push(reason) })).toBeNull();
+      expect(codes).toEqual([expected]);
+    }
+  });
+
   it("keeps the complete Stage thread under a distinct persisted-owner trigger", () => {
     const humanId = "stage-responsible-human", wakeId = randomUUID(), intentId = randomUUID();
     const human = nativeContinuationCommentProjection({ id: randomUUID(), authorType: "user", authorUserId: "another-readable-human",

@@ -16319,6 +16319,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                   disposition: "quarantined",
                   sourceIssueId: conversation!.issueId,
                 },
+            ...(verifiedChatHumanUserId && verifiedChatHumanUserId === taskUserId
+              ? { verifiedChatHumanInput: { userId: verifiedChatHumanUserId, endpointId: taskEndpoint.id,
+                  principalId: principalResolution.principal.id } }
+              : {}),
           },
           taskTx,
         );

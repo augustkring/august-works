@@ -1430,5 +1430,184 @@
         "sourceDeltaPathCount": 1987
       }
     ]
+  },
+  "nativeChannelSourceOwnersReview20261110": {
+    "sourceHead": "d6a5f7acb249b817c51607a5ee607ecabeeb8f8f",
+    "worktreeDisposition": "7 exact root-accepted channel source/test paths changed after sourceHead; hashes describe this overlay",
+    "changes": [
+      {
+        "path": "server/src/__tests__/chat-channels.integration.test.ts",
+        "oldSha256": "f8d4fd98b4d304af8861149520814d152d8bf27295ba59a4f5300567eda04da8",
+        "newSha256": "95221440a2259d19cf62231d4f9e9f83ff38b87757d388e098f1115fae8f956f",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-context-summary.test.ts",
+        "oldSha256": "262e3e63f35a4c8d3c9586520c124398db130df06ae736fc5b4f825d479b521a",
+        "newSha256": "f760eceb0c6be47115cccd4799816f9cad3c41db99285abb77206aa80036c95c",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02"
+        ]
+      },
+      {
+        "path": "server/src/services/chat-channels.ts",
+        "oldSha256": "134f6eaf485b78ef3df02d200ac634bbf4e5db9838a914e5466a9e430ab3b4c9",
+        "newSha256": "c47eae4dff32e7c2b4b080e762dd73510569b4dca6ebe333e6195cedc0c1056a",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/heartbeat.ts",
+        "oldSha256": "e50c91d0cb70888e6469485f2d6d3024a07d391710626e305260fce10c3089df",
+        "newSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07",
+          "SCR-V10-HOTSPOT-08",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/issues.ts",
+        "oldSha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421",
+        "newSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-12"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+        "oldSha256": "088c536e1bddb065321c727583d5638ded1bb01c8ee52bc7ba3ae68be27132e3",
+        "newSha256": "18ad2db8f88d675dac8cc3a4854fd6928b3c79e733e878e51f4cb03e308ad3b0",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-execution-input.ts",
+        "oldSha256": "a62cce635cb155f613ef51ae4bc6adee59eb1f233c6c0e9aea257933db3af106",
+        "newSha256": "67f1300f890faa92d875c45eb146c53ac87edbd1e24144006812ac6687d7eb9e",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      }
+    ],
+    "reason": "Bind direct Slack Human Task and Comment source capture to the current linked non-bot principal and exact owner transaction. Carry the server-rendered external chat provider as a typed source reference only when it matches one exact Native Task wake source; keep withdrawal interaction ownership separate, and reject unbound or additional unknown rendered references.",
+    "qualificationBoundary": "Bounded source/software receipts only. R285 pure-module coverage passed 72 cases; R291 PostgreSQL source eligibility regression passed one case with linked/guest/bot/revoked/other-user scenarios in 26.17s; current exact-seven-source server TypeScript check R293 passed in 104.01s. R292 actual Slack retry reached Native input source proof and Host admission but failed later at fixture serial close because its prelaunch Host handoff expected a physical PID; do not call the retry complete or qualified. SDK R284 remains incomplete: two provider turns completed, then workspace finalize failed on a missing trusted download-operations command. These results do not qualify deployed Slack, other providers, customer operations, or aggregate V10 completion.",
+    "sourceGraphOwnersVerified": {
+      "server/src/__tests__/chat-channels.integration.test.ts": [
+        "SCR-V10-HOTSPOT-01",
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-04",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07"
+      ],
+      "server/src/__tests__/heartbeat-context-summary.test.ts": [
+        "SCR-V10-HOTSPOT-02"
+      ],
+      "server/src/services/chat-channels.ts": [
+        "SCR-V10-HOTSPOT-01",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07"
+      ],
+      "server/src/services/heartbeat.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-03",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07",
+        "SCR-V10-HOTSPOT-08",
+        "SCR-V10-HOTSPOT-11"
+      ],
+      "server/src/services/issues.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-12"
+      ],
+      "server/src/services/native-runtime/native-execution-input.test.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-execution-input.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ]
+    },
+    "compatibilityPinsUpdated": [
+      {
+        "path": "server/src/services/issues.ts",
+        "oldSha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421",
+        "newSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037"
+      }
+    ],
+    "phaseMatrixPinsUpdated": [],
+    "helpReviewDisposition": {
+      "updatedExistingLinkedPairs": [
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete",
+          "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+          "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+          "decision": "no_change",
+          "rationale": "The heartbeat delta only changes rendered channel-provider source references and their admission checks. It adds no export, deletion, retention or file-cleanup action. The existing distinction between a deletion request, confirmed process stop and verified storage removal remains accurate."
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete-da",
+          "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+          "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+          "decision": "no_change",
+          "rationale": "\u00c6ndringen i heartbeat vedr\u00f8rer kun den renderede kanalkonteksts kildereferencer og deres validering. Den tilf\u00f8jer ingen eksport-, slette-, opbevarings- eller filoprydningshandling. Vejledningens skelnen mellem en sletteanmodning, bekr\u00e6ftet processtop og verificeret fjernelse fra lageret er fortsat korrekt."
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work",
+          "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+          "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+          "decision": "no_change",
+          "rationale": "The renderer now binds channel provider context to exactly one same-Run, same-Task wake source, while preserving unknown-source and withdrawal checks. This changes internal input admission. The article's guidance to inspect the original task and use only its current recovery action remains accurate."
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work-da",
+          "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+          "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+          "decision": "no_change",
+          "rationale": "Renderingen binder nu kanalens kontekst til pr\u00e6cis \u00e9n wake-kilde for samme k\u00f8rsel og opgave. Kontrollen af ukendte kilder og tilbagetr\u00e6kninger bevares. Det \u00e6ndrer intern inputvalidering; vejledningen om at gennemg\u00e5 den oprindelige opgave og kun bruge dens aktuelle genoprettelseshandling er stadig korrekt."
+        },
+        {
+          "source": "server/src/services/issues.ts",
+          "articleId": "recovering-work",
+          "sourceSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
+          "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+          "decision": "no_change",
+          "rationale": "Verified linked, non-bot channel Humans now receive atomic Task and comment source snapshots. Guest, bot, revoked and unrelated-user cases do not gain source authority. The article still correctly requires the current task state and an available retry action; it promises no bypass of source or owner requirements."
+        },
+        {
+          "source": "server/src/services/issues.ts",
+          "articleId": "recovering-work-da",
+          "sourceSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
+          "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+          "decision": "no_change",
+          "rationale": "En verificeret, tilknyttet kanalbruger f\u00e5r nu atomiske kildesnapshots for opgaven og kommentaren. G\u00e6ster, bots samt tilbagekaldte og andre brugere f\u00e5r ikke ny kildeadgang. Vejledningens krav om aktuel opgavestatus, kildeadgang og en vist handling til nyt fors\u00f8g er fortsat korrekte."
+        }
+      ],
+      "noNewPairsAdded": true,
+      "noBlanketRationales": true
+    },
+    "historicalRequirementStatusesPromoted": 0,
+    "migrationRegisterChanged": false
   }
 }

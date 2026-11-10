@@ -358,7 +358,7 @@
     },
     {
       "path": "server/src/services/issues.ts",
-      "sha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421"
+      "sha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037"
     },
     {
       "path": "server/src/services/memory/memory-agent-tools.ts",

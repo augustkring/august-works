@@ -13789,6 +13789,8 @@ export function issueService(db: Db) {
         deferConversationActivation?: boolean;
         /** Actual HTTP actor, never inferred from author attribution. */
         manualInputActor?: AuthorizationActor;
+        /** The chat delivery owner passes this only after current linked-Human authorization. */
+        verifiedChatHumanInput?: { userId: string; endpointId: string; principalId: string };
         /**
          * Caller-owned transactions must publish source activity only after
          * their outer transaction commits. The callback must retain this value
@@ -13800,11 +13802,17 @@ export function issueService(db: Db) {
       manualInputProtocol?: 1,
     ): Promise<IssueComment> {
       const candidate = options?.manualInputActor;
+      const verifiedChatHumanInput = options?.verifiedChatHumanInput ?? null;
       const directActor = candidate?.type === "board" && candidate.source === "session" &&
         candidate.userId === actor.userId && candidate.sessionId && !candidate.runId && !actor.agentId && !actor.runId &&
         (!options?.authorType || options.authorType === "user") && !options?.presentation && !options?.metadata &&
         !options?.createdAt && (!options?.authorizationReason || options.authorizationReason === "allow_board_actor") &&
         !options?.attachmentIds?.length ? { ...candidate } : null;
+      if (verifiedChatHumanInput && (!verifiedChatHumanInput.userId || !verifiedChatHumanInput.endpointId ||
+          !verifiedChatHumanInput.principalId || actor.userId !== verifiedChatHumanInput.userId || actor.agentId || actor.runId ||
+          options?.authorType !== "user" || options?.manualInputActor || options?.authorizationReason ||
+          options?.presentation || options?.sourceTrust || options?.createdAt || options?.attachmentIds?.length))
+        throw forbidden("The verified chat Human comment source is unavailable");
       const appendWithManualInput = async (tx: any) => {
         let sourcePublication: ActivityPublication | null = null;
         let expiresAt: number | null = null;
@@ -13872,11 +13880,70 @@ export function issueService(db: Db) {
         }
         return { comment, sourcePublication };
       };
+      const appendWithVerifiedChatHumanInput = async (tx: any) => {
+        const [target] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, issueId)).for("update");
+        if (!target?.companyId) throw notFound("Issue not found");
+        const [linkedHuman] = await tx.select({ externalId: chatExternalPrincipals.externalId,
+          displayName: chatExternalPrincipals.displayName, handle: chatExternalPrincipals.handle,
+          provider: chatEndpoints.provider })
+          .from(chatIdentityLinks)
+          .innerJoin(chatExternalPrincipals, and(eq(chatExternalPrincipals.id, chatIdentityLinks.principalId),
+            eq(chatExternalPrincipals.companyId, chatIdentityLinks.companyId)))
+          .innerJoin(chatEndpoints, and(eq(chatEndpoints.id, chatIdentityLinks.endpointId),
+            eq(chatEndpoints.companyId, chatIdentityLinks.companyId)))
+          .where(and(eq(chatIdentityLinks.companyId, target.companyId),
+            eq(chatIdentityLinks.endpointId, verifiedChatHumanInput!.endpointId),
+            eq(chatIdentityLinks.principalId, verifiedChatHumanInput!.principalId),
+            eq(chatIdentityLinks.paperclipUserId, verifiedChatHumanInput!.userId), eq(chatIdentityLinks.status, "linked"),
+            eq(chatExternalPrincipals.kind, "user"), eq(chatExternalPrincipals.isBot, false)))
+          .for("share");
+        const metadata = issueCommentMetadataSchema.safeParse(options?.metadata);
+        const section = metadata.success && metadata.data?.sections.length === 1 ? metadata.data.sections[0] : null;
+        const rows = section?.rows ?? [];
+        const labels = rows.map(row => row.type === "key_value" ? row.label : "");
+        const prefix = labels.slice(0, -3);
+        const trailingLabels = labels.slice(-3);
+        const nameRow = rows.at(-3);
+        const providerRow = rows.at(-2);
+        const authorityRow = rows.at(-1);
+        const providerLabel: Record<string, string> = {
+          "imessage-photon": "iMessage Photon", agentmail: "AgentMail", slack: "Slack", github: "GitHub",
+          discord: "Discord", "microsoft-teams": "Microsoft Teams", telegram: "Telegram",
+        };
+        const canonicalChatMetadata = Boolean(section && linkedHuman && providerLabel[linkedHuman.provider] &&
+          metadata.success && metadata.data.version === 1 &&
+          typeof section.title === "string" && section.title === `${providerLabel[linkedHuman?.provider ?? ""]} sender` &&
+          (linkedHuman?.provider === "imessage-photon" ? metadata.data.sourceChannel === "imessage-photon" : !metadata.data.sourceChannel) &&
+          rows.every(row => row.type === "key_value") &&
+          ["", "Reply to message", "Reply to message,Reply part"].includes(prefix.join(",")) &&
+          trailingLabels.join(",") === "Name,Provider ID,Authority" &&
+          nameRow?.type === "key_value" && providerRow?.type === "key_value" && authorityRow?.type === "key_value" &&
+          nameRow.value === (linkedHuman?.displayName || linkedHuman?.handle || linkedHuman?.externalId) && providerRow.value === linkedHuman?.externalId &&
+          authorityRow.value === "Linked Paperclip user");
+        if (!linkedHuman || !canonicalChatMetadata)
+          throw forbidden("The verified chat Human comment source is unavailable");
+        const existing = options?.clientRequestId ? await tx.select().from(issueComments).where(and(
+          eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, verifiedChatHumanInput!.userId),
+          eq(issueComments.clientRequestId, options.clientRequestId))).limit(1).then((found: typeof issueComments.$inferSelect[]) => found[0] ?? null) : null;
+        const comment = await addComment(issueId, body, actor, {
+          ...options, verifiedChatHumanInput: undefined, onManualInputSourcePublication: undefined,
+        }, tx, existing ? undefined : 1);
+        if (existing) return { comment, sourcePublication: null };
+        const [captured] = await tx.update(issueComments).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
+          .where(and(eq(issueComments.id, comment.id), eq(issueComments.companyId, target.companyId),
+            eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, verifiedChatHumanInput!.userId),
+            eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
+            eq(issueComments.payloadSourceSnapshotInvalidated, false), isNull(issueComments.deletedAt))).returning();
+        if (!captured?.payloadSourceSnapshot) throw conflict("Verified chat Human comment source capture was not stored");
+        nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+        return { comment: captured, sourcePublication: null };
+      };
       if ((actor.runId || actor.userId) && dbOrTx === db) {
         const append = async () => {
           let sourcePublication: ActivityPublication | null = null;
           const comment = await db.transaction(async (tx) => {
-            const result = await appendWithManualInput(tx);
+            const result = verifiedChatHumanInput
+              ? await appendWithVerifiedChatHumanInput(tx) : await appendWithManualInput(tx);
             sourcePublication = result.sourcePublication;
             return result.comment;
           });
@@ -13896,6 +13963,11 @@ export function issueService(db: Db) {
         return result.comment;
       }
       // Callers supplying a transaction still share the settlement fence.
+      if (actor.userId && dbOrTx !== db && verifiedChatHumanInput) {
+        const result = await appendWithVerifiedChatHumanInput(dbOrTx);
+        if (result.sourcePublication) options?.onManualInputSourcePublication?.(result.sourcePublication);
+        return result.comment;
+      }
       if (actor.userId && dbOrTx !== db) {
         await dbOrTx.select({ id: issues.id }).from(issues).where(eq(issues.id, issueId)).for("update");
       }

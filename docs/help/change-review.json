@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "e50c91d0cb70888e6469485f2d6d3024a07d391710626e305260fce10c3089df",
+      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Native wake evidence now binds the provider and matching canonical/Native initial guidance to the exact Task source, and replay checks that binding against the current Context source closure. Current cancellation and rejection owners remain exact; bounded staged-attachment cleanup is attempted before an owned failure is settled while Run/lease authority remains available. These internal controls preserve the current recovery guidance."
+      "rationale": "The renderer now binds channel provider context to exactly one same-Run, same-Task wake source, while preserving unknown-source and withdrawal checks. This changes internal input admission. The article's guidance to inspect the original task and use only its current recovery action remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421",
+      "sourceSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Direct chat Task creation now preserves the exact linked non-bot Human identity separately from later GitHub sponsorship attribution, rechecks that same company/endpoint/principal/user link inside the Task transaction, and captures the direct-Human Task source atomically. These internal admission and provenance checks do not change the documented recovery, support, Stop, retention or deletion actions."
+      "rationale": "Verified linked, non-bot channel Humans now receive atomic Task and comment source snapshots. Guest, bot, revoked and unrelated-user cases do not gain source authority. The article still correctly requires the current task state and an available retry action; it promises no bypass of source or owner requirements."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "e50c91d0cb70888e6469485f2d6d3024a07d391710626e305260fce10c3089df",
+      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Native-wake-evidens binder nu udbyderen og den matchende kanoniske/Native startvejledning til den pr\u00e6cise Task-kilde, og genafspilning kontrollerer bindingen mod den aktuelle Context-kildelukning. Aktuelle annullerings- og afvisningsejere forbliver pr\u00e6cise; afgr\u00e6nset oprydning af mellemoplagte vedh\u00e6ftninger fors\u00f8ges, f\u00f8r en ejet fejl afsluttes, mens Run-/lease-autoriteten stadig er tilg\u00e6ngelig. Disse interne kontroller bevarer den eksisterende vejledning om genoprettelse."
+      "rationale": "Renderingen binder nu kanalens kontekst til pr\u00e6cis \u00e9n wake-kilde for samme k\u00f8rsel og opgave. Kontrollen af ukendte kilder og tilbagetr\u00e6kninger bevares. Det \u00e6ndrer intern inputvalidering; vejledningen om at gennemg\u00e5 den oprindelige opgave og kun bruge dens aktuelle genoprettelseshandling er stadig korrekt."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "729ffdfa458dd1ff15d2e79e3884c15a2704eb945db2f943c6a9c81ee7e73421",
+      "sourceSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Direkte chatopgaver bevarer nu den pr\u00e6cise tilknyttede ikke-bot-Human-identitet adskilt fra senere GitHub- sponsorattribuering, kontrollerer den samme virksomheds-, endpoint-, principal- og brugerrelation i Task-transaktionen og registrerer den direkte Human-Task-kilde atomisk. Disse interne adgangs- og provenienschecks \u00e6ndrer ikke den dokumenterede vejledning om genoprettelse, support, Stop, opbevaring eller sletning."
+      "rationale": "En verificeret, tilknyttet kanalbruger f\u00e5r nu atomiske kildesnapshots for opgaven og kommentaren. G\u00e6ster, bots samt tilbagekaldte og andre brugere f\u00e5r ikke ny kildeadgang. Vejledningens krav om aktuel opgavestatus, kildeadgang og en vist handling til nyt fors\u00f8g er fortsat korrekte."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "e50c91d0cb70888e6469485f2d6d3024a07d391710626e305260fce10c3089df",
+      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "The changed wake-source capture does not alter export contents, deletion request semantics or erasure timing. Help still distinguishes submitting an organization deletion request from completed erasure."
+      "rationale": "The heartbeat delta only changes rendered channel-provider source references and their admission checks. It adds no export, deletion, retention or file-cleanup action. The existing distinction between a deletion request, confirmed process stop and verified storage removal remains accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "e50c91d0cb70888e6469485f2d6d3024a07d391710626e305260fce10c3089df",
+      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Den \u00e6ndrede registrering af wake-kilder \u00e6ndrer ikke eksportens indhold, betydningen af en sletteanmodning eller sletningens tidsforl\u00f8b. Hj\u00e6lp skelner fortsat mellem at indsende en anmodning om organisationssletning og gennemf\u00f8rt sletning."
+      "rationale": "\u00c6ndringen i heartbeat vedr\u00f8rer kun den renderede kanalkonteksts kildereferencer og deres validering. Den tilf\u00f8jer ingen eksport-, slette-, opbevarings- eller filoprydningshandling. Vejledningens skelnen mellem en sletteanmodning, bekr\u00e6ftet processtop og verificeret fjernelse fra lageret er fortsat korrekt."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
