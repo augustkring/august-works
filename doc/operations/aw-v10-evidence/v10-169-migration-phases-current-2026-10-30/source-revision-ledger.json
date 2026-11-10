@@ -1661,5 +1661,977 @@
     },
     "historicalRequirementStatusesPromoted": 0,
     "migrationRegisterChanged": false
+  },
+  "publicBrandAndHelpSurfaceReconciliation20261110": {
+    "sourceHead": "a0740e57821a381d13732116ff88639eb5d42f28",
+    "candidateRevision": "R8",
+    "worktreeDisposition": "87 exact accepted brand paths changed after sourceHead; hashes describe the accepted overlay",
+    "changes": [
+      {
+        "path": "README.md",
+        "oldSha256": "e534958eedeeeb641c980e2a2b5e23143743f83bdf5a2866b2697a46944263aa",
+        "newSha256": "3e03bda8b31e8ec6d32162f240d2d08df37544c5b97db34f8a98a6e1ca92bd7a",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "announcements/examples/animated/current.json",
+        "oldSha256": "a2fe161f9b74f82fc9aa958b9f8b4b59afe23da8d5de93ea81007df2ba1a3b5c",
+        "newSha256": "e3a7a709bb9816f95763ae8c8cbe8b18c85ff95f2e9ae77d04c431710a5b3e93",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "announcements/examples/staging/current.json",
+        "oldSha256": "cedde2d64744eb35bad74404f45ab414900e676b01779d60e22946a0eb729831",
+        "newSha256": "cd436ed510cc290add4d078e0c64a8d4e5a93f81acf8a171b8655c91c3e5ed5d",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/README.md",
+        "oldSha256": "30c188bff476d5682239a40263b0f7cf5992fd249cf018ae1d8834069331b282",
+        "newSha256": "6819b582315985b95c2ab4b9e76d8e6ca1bc45053f7f5eceae7b3e53db4ecbd0",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "cli/src/__tests__/feedback.test.ts",
+        "oldSha256": "ea4c0bc293e98e8d9bce1541498e9c3658efe8aae4f1b7e15ef4e7eb1516cc83",
+        "newSha256": "2e4f126480ac1f69b8546c40973f677b546a66c340e21efd64083dca1ee52585",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/__tests__/http.test.ts",
+        "oldSha256": "d73ee5d7e60c48f446361c8ed57042fc672c0304390c453f54960c343baa46c8",
+        "newSha256": "f0ef326b6ebd3891e5be7e148fba9b910b12f2f1ef1bd3e4779acf442103f885",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/__tests__/plugin-init.test.ts",
+        "oldSha256": "444fb652dc633cf7f26935362a0a051a57944cb31216b9ff071187996a949a44",
+        "newSha256": "2f5f4ecd93ae57b59670d6f8b6be609a8d31321de1c771b864a62e6f32a488a9",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/__tests__/worktree.test.ts",
+        "oldSha256": "0d9708669c21f435b64fdf1d96bf05e1261a8fdd5871be612b947f386eb32f9b",
+        "newSha256": "10c1514fc91305c852f1eac5264a64af447a578b976034562dc9c40780691b68",
+        "sourceGroups": [
+          "SCR-V10-CLI-COMPATIBILITY-AND-COMMANDS",
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/client/http.ts",
+        "oldSha256": "99de4bfa4942b0c05eacc16afdc913fab7610919ba7fdabfe036908e386603c8",
+        "newSha256": "0902b2511c5a36578d210d97c2130aea6195fe2c4048b0dcadca73a775df7c13",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/channels.ts",
+        "oldSha256": "7bf30a1a392ec1c202de2525b6bf66680d20bd0d14611a68256bf1ed945ffe30",
+        "newSha256": "8a41c81edfe1ae46aca20cd5fc5de95c8d239a3aab15881ca6a666efb3b98a31",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/agent.ts",
+        "oldSha256": "5d58f29adc5dda4a45c59f27ad0ab43e7edf35aa75d284a12c9d46bb23acef70",
+        "newSha256": "7bbea947e17f0721937d07b516c894110662fdae1c27e3aa538f84ef9aa4d88d",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/common.ts",
+        "oldSha256": "e8f56a3d354bb2ffe69c8141ba867889026da2bef59d5bc8c71dc1295a8b9f5f",
+        "newSha256": "825f27c4d9970fb04048fc3cb56e8537d6cb47f3b1b90007561f717227a8b2d0",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/company.ts",
+        "oldSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
+        "newSha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/connect.ts",
+        "oldSha256": "13cde8e92ceef204c6c1e4a348386cc38bf3b0bdede0e10ff433374b049e150c",
+        "newSha256": "e7d0f772751d459637847722b1259244d49403f64658893719d4df08b7a9a87e",
+        "sourceGroups": [
+          "SCR-V10-CLI-COMPATIBILITY-AND-COMMANDS",
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/context.ts",
+        "oldSha256": "0850a1de0fd8214e585defc28707df51f1c6a215d9c5e79a2f0e2a7a309c650a",
+        "newSha256": "a196a6e397aafd313909f185c7d4fbb42f4650a4290cf651aa26d2dbf14b5642",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/feedback.ts",
+        "oldSha256": "8526853f1494089499020c0f33130dd9542ff641b8925fbb98b6c236eebdc00f",
+        "newSha256": "0e68e78caa67e241e3dca23151e30e0d892acb3c9ea9e628a2eadd805d0c1973",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/plugin.ts",
+        "oldSha256": "996f9c9852017f9349f06ee6e7bd8b1af0c0c6c43995e702e5611b64d51bac59",
+        "newSha256": "7ed2b485602eab3438b77447f7e21a2e120d12beb8bb3deed0852512418b7601",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/prompt.ts",
+        "oldSha256": "87b5d70f36203193deccf4853a6a4ba34004a72363b4089c2ee583babc460019",
+        "newSha256": "be73542e703c2be7c837aa43748864d87763cecd04a4d69436762795f82f805d",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/secrets.ts",
+        "oldSha256": "bf46bc79e2a294a276fbce188b22e7053684e166c80de8bc0d89af857af670a4",
+        "newSha256": "01727e5dbe6f17235bcfc4ea0737c6b73833929462993efd9c99676ddbb18266",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/teams.ts",
+        "oldSha256": "0eff2ec04962e03f5607965ea1c0603bcfeedeea109b194b95f3aaabc1cdebee",
+        "newSha256": "174f076537cdf07c7d3cee19baa87d713e9b0b65307233e4307d6ef474523609",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/client/token.ts",
+        "oldSha256": "2a3f45fe1fe7b89aa1f0e6e815db45a40620fe4e74060579da70be2b69233aa4",
+        "newSha256": "3a1c27a84b10ccad7ad02ade5e3f67f57d33bb7ba93fbce67b1386a7d90e8899",
+        "sourceGroups": [
+          "SCR-V10-CLI-COMPATIBILITY-AND-COMMANDS",
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/env-lab.ts",
+        "oldSha256": "82780a1fa9e3617b62d4a851520afcc12388d8a1d7ab7623c20947ae9ba50dc5",
+        "newSha256": "721f99013f6d360cf2ec35d80963feedae85fbe44e1960d8fc511e54d2e0795d",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/install.ts",
+        "oldSha256": "f9b9a3ba1e3d6ae62196b1668a6b1897c17ac9f430baabaf01186f7e146c27c1",
+        "newSha256": "2352d9a6eadb8747b83abeb6b39c43eed2e37e11320721336a57dd8b250ff42f",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/managed-agent.ts",
+        "oldSha256": "98c967a197a4a092441aa56fbf72e5d11c7d32e3c701216a09ec0a90907e458d",
+        "newSha256": "965a1905a3c4fb63ae1c274bdf2721ac686dfd8db5fb2660884844cfaa826178",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/routines.ts",
+        "oldSha256": "6c2c5638040fc4cc94338e0ca921e52930ff0b83887d8c479f8fc3d5374f8a1a",
+        "newSha256": "44c13ce57013c2f2f8dfc95c0c9b95485c054cc5600655bf0c6b3a24268fd3fc",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/service.ts",
+        "oldSha256": "8bfcfc447e654f0a954d143c9bba2d7c862024ea3d6b800c1c8c23f61d192bd8",
+        "newSha256": "c7b4afe462c3a3c554b27589633fc27ebc559bd1e67e3a5e7956b0fe4d51c741",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/test-drive.ts",
+        "oldSha256": "ff2ab48112e53c5478f55edbfc47e43d5678efdf9b1f34c22815addddb475841",
+        "newSha256": "96ec8b7216283e3f46cd8b5b5244dc353fb5c020ee9b8b4677a7f9ebc0e40405",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/uninstall.ts",
+        "oldSha256": "b1b5fc0f58ac348853e0e7eda721160f7f3dde17e07c349f461313b9a9916a98",
+        "newSha256": "59fd75ca1192c4e54e61d32372e552dcf622cb9d96ef389d88f43f4c19514225",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/update.ts",
+        "oldSha256": "37e30f42334ff689ebc794ff17065b7fe8beebbbb15ac03dae938cd8d1f81296",
+        "newSha256": "29e57632f166358e8786a790f55aed6177abbb361b15f9fafc114ceea8df20ab",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/commands/worktree.ts",
+        "oldSha256": "5081dfc756f46150d8a8290818c6d8d272774c94a3b3dfa69c91c88edc7e1dce",
+        "newSha256": "835a66c7e90990850d30c0207dc88d70b5ea4f1a1aab1d7b10b4929e7839384c",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/config/env.ts",
+        "oldSha256": "9ee17f3b2962afcc52f38cada75321bab4e4a6fecb898e8fc081f4e6e66b2491",
+        "newSha256": "23bd901fa0b6a849c38be1e0fa32224ebf683186e7b0e3309dcfbd75e15d91b6",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/index.ts",
+        "oldSha256": "d41fa52f77eede589e65890f8810ef8a87b2012d0a5f8a9abf4989b41a73bf75",
+        "newSha256": "7e5caf8e9296cd201bb6ac816ef50bc4f23547b1e31284b9e4eb07110a854391",
+        "sourceGroups": [
+          "SCR-V10-CLI-COMPATIBILITY-AND-COMMANDS",
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "cli/src/node-version.test.ts",
+        "oldSha256": "770d9da59b13af8f6d33dc8912be1a40bb69979dca3afd755bda2d46081f38af",
+        "newSha256": "cc8a16ad813e26d69aaca8bce8e3991c75f31f9438be5f36e44d700158937526",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "docs/adapters/adapter-ui-parser.md",
+        "oldSha256": "eb1d6052daa290a9cd97946d74167e51766e82f4a7188fe6688758f5240014c6",
+        "newSha256": "56827ec93bda290c206c0f62dc6c9cb953d840eb425c6ae97b5e905ae1c057e9",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/adapters/claude-local.md",
+        "oldSha256": "1c7d24519c07579b0d8e21c0b659503008e9e007f663324b6ff8fe2e5394c5ce",
+        "newSha256": "c7fde1024c836283f22561c35fce8849f2d16a6cc8c44ccb3edee983019dafa1",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/adapters/codex-local.md",
+        "oldSha256": "2e5d0c0c6945ee722d906b80d55982128687cafd1d41186dfe4eefaf01ce6ebb",
+        "newSha256": "10ae4a308a2466354b0f833ee4e0393b19ab1e15bd301c5d07aa4e8c39146826",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/adapters/creating-an-adapter.md",
+        "oldSha256": "99a6a0d2e71c168916f22e498adbd86ad764ec572dc49d8546b851adff9fb1b2",
+        "newSha256": "c443ba0aa7289adc793628df1443e2d655520a841113085c11839cf856f89da3",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/adapters/external-adapters.md",
+        "oldSha256": "ccca48fee9cb7f742593a63d775887f6304be9b4ddaaf39a4c57deb91b8a1d4c",
+        "newSha256": "05cb25021bd7747fc83161065209ce4aeda51635413236f0daa93276a579dc03",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/adapters/http.md",
+        "oldSha256": "2bd877e56a0444008c0af1dfd46d8c4a55710a4397ef43db38d7cfea7cb24ba9",
+        "newSha256": "983f24bc622fd9d0363c664ef65d4d1d928b7038330497cce71673aea61cc442",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/adapters/overview.md",
+        "oldSha256": "52f1f8ede2830c9f06d3f144a0d86a3b88e9d37fc6f02a001411c8db0b27b353",
+        "newSha256": "cc2c68c091ce852e48f4972697dd304aadb4302270eb2e3b78f4bbe12dcd6a03",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/adapters/process.md",
+        "oldSha256": "bd9d54cd884683c112a9090f87e55da04b8b7422fe30a92d136ad7df08355fdf",
+        "newSha256": "168bd98474782ebba43a4f8fb382dbfc2b5fde33c9ed31a6d472d36a710a7c3e",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/api/authentication.md",
+        "oldSha256": "a6f366beb43a1d653f289adcf6693672dfce7e9ba3bc348cec4224dec9d85428",
+        "newSha256": "94ef48f437845ed6214b2720bbc1bba0e5588a2da277da69ae77a35ca188ceee",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/api/companies.md",
+        "oldSha256": "d9ae20590f144e9607c85b1e8e6c79aaafcb13870c9b589e5acb7e39f3b88de4",
+        "newSha256": "4428c610ec1f12d52896724aa0a69fea08450062f9ffabda1d30076dbbf03137",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/api/issues.md",
+        "oldSha256": "72965fd35660c9d1cb890b11390a5c1667d43f1de84ffce0222b163e6c47da19",
+        "newSha256": "fdb8a9ef304cf61f827277a1a0be3dd038bf2d26f86d25839ce185f0c41d0e8f",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/api/overview.md",
+        "oldSha256": "aae547c60345856dcc8a0364bcbab2b25b9e1eba00a0622b9001dba898f96cd9",
+        "newSha256": "07e6293c951e7c77fa2ef07bd92134d1db180373f9499a796b32f584b5bd7738",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/api/secrets.md",
+        "oldSha256": "f43e5b30aa79e0a4b5e5ad9cff1dafcbcd89b93c47f8003e35610a3ad6e4911a",
+        "newSha256": "d7f0347a903633d58f40bbdf64737c6c9ed26daef48092451dc4fbaff5cf9537",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/cli/setup-commands.md",
+        "oldSha256": "154e140e88c6821285dda4f6b36a00d25f49431321bf2144272dc105320ea4e6",
+        "newSha256": "52e468cfa8c39a6ac072c6d34e7975db4383fa38c2f129e9edfa4009e6ebee9e",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/da/guides/board-operator/importing-and-exporting.md",
+        "oldSha256": "c98978930570e52384dd01334db64252a7dbaf41a402a942e1ca9aca7d9e6fb7",
+        "newSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/database.md",
+        "oldSha256": "40f4ec01b32f1ffb9581559c3fd2b8475f209bc4bd01714c7372f90776c1bb17",
+        "newSha256": "85af09d7432c582eb3c4ad0af00472f94436c9d7bc7223fd13852488fb687214",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/deployment-modes.md",
+        "oldSha256": "9265f5b9ec2a65518fc46de5c13b6738cb90be99856b6652b07b053136e3eb94",
+        "newSha256": "c5b9cd01077891771afeebf70a54b64654dbc492d77cae75f50019ea4792f6cc",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/docker.md",
+        "oldSha256": "1a79e89de836a512368a0bedafad07fbfca8b1d52db20f255e2584a1f12da8d8",
+        "newSha256": "de6c9c3afb4633a7a414404a999783a4e2d22466c079404eb0eeb8ce31d5d832",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/environment-variables.md",
+        "oldSha256": "1c6b35b33762553a711931b28a3d2ed87fc2c2c475ae2c726dd1f21501b378c2",
+        "newSha256": "2b7d482518e3ee4dea730a6b25b015dbfb5b1ba0fdf5b2605c05bb3e75a9e7a5",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/local-development.md",
+        "oldSha256": "db48c886abe2afab57c1a6452591124f102cbf2840a22fa1fe045d5528f86e19",
+        "newSha256": "ca406b8d6e8427d28aa75f4699de64dd70b1c5a8e05306c0ea69317a7f16a552",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/overview.md",
+        "oldSha256": "6299ca6528b5e2b79f084fa9d4f5d902bb99e20fd4211f5db8c6c651d54312f6",
+        "newSha256": "55ee89f956a99af5f7a6e4687de9ef6933263069a37498474a93f6c65fdacd00",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/secrets.md",
+        "oldSha256": "bd2b9156d31c690047a906b2dbac01ae551cb988902201429ea3ecad936b37e6",
+        "newSha256": "9429d603a744bcca29825557ad2764ecfb60cbbb4203b103539130ebb7c9b5ff",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/storage.md",
+        "oldSha256": "059947dda603f25639a4badd6960e65bee1d6505fe4f9b4b5348a12492d869d2",
+        "newSha256": "cf1bf8081053b6c378d1ad7c92a792f36a8a71a5bedda838a7476ec704a2ec7c",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/deploy/tailscale-private-access.md",
+        "oldSha256": "32693d60bb3e5ac8369b13d5ccedb772b0068fa980e68a6646e8470cfede309c",
+        "newSha256": "4e20959e33458a8c4876d5ecc97949ce751d9fb9ad9357d82ac005961d8a7d0f",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/agent-developer/cost-reporting.md",
+        "oldSha256": "813fc79560cc3794a859146fc413dbb3323fa9b66b27eff90dc07ee4de4ab3bb",
+        "newSha256": "4c7e075caedf1bd4bbdcc5ddb24c345f687b917544743efd2304334f76405409",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/agent-developer/heartbeat-protocol.md",
+        "oldSha256": "f44bdf67a19d0ffdbb10c2030aab168cf8d6d29cd84e6f1c4d76fdc8c032d381",
+        "newSha256": "1b8edeabafb7e7de25e7bbeecba5996ffe4e0c1521833fc94a857ab568d2c2a4",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/agent-developer/how-agents-work.md",
+        "oldSha256": "1233386c45bf6996cb9276f2fa7af420c7ecad16dd4b76fce76db3792f81c75a",
+        "newSha256": "e1b3dc954c4f04cf0df284cf9165373e48a6c25510dffd4695ea981f045dbccd",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/agent-developer/skills-store.md",
+        "oldSha256": "8464e5d6e21660346cb79dd375a9a4a7afccbfee75b4f260d614d400a11254f1",
+        "newSha256": "138aa347fec584a9a25af2ffce6bbba0fc54dcc1f8c812f2cf15d687c59bcefc",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/agent-developer/task-workflow.md",
+        "oldSha256": "7b8d8cc0a80ea7e44180ab53e250d64ea015f2d7d1436373d62db31575d55041",
+        "newSha256": "f06e99f900ad5e3cf8a486094cee3d014dfde6cffb3405d6cbd0ff1c8dad3810",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/board-operator/activity-log.md",
+        "oldSha256": "8ebc4d4e0fd7fea1f2601fa20b561720188e45e679cb16502e59a16415972e29",
+        "newSha256": "cc45a8e4247d0d025171c2b1bf92e0d5fdeeec32c7d0d0fbd3f9509964aa0a12",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/board-operator/delegation.md",
+        "oldSha256": "371f99aa566a5a74d9039d7f82c329dbe5c72b9bcde263a69fcc92c6429d08e9",
+        "newSha256": "b3e4e152945853af6487391b55cba9e8a517e26e15c6a93809375b63062db5b7",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/board-operator/editing-first-task-texts.md",
+        "oldSha256": "5b37a9f42b52b2a9cfdfee2f0a967cc4ec33a38674aa10172885371d66e5aadf",
+        "newSha256": "357713abf454464c923a80706b01f19d204f74bb890559e84fae35f9b56ef696",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/board-operator/execution-workspaces-and-runtime-services.md",
+        "oldSha256": "267f1fa9d660a436237da29574ce0fffee0ba9fcfd48a55d8347fcd1c259d14f",
+        "newSha256": "96c8194112c26f27bc88dc21cc6a216d9cbf26f0a71318acd0d510090ff7d288",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/board-operator/importing-and-exporting.md",
+        "oldSha256": "805bc48654c5101625c373643ca9ea6273518e259c7a5ecaa6e9bc424ad95dcd",
+        "newSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/guides/board-operator/status-cards.md",
+        "oldSha256": "47fcdf6af1f2426f0cb44684a18576e10a43216ff31d37561f72f4a269d7cb42",
+        "newSha256": "164a789ec65032d38768a62007f5e69b9499dda78718f0b65eeba3e2049f0979",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/start/architecture.md",
+        "oldSha256": "ca083e7e9b701b409356ff7d6554d8b553df58c7e1f83dfee10c127ee024e08f",
+        "newSha256": "406d27e5ec25f5ef7a97144feae6aa1a346bf88784b6f4a3920a8818f62b1862",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/start/core-concepts.md",
+        "oldSha256": "cceba294c7c7559442683517c8513824d972626bb96ed6685b10f3ea3b10bba7",
+        "newSha256": "cf863136d4847d8e5369f1c36e8fe730ebd35a479da88f27c3963ad8fcc40bf4",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/start/quickstart.md",
+        "oldSha256": "537427a628d57151f41a8190ee1ec178b8998647559e32289c11b09d312f7699",
+        "newSha256": "56da9bb1313b4cccb2f4709d939bc98a9f6bcd0c405bc9ebdc8da2a33ffaf7cb",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "docs/start/what-is-paperclip.md",
+        "oldSha256": "6ef8f67e41ef5842631563d7a4aec3396a32de1add4c1de4f43e1c9c4a7c8d33",
+        "newSha256": "7c09f50c843b4db19827af65a9f4ce7cafe98dc08c29b34fc103892c131852b1",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/adapter-utils/README.md",
+        "oldSha256": "5eac7bf8fde5f1c76376a8df0660c6be335d8ad3a05c852d0b5ee2c0904c97ce",
+        "newSha256": "03780f1d0423b1832d698a4fbf8c5e3ea973def0d163e017dc479e62f5a7d8e5",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/adapters/hermes-gateway/README.md",
+        "oldSha256": "287da5b828b2a98f788f89f78f96c405f641cad190dea2159c25636928c4af8b",
+        "newSha256": "1320e1529bb979298825064a5d6ac67d90b988b1f872b942e4727988fead0a0d",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/adapters/hermes/README.md",
+        "oldSha256": "fb2c6f969ad897d241680546976e5de3796c7f7218c675f6afe7b726ddfea444",
+        "newSha256": "af91012955fbfdb07662e4c395b66d487b20b6bd5abca2416dd8e533fa8e7fd3",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/adapters/openclaw-gateway/README.md",
+        "oldSha256": "43251aed6f465eee3c0cec146d417d93beb72f51bbda76bc899e438e8d570954",
+        "newSha256": "d5b792e80a049908785abfb08fb0b796809b2a8daf7d7da70f933f37065406e0",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/google-sheets-mcp-server/README.md",
+        "oldSha256": "3f48f09cb8f6a59598469c24050a4818452910b807fb605012987e162eb1b3c9",
+        "newSha256": "51e64da12ce52158beb325c468fc0ad29f7e77c95ad8b0c66adf22d9ad431d8d",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/kv-demo-mcp-server/README.md",
+        "oldSha256": "eb2cc42b657d4b9cc760c743fcefa06dd814f3a72b499e919be558b11fcb1071",
+        "newSha256": "2f1686b007bb1a211d13b83f896d3d66c916ff772b0610a095fdb09d98389d92",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/mcp-server/README.md",
+        "oldSha256": "84b850e70702163ddc34dd563af8c0d91797c4f9f866f077712f207a5ca5f2f6",
+        "newSha256": "986eb2bfc1fa9c09aceca2399cafe4d18f487bd1e5539280dee121b472a062ea",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/plugins/create-paperclip-plugin/README.md",
+        "oldSha256": "7bd068688a8170728b83706b4b23bf090599e8759dcf4fbcfbe9bfec3776f8c4",
+        "newSha256": "1f3bb974e714db018d1d843092ff911f61cee047d7dfbda5071a883d9e9d8ad1",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/plugins/sdk/README.md",
+        "oldSha256": "00de047c04f9c4f8230b30b6b9beaa9ee7a48d4d93553a9361adb3d762951b41",
+        "newSha256": "22a55f42040de3407367848c41b22a83885c3ad6e3646f7a1bab2e37304682aa",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "documentation_only"
+      },
+      {
+        "path": "packages/shared/src/node-version.ts",
+        "oldSha256": "3e61b974ef1e91fbd3e6c1ab2594306fbabbdf80047d7a268165c1e69ebd3bae",
+        "newSha256": "1761e85105a5955df0d4b227a30f3729a13eba28276beaa3a9a8766174cedcfd",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "scripts/check-customer-brand.mjs",
+        "oldSha256": "32c80c1b986810920dd5f4f144d4cf8fbad3c950eb60e66bea39959dcb499e1c",
+        "newSha256": "32d54bf82643f2828f45b24d3d099f44c2195f858b072d914b7276352a1658d9",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "scripts/check-customer-brand.test.mjs",
+        "oldSha256": "30d7524e9d3c86b019d56ff2a0d1cda3747ad2e12b77208c90bad4c1afb73041",
+        "newSha256": "52b525012d295a7cba9bc9beae656c9da2bc4a6b384c36158be9a76370d5af07",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "scripts/customer-brand-compatibility.json",
+        "oldSha256": "561b2c6c46991748857eae62a0111000941d0a3c446ef6c96fe99724e75956f3",
+        "newSha256": "9e3364fc1b025d3e0881e1305f4327090ae7f02467be29b53fdfa7ba664e3556",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "ui/public/announcement-preview.svg",
+        "oldSha256": "050a8792969511c7cddd948170b8c6570d09cbe2bd59669b27717655f2c4370a",
+        "newSha256": "d20743e628fdb8c8e137bccc336fbc6d402d9e7dc101cfc97146e3d202e9d3e4",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      },
+      {
+        "path": "ui/public/sw.js",
+        "oldSha256": "2cfdbaa7506fc36d6d783ec47b93a5ce7116b28dccde90c8393c88c70de87e8c",
+        "newSha256": "e7bf7b8116534a55919ebb3cba1c901810a592ca5a722ac8d2c0f1e36b609816",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "inventoryDisposition": "source_delta"
+      }
+    ],
+    "reason": "Reconcile the current Blentera public-copy surfaces in the accepted brand candidate: retain canonical support, security and privacy contacts and the Trust Center destination, preserve compatibility and legal identities, distinguish upstream destinations, and scope the expanded checker to enumerated public text, CLI, documentation, package, announcement, email and asset inputs. English and Danish Help contact and Trust destinations are reviewed as a paired copy. This records source inventory and copy review only.",
+    "qualificationBoundary": "Source/copy inventory only. The current Root-recorded checks cover five focused Node tests and the full selected inventory gate with 39 categorized exceptions, zero leaks and zero stale exceptions. This does not establish that the brand is published, available in general release, hosted at the named destination, delivered by email, certified, or supported by any external provider. Keep V10-006/V10-007 implementation partial; run current-source public-text/CLI/SVG/compatibility regression cases and separately verify real release, package, documentation, service, support/privacy and provider destinations.",
+    "sourceGraphGroup": "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE",
+    "sourceGraphPathsAdded": [
+      "README.md",
+      "announcements/examples/animated/current.json",
+      "announcements/examples/staging/current.json",
+      "cli/README.md",
+      "cli/src/__tests__/feedback.test.ts",
+      "cli/src/__tests__/http.test.ts",
+      "cli/src/__tests__/plugin-init.test.ts",
+      "cli/src/__tests__/worktree.test.ts",
+      "cli/src/client/http.ts",
+      "cli/src/commands/channels.ts",
+      "cli/src/commands/client/agent.ts",
+      "cli/src/commands/client/common.ts",
+      "cli/src/commands/client/company.ts",
+      "cli/src/commands/client/connect.ts",
+      "cli/src/commands/client/context.ts",
+      "cli/src/commands/client/feedback.ts",
+      "cli/src/commands/client/plugin.ts",
+      "cli/src/commands/client/prompt.ts",
+      "cli/src/commands/client/secrets.ts",
+      "cli/src/commands/client/teams.ts",
+      "cli/src/commands/client/token.ts",
+      "cli/src/commands/env-lab.ts",
+      "cli/src/commands/install.ts",
+      "cli/src/commands/managed-agent.ts",
+      "cli/src/commands/routines.ts",
+      "cli/src/commands/service.ts",
+      "cli/src/commands/test-drive.ts",
+      "cli/src/commands/uninstall.ts",
+      "cli/src/commands/update.ts",
+      "cli/src/commands/worktree.ts",
+      "cli/src/config/env.ts",
+      "cli/src/index.ts",
+      "cli/src/node-version.test.ts",
+      "docs/adapters/adapter-ui-parser.md",
+      "docs/adapters/claude-local.md",
+      "docs/adapters/codex-local.md",
+      "docs/adapters/creating-an-adapter.md",
+      "docs/adapters/external-adapters.md",
+      "docs/adapters/http.md",
+      "docs/adapters/overview.md",
+      "docs/adapters/process.md",
+      "docs/api/authentication.md",
+      "docs/api/companies.md",
+      "docs/api/issues.md",
+      "docs/api/overview.md",
+      "docs/api/secrets.md",
+      "docs/cli/setup-commands.md",
+      "docs/da/guides/board-operator/importing-and-exporting.md",
+      "docs/deploy/database.md",
+      "docs/deploy/deployment-modes.md",
+      "docs/deploy/docker.md",
+      "docs/deploy/environment-variables.md",
+      "docs/deploy/local-development.md",
+      "docs/deploy/overview.md",
+      "docs/deploy/secrets.md",
+      "docs/deploy/storage.md",
+      "docs/deploy/tailscale-private-access.md",
+      "docs/guides/agent-developer/cost-reporting.md",
+      "docs/guides/agent-developer/heartbeat-protocol.md",
+      "docs/guides/agent-developer/how-agents-work.md",
+      "docs/guides/agent-developer/skills-store.md",
+      "docs/guides/agent-developer/task-workflow.md",
+      "docs/guides/board-operator/activity-log.md",
+      "docs/guides/board-operator/delegation.md",
+      "docs/guides/board-operator/editing-first-task-texts.md",
+      "docs/guides/board-operator/execution-workspaces-and-runtime-services.md",
+      "docs/guides/board-operator/importing-and-exporting.md",
+      "docs/guides/board-operator/status-cards.md",
+      "docs/start/architecture.md",
+      "docs/start/core-concepts.md",
+      "docs/start/quickstart.md",
+      "docs/start/what-is-paperclip.md",
+      "packages/adapter-utils/README.md",
+      "packages/adapters/hermes-gateway/README.md",
+      "packages/adapters/hermes/README.md",
+      "packages/adapters/openclaw-gateway/README.md",
+      "packages/google-sheets-mcp-server/README.md",
+      "packages/kv-demo-mcp-server/README.md",
+      "packages/mcp-server/README.md",
+      "packages/plugins/create-paperclip-plugin/README.md",
+      "packages/plugins/sdk/README.md",
+      "packages/shared/src/node-version.ts",
+      "ui/public/announcement-preview.svg",
+      "ui/public/sw.js"
+    ],
+    "sourceInventory": {
+      "sourceDeltaPathCount": 2017,
+      "fullDiffPathCount": 14362,
+      "newSourceDeltaPaths": [
+        "announcements/examples/animated/current.json",
+        "announcements/examples/staging/current.json",
+        "cli/src/__tests__/feedback.test.ts",
+        "cli/src/__tests__/http.test.ts",
+        "cli/src/__tests__/plugin-init.test.ts",
+        "cli/src/__tests__/worktree.test.ts",
+        "cli/src/client/http.ts",
+        "cli/src/commands/channels.ts",
+        "cli/src/commands/client/agent.ts",
+        "cli/src/commands/client/common.ts",
+        "cli/src/commands/client/company.ts",
+        "cli/src/commands/client/connect.ts",
+        "cli/src/commands/client/context.ts",
+        "cli/src/commands/client/feedback.ts",
+        "cli/src/commands/client/plugin.ts",
+        "cli/src/commands/client/prompt.ts",
+        "cli/src/commands/client/secrets.ts",
+        "cli/src/commands/client/teams.ts",
+        "cli/src/commands/client/token.ts",
+        "cli/src/commands/env-lab.ts",
+        "cli/src/commands/install.ts",
+        "cli/src/commands/managed-agent.ts",
+        "cli/src/commands/routines.ts",
+        "cli/src/commands/service.ts",
+        "cli/src/commands/test-drive.ts",
+        "cli/src/commands/uninstall.ts",
+        "cli/src/commands/update.ts",
+        "cli/src/commands/worktree.ts",
+        "cli/src/config/env.ts",
+        "cli/src/index.ts",
+        "cli/src/node-version.test.ts",
+        "packages/shared/src/node-version.ts",
+        "scripts/check-customer-brand.mjs",
+        "scripts/check-customer-brand.test.mjs",
+        "scripts/customer-brand-compatibility.json",
+        "ui/public/announcement-preview.svg",
+        "ui/public/sw.js"
+      ]
+    },
+    "helpReviewDisposition": {
+      "pairedArticlesReviewed": [],
+      "existingLinkedPairsRefreshed": [
+        {
+          "source": "cli/src/index.ts",
+          "articleId": "developer-and-advanced",
+          "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
+          "sourceSha256": "7e5caf8e9296cd201bb6ac816ef50bc4f23547b1e31284b9e4eb07110a854391",
+          "decision": "no_change",
+          "rationale": "Reviewed the four CLI help-text replacements against this English article: command names, options, routing, compatibility alias, stderr deprecation notice and permissions stay unchanged; the article already uses Blentera and remains accurate."
+        },
+        {
+          "source": "cli/src/index.ts",
+          "articleId": "developer-and-advanced-da",
+          "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
+          "sourceSha256": "7e5caf8e9296cd201bb6ac816ef50bc4f23547b1e31284b9e4eb07110a854391",
+          "decision": "no_change",
+          "rationale": "Gennemg\u00e5et de fire CLI-hj\u00e6lpetekster mod denne danske artikel: kommandoer, flag, API-adressevalg, kompatibilitetsalias og adgangskontrol er u\u00e6ndrede; artiklens Blentera-navn og migrationsvejledning er fortsat korrekte."
+        }
+      ],
+      "changedSourcePairDecisions": [
+        {
+          "source": "cli/src/index.ts",
+          "articleId": "developer-and-advanced",
+          "decision": "no_change",
+          "rationale": "Reviewed the four CLI help-text replacements against this English article: command names, options, routing, compatibility alias, stderr deprecation notice and permissions stay unchanged; the article already uses Blentera and remains accurate."
+        },
+        {
+          "source": "cli/src/index.ts",
+          "articleId": "developer-and-advanced-da",
+          "decision": "no_change",
+          "rationale": "Gennemg\u00e5et de fire CLI-hj\u00e6lpetekster mod denne danske artikel: kommandoer, flag, API-adressevalg, kompatibilitetsalias og adgangskontrol er u\u00e6ndrede; artiklens Blentera-navn og migrationsvejledning er fortsat korrekte."
+        }
+      ],
+      "noNewReviewPairsAdded": true,
+      "noBlanketSourceDecisionChanges": true
+    },
+    "requirementDisposition": {
+      "updatedFindings": [
+        "V10-006",
+        "V10-007"
+      ],
+      "implementationStatusesPromoted": 0,
+      "acceptanceStatusesChanged": 0,
+      "historicalRequirementRowsPreserved": 169
+    }
   }
 }

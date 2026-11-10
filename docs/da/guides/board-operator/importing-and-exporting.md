@@ -19,7 +19,7 @@ Blentera-virksomheder kan eksporteres som flytbare Markdown-pakker og importeres
 
 ## Pakkeformat
 
-Eksporterede pakker følger den engelske [Agent Companies-specifikation](https://docs.blentera.com/companies/companies-spec) og bruger en struktur baseret på Markdown:
+Eksporterede pakker bruger en Markdown-struktur som denne:
 
 ~~~text
 my-company/
@@ -39,7 +39,7 @@ my-company/
 - **COMPANY.md** indeholder virksomhedens navn, beskrivelse og metadata.
 - **AGENT.md**-filer indeholder agentidentitet, rolle og instruktioner.
 - **SKILL.md**-filer er kompatible med Agent Skills-økosystemet.
-- **.paperclip.yaml** indeholder valgfri Paperclip-specifik opsætning såsom adaptertyper, miljøinput og budgetter.
+- **.paperclip.yaml** indeholder valgfri Blentera-specifik opsætning såsom adaptertyper, miljøinput og budgetter.
 
 ## Eksport og import i appen
 

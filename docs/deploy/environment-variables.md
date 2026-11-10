@@ -3,7 +3,7 @@ title: Environment Variables
 summary: Full environment variable reference
 ---
 
-All environment variables that Paperclip uses for server configuration.
+All environment variables that Blentera uses for server configuration.
 
 ## Server Configuration
 
@@ -14,20 +14,20 @@ All environment variables that Paperclip uses for server configuration.
 | `PAPERCLIP_BIND_HOST` | (unset) | Required when `PAPERCLIP_BIND=custom` |
 | `HOST` | `127.0.0.1` | Legacy host override; prefer `PAPERCLIP_BIND` for new setups |
 | `DATABASE_URL` | (embedded) | PostgreSQL connection string |
-| `PAPERCLIP_HOME` | `~/.paperclip` | Base directory for all Paperclip data |
+| `PAPERCLIP_HOME` | `~/.paperclip` | Base directory for all Blentera data |
 | `PAPERCLIP_INSTANCE_ID` | `default` | Instance identifier (for multiple local instances) |
 | `PAPERCLIP_DEPLOYMENT_MODE` | `local_trusted` | Runtime mode override |
 | `PAPERCLIP_DEPLOYMENT_EXPOSURE` | `private` | Exposure policy when deployment mode is `authenticated` |
-| `PAPERCLIP_API_URL` | (auto-derived) | Paperclip API base URL. When set externally (e.g., via Kubernetes ConfigMap, load balancer, or reverse proxy), the server preserves the value instead of deriving it from the listen host and port. Useful for deployments where the public-facing URL differs from the local bind address. |
+| `PAPERCLIP_API_URL` | (auto-derived) | Blentera API base URL. When set externally (e.g., via Kubernetes ConfigMap, load balancer, or reverse proxy), the server preserves the value instead of deriving it from the listen host and port. Useful for deployments where the public-facing URL differs from the local bind address. |
 | `PAPERCLIP_CHAT_WEBHOOK_PUBLIC_URL` | (board public origin) | Optional HTTPS origin for native chat provider webhooks when ingress and the board use different hosts. Must have no credentials, path, query, or fragment; invalid configuration refuses startup. Used only for provider callback URLs, not board links, authentication, trusted hosts, or identity confirmation. |
-| `PAPERCLIP_RUNNER_PUBLIC_URL` | (unset) | Explicit `wss://` base URL used only when a remote `paperclip_runner` target dials Paperclip directly. Paperclip appends `/api/runner/v1/connect/<runId>`; the reverse proxy must forward WebSocket upgrades for that route. This value is never inferred from request headers. Daytona ignores it and uses provider ingress. |
+| `PAPERCLIP_RUNNER_PUBLIC_URL` | (unset) | Explicit `wss://` base URL used only when a remote `paperclip_runner` target dials Blentera directly. Blentera appends `/api/runner/v1/connect/<runId>`; the reverse proxy must forward WebSocket upgrades for that route. This value is never inferred from request headers. Daytona ignores it and uses provider ingress. |
 | `PAPERCLIP_RUNNER_CA_BUNDLE_PATH` | (unset) | Optional PEM CA bundle for direct runner WSS. Platform roots remain enabled. There is no insecure TLS bypass. |
-| `PAPERCLIP_RUNNER_REMOTE_BINARY_PATH` | (host build) | Host-local path to a `paperclip-runnerd` artifact built for the remote target OS and architecture. Required when Paperclip and the remote sandbox do not share a compatible platform; build metadata and the required transport mode are verified before launch. |
-| `PAPERCLIP_RUNNER_REMOTE_CODEX_PATH` | (unset) | Optional host-local path to a Codex executable built for the remote target OS and architecture. For remote Codex-backed runners, Paperclip stages and verifies this executable beside `paperclip-runnerd`. |
-| `PAPERCLIP_RUNNER_REMOTE_CODEX_NPM_SPEC` | (unset) | Optional pinned npm package spec (for example, `@openai/codex@0.156.0`) installed inside each fresh remote lease when its Codex harness is not baked into the sandbox image. Mutually exclusive with `PAPERCLIP_RUNNER_REMOTE_CODEX_PATH`; Paperclip verifies the installed executable before starting `runnerd`. |
-| `PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH` | (unset) | Host-local path to the immutable provider pack built by `pnpm --filter @paperclipai/paperclip-runner build:provider-pack`. The pack includes its target-built Node 24.11 runtime, locked production dependencies, OpenCode proxy/executable, and ACPX sidecar. Remote OpenCode and ACPX fail closed without it. A preinstalled pack is accepted only when its complete digested manifest matches this build-owned pack; otherwise Paperclip stages this pack into the sandbox. |
+| `PAPERCLIP_RUNNER_REMOTE_BINARY_PATH` | (host build) | Host-local path to a `paperclip-runnerd` artifact built for the remote target OS and architecture. Required when Blentera and the remote sandbox do not share a compatible platform; build metadata and the required transport mode are verified before launch. |
+| `PAPERCLIP_RUNNER_REMOTE_CODEX_PATH` | (unset) | Optional host-local path to a Codex executable built for the remote target OS and architecture. For remote Codex-backed runners, Blentera stages and verifies this executable beside `paperclip-runnerd`. |
+| `PAPERCLIP_RUNNER_REMOTE_CODEX_NPM_SPEC` | (unset) | Optional pinned npm package spec (for example, `@openai/codex@0.156.0`) installed inside each fresh remote lease when its Codex harness is not baked into the sandbox image. Mutually exclusive with `PAPERCLIP_RUNNER_REMOTE_CODEX_PATH`; Blentera verifies the installed executable before starting `runnerd`. |
+| `PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH` | (unset) | Host-local path to the immutable provider pack built by `pnpm --filter @paperclipai/paperclip-runner build:provider-pack`. The pack includes its target-built Node 24.11 runtime, locked production dependencies, OpenCode proxy/executable, and ACPX sidecar. Remote OpenCode and ACPX fail closed without it. A preinstalled pack is accepted only when its complete digested manifest matches this build-owned pack; otherwise Blentera stages this pack into the sandbox. |
 | `PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_INSTALL_ROOT` | `/opt/paperclip-runner/provider-pack` | Server-process-only selection of one exact preinstalled provider-pack directory for ordinary managed OpenCode Sandbox preparation. Use a normalized absolute path outside tenant-writable policy roots. The sealed Run authority binds this path and the build-owned manifest; a fixed system checksum verifies Node before it executes the full pack verifier. This does not select the controller-local pack, authorize a provider, or qualify a runtime. Agent configuration and workload environment cannot select it. |
-| `PAPERCLIP_HIDDEN_SETTINGS` | (unset) | Comma-separated settings surfaces to hide from the UI and floor at the API, for operators hosting Paperclip for others (managed cloud, internal shared server). See [Hiding settings surfaces](#hiding-settings-surfaces). |
+| `PAPERCLIP_HIDDEN_SETTINGS` | (unset) | Comma-separated settings surfaces to hide from the UI and floor at the API, for operators hosting Blentera for others (managed cloud, internal shared server). See [Hiding settings surfaces](#hiding-settings-surfaces). |
 | `PAPERCLIP_SETTING_DEFAULTS` | (unset) | JSON object replacing the schema default of selected instance settings, for hosting operators. See [Operator setting defaults](#operator-setting-defaults). |
 
 ### Optional SaaS Support Assistant
@@ -60,7 +60,7 @@ only `POST /api/chat-webhooks/*` from that host. Provider signatures still gate
 ingress; this variable does not expose routes or grant provider access.
 Never forward the private `local_trusted` board through a public tunnel.
 
-In Paperclip Cloud, chat callback URLs and account-linking URLs follow the
+For existing Paperclip Cloud accounts, chat callback URLs and account-linking URLs follow the
 instance's signed canonical origin after a warm instance is claimed, without
 requiring a restart. An explicit `PAPERCLIP_CHAT_WEBHOOK_PUBLIC_URL` still takes
 precedence for provider callbacks only; board links follow the claimed origin.
@@ -69,7 +69,7 @@ with an old URL.
 
 Task links in external messages require an externally safe HTTPS board URL.
 Local/private board URLs are omitted with instructions to open the task in
-Paperclip; the public webhook host is never substituted for the board. Identity
+Blentera; the public webhook host is never substituted for the board. Identity
 confirmation stays on the board and requires the user to be able to reach it.
 
 ### Preinstalled remote runner images
@@ -78,7 +78,7 @@ Remote sandbox images may preinstall `paperclip-runnerd`, `codex`, and the
 provider pack at `/opt/paperclip-runner/provider-pack` instead of
 paying the upload and npm-install cost on every fresh lease. Put both executable
 names on the sandbox user's `PATH`; `$HOME/.local/bin` is checked explicitly
-before `PATH`. Paperclip verifies runner build metadata, the selected PRP
+before `PATH`. Blentera verifies runner build metadata, the selected PRP
 transport capability, Codex startup, the provider-pack digest, exact harness
 pins, Node compatibility, and packaged bridge digests before linking artifacts
 into the run-specific runtime directory. A missing or incompatible executable falls back
@@ -87,10 +87,10 @@ to `PAPERCLIP_RUNNER_REMOTE_BINARY_PATH` and
 `PAPERCLIP_RUNNER_REMOTE_CODEX_PATH`) without changing the selected transport.
 OpenCode and ACPX instead fall back only to
 `PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH`; they never start a provider
-process on the Paperclip host for a remote target.
+process on the Blentera host for a remote target.
 The Daytona environment editor's **Configure image** action can create this
 image without a separate container registry: install the executables in its
-setup sandbox, finish setup, and Paperclip captures and promotes the resulting
+setup sandbox, finish setup, and Blentera captures and promotes the resulting
 Daytona snapshot for future leases.
 
 ### Hiding settings surfaces
@@ -208,7 +208,7 @@ These are set automatically by the server when invoking agents:
 |----------|-------------|
 | `PAPERCLIP_AGENT_ID` | Agent's unique ID |
 | `PAPERCLIP_COMPANY_ID` | Company ID |
-| `PAPERCLIP_API_URL` | Paperclip API base URL (inherits the server-level value; see Server Configuration above) |
+| `PAPERCLIP_API_URL` | Blentera API base URL (inherits the server-level value; see Server Configuration above) |
 | `PAPERCLIP_API_KEY` | Short-lived JWT for API auth |
 | `PAPERCLIP_RUN_ID` | Current heartbeat run ID |
 | `PAPERCLIP_TASK_ID` | Issue that triggered this wake |

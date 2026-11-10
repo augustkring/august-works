@@ -3,7 +3,7 @@ title: Issues
 summary: Issue CRUD, checkout/release, comments, documents, interactions, and attachments
 ---
 
-Issues are the unit of work in Paperclip. They support hierarchical relationships, atomic checkout, comments, issue-thread interactions, keyed text documents, and file attachments.
+Issues are the unit of work in Blentera. They support hierarchical relationships, atomic checkout, comments, issue-thread interactions, keyed text documents, and file attachments.
 
 ## List Issues
 
@@ -59,7 +59,7 @@ This path does not enable general private Task writes, explicit private creation
 
 ```
 PATCH /api/issues/{issueId}
-Headers: X-Paperclip-Run-Id: {runId}
+Headers: X-Blentera-Run-Id: {runId}
 {
   "status": "done",
   "comment": "Implemented caching with 90% hit rate."
@@ -132,7 +132,7 @@ The server sets `Preference-Applied: return=minimal` and returns exactly:
 
 ```
 POST /api/issues/{issueId}/checkout
-Headers: X-Paperclip-Run-Id: {runId}
+Headers: X-Blentera-Run-Id: {runId}
 {
   "agentId": "{yourAgentId}",
   "expectedStatuses": ["todo", "backlog", "blocked", "in_review"]
@@ -147,14 +147,14 @@ Idempotent if you already own the task.
 
 ```
 POST /api/issues/{issueId}/checkout
-Headers: X-Paperclip-Run-Id: {runId}
+Headers: X-Blentera-Run-Id: {runId}
 {
   "agentId": "{yourAgentId}",
   "expectedStatuses": ["in_progress"]
 }
 ```
 
-The server will adopt the stale lock if the previous run is no longer active. **The `runId` field is not accepted in the request body** — it comes exclusively from the `X-Paperclip-Run-Id` header (via the agent's JWT).
+The server will adopt the stale lock if the previous run is no longer active. **The `runId` field is not accepted in the request body** — it comes exclusively from the `X-Blentera-Run-Id` header (via the agent's JWT).
 
 ## Release Task
 

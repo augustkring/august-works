@@ -1,0 +1,274 @@
+{
+  "root": "/workspace/blentera-v10",
+  "head": "a0740e57821a381d13732116ff88639eb5d42f28",
+  "statusPorcelain": "M README.md\n M announcements/examples/animated/current.json\n M announcements/examples/staging/current.json\n M cli/README.md\n M cli/src/__tests__/http.test.ts\n M cli/src/__tests__/plugin-init.test.ts\n M cli/src/__tests__/worktree.test.ts\n M cli/src/client/http.ts\n M cli/src/commands/channels.ts\n M cli/src/commands/client/agent.ts\n M cli/src/commands/client/common.ts\n M cli/src/commands/client/company.ts\n M cli/src/commands/client/connect.ts\n M cli/src/commands/client/context.ts\n M cli/src/commands/client/feedback.ts\n M cli/src/commands/client/plugin.ts\n M cli/src/commands/client/prompt.ts\n M cli/src/commands/client/secrets.ts\n M cli/src/commands/client/teams.ts\n M cli/src/commands/client/token.ts\n M cli/src/commands/env-lab.ts\n M cli/src/commands/install.ts\n M cli/src/commands/managed-agent.ts\n M cli/src/commands/routines.ts\n M cli/src/commands/service.ts\n M cli/src/commands/test-drive.ts\n M cli/src/commands/uninstall.ts\n M cli/src/commands/update.ts\n M cli/src/commands/worktree.ts\n M cli/src/config/env.ts\n M cli/src/index.ts\n M doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/SHA256SUMS\n M doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/source-revision-ledger.json\n M doc/operations/v10-safe-change-graph.json\n M doc/operations/v10-safe-change-graph.source.json\n M docs/adapters/adapter-ui-parser.md\n M docs/adapters/claude-local.md\n M docs/adapters/codex-local.md\n M docs/adapters/creating-an-adapter.md\n M docs/adapters/external-adapters.md\n M docs/adapters/http.md\n M docs/adapters/overview.md\n M docs/adapters/process.md\n M docs/api/authentication.md\n M docs/api/companies.md\n M docs/api/issues.md\n M docs/api/overview.md\n M docs/api/secrets.md\n M docs/cli/setup-commands.md\n M docs/da/guides/board-operator/importing-and-exporting.md\n M docs/deploy/database.md\n M docs/deploy/deployment-modes.md\n M docs/deploy/docker.md\n M docs/deploy/environment-variables.md\n M docs/deploy/local-development.md\n M docs/deploy/overview.md\n M docs/deploy/secrets.md\n M docs/deploy/storage.md\n M docs/deploy/tailscale-private-access.md\n M docs/guides/agent-developer/cost-reporting.md\n M docs/guides/agent-developer/heartbeat-protocol.md\n M docs/guides/agent-developer/how-agents-work.md\n M docs/guides/agent-developer/skills-store.md\n M docs/guides/agent-developer/task-workflow.md\n M docs/guides/board-operator/activity-log.md\n M docs/guides/board-operator/delegation.md\n M docs/guides/board-operator/editing-first-task-texts.md\n M docs/guides/board-operator/execution-workspaces-and-runtime-services.md\n M docs/guides/board-operator/importing-and-exporting.md\n M docs/guides/board-operator/status-cards.md\n M docs/help/change-review.json\n M docs/start/architecture.md\n M docs/start/core-concepts.md\n M docs/start/quickstart.md\n M docs/start/what-is-paperclip.md\n M packages/adapter-utils/README.md\n M packages/adapters/hermes-gateway/README.md\n M packages/adapters/hermes/README.md\n M packages/adapters/openclaw-gateway/README.md\n M packages/google-sheets-mcp-server/README.md\n M packages/kv-demo-mcp-server/README.md\n M packages/mcp-server/README.md\n M packages/plugins/create-paperclip-plugin/README.md\n M packages/plugins/sdk/README.md\n M scripts/check-customer-brand.mjs\n M scripts/check-customer-brand.test.mjs\n M scripts/customer-brand-compatibility.json\n M ui/public/announcement-preview.svg\n M ui/public/sw.js",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8
+    },
+    "cli/README.md": {
+      "sha256": "6819b582315985b95c2ab4b9e76d8e6ca1bc45053f7f5eceae7b3e53db4ecbd0",
+      "bytes": 1426
+    },
+    "cli/package.json": {
+      "sha256": "310ff36caa8839a9c2090ea84b54c61a1b28a9763edb415323edd6337fa6d1f1",
+      "bytes": 2148
+    },
+    "cli/src/__tests__/http.test.ts": {
+      "sha256": "f0ef326b6ebd3891e5be7e148fba9b910b12f2f1ef1bd3e4779acf442103f885",
+      "bytes": 4142
+    },
+    "cli/src/__tests__/plugin-init.test.ts": {
+      "sha256": "2f5f4ecd93ae57b59670d6f8b6be609a8d31321de1c771b864a62e6f32a488a9",
+      "bytes": 6770
+    },
+    "cli/src/__tests__/worktree.test.ts": {
+      "sha256": "10c1514fc91305c852f1eac5264a64af447a578b976034562dc9c40780691b68",
+      "bytes": 104357
+    },
+    "cli/src/client/http.ts": {
+      "sha256": "0902b2511c5a36578d210d97c2130aea6195fe2c4048b0dcadca73a775df7c13",
+      "bytes": 7656
+    },
+    "cli/src/commands/channels.ts": {
+      "sha256": "8a41c81edfe1ae46aca20cd5fc5de95c8d239a3aab15881ca6a666efb3b98a31",
+      "bytes": 3902
+    },
+    "cli/src/commands/client/agent.ts": {
+      "sha256": "7bbea947e17f0721937d07b516c894110662fdae1c27e3aa538f84ef9aa4d88d",
+      "bytes": 30873
+    },
+    "cli/src/commands/client/common.ts": {
+      "sha256": "825f27c4d9970fb04048fc3cb56e8537d6cb47f3b1b90007561f717227a8b2d0",
+      "bytes": 10018
+    },
+    "cli/src/commands/client/company.ts": {
+      "sha256": "8553c79050f68ebaf0a8bf6433776105abf8aa74f40c31fe6bf0efec547eb0c4",
+      "bytes": 78449
+    },
+    "cli/src/commands/client/connect.ts": {
+      "sha256": "e7d0f772751d459637847722b1259244d49403f64658893719d4df08b7a9a87e",
+      "bytes": 9223
+    },
+    "cli/src/commands/client/context.ts": {
+      "sha256": "a196a6e397aafd313909f185c7d4fbb42f4650a4290cf651aa26d2dbf14b5642",
+      "bytes": 5664
+    },
+    "cli/src/commands/client/feedback.ts": {
+      "sha256": "0e68e78caa67e241e3dca23151e30e0d892acb3c9ea9e628a2eadd805d0c1973",
+      "bytes": 24050
+    },
+    "cli/src/commands/client/plugin.ts": {
+      "sha256": "7ed2b485602eab3438b77447f7e21a2e120d12beb8bb3deed0852512418b7601",
+      "bytes": 36380
+    },
+    "cli/src/commands/client/prompt.ts": {
+      "sha256": "be73542e703c2be7c837aa43748864d87763cecd04a4d69436762795f82f805d",
+      "bytes": 9202
+    },
+    "cli/src/commands/client/secrets.ts": {
+      "sha256": "01727e5dbe6f17235bcfc4ea0737c6b73833929462993efd9c99676ddbb18266",
+      "bytes": 25721
+    },
+    "cli/src/commands/client/teams.ts": {
+      "sha256": "174f076537cdf07c7d3cee19baa87d713e9b0b65307233e4307d6ef474523609",
+      "bytes": 26914
+    },
+    "cli/src/commands/client/token.ts": {
+      "sha256": "3a1c27a84b10ccad7ad02ade5e3f67f57d33bb7ba93fbce67b1386a7d90e8899",
+      "bytes": 9007
+    },
+    "cli/src/commands/env-lab.ts": {
+      "sha256": "721f99013f6d360cf2ec35d80963feedae85fbe44e1960d8fc511e54d2e0795d",
+      "bytes": 10205
+    },
+    "cli/src/commands/install.ts": {
+      "sha256": "2352d9a6eadb8747b83abeb6b39c43eed2e37e11320721336a57dd8b250ff42f",
+      "bytes": 21892
+    },
+    "cli/src/commands/managed-agent.ts": {
+      "sha256": "965a1905a3c4fb63ae1c274bdf2721ac686dfd8db5fb2660884844cfaa826178",
+      "bytes": 14269
+    },
+    "cli/src/commands/routines.ts": {
+      "sha256": "44c13ce57013c2f2f8dfc95c0c9b95485c054cc5600655bf0c6b3a24268fd3fc",
+      "bytes": 10954
+    },
+    "cli/src/commands/service.ts": {
+      "sha256": "c7b4afe462c3a3c554b27589633fc27ebc559bd1e67e3a5e7956b0fe4d51c741",
+      "bytes": 11277
+    },
+    "cli/src/commands/test-drive.ts": {
+      "sha256": "96ec8b7216283e3f46cd8b5b5244dc353fb5c020ee9b8b4677a7f9ebc0e40405",
+      "bytes": 17502
+    },
+    "cli/src/commands/uninstall.ts": {
+      "sha256": "59fd75ca1192c4e54e61d32372e552dcf622cb9d96ef389d88f43f4c19514225",
+      "bytes": 3576
+    },
+    "cli/src/commands/update.ts": {
+      "sha256": "29e57632f166358e8786a790f55aed6177abbb361b15f9fafc114ceea8df20ab",
+      "bytes": 19225
+    },
+    "cli/src/commands/worktree.ts": {
+      "sha256": "835a66c7e90990850d30c0207dc88d70b5ea4f1a1aab1d7b10b4929e7839384c",
+      "bytes": 165586
+    },
+    "cli/src/config/env.ts": {
+      "sha256": "23bd901fa0b6a849c38be1e0fa32224ebf683186e7b0e3309dcfbd75e15d91b6",
+      "bytes": 5083
+    },
+    "cli/src/index.ts": {
+      "sha256": "7e5caf8e9296cd201bb6ac816ef50bc4f23547b1e31284b9e4eb07110a854391",
+      "bytes": 13204
+    },
+    "cli/tsconfig.json": {
+      "sha256": "6335453813e3f30925f54fd36c9da9d4904b1fcaf882a2bf0e90c3fcd11a2238",
+      "bytes": 246
+    },
+    "cli/vitest.config.ts": {
+      "sha256": "2d4ac4b984c9b3891a9eabb63b9b5c9e6164b291453e8071055a56d68d67bfda",
+      "bytes": 121
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972
+    },
+    "packages/adapter-utils/README.md": {
+      "sha256": "03780f1d0423b1832d698a4fbf8c5e3ea973def0d163e017dc479e62f5a7d8e5",
+      "bytes": 1790
+    },
+    "packages/adapters/hermes-gateway/README.md": {
+      "sha256": "1320e1529bb979298825064a5d6ac67d90b988b1f872b942e4727988fead0a0d",
+      "bytes": 958
+    },
+    "packages/adapters/hermes/README.md": {
+      "sha256": "af91012955fbfdb07662e4c395b66d487b20b6bd5abca2416dd8e533fa8e7fd3",
+      "bytes": 14583
+    },
+    "packages/adapters/openclaw-gateway/README.md": {
+      "sha256": "d5b792e80a049908785abfb08fb0b796809b2a8daf7d7da70f933f37065406e0",
+      "bytes": 3185
+    },
+    "packages/google-sheets-mcp-server/README.md": {
+      "sha256": "51e64da12ce52158beb325c468fc0ad29f7e77c95ad8b0c66adf22d9ad431d8d",
+      "bytes": 4634
+    },
+    "packages/kv-demo-mcp-server/README.md": {
+      "sha256": "2f1686b007bb1a211d13b83f896d3d66c916ff772b0610a095fdb09d98389d92",
+      "bytes": 9207
+    },
+    "packages/mcp-server/README.md": {
+      "sha256": "986eb2bfc1fa9c09aceca2399cafe4d18f487bd1e5539280dee121b472a062ea",
+      "bytes": 4784
+    },
+    "packages/plugins/create-paperclip-plugin/README.md": {
+      "sha256": "1f3bb974e714db018d1d843092ff911f61cee047d7dfbda5071a883d9e9d8ad1",
+      "bytes": 1909
+    },
+    "packages/plugins/sdk/README.md": {
+      "sha256": "22a55f42040de3407367848c41b22a83885c3ad6e3646f7a1bab2e37304682aa",
+      "bytes": 56687
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978
+    },
+    "scripts/check-customer-brand.mjs": {
+      "sha256": "892e3b692c741bab33a1ade06f200ef00b0e8bebaff31397ec2e27f160820f67",
+      "bytes": 15237
+    },
+    "scripts/check-customer-brand.test.mjs": {
+      "sha256": "0ceb5e135cc24d4eeed493c60ff87a0f6fc8687b0ffc439f3932558eac40fce6",
+      "bytes": 6040
+    },
+    "scripts/customer-brand-compatibility.json": {
+      "sha256": "9e3364fc1b025d3e0881e1305f4327090ae7f02467be29b53fdfa7ba664e3556",
+      "bytes": 12648
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "d4a8a2618a214cd6925da2c770d9cdf31e5e3e621fcbca70d772c2ad8a968773",
+      "bytes": 201159
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+      "bytes": 1269209
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "860654da71dd4451cb4a90ca8861eb68357694b7727231219156dc3784b422f4",
+      "bytes": 527535
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "18ad2db8f88d675dac8cc3a4854fd6928b3c79e733e878e51f4cb03e308ad3b0",
+      "bytes": 136739
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "67f1300f890faa92d875c45eb146c53ac87edbd1e24144006812ac6687d7eb9e",
+      "bytes": 130393
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883
+    },
+    "ui/public/announcement-preview.svg": {
+      "sha256": "d20743e628fdb8c8e137bccc336fbc6d402d9e7dc101cfc97146e3d202e9d3e4",
+      "bytes": 928
+    },
+    "ui/public/sw.js": {
+      "sha256": "e7bf7b8116534a55919ebb3cba1c901810a592ca5a722ac8d2c0f1e36b609816",
+      "bytes": 4768
+    }
+  },
+  "qualificationInputPaths": [
+    "server/src/services/heartbeat.ts",
+    "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/native-execution-input.ts",
+    "server/src/services/native-runtime/native-project-repository-source.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+    "server/src/services/native-runtime/native-execution-input.test.ts",
+    "server/src/services/native-runtime/native-project-repository-source.test.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+    "server/vitest.config.ts",
+    "server/package.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".nvmrc",
+    "cli/src/__tests__/http.test.ts",
+    "cli/src/__tests__/plugin-init.test.ts",
+    "cli/src/__tests__/worktree.test.ts",
+    "cli/package.json",
+    "cli/vitest.config.ts",
+    "cli/tsconfig.json"
+  ],
+  "scope": "exact involved production/tests and tool configuration plus dirty server/package files; HEAD identifies unchanged repository bytes, not a loaded-module trace",
+  "fixturePoolMax": null,
+  "fixturePoolScope": "Read actual fixture createDb options; not inferred by this harness",
+  "sourceWritesByThisHarness": false
+}

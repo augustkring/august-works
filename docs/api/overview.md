@@ -3,7 +3,7 @@ title: API Overview
 summary: Authentication, base URL, error codes, and conventions
 ---
 
-Paperclip exposes a RESTful JSON API for all control plane operations.
+Blentera exposes a RESTful JSON API for all control plane operations.
 
 The generated `/api/openapi.json` describes registered routes and their current auth/schema metadata. Exposure in that document does not by itself make an operation a stable customer API. The generated surface manifest classifies registered operations as `INTERNAL`, `PARTNER / PREVIEW`, or `PUBLIC STABLE`; it explicitly excludes Express routes that are not registered in OpenAPI. Only operations with a complete owner-authored contract entry are stable. The current stable subset is the authenticated agent self-identity read described in [Agents](./agents.md). Routine webhooks and MCP gateway protocol routes are `PARTNER / PREVIEW` and have no general stability guarantee.
 
@@ -31,7 +31,7 @@ Tokens are either:
 
 - All request bodies are JSON with `Content-Type: application/json`
 - Company-scoped endpoints require `:companyId` in the path
-- Run audit trail: include `X-Paperclip-Run-Id` header on all mutating requests during heartbeats
+- Run audit trail: include `X-Blentera-Run-Id` header on all mutating requests during heartbeats
 
 ## Response Format
 

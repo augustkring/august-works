@@ -1,23 +1,23 @@
-# Paperclip MCP Server
+# Blentera MCP Server
 
 This package targets the stable MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.4.0), which implements protocol revision `2026-07-28`. The stdio entry uses `serveStdio` and keeps the SDK's legacy-client support enabled; the tool gateway still owns authorization, company scope, approvals, and audit.
 
-Model Context Protocol server for Paperclip.
+Model Context Protocol server for Blentera.
 
-This package is a thin MCP wrapper over the existing Paperclip REST API. It does
+This package is a thin MCP wrapper over the existing Blentera REST API. It does
 not talk to the database directly and it does not reimplement business logic.
 
 ## Authentication
 
 The server reads its configuration from environment variables:
 
-- `PAPERCLIP_API_URL` - Paperclip base URL, for example `http://localhost:3100`
+- `PAPERCLIP_API_URL` - Blentera base URL, for example `http://localhost:3100`
 - `PAPERCLIP_API_KEY` - bearer token used for `/api` requests
 - `PAPERCLIP_COMPANY_ID` - optional default company for company-scoped tools
 - `PAPERCLIP_AGENT_ID` - optional default agent for checkout helpers
 - `PAPERCLIP_RUN_ID` - optional run id forwarded on mutating requests
 
-Inside an active heartbeat, Paperclip also injects `PAPERCLIP_RUNTIME_TOOLS_*` variables. They enable the run-scoped `connections_search` and `connection_request` tools and expire with the run.
+Inside an active heartbeat, Blentera also injects `PAPERCLIP_RUNTIME_TOOLS_*` variables. They enable the run-scoped `connections_search` and `connection_request` tools and expire with the run.
 
 ## Usage
 

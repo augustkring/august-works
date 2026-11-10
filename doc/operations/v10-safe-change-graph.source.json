@@ -21,13 +21,13 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1987,
+    "sourceDeltaPathCount": 2017,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14218,
+    "fullDiffPathCount": 14362,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -123,12 +123,96 @@
       "bindingClause": "6. `V10-006` Paperclip + August Works customer-facing brand-token inventory, allow-list and CI leakage gate.",
       "reconciliationStatus": "partial_implementation_open",
       "implementationStatus": "partial_implementation",
-      "implementationFinding": "`scripts/check-customer-brand.mjs` parses rendered UI strings and JSX and fails on unapproved Paperclip/August Works copy; exact compatibility literals are recorded in `scripts/customer-brand-compatibility.json`. Its walk is limited to `ui/src` TypeScript/TSX and i18n JSON. It does not inventory repository docs, CLI, email, public asset/package surfaces, nor generate an allow-listed cross-surface brand-token inventory.",
-      "remainingWork": "Extend or explicitly compose the gate with the scoped docs/CLI/email/announcement/public-asset surfaces and produce the brief\u2019s complete token inventory/allow-list; retain legally required MIT/provenance and technical compatibility strings as classified exceptions.",
+      "implementationFinding": "The current R8 customer-brand gate inventories rendered UI/HTML/SVG/JSON, root and CLI READMEs, CLI source, configured public documentation and assets, the shared CLI Node startup notice, announcement JSON, published package READMEs, email/notification/product-notice source, and exact categorized compatibility exceptions. R8 includes five Node regression tests and Root-recorded full-inventory gate evidence. This is source-gate evidence, not brand-release, GA, provider, or deployment qualification.",
+      "remainingWork": "Keep individual exact compatibility exceptions and rerun the final-source brand gate and focused regression coverage on the final accepted bytes. Review any changed English/Danish Help copy pair and every changed-source pair linked from English or locale Help. Keep release, hosted-domain, provider, and certification claims separately qualified; do not promote the requirement from source inventory or local gate output.",
       "changedReferencedPaths": [
+        "README.md",
+        "announcements/examples/animated/current.json",
+        "announcements/examples/staging/current.json",
+        "cli/README.md",
+        "cli/src/__tests__/feedback.test.ts",
+        "cli/src/__tests__/http.test.ts",
+        "cli/src/__tests__/plugin-init.test.ts",
+        "cli/src/__tests__/worktree.test.ts",
+        "cli/src/client/http.ts",
+        "cli/src/commands/channels.ts",
+        "cli/src/commands/client/agent.ts",
+        "cli/src/commands/client/common.ts",
+        "cli/src/commands/client/company.ts",
+        "cli/src/commands/client/connect.ts",
+        "cli/src/commands/client/context.ts",
+        "cli/src/commands/client/feedback.ts",
+        "cli/src/commands/client/plugin.ts",
+        "cli/src/commands/client/prompt.ts",
+        "cli/src/commands/client/secrets.ts",
+        "cli/src/commands/client/teams.ts",
+        "cli/src/commands/client/token.ts",
+        "cli/src/commands/env-lab.ts",
+        "cli/src/commands/install.ts",
+        "cli/src/commands/managed-agent.ts",
+        "cli/src/commands/routines.ts",
+        "cli/src/commands/service.ts",
+        "cli/src/commands/test-drive.ts",
+        "cli/src/commands/uninstall.ts",
+        "cli/src/commands/update.ts",
+        "cli/src/commands/worktree.ts",
+        "cli/src/config/env.ts",
+        "cli/src/index.ts",
+        "cli/src/node-version.test.ts",
+        "docs/adapters/adapter-ui-parser.md",
+        "docs/adapters/claude-local.md",
+        "docs/adapters/codex-local.md",
+        "docs/adapters/creating-an-adapter.md",
+        "docs/adapters/external-adapters.md",
+        "docs/adapters/http.md",
+        "docs/adapters/overview.md",
+        "docs/adapters/process.md",
+        "docs/api/authentication.md",
+        "docs/api/companies.md",
+        "docs/api/issues.md",
+        "docs/api/overview.md",
+        "docs/api/secrets.md",
+        "docs/cli/setup-commands.md",
+        "docs/da/guides/board-operator/importing-and-exporting.md",
+        "docs/deploy/database.md",
+        "docs/deploy/deployment-modes.md",
+        "docs/deploy/docker.md",
+        "docs/deploy/environment-variables.md",
+        "docs/deploy/local-development.md",
+        "docs/deploy/overview.md",
+        "docs/deploy/secrets.md",
+        "docs/deploy/storage.md",
+        "docs/deploy/tailscale-private-access.md",
+        "docs/guides/agent-developer/cost-reporting.md",
+        "docs/guides/agent-developer/heartbeat-protocol.md",
+        "docs/guides/agent-developer/how-agents-work.md",
+        "docs/guides/agent-developer/skills-store.md",
+        "docs/guides/agent-developer/task-workflow.md",
+        "docs/guides/board-operator/activity-log.md",
+        "docs/guides/board-operator/delegation.md",
+        "docs/guides/board-operator/editing-first-task-texts.md",
+        "docs/guides/board-operator/execution-workspaces-and-runtime-services.md",
+        "docs/guides/board-operator/importing-and-exporting.md",
+        "docs/guides/board-operator/status-cards.md",
+        "docs/start/architecture.md",
+        "docs/start/core-concepts.md",
+        "docs/start/quickstart.md",
+        "docs/start/what-is-paperclip.md",
+        "packages/adapter-utils/README.md",
+        "packages/adapters/hermes-gateway/README.md",
+        "packages/adapters/hermes/README.md",
+        "packages/adapters/openclaw-gateway/README.md",
+        "packages/google-sheets-mcp-server/README.md",
+        "packages/kv-demo-mcp-server/README.md",
+        "packages/mcp-server/README.md",
+        "packages/plugins/create-paperclip-plugin/README.md",
+        "packages/plugins/sdk/README.md",
+        "packages/shared/src/node-version.ts",
         "scripts/check-customer-brand.mjs",
         "scripts/check-customer-brand.test.mjs",
-        "scripts/customer-brand-compatibility.json"
+        "scripts/customer-brand-compatibility.json",
+        "ui/public/announcement-preview.svg",
+        "ui/public/sw.js"
       ],
       "safeChangeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
@@ -141,15 +225,101 @@
       "bindingClause": "7. `V10-007` README/docs/app/email/announcement migration to Blentera.",
       "reconciliationStatus": "partial_implementation_open",
       "implementationStatus": "partial_implementation",
-      "implementationFinding": "Canonical Blentera identity is consumed by account mail, invitations, notifications, support/security/privacy links and the service-health origin; current docs/help and CLI migration guidance use Blentera wording. The current customer-copy gate scans only UI source, and the source review does not establish migration of every README, app, announcement, published package, email template, or deployment origin.",
-      "remainingWork": "Inventory and reconcile all named customer-facing release surfaces and add the corresponding docs/CLI/email/announcement checks. Preserve upstream MIT/provenance and compatibility identities; qualify delivered email and public origins separately.",
+      "implementationFinding": "The accepted brand batch reconciles current public copy across the README, CLI, public documentation, Help, published package READMEs, announcements, and public assets. Help retains the documented canonical support, privacy and security contact routes and Trust Center destination, while identifying upstream project destinations as upstream. These repository bytes do not show that documentation, packages, email, app assets, or a service origin have been published or delivered.",
+      "remainingWork": "Review changed Help-linked source pairs against exact accepted source hashes. Verify published docs, CLI/package distribution, application/service-worker assets, delivered email, and production support/privacy/security origins at their real destinations. Keep implementation partial until those separate release and operator checks have receipts.",
       "changedReferencedPaths": [
+        "README.md",
+        "announcements/examples/animated/current.json",
+        "announcements/examples/staging/current.json",
+        "cli/README.md",
+        "cli/src/__tests__/feedback.test.ts",
+        "cli/src/__tests__/http.test.ts",
+        "cli/src/__tests__/plugin-init.test.ts",
+        "cli/src/__tests__/worktree.test.ts",
+        "cli/src/client/http.ts",
+        "cli/src/commands/channels.ts",
+        "cli/src/commands/client/agent.ts",
+        "cli/src/commands/client/common.ts",
+        "cli/src/commands/client/company.ts",
+        "cli/src/commands/client/connect.ts",
+        "cli/src/commands/client/context.ts",
+        "cli/src/commands/client/feedback.ts",
+        "cli/src/commands/client/plugin.ts",
+        "cli/src/commands/client/prompt.ts",
+        "cli/src/commands/client/secrets.ts",
+        "cli/src/commands/client/teams.ts",
+        "cli/src/commands/client/token.ts",
+        "cli/src/commands/env-lab.ts",
+        "cli/src/commands/install.ts",
+        "cli/src/commands/managed-agent.ts",
+        "cli/src/commands/routines.ts",
+        "cli/src/commands/service.ts",
+        "cli/src/commands/test-drive.ts",
+        "cli/src/commands/uninstall.ts",
+        "cli/src/commands/update.ts",
+        "cli/src/commands/worktree.ts",
+        "cli/src/config/env.ts",
+        "cli/src/index.ts",
+        "cli/src/node-version.test.ts",
+        "docs/adapters/adapter-ui-parser.md",
+        "docs/adapters/claude-local.md",
+        "docs/adapters/codex-local.md",
+        "docs/adapters/creating-an-adapter.md",
+        "docs/adapters/external-adapters.md",
+        "docs/adapters/http.md",
+        "docs/adapters/overview.md",
+        "docs/adapters/process.md",
+        "docs/api/authentication.md",
+        "docs/api/companies.md",
+        "docs/api/issues.md",
+        "docs/api/overview.md",
+        "docs/api/secrets.md",
+        "docs/cli/setup-commands.md",
+        "docs/da/guides/board-operator/importing-and-exporting.md",
+        "docs/deploy/database.md",
+        "docs/deploy/deployment-modes.md",
+        "docs/deploy/docker.md",
+        "docs/deploy/environment-variables.md",
+        "docs/deploy/local-development.md",
+        "docs/deploy/overview.md",
+        "docs/deploy/secrets.md",
+        "docs/deploy/storage.md",
+        "docs/deploy/tailscale-private-access.md",
+        "docs/guides/agent-developer/cost-reporting.md",
+        "docs/guides/agent-developer/heartbeat-protocol.md",
+        "docs/guides/agent-developer/how-agents-work.md",
+        "docs/guides/agent-developer/skills-store.md",
+        "docs/guides/agent-developer/task-workflow.md",
+        "docs/guides/board-operator/activity-log.md",
+        "docs/guides/board-operator/delegation.md",
+        "docs/guides/board-operator/editing-first-task-texts.md",
+        "docs/guides/board-operator/execution-workspaces-and-runtime-services.md",
+        "docs/guides/board-operator/importing-and-exporting.md",
+        "docs/guides/board-operator/status-cards.md",
+        "docs/start/architecture.md",
+        "docs/start/core-concepts.md",
+        "docs/start/quickstart.md",
+        "docs/start/what-is-paperclip.md",
+        "packages/adapter-utils/README.md",
+        "packages/adapters/hermes-gateway/README.md",
+        "packages/adapters/hermes/README.md",
+        "packages/adapters/openclaw-gateway/README.md",
+        "packages/google-sheets-mcp-server/README.md",
+        "packages/kv-demo-mcp-server/README.md",
+        "packages/mcp-server/README.md",
+        "packages/plugins/create-paperclip-plugin/README.md",
+        "packages/plugins/sdk/README.md",
+        "packages/shared/src/node-version.ts",
         "packages/shared/src/product-identity.ts",
         "scripts/check-customer-brand.mjs",
+        "scripts/check-customer-brand.test.mjs",
+        "scripts/customer-brand-compatibility.json",
         "server/src/services/notifications/channel-delivery.ts",
         "server/src/services/notifications/notifications.ts",
         "server/src/services/saas/auth-delivery.ts",
-        "server/src/services/saas/invitations.ts"
+        "server/src/services/saas/invitations.ts",
+        "ui/public/announcement-preview.svg",
+        "ui/public/sw.js"
       ],
       "safeChangeIds": [
         "SCR-V10-AUTH-IDENTITY",
@@ -21464,6 +21634,498 @@
       "state": "source_delta_present_review_open",
       "sourceBeforePins": [
         {
+          "path": "README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "e534958eedeeeb641c980e2a2b5e23143743f83bdf5a2866b2697a46944263aa"
+        },
+        {
+          "path": "announcements/examples/animated/current.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "a2fe161f9b74f82fc9aa958b9f8b4b59afe23da8d5de93ea81007df2ba1a3b5c"
+        },
+        {
+          "path": "announcements/examples/staging/current.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "cedde2d64744eb35bad74404f45ab414900e676b01779d60e22946a0eb729831"
+        },
+        {
+          "path": "cli/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "30c188bff476d5682239a40263b0f7cf5992fd249cf018ae1d8834069331b282"
+        },
+        {
+          "path": "cli/src/__tests__/feedback.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ea4c0bc293e98e8d9bce1541498e9c3658efe8aae4f1b7e15ef4e7eb1516cc83"
+        },
+        {
+          "path": "cli/src/__tests__/http.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "d73ee5d7e60c48f446361c8ed57042fc672c0304390c453f54960c343baa46c8"
+        },
+        {
+          "path": "cli/src/__tests__/plugin-init.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "444fb652dc633cf7f26935362a0a051a57944cb31216b9ff071187996a949a44"
+        },
+        {
+          "path": "cli/src/__tests__/worktree.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "33e396a5dabe1fca2c6111e8c9d69e51d422fe97aee78219d5cfaf5dbab58ead"
+        },
+        {
+          "path": "cli/src/client/http.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "99de4bfa4942b0c05eacc16afdc913fab7610919ba7fdabfe036908e386603c8"
+        },
+        {
+          "path": "cli/src/commands/channels.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "7bf30a1a392ec1c202de2525b6bf66680d20bd0d14611a68256bf1ed945ffe30"
+        },
+        {
+          "path": "cli/src/commands/client/agent.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5d58f29adc5dda4a45c59f27ad0ab43e7edf35aa75d284a12c9d46bb23acef70"
+        },
+        {
+          "path": "cli/src/commands/client/common.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "e8f56a3d354bb2ffe69c8141ba867889026da2bef59d5bc8c71dc1295a8b9f5f"
+        },
+        {
+          "path": "cli/src/commands/client/company.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6"
+        },
+        {
+          "path": "cli/src/commands/client/connect.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ea33d5d3e30a4582cbcc904e9ed11ea10da60d9ba76d2c82a0f6e1aec56717c2"
+        },
+        {
+          "path": "cli/src/commands/client/context.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "0850a1de0fd8214e585defc28707df51f1c6a215d9c5e79a2f0e2a7a309c650a"
+        },
+        {
+          "path": "cli/src/commands/client/feedback.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "8526853f1494089499020c0f33130dd9542ff641b8925fbb98b6c236eebdc00f"
+        },
+        {
+          "path": "cli/src/commands/client/plugin.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "996f9c9852017f9349f06ee6e7bd8b1af0c0c6c43995e702e5611b64d51bac59"
+        },
+        {
+          "path": "cli/src/commands/client/prompt.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "87b5d70f36203193deccf4853a6a4ba34004a72363b4089c2ee583babc460019"
+        },
+        {
+          "path": "cli/src/commands/client/secrets.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "bf46bc79e2a294a276fbce188b22e7053684e166c80de8bc0d89af857af670a4"
+        },
+        {
+          "path": "cli/src/commands/client/teams.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "0eff2ec04962e03f5607965ea1c0603bcfeedeea109b194b95f3aaabc1cdebee"
+        },
+        {
+          "path": "cli/src/commands/client/token.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "78cd6669db80bd68a0990ce596a9b3d68848dae07ae0d3ee6fd59193e1e20206"
+        },
+        {
+          "path": "cli/src/commands/env-lab.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "82780a1fa9e3617b62d4a851520afcc12388d8a1d7ab7623c20947ae9ba50dc5"
+        },
+        {
+          "path": "cli/src/commands/install.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "f9b9a3ba1e3d6ae62196b1668a6b1897c17ac9f430baabaf01186f7e146c27c1"
+        },
+        {
+          "path": "cli/src/commands/managed-agent.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "98c967a197a4a092441aa56fbf72e5d11c7d32e3c701216a09ec0a90907e458d"
+        },
+        {
+          "path": "cli/src/commands/routines.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "6c2c5638040fc4cc94338e0ca921e52930ff0b83887d8c479f8fc3d5374f8a1a"
+        },
+        {
+          "path": "cli/src/commands/service.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "8bfcfc447e654f0a954d143c9bba2d7c862024ea3d6b800c1c8c23f61d192bd8"
+        },
+        {
+          "path": "cli/src/commands/test-drive.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ff2ab48112e53c5478f55edbfc47e43d5678efdf9b1f34c22815addddb475841"
+        },
+        {
+          "path": "cli/src/commands/uninstall.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "b1b5fc0f58ac348853e0e7eda721160f7f3dde17e07c349f461313b9a9916a98"
+        },
+        {
+          "path": "cli/src/commands/update.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "37e30f42334ff689ebc794ff17065b7fe8beebbbb15ac03dae938cd8d1f81296"
+        },
+        {
+          "path": "cli/src/commands/worktree.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5081dfc756f46150d8a8290818c6d8d272774c94a3b3dfa69c91c88edc7e1dce"
+        },
+        {
+          "path": "cli/src/config/env.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "9ee17f3b2962afcc52f38cada75321bab4e4a6fecb898e8fc081f4e6e66b2491"
+        },
+        {
+          "path": "cli/src/index.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "7c3b4bfb3de9950590a50abff7c917115e819091148a76a658ff7233654568be"
+        },
+        {
+          "path": "cli/src/node-version.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "770d9da59b13af8f6d33dc8912be1a40bb69979dca3afd755bda2d46081f38af"
+        },
+        {
+          "path": "docs/adapters/adapter-ui-parser.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "eb1d6052daa290a9cd97946d74167e51766e82f4a7188fe6688758f5240014c6"
+        },
+        {
+          "path": "docs/adapters/claude-local.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "1c7d24519c07579b0d8e21c0b659503008e9e007f663324b6ff8fe2e5394c5ce"
+        },
+        {
+          "path": "docs/adapters/codex-local.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "2e5d0c0c6945ee722d906b80d55982128687cafd1d41186dfe4eefaf01ce6ebb"
+        },
+        {
+          "path": "docs/adapters/creating-an-adapter.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "99a6a0d2e71c168916f22e498adbd86ad764ec572dc49d8546b851adff9fb1b2"
+        },
+        {
+          "path": "docs/adapters/external-adapters.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ccca48fee9cb7f742593a63d775887f6304be9b4ddaaf39a4c57deb91b8a1d4c"
+        },
+        {
+          "path": "docs/adapters/http.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "2bd877e56a0444008c0af1dfd46d8c4a55710a4397ef43db38d7cfea7cb24ba9"
+        },
+        {
+          "path": "docs/adapters/overview.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "52f1f8ede2830c9f06d3f144a0d86a3b88e9d37fc6f02a001411c8db0b27b353"
+        },
+        {
+          "path": "docs/adapters/process.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "bd9d54cd884683c112a9090f87e55da04b8b7422fe30a92d136ad7df08355fdf"
+        },
+        {
+          "path": "docs/api/authentication.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "457d72f90ff5295014a3f94785da4799dbd1ab39abc792bd6fb42f6503de22c9"
+        },
+        {
+          "path": "docs/api/companies.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "d9ae20590f144e9607c85b1e8e6c79aaafcb13870c9b589e5acb7e39f3b88de4"
+        },
+        {
+          "path": "docs/api/issues.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "67a12dd7238031b364a0680b2f8a7c63dec538fe9626c872b61aa54a5a3fab4f"
+        },
+        {
+          "path": "docs/api/overview.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "4b8393f36cf62a6f30f2d488d75ff96bcb918e399e7caf95eac67f63b97b8909"
+        },
+        {
+          "path": "docs/api/secrets.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "f43e5b30aa79e0a4b5e5ad9cff1dafcbcd89b93c47f8003e35610a3ad6e4911a"
+        },
+        {
+          "path": "docs/cli/setup-commands.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "154e140e88c6821285dda4f6b36a00d25f49431321bf2144272dc105320ea4e6"
+        },
+        {
+          "path": "docs/da/guides/board-operator/importing-and-exporting.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "docs/deploy/database.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "40f4ec01b32f1ffb9581559c3fd2b8475f209bc4bd01714c7372f90776c1bb17"
+        },
+        {
+          "path": "docs/deploy/deployment-modes.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "9265f5b9ec2a65518fc46de5c13b6738cb90be99856b6652b07b053136e3eb94"
+        },
+        {
+          "path": "docs/deploy/docker.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "1a79e89de836a512368a0bedafad07fbfca8b1d52db20f255e2584a1f12da8d8"
+        },
+        {
+          "path": "docs/deploy/environment-variables.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "d849fccdf2d9a63f9acffd804f39529745183d2dd6c5d5a42acefe236050a4e9"
+        },
+        {
+          "path": "docs/deploy/local-development.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "db48c886abe2afab57c1a6452591124f102cbf2840a22fa1fe045d5528f86e19"
+        },
+        {
+          "path": "docs/deploy/overview.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "6299ca6528b5e2b79f084fa9d4f5d902bb99e20fd4211f5db8c6c651d54312f6"
+        },
+        {
+          "path": "docs/deploy/secrets.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "bd2b9156d31c690047a906b2dbac01ae551cb988902201429ea3ecad936b37e6"
+        },
+        {
+          "path": "docs/deploy/storage.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "059947dda603f25639a4badd6960e65bee1d6505fe4f9b4b5348a12492d869d2"
+        },
+        {
+          "path": "docs/deploy/tailscale-private-access.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "32693d60bb3e5ac8369b13d5ccedb772b0068fa980e68a6646e8470cfede309c"
+        },
+        {
+          "path": "docs/guides/agent-developer/cost-reporting.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "813fc79560cc3794a859146fc413dbb3323fa9b66b27eff90dc07ee4de4ab3bb"
+        },
+        {
+          "path": "docs/guides/agent-developer/heartbeat-protocol.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "f44bdf67a19d0ffdbb10c2030aab168cf8d6d29cd84e6f1c4d76fdc8c032d381"
+        },
+        {
+          "path": "docs/guides/agent-developer/how-agents-work.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "1233386c45bf6996cb9276f2fa7af420c7ecad16dd4b76fce76db3792f81c75a"
+        },
+        {
+          "path": "docs/guides/agent-developer/skills-store.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "8464e5d6e21660346cb79dd375a9a4a7afccbfee75b4f260d614d400a11254f1"
+        },
+        {
+          "path": "docs/guides/agent-developer/task-workflow.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "7b8d8cc0a80ea7e44180ab53e250d64ea015f2d7d1436373d62db31575d55041"
+        },
+        {
+          "path": "docs/guides/board-operator/activity-log.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "8ebc4d4e0fd7fea1f2601fa20b561720188e45e679cb16502e59a16415972e29"
+        },
+        {
+          "path": "docs/guides/board-operator/delegation.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "371f99aa566a5a74d9039d7f82c329dbe5c72b9bcde263a69fcc92c6429d08e9"
+        },
+        {
+          "path": "docs/guides/board-operator/editing-first-task-texts.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5b37a9f42b52b2a9cfdfee2f0a967cc4ec33a38674aa10172885371d66e5aadf"
+        },
+        {
+          "path": "docs/guides/board-operator/execution-workspaces-and-runtime-services.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "267f1fa9d660a436237da29574ce0fffee0ba9fcfd48a55d8347fcd1c259d14f"
+        },
+        {
+          "path": "docs/guides/board-operator/importing-and-exporting.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "0d86d7312da93be4453923dcf345ca331770b3ce8be04fe10caf0b10d3c3139d"
+        },
+        {
+          "path": "docs/guides/board-operator/status-cards.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "47fcdf6af1f2426f0cb44684a18576e10a43216ff31d37561f72f4a269d7cb42"
+        },
+        {
+          "path": "docs/start/architecture.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ca083e7e9b701b409356ff7d6554d8b553df58c7e1f83dfee10c127ee024e08f"
+        },
+        {
+          "path": "docs/start/core-concepts.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "cceba294c7c7559442683517c8513824d972626bb96ed6685b10f3ea3b10bba7"
+        },
+        {
+          "path": "docs/start/quickstart.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "537427a628d57151f41a8190ee1ec178b8998647559e32289c11b09d312f7699"
+        },
+        {
+          "path": "docs/start/what-is-paperclip.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "6ef8f67e41ef5842631563d7a4aec3396a32de1add4c1de4f43e1c9c4a7c8d33"
+        },
+        {
+          "path": "packages/adapter-utils/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5eac7bf8fde5f1c76376a8df0660c6be335d8ad3a05c852d0b5ee2c0904c97ce"
+        },
+        {
+          "path": "packages/adapters/hermes-gateway/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "287da5b828b2a98f788f89f78f96c405f641cad190dea2159c25636928c4af8b"
+        },
+        {
+          "path": "packages/adapters/hermes/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "fb2c6f969ad897d241680546976e5de3796c7f7218c675f6afe7b726ddfea444"
+        },
+        {
+          "path": "packages/adapters/openclaw-gateway/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "43251aed6f465eee3c0cec146d417d93beb72f51bbda76bc899e438e8d570954"
+        },
+        {
+          "path": "packages/google-sheets-mcp-server/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "274333200ce1a928b6a569793f5aa8c648a0c3982d0bdbc13e2ba7bcc6eba6b4"
+        },
+        {
+          "path": "packages/kv-demo-mcp-server/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "c0c3df563ccd28940eb43b25db9436e7deeeec67274aa79e092341d039f00e82"
+        },
+        {
+          "path": "packages/mcp-server/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "d5d2460fe3857ce63a5f7d4b74123fd07859494eadedae067d9238c8963da0fa"
+        },
+        {
+          "path": "packages/plugins/create-paperclip-plugin/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "7bd068688a8170728b83706b4b23bf090599e8759dcf4fbcfbe9bfec3776f8c4"
+        },
+        {
+          "path": "packages/plugins/sdk/README.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "9b4fc804c57b3f0adf208a1b95512ac88a7c073f2f92861e691fc7bc5fb5700d"
+        },
+        {
+          "path": "packages/shared/src/node-version.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "3e61b974ef1e91fbd3e6c1ab2594306fbabbdf80047d7a268165c1e69ebd3bae"
+        },
+        {
           "path": "packages/shared/src/types/search.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -21650,6 +22312,18 @@
           "sha256": "72e7297b95c6edf5b0b86ad7c96cf0ca6e3da6ffaec90e7a93192ad98beb9b65"
         },
         {
+          "path": "ui/public/announcement-preview.svg",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "050a8792969511c7cddd948170b8c6570d09cbe2bd59669b27717655f2c4370a"
+        },
+        {
+          "path": "ui/public/sw.js",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "2cfdbaa7506fc36d6d783ec47b93a5ce7116b28dccde90c8393c88c70de87e8c"
+        },
+        {
           "path": "ui/src/components/AccountExperienceLanguageSelect.test.tsx",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -21783,6 +22457,88 @@
         }
       ],
       "sourcePaths": [
+        "README.md",
+        "announcements/examples/animated/current.json",
+        "announcements/examples/staging/current.json",
+        "cli/README.md",
+        "cli/src/__tests__/feedback.test.ts",
+        "cli/src/__tests__/http.test.ts",
+        "cli/src/__tests__/plugin-init.test.ts",
+        "cli/src/__tests__/worktree.test.ts",
+        "cli/src/client/http.ts",
+        "cli/src/commands/channels.ts",
+        "cli/src/commands/client/agent.ts",
+        "cli/src/commands/client/common.ts",
+        "cli/src/commands/client/company.ts",
+        "cli/src/commands/client/connect.ts",
+        "cli/src/commands/client/context.ts",
+        "cli/src/commands/client/feedback.ts",
+        "cli/src/commands/client/plugin.ts",
+        "cli/src/commands/client/prompt.ts",
+        "cli/src/commands/client/secrets.ts",
+        "cli/src/commands/client/teams.ts",
+        "cli/src/commands/client/token.ts",
+        "cli/src/commands/env-lab.ts",
+        "cli/src/commands/install.ts",
+        "cli/src/commands/managed-agent.ts",
+        "cli/src/commands/routines.ts",
+        "cli/src/commands/service.ts",
+        "cli/src/commands/test-drive.ts",
+        "cli/src/commands/uninstall.ts",
+        "cli/src/commands/update.ts",
+        "cli/src/commands/worktree.ts",
+        "cli/src/config/env.ts",
+        "cli/src/index.ts",
+        "cli/src/node-version.test.ts",
+        "docs/adapters/adapter-ui-parser.md",
+        "docs/adapters/claude-local.md",
+        "docs/adapters/codex-local.md",
+        "docs/adapters/creating-an-adapter.md",
+        "docs/adapters/external-adapters.md",
+        "docs/adapters/http.md",
+        "docs/adapters/overview.md",
+        "docs/adapters/process.md",
+        "docs/api/authentication.md",
+        "docs/api/companies.md",
+        "docs/api/issues.md",
+        "docs/api/overview.md",
+        "docs/api/secrets.md",
+        "docs/cli/setup-commands.md",
+        "docs/da/guides/board-operator/importing-and-exporting.md",
+        "docs/deploy/database.md",
+        "docs/deploy/deployment-modes.md",
+        "docs/deploy/docker.md",
+        "docs/deploy/environment-variables.md",
+        "docs/deploy/local-development.md",
+        "docs/deploy/overview.md",
+        "docs/deploy/secrets.md",
+        "docs/deploy/storage.md",
+        "docs/deploy/tailscale-private-access.md",
+        "docs/guides/agent-developer/cost-reporting.md",
+        "docs/guides/agent-developer/heartbeat-protocol.md",
+        "docs/guides/agent-developer/how-agents-work.md",
+        "docs/guides/agent-developer/skills-store.md",
+        "docs/guides/agent-developer/task-workflow.md",
+        "docs/guides/board-operator/activity-log.md",
+        "docs/guides/board-operator/delegation.md",
+        "docs/guides/board-operator/editing-first-task-texts.md",
+        "docs/guides/board-operator/execution-workspaces-and-runtime-services.md",
+        "docs/guides/board-operator/importing-and-exporting.md",
+        "docs/guides/board-operator/status-cards.md",
+        "docs/start/architecture.md",
+        "docs/start/core-concepts.md",
+        "docs/start/quickstart.md",
+        "docs/start/what-is-paperclip.md",
+        "packages/adapter-utils/README.md",
+        "packages/adapters/hermes-gateway/README.md",
+        "packages/adapters/hermes/README.md",
+        "packages/adapters/openclaw-gateway/README.md",
+        "packages/google-sheets-mcp-server/README.md",
+        "packages/kv-demo-mcp-server/README.md",
+        "packages/mcp-server/README.md",
+        "packages/plugins/create-paperclip-plugin/README.md",
+        "packages/plugins/sdk/README.md",
+        "packages/shared/src/node-version.ts",
         "packages/shared/src/types/search.ts",
         "packages/shared/src/validators/search.ts",
         "scripts/check-customer-brand.mjs",
@@ -21814,6 +22570,8 @@
         "server/src/services/task-search.ts",
         "tests/e2e/account-locale-isolation.ts",
         "tests/e2e/aw-v9-language.spec.ts",
+        "ui/public/announcement-preview.svg",
+        "ui/public/sw.js",
         "ui/src/components/AccountExperienceLanguageSelect.test.tsx",
         "ui/src/components/AccountExperienceLanguageSelect.tsx",
         "ui/src/components/ExperienceLanguageSelect.tsx",
@@ -21839,6 +22597,38 @@
       ],
       "deletedSourcePaths": [],
       "changedSourcePaths": [
+        "announcements/examples/animated/current.json",
+        "announcements/examples/staging/current.json",
+        "cli/src/__tests__/feedback.test.ts",
+        "cli/src/__tests__/http.test.ts",
+        "cli/src/__tests__/plugin-init.test.ts",
+        "cli/src/__tests__/worktree.test.ts",
+        "cli/src/client/http.ts",
+        "cli/src/commands/channels.ts",
+        "cli/src/commands/client/agent.ts",
+        "cli/src/commands/client/common.ts",
+        "cli/src/commands/client/company.ts",
+        "cli/src/commands/client/connect.ts",
+        "cli/src/commands/client/context.ts",
+        "cli/src/commands/client/feedback.ts",
+        "cli/src/commands/client/plugin.ts",
+        "cli/src/commands/client/prompt.ts",
+        "cli/src/commands/client/secrets.ts",
+        "cli/src/commands/client/teams.ts",
+        "cli/src/commands/client/token.ts",
+        "cli/src/commands/env-lab.ts",
+        "cli/src/commands/install.ts",
+        "cli/src/commands/managed-agent.ts",
+        "cli/src/commands/routines.ts",
+        "cli/src/commands/service.ts",
+        "cli/src/commands/test-drive.ts",
+        "cli/src/commands/uninstall.ts",
+        "cli/src/commands/update.ts",
+        "cli/src/commands/worktree.ts",
+        "cli/src/config/env.ts",
+        "cli/src/index.ts",
+        "cli/src/node-version.test.ts",
+        "packages/shared/src/node-version.ts",
         "packages/shared/src/types/search.ts",
         "packages/shared/src/validators/search.ts",
         "scripts/check-customer-brand.mjs",
@@ -21870,6 +22660,8 @@
         "server/src/services/task-search.ts",
         "tests/e2e/account-locale-isolation.ts",
         "tests/e2e/aw-v9-language.spec.ts",
+        "ui/public/announcement-preview.svg",
+        "ui/public/sw.js",
         "ui/src/components/AccountExperienceLanguageSelect.test.tsx",
         "ui/src/components/AccountExperienceLanguageSelect.tsx",
         "ui/src/components/ExperienceLanguageSelect.tsx",

@@ -613,10 +613,10 @@
     {
       "source": "cli/src/index.ts",
       "articleId": "developer-and-advanced",
-      "sourceSha256": "d41fa52f77eede589e65890f8810ef8a87b2012d0a5f8a9abf4989b41a73bf75",
+      "sourceSha256": "7e5caf8e9296cd201bb6ac816ef50bc4f23547b1e31284b9e4eb07110a854391",
       "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
-      "decision": "updated",
-      "rationale": "Paired Help guidance now names the canonical blentera command, the same-implementation paperclipai compatibility entry, stderr deprecation, and the migration guide without claiming publication or changing stored state and authority."
+      "decision": "no_change",
+      "rationale": "Reviewed the four CLI help-text replacements against this English article: command names, options, routing, compatibility alias, stderr deprecation notice and permissions stay unchanged; the article already uses Blentera and remains accurate."
     },
     {
       "source": "server/src/routes/index.ts",
@@ -637,10 +637,10 @@
     {
       "source": "cli/src/index.ts",
       "articleId": "developer-and-advanced-da",
-      "sourceSha256": "d41fa52f77eede589e65890f8810ef8a87b2012d0a5f8a9abf4989b41a73bf75",
+      "sourceSha256": "7e5caf8e9296cd201bb6ac816ef50bc4f23547b1e31284b9e4eb07110a854391",
       "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
-      "decision": "updated",
-      "rationale": "Paired Help guidance now names the canonical blentera command, the same-implementation paperclipai compatibility entry, stderr deprecation, and the migration guide without claiming publication or changing stored state and authority."
+      "decision": "no_change",
+      "rationale": "Gennemg\u00e5et de fire CLI-hj\u00e6lpetekster mod denne danske artikel: kommandoer, flag, API-adressevalg, kompatibilitetsalias og adgangskontrol er u\u00e6ndrede; artiklens Blentera-navn og migrationsvejledning er fortsat korrekte."
     },
     {
       "source": "server/src/routes/index.ts",
