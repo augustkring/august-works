@@ -27,15 +27,16 @@ import {
   activityLog, agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
   chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, companies, createDb,
   agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
-  runtimeVersionCatalog, runtimeHostCommands, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
+  runtimeVersionCatalog, runtimeHostCommands, runtimeSandboxBindings, runtimePolicySnapshots, runtimeOperations, sandboxQualificationRuns, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
 } from "@paperclipai/db";
-import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
+import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostRequestSchema, sandboxHostReplySchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
 import { assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
 import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/native-direct-input.js";
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
 import { environmentService } from "../../services/environments.js";
 import { readRunLeaseCleanup, verifyNativeCleanupRuntimeState } from "../../services/execution-sandbox/run-lease-cleanup.js";
+import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { environmentRuntimeService } from "../../services/environment-runtime.js";
 import { executionSandboxService } from "../../services/execution-sandbox/sandbox-service.js";
 import { openShellBackend } from "../../services/execution-sandbox/openshell-backend.js";
@@ -1391,6 +1392,11 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     } });
 
   let binding: Awaited<ReturnType<typeof service.create>>;
+  let setupAdmissionOwner: { bindingId: string; cellId: string; generation: string; hostId: string;
+    claimKey: string; claimVersion: number; bindingVersion: number; startCommandId: string;
+    policySnapshotId: string; policyHash: string;
+    manifestId: string; manifestHash: string; hostEpoch: number; imageDigest: string;
+    sandboxId: string; containerId: string; requesterUserId: string } | null = null;
   let sessionHostEngine: any = null;
   let sessionOverlayUpperDir: string | null = null;
   let fixtureSandboxExists = false;
@@ -1430,6 +1436,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     stopCheckerExit: number | null; stopReceiptMatched: boolean; startBindingDigest: string | null;
   };
   let nativeRunnerClosureWitness: NativeRunnerClosureWitness | null = null;
+  const nativeRunnerLaunchIntentRunIds = new Set<string>();
+  let modelProviderRequestCount = 0;
   let activeHostExecStreams = 0;
   let nextRuntimeExecuteStreamId = 0;
   const activeRuntimeExecuteStreams = new Map<number, number>();
@@ -2964,8 +2972,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
               !canonicalChannelTask && !canonicalAppConversationTask) ||
           Object.prototype.hasOwnProperty.call((await db.select({ payload: runtimeHostCommands.payload })
             .from(runtimeHostCommands).where(eq(runtimeHostCommands.id, commandId)).limit(1))[0]?.payload ?? {},
-            "__nativeConformancePolicyProof"))
+            "__nativeConformancePolicyProof")) {
         throw new Error("software_only_host_peer_current_task_owner_changed");
+      }
     }
     if (snapshot.capabilitySnapshotHash !== currentBinding.capabilitySnapshotHash)
       throw new Error("software_only_host_peer_current_authority_changed");
@@ -3971,6 +3980,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const nativePreparationPurpose = purposeByRequestId.get(request.requestId) ??
       (requestArgv[3] === "paperclip-native-asset-erasure" ? "native_provider_data_erasure" : null);
     const requestLabel = requestArgv[0] === "sh" && requestArgv[1] === "-c" ? requestArgv[3] : null;
+    if (expectedRunId && (requestLabel === "paperclip-runner-launch" || request.modelBrokerSession?.phase === "start"))
+      nativeRunnerLaunchIntentRunIds.add(expectedRunId);
     relayCommandOwnerByRequestId.set(request.requestId, requestLabel === "paperclip-runner-monitor"
       ? "runner_monitor" : requestLabel === "paperclip-runner-process-identity"
         ? "runner_identity_read" : requestLabel === "paperclip-runner-signal"
@@ -4427,6 +4438,68 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const admittedPromise = service.admit(actor, companyId, binding.id, { expectedVersion: binding.version + 1, policySnapshotId: compiled.id });
     const admitted = await driveHost(admittedPromise);
     if (admitted.binding.status !== "running") throw new Error("conversation_software_host_workload_not_running");
+    if (!nativeConformanceMode) {
+      const expectedVersion = binding.version + 1;
+      const claimKey = `v7-sandbox-admission:${binding.id}:${cell.generation}:${expectedVersion}:${compiled.id}`;
+      const [claim] = await db.select().from(activityLog).where(and(
+        eq(activityLog.companyId, companyId), eq(activityLog.entityType, "runtime_sandbox"),
+        eq(activityLog.entityId, binding.id), eq(activityLog.action, "sandbox.admission_claimed"),
+        sql`${activityLog.details}->>'claimKey' = ${claimKey}`)).limit(1);
+      const claimDetails = claim?.details && typeof claim.details === "object" && !Array.isArray(claim.details)
+        ? claim.details as Record<string, unknown> : {};
+      const [policy] = await db.select().from(runtimePolicySnapshots).where(and(
+        eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.id, compiled.id),
+        eq(runtimePolicySnapshots.bindingId, binding.id), eq(runtimePolicySnapshots.executionManifestId, manifest.id),
+        eq(runtimePolicySnapshots.status, "qualified"))).limit(1);
+      const prepareRows = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeHostId, host.id),
+        eq(runtimeHostCommands.runtimeCellId, cell.id), eq(runtimeHostCommands.cellGeneration, BigInt(cell.generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+        sql`${runtimeHostCommands.payload}->>'action' = 'prepare'`,
+        sql`${runtimeHostCommands.payload}->'provisioning'->>'purpose' = 'admission'`,
+        sql`${runtimeHostCommands.payload}->'provisioning'->>'operationKey' = ${claimKey}`));
+      const prepareRequest = prepareRows.length === 1 ? sandboxHostRequestSchema.safeParse(prepareRows[0]!.payload) : null;
+      const prepareReply = prepareRows.length === 1 ? sandboxHostReplySchema.safeParse(prepareRows[0]!.safeResult) : null;
+      const request = prepareRequest?.success ? prepareRequest.data : null;
+      const reply = prepareReply?.success ? prepareReply.data : null;
+      const [start] = admitted.operationId ? await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.id, admitted.operationId),
+        eq(runtimeHostCommands.runtimeHostId, host.id), eq(runtimeHostCommands.runtimeCellId, cell.id),
+        eq(runtimeHostCommands.cellGeneration, BigInt(cell.generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"))) : [];
+      const startRequestResult = start ? sandboxHostRequestSchema.safeParse(start.payload) : null;
+      const startReplyResult = start ? sandboxHostReplySchema.safeParse(start.safeResult) : null;
+      const startRequest = startRequestResult?.success ? startRequestResult.data : null;
+      const startReply = startReplyResult?.success ? startReplyResult.data : null;
+      const claimVersion = Number(claimDetails.claimVersion);
+      if (!claim || claim.actorType !== "user" || claim.actorId !== actor.userId || claimDetails.claimKey !== claimKey ||
+          claimDetails.expectedVersion !== expectedVersion || claimDetails.claimVersion !== claimVersion ||
+          claimVersion !== expectedVersion + 1 || admitted.binding.version !== claimVersion + 1 ||
+          claimDetails.generation !== cell.generation.toString() || claimDetails.policySnapshotId !== compiled.id ||
+          claimDetails.executionManifestId !== manifest.id || claimDetails.executionManifestHash !== manifest.hash ||
+          !policy || !request || !reply || request.action !== "prepare" || reply.action !== "prepare" ||
+          request.scope.companyId !== companyId || request.scope.bindingId !== binding.id || request.scope.cellId !== cell.id ||
+          request.scope.cellGeneration !== cell.generation.toString() || request.hostEpoch !== host.credentialVersion ||
+          request.imageDigest !== reply.imageDigest || reply.hostEpoch !== host.credentialVersion ||
+          reply.bindingVersion !== claimVersion || reply.requiresRecreate || !reply.sandboxId || !reply.containerId ||
+          request.provisioning?.operationKey !== claimKey || request.provisioning.bindingVersion !== claimVersion ||
+          request.provisioning.policyHash !== policy.policyHash || policy.policyHash !== claimDetails.policyHash)
+        throw new Error("conversation_software_host_prepared_admission_owner_missing");
+      if (!start || !startRequest || !startReply || startRequest.action !== "start" || startReply.action !== "start" ||
+          startRequest.scope.bindingId !== binding.id || startRequest.scope.cellGeneration !== cell.generation.toString() ||
+          startRequest.hostEpoch !== host.credentialVersion || startRequest.imageDigest !== request.imageDigest ||
+          startRequest.start?.idempotencyKey !== `v7-sandbox-start:${binding.id}:${cell.generation}:${claimVersion}:${compiled.id}` ||
+          startRequest.start.policyHash !== policy.policyHash || startReply.sandboxId !== reply.sandboxId ||
+          startReply.containerId !== reply.containerId || startReply.imageDigest !== request.imageDigest ||
+          startReply.policyHash !== policy.policyHash)
+        throw new Error("conversation_software_host_prepared_admission_start_receipt_missing");
+      setupAdmissionOwner = { bindingId: binding.id, cellId: cell.id, generation: cell.generation.toString(),
+        hostId: host.id, claimKey, claimVersion, bindingVersion: admitted.binding.version, startCommandId: start.id,
+        policySnapshotId: compiled.id, policyHash: policy.policyHash,
+        manifestId: manifest.id, manifestHash: manifest.hash, hostEpoch: host.credentialVersion,
+        imageDigest: request.imageDigest, sandboxId: reply.sandboxId, containerId: reply.containerId,
+        requesterUserId: actor.userId! };
+    }
     preparationStage="admitted_lease";
     const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
       eq(environmentLeases.id, expectedLeaseId), eq(environmentLeases.heartbeatRunId, runId),
@@ -4567,7 +4640,242 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       return { runId: expectedRunId, claims, token: provider.credential };
   };
 
+  const assertProvenNotLaunchedRun = async (leaseId: string) => {
+      // Native selection persists the logical runner/session IDs and the
+      // observed phase before a process starts. This branch proves that exact
+      // prelaunch state; it never manufactures a PID or Stop receipt.
+      if (!expectedRunId || !expectedTaskRoot || nativeRunnerClosureWitness ||
+          nativeRunnerLaunchIntentRunIds.has(expectedRunId) || activeHostExecStreams !== 0 || activeRuntimeExecuteStreams.size !== 0 ||
+          activeHostOperations.size !== 0 || activeModelRequests !== 0 || modelProviderRequestCount !== 0 ||
+          attachedSessionProviders.size !== 0 || modelBrokerSessionReceipts.length !== 0 ||
+          [...nativeSessionBackingByKey.values()].some(session => session.runId === expectedRunId))
+        throw new Error("scheduler_unlaunched_native_run_host_proof_incomplete");
+      const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.id, expectedRunId))).limit(1);
+      const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, unknown> : {};
+      let execution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+      try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { /* Fail closed below. */ }
+      const recovery = run?.resultJson && typeof run.resultJson === "object" && !Array.isArray(run.resultJson)
+        ? (run.resultJson as Record<string, unknown>).executionRecovery : null;
+      const recoveryFacts = recovery && typeof recovery === "object" && !Array.isArray(recovery)
+        ? recovery as Record<string, unknown> : {};
+      const context = run?.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+        ? run.contextSnapshot as Record<string, unknown> : {};
+      const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+        eq(environmentLeases.id, leaseId), eq(environmentLeases.heartbeatRunId, expectedRunId),
+        eq(environmentLeases.environmentId, environment.id))).limit(1);
+      const events = await db.select({ eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload })
+        .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.runId, expectedRunId)));
+      const safePrelaunchSpans = new Set(["heartbeat.queue", "comment.to_run_created", "question_response.to_run_created",
+        "heartbeat.prepare_before_environment", "heartbeat.prepare_after_environment", "skills.prepare", "environment.acquire",
+        "environment.workspace.realize", "sandbox.lifecycle.selected", "task.prepare", "environment.startup"]);
+      const spans = events.filter(event => event.eventType === "run.performance.span");
+      const eventsArePrelaunchOnly = events.every(event => {
+        if (event.eventType === "lifecycle" || event.eventType === "error") return true;
+        if (event.eventType !== "run.performance.span" || !event.payload || typeof event.payload !== "object" || Array.isArray(event.payload))
+          return false;
+        const payload = event.payload as Record<string, unknown>;
+        return payload.schema === "paperclip.run-performance-span.v1" && typeof payload.span === "string" &&
+          safePrelaunchSpans.has(payload.span);
+      }) && spans.length <= safePrelaunchSpans.size &&
+        new Set(spans.map(event => event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+          ? (event.payload as Record<string, unknown>).span : null)).size === spans.length;
+      const hostExecutions = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
+        sql`${runtimeHostCommands.payload}->>'runId' = ${expectedRunId}`));
+      const modelReservations = await db.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations)
+        .where(and(eq(orchestrationModelReservations.companyId, companyId),
+          eq(orchestrationModelReservations.conversationRunId, expectedRunId)));
+      const dispatchIntents = profile.nativeModelInputDispatchIntents;
+      const noDispatchReceipt = run?.nativeInputSourceProtocolVersion === 0 &&
+        (dispatchIntents === undefined || Array.isArray(dispatchIntents) && dispatchIntents.length === 0) &&
+        profile.nativeInputSourceReceipt == null &&
+        (profile.nativeToolCallDispatchAssociations === undefined ||
+          Array.isArray(profile.nativeToolCallDispatchAssociations) && profile.nativeToolCallDispatchAssociations.length === 0);
+      const logicalIdentityMatches = Boolean(run && execution &&
+        execution.binding.companyId === companyId && execution.binding.runId === run.id &&
+        execution.binding.agentId === agentId && execution.binding.issueId === run.nativeIssueId &&
+        execution.session.normalizedSessionId && execution.session.normalizedSessionId === run.nativeSessionId &&
+        typeof run.runnerInstanceId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(run.runnerInstanceId));
+      const noProcessIdentity = run && run.nativePhase === "observed" && run.nativePhaseUpdatedAt !== null &&
+        run.processPid === null && run.processGroupId === null && run.processStartedAt === null &&
+        run.sessionIdAfter === null && run.nativeProcessCleanupPending !== true;
+      const noLaunchEvidence = run?.status === "failed" && run.runtimeMode === "native" && run.nativeIssueId === context.issueId &&
+        run.finishedAt !== null && logicalIdentityMatches && noProcessIdentity && noDispatchReceipt &&
+        recoveryFacts.kind === "bootstrap" && recoveryFacts.providerWorkStarted === false && eventsArePrelaunchOnly &&
+        hostExecutions.length === 0 && modelReservations.length === 0;
+      const leaseOutcomeMatches = nativeConformanceMode
+        ? lease?.status === (run?.status === "cancelled" && lease?.leasePolicy !== "reuse_by_environment" ? "expired" : "released") && !lease.failureReason
+        : lease?.leasePolicy === "reuse_by_environment"
+          ? lease.status === "released" && !lease.failureReason
+          : lease?.status === "expired" && lease.failureReason === "paperclip_runner_destroy_after_turn";
+      if (!noLaunchEvidence || !lease || !leaseOutcomeMatches || lease.cleanupStatus !== "success" || !lease.releasedAt)
+        throw new Error("scheduler_unlaunched_native_run_database_proof_incomplete");
+      const storedTermination = lease.metadata?.remoteExecutionTermination as Record<string, unknown> | undefined;
+      const storedSandboxStop = storedTermination?.sandboxStop as Record<string, unknown> | undefined;
+      if (nativeConformanceMode || !setupAdmissionOwner || storedSandboxStop?.runtimeOperationId)
+        throw new Error("scheduler_unlaunched_native_setup_admission_owner_unavailable");
+      const setupOwner = setupAdmissionOwner;
+      const [currentBinding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, setupOwner.bindingId),
+        eq(runtimeSandboxBindings.runtimeCellId, setupOwner.cellId),
+        eq(runtimeSandboxBindings.cellGeneration, setupOwner.generation))).limit(1);
+      const [currentCell] = await db.select().from(runtimeCells).where(and(
+        eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, setupOwner.cellId),
+        eq(runtimeCells.generation, BigInt(setupOwner.generation)), eq(runtimeCells.runtimeHostId, setupOwner.hostId))).limit(1);
+      const stopIdempotencyKey = `unlaunched-run-close:${expectedRunId}:${leaseId}:${setupOwner.claimVersion}`;
+      const priorStopOperations = await db.select().from(runtimeOperations).where(and(
+        eq(runtimeOperations.companyId, companyId), eq(runtimeOperations.runtimeCellId, setupOwner.cellId),
+        eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.idempotencyKey, stopIdempotencyKey))).limit(2);
+      const priorStop = priorStopOperations.length === 1 ? priorStopOperations[0] : null;
+      const claims = await db.select().from(activityLog).where(and(
+        eq(activityLog.companyId, companyId), eq(activityLog.entityType, "runtime_sandbox"),
+        eq(activityLog.entityId, setupOwner.bindingId), eq(activityLog.action, "sandbox.admission_claimed")))
+        .orderBy(desc(activityLog.createdAt), desc(activityLog.id)).limit(2);
+      const latestDetails = claims[0]?.details && typeof claims[0].details === "object" && !Array.isArray(claims[0].details)
+        ? claims[0].details as Record<string, unknown> : {};
+      const [currentPolicy] = await db.select().from(runtimePolicySnapshots).where(and(
+        eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.id, setupOwner.policySnapshotId),
+        eq(runtimePolicySnapshots.bindingId, setupOwner.bindingId), eq(runtimePolicySnapshots.executionManifestId, setupOwner.manifestId))).limit(1);
+      const [currentManifest] = await db.select().from(agentExecutionManifests).where(and(
+        eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.id, setupOwner.manifestId),
+        eq(agentExecutionManifests.runId, expectedRunId), eq(agentExecutionManifests.agentId, agentId))).limit(1);
+      const prepared = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeHostId, setupOwner.hostId),
+        eq(runtimeHostCommands.runtimeCellId, setupOwner.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(setupOwner.generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+        sql`${runtimeHostCommands.payload}->>'action' = 'prepare'`,
+        sql`${runtimeHostCommands.payload}->'provisioning'->>'purpose' = 'admission'`,
+        sql`${runtimeHostCommands.payload}->'provisioning'->>'operationKey' = ${setupOwner.claimKey}`));
+      const preparedRequest = prepared.length === 1 ? sandboxHostRequestSchema.safeParse(prepared[0]!.payload) : null;
+      const preparedReply = prepared.length === 1 ? sandboxHostReplySchema.safeParse(prepared[0]!.safeResult) : null;
+      const prepareRequest = preparedRequest?.success ? preparedRequest.data : null;
+      const prepareReply = preparedReply?.success ? preparedReply.data : null;
+      const [start] = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.id, setupOwner.startCommandId),
+        eq(runtimeHostCommands.runtimeHostId, setupOwner.hostId), eq(runtimeHostCommands.runtimeCellId, setupOwner.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(setupOwner.generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"))).limit(1);
+      const startRequestResult = start ? sandboxHostRequestSchema.safeParse(start.payload) : null;
+      const startReplyResult = start ? sandboxHostReplySchema.safeParse(start.safeResult) : null;
+      const startRequest = startRequestResult?.success ? startRequestResult.data : null;
+      const startReply = startReplyResult?.success ? startReplyResult.data : null;
+      const pendingHostEffects = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeHostId, setupOwner.hostId),
+        eq(runtimeHostCommands.runtimeCellId, setupOwner.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(setupOwner.generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), inArray(runtimeHostCommands.status, ["PENDING", "CLAIMED"]),
+        sql`${runtimeHostCommands.payload}->'scope'->>'bindingId' = ${setupOwner.bindingId}`));
+      if (!currentBinding || currentBinding.status !== (priorStop ? "stopped" : "running") ||
+          (priorStop ? currentBinding.version <= setupOwner.bindingVersion : currentBinding.version !== setupOwner.bindingVersion) ||
+          !currentCell || currentCell.status !== (priorStop ? "STOPPED" : "HEALTHY") ||
+          (currentCell.activeImageDigest ?? currentCell.desiredImageDigest) !== setupOwner.imageDigest ||
+          latestDetails.claimKey !== setupOwner.claimKey ||
+          claims[0]!.actorType !== "user" || claims[0]!.actorId !== setupOwner.requesterUserId ||
+          latestDetails.policySnapshotId !== setupOwner.policySnapshotId || latestDetails.policyHash !== setupOwner.policyHash ||
+          latestDetails.executionManifestId !== setupOwner.manifestId || latestDetails.executionManifestHash !== setupOwner.manifestHash ||
+          !currentPolicy || currentPolicy.policyHash !== setupOwner.policyHash ||
+          currentPolicy.status !== (priorStop ? "revoked" : "qualified") || !currentManifest ||
+          currentManifest.hash !== setupOwner.manifestHash || !prepareRequest || !prepareReply ||
+          prepareRequest.action !== "prepare" || prepareReply.action !== "prepare" ||
+          prepareRequest.hostEpoch !== setupOwner.hostEpoch || prepareRequest.imageDigest !== setupOwner.imageDigest ||
+          prepareRequest.scope.bindingId !== setupOwner.bindingId || prepareRequest.scope.cellGeneration !== setupOwner.generation ||
+          prepareRequest.provisioning?.operationKey !== setupOwner.claimKey ||
+          prepareRequest.provisioning.bindingVersion !== setupOwner.claimVersion || prepareReply.hostEpoch !== setupOwner.hostEpoch ||
+          prepareReply.imageDigest !== setupOwner.imageDigest || prepareReply.sandboxId !== setupOwner.sandboxId ||
+          prepareReply.containerId !== setupOwner.containerId || prepareReply.requiresRecreate ||
+          !start || !startRequest || !startReply || startRequest.action !== "start" || startReply.action !== "start" ||
+          startRequest.scope.bindingId !== setupOwner.bindingId || startRequest.scope.cellGeneration !== setupOwner.generation ||
+          startRequest.start?.policyHash !== setupOwner.policyHash ||
+          startRequest.start?.idempotencyKey !== `v7-sandbox-start:${setupOwner.bindingId}:${setupOwner.generation}:${setupOwner.claimVersion}:${setupOwner.policySnapshotId}` ||
+          startReply.sandboxId !== setupOwner.sandboxId || startReply.containerId !== setupOwner.containerId ||
+          startReply.imageDigest !== setupOwner.imageDigest || startReply.policyHash !== setupOwner.policyHash || pendingHostEffects.length !== 0)
+        throw new Error("scheduler_unlaunched_native_setup_admission_target_changed");
+      // The ordinary fixture owns this prepared Sandbox as the authenticated
+      // setup Human. Its service Stop records the real Host Stop, independent
+      // Inspect, and canonical runtime operation without inventing a Native
+      // session cleanup receipt for a session that never started.
+      if (!priorStop) {
+        const stopped = await driveHost(service.stop(actor, companyId, setupOwner.bindingId, stopIdempotencyKey));
+        if (!stopped.stopConfirmed || stopped.binding.status !== "stopped")
+          throw new Error("scheduler_unlaunched_native_setup_admission_stop_unconfirmed");
+      }
+      const [stopOperation] = await db.select().from(runtimeOperations).where(and(
+        eq(runtimeOperations.companyId, companyId), eq(runtimeOperations.runtimeCellId, setupOwner.cellId),
+        eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.idempotencyKey, stopIdempotencyKey))).limit(1);
+      const [stoppedBinding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, setupOwner.bindingId),
+        eq(runtimeSandboxBindings.runtimeCellId, setupOwner.cellId), eq(runtimeSandboxBindings.cellGeneration, setupOwner.generation)));
+      const [stoppedCell] = await db.select().from(runtimeCells).where(and(
+        eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, setupOwner.cellId),
+        eq(runtimeCells.generation, BigInt(setupOwner.generation)), eq(runtimeCells.runtimeHostId, setupOwner.hostId)));
+      const remainingPolicies = await db.select({ id: runtimePolicySnapshots.id }).from(runtimePolicySnapshots).where(and(
+        eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, setupOwner.bindingId),
+        inArray(runtimePolicySnapshots.status, ["draft", "qualified"])));
+      const stopCommandId = stopOperation?.desiredState && typeof stopOperation.desiredState === "object"
+        ? (stopOperation.desiredState as Record<string, unknown>).sandboxHostCommandId : null;
+      const stopCommand = typeof stopCommandId === "string" ? await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.id, stopCommandId),
+        eq(runtimeHostCommands.runtimeHostId, setupOwner.hostId), eq(runtimeHostCommands.runtimeCellId, setupOwner.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(setupOwner.generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"))).limit(1) : [];
+      const stopRequest = stopCommand.length === 1 ? sandboxHostRequestSchema.safeParse(stopCommand[0]!.payload) : null;
+      const stopReply = stopCommand.length === 1 ? sandboxHostReplySchema.safeParse(stopCommand[0]!.safeResult) : null;
+      const inspectCommands = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeHostId, setupOwner.hostId),
+        eq(runtimeHostCommands.runtimeCellId, setupOwner.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(setupOwner.generation)),
+        eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+        sql`${runtimeHostCommands.payload}->>'action' = 'inspect'`,
+        sql`${runtimeHostCommands.createdAt} >= (select stopped.completed_at from runtime_host_commands stopped where stopped.id = ${stopCommandId ?? "00000000-0000-0000-0000-000000000000"})`))
+        .orderBy(runtimeHostCommands.createdAt).limit(2);
+      const inspectCommand = inspectCommands.length === 1 ? inspectCommands[0] : null;
+      const inspectRequest = inspectCommand ? sandboxHostRequestSchema.safeParse(inspectCommand.payload) : null;
+      const inspectReply = inspectCommand ? sandboxHostReplySchema.safeParse(inspectCommand.safeResult) : null;
+      const stopPayload = stopRequest?.success ? stopRequest.data : null;
+      const stopResult = stopReply?.success ? stopReply.data : null;
+      const inspectPayload = inspectRequest?.success ? inspectRequest.data : null;
+      const inspectResult = inspectReply?.success ? inspectReply.data : null;
+      const stopOriginalStartOwnerMatches = Boolean(stopPayload && startRequest &&
+        nativeSha256(stopPayload.scope) === nativeSha256(startRequest.scope) &&
+        stopPayload.hostEpoch === startRequest.hostEpoch && stopPayload.imageDigest === startRequest.imageDigest &&
+        stopPayload.requesterUserId === startRequest.requesterUserId &&
+        stopPayload.requesterUserId === setupOwner.requesterUserId);
+      const inspectOriginalStartOwnerMatches = Boolean(inspectPayload && startRequest &&
+        nativeSha256(inspectPayload.scope) === nativeSha256(startRequest.scope) &&
+        inspectPayload.hostEpoch === startRequest.hostEpoch && inspectPayload.imageDigest === startRequest.imageDigest &&
+        inspectPayload.requesterUserId === startRequest.requesterUserId &&
+        inspectPayload.requesterUserId === setupOwner.requesterUserId);
+      const desired = stopOperation?.desiredState && typeof stopOperation.desiredState === "object"
+        ? stopOperation.desiredState as Record<string, unknown> : {};
+      if (!stopOperation || stopOperation.status !== "SUCCEEDED" || stopOperation.requestedByType !== "user" ||
+          stopOperation.requestedById !== actor.userId || desired.sandboxBindingId !== setupOwner.bindingId ||
+          desired.generation !== setupOwner.generation || desired.claimKey !== setupOwner.claimKey ||
+          desired.policySnapshotId !== setupOwner.policySnapshotId || desired.executionManifestId !== setupOwner.manifestId ||
+          desired.executionManifestHash !== setupOwner.manifestHash || desired.policyHash !== setupOwner.policyHash ||
+          stoppedBinding?.status !== "stopped" || stoppedCell?.status !== "STOPPED" || remainingPolicies.length !== 0 ||
+          stopPayload?.action !== "stop" || !stopOriginalStartOwnerMatches ||
+          stopResult?.action !== "stop" || stopResult.stopped !== true || !stopCommand[0]?.completedAt || !inspectPayload ||
+          inspectPayload.action !== "inspect" || !inspectOriginalStartOwnerMatches ||
+          inspectResult?.action !== "inspect" || inspectResult.state !== "stopped" ||
+          inspectResult.generation !== setupOwner.generation || inspectResult.imageDigest !== setupOwner.imageDigest ||
+          inspectResult.policyHash !== setupOwner.policyHash || !inspectCommand?.completedAt ||
+          inspectCommand.createdAt < stopCommand[0]!.completedAt)
+        throw new Error("scheduler_unlaunched_native_setup_admission_stop_receipt_invalid");
+      const [currentLease] = await db.select().from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, companyId), eq(environmentLeases.id, leaseId),
+        eq(environmentLeases.heartbeatRunId, expectedRunId), eq(environmentLeases.environmentId, environment.id))).limit(1);
+      if (!currentLease || currentLease.cleanupStatus !== "success" || !currentLease.releasedAt)
+        throw new Error("scheduler_unlaunched_native_cleanup_lease_not_settled");
+  };
+
   const assertClosedRun = async (leaseId: string) => {
+      if (!nativeRunnerClosureWitness) {
+        await assertProvenNotLaunchedRun(leaseId);
+        return;
+      }
       if (!expectedRunId || !expectedTaskRoot || activeHostExecStreams !== 0 || activeModelRequests !== 0 ||
           attachedSessionProviders.size !== 0 || !nativeRunnerClosureWitness ||
           nativeRunnerClosureWitness.runId !== expectedRunId || nativeRunnerClosureWitness.leaseId !== leaseId ||
@@ -4683,8 +4991,16 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     executeManagedSandboxTask: executeSandboxTask,
     stopSandboxRunLease,
     proveImageDataRetirement: async () => {
-      if (!nativeRunnerClosureWitness) throw new Error("image_native_closure_unknown");
-      await assertClosedRun(nativeRunnerClosureWitness.leaseId);
+      if (nativeRunnerClosureWitness) {
+        await assertClosedRun(nativeRunnerClosureWitness.leaseId);
+        return;
+      }
+      if (!expectedRunId) throw new Error("image_native_closure_unknown");
+      const leases = await db.select({ id: environmentLeases.id }).from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, expectedRunId),
+        eq(environmentLeases.environmentId, environment.id))).limit(2);
+      if (leases.length !== 1) throw new Error("image_native_unlaunched_lease_owner_unknown");
+      await assertClosedRun(leases[0]!.id);
     },
     assertSerialSuccessorReady: async (leaseId: string) => {
       await assertClosedRun(leaseId);
@@ -4704,6 +5020,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     environmentRuntime,
     beforeNativeExecution,
     modelRequest: async (body: unknown, signal?: AbortSignal) => {
+      modelProviderRequestCount++;
       const { runId, claims } = await verifiedModelProvider();
       const work = (): ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]> =>
         (input.gateway as any).callManagedMessages(claims, body, signal ?? new AbortController().signal);
@@ -4734,6 +5051,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       return observed;
     },
     modelRequestAuthenticated: async (body: unknown, signal: AbortSignal, authorization: string | undefined) => {
+      modelProviderRequestCount++;
       const provider = await verifiedModelProvider();
       const authenticated = authenticateSerialModelRequest(authorization, { companyId, agentId,
         runId: provider.runId, capabilityToken: provider.token,

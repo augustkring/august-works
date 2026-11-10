@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The renderer now binds channel provider context to exactly one same-Run, same-Task wake source, while preserving unknown-source and withdrawal checks. This changes internal input admission. The article's guidance to inspect the original task and use only its current recovery action remains accurate."
+      "rationale": "Reviewed the managed sandbox preparation phase change against the English recovery guide. It reuses the existing source-bound workspace callback for qualified non-conversation chat Tasks; available retry actions, original-task recovery, pending Stop and unknown-outcome guidance remain accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Renderingen binder nu kanalens kontekst til pr\u00e6cis \u00e9n wake-kilde for samme k\u00f8rsel og opgave. Kontrollen af ukendte kilder og tilbagetr\u00e6kninger bevares. Det \u00e6ndrer intern inputvalidering; vejledningen om at gennemg\u00e5 den oprindelige opgave og kun bruge dens aktuelle genoprettelseshandling er stadig korrekt."
+      "rationale": "Gennemg\u00e5et den udskudte workspace-forberedelse mod den danske genoprettelsesvejledning. \u00c6ndringen bruger den eksisterende kildebundne callback for kvalificerede chatopgaver; vejledningen om oprindelig opgave, viste genfors\u00f8g, afventende stop og ukendt resultat er fortsat korrekt."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "The heartbeat delta only changes rendered channel-provider source references and their admission checks. It adds no export, deletion, retention or file-cleanup action. The existing distinction between a deletion request, confirmed process stop and verified storage removal remains accurate."
+      "rationale": "Reviewed the exact non-conversation sandbox preparation routing against the English deletion guide. Native termination, runtime-file erasure verification, retention and external-provider limits are unchanged; deferred preparation does not turn a request or Memory deletion into proof of completed erasure."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "\u00c6ndringen i heartbeat vedr\u00f8rer kun den renderede kanalkonteksts kildereferencer og deres validering. Den tilf\u00f8jer ingen eksport-, slette-, opbevarings- eller filoprydningshandling. Vejledningens skelnen mellem en sletteanmodning, bekr\u00e6ftet processtop og verificeret fjernelse fra lageret er fortsat korrekt."
+      "rationale": "Gennemg\u00e5et den pr\u00e6cise \u00e6ndring i chatopgavers forberedelsesfase mod den danske slettevejledning. Native-stop, verificeret filoprydning, opbevaring og begr\u00e6nsningen for udbyderdata er u\u00e6ndrede; vejledningens kvitteringer og afventende status er fortsat korrekte."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

@@ -477,9 +477,30 @@ describe("durable inbound chat scheduler receipts", () => {
           preparedRegistration: context.preparedRegistration,
           withVerifiedModelRun: context.withVerifiedModelRun });
         const before = host.beforeNativeExecution;
+        const hostOwner = host as typeof host & {
+          closeManagedAgentHostForRun?: (runId: string) => Promise<void>;
+          factsForRun?: (runId: string) => Record<string, unknown>;
+        };
         return { ...host, beforeNativeExecution: async args => {
           const environment = await before(args);
           if (!injectedPreProviderFailure) {
+            const [activeRun] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
+              .where(and(eq(heartbeatRuns.companyId, context.companyId), eq(heartbeatRuns.id, args.runId))).limit(1);
+            if (activeRun?.status !== "running" || !hostOwner.closeManagedAgentHostForRun || !hostOwner.factsForRun)
+              throw new Error("durable_retry_fixture_unlaunched_negative_probe_unavailable");
+            let rejectedWithPrelaunchProof = false;
+            try { await hostOwner.closeManagedAgentHostForRun(args.runId); }
+            catch (error) {
+              rejectedWithPrelaunchProof = error instanceof Error &&
+                error.message.startsWith("scheduler_unlaunched_native_run_");
+              if (!rejectedWithPrelaunchProof) throw error;
+            }
+            if (!rejectedWithPrelaunchProof || hostOwner.factsForRun(args.runId).serialContextRetired !== false)
+              throw new Error("durable_retry_fixture_unlaunched_negative_probe_changed_host");
+            const [stillRunning] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
+              .where(and(eq(heartbeatRuns.companyId, context.companyId), eq(heartbeatRuns.id, args.runId))).limit(1);
+            if (stillRunning?.status !== "running")
+              throw new Error("durable_retry_fixture_unlaunched_negative_probe_changed_run");
             injectedPreProviderFailure = true;
             throw new Error("durable_retry_fixture_pre_provider_host_handoff_failure");
           }
@@ -534,9 +555,31 @@ describe("durable inbound chat scheduler receipts", () => {
           }
           await new Promise(resolve => setTimeout(resolve, 50));
         }
+        if (!injectedPreProviderFailure)
+          throw new Error("durable_retry_fixture_pre_provider_hook_not_reached");
         if (!sourceRun || sourceRun.status !== "failed")
           throw new Error("durable_retry_fixture_pre_provider_run_not_failed");
         await heartbeat.drainActiveRunExecutions();
+        const [sourceConversation] = await db.select().from(chatConversations)
+          .where(eq(chatConversations.id, sourceAction.conversationId!));
+        const sourceGeneration = sourceAction.payload.sessionGeneration;
+        if (!sourceConversation || typeof sourceGeneration !== "number" ||
+            sourceRun.contextSnapshot?.conversationSessionGeneration !== sourceGeneration ||
+            sourceConversation.sessionGeneration !== sourceGeneration)
+          throw new Error("durable_retry_fixture_run_generation_binding_invalid");
+        await db.update(chatConversations)
+          .set({ sessionGeneration: sourceConversation.sessionGeneration + 1 })
+          .where(eq(chatConversations.id, sourceConversation.id));
+        try {
+          await expect(db.transaction(tx => chatService.prepareFailedChatRunRetry(tx, {
+            companyId, issueId: sourceAction.payload.issueId as string, agentId,
+            failedRunId: sourceRun!.id, initiatedByUserId: actor.userId!,
+          }))).rejects.toMatchObject({ details: { code: "chat_failed_run_retry_not_authorized" } });
+        } finally {
+          await db.update(chatConversations)
+            .set({ sessionGeneration: sourceConversation.sessionGeneration })
+            .where(eq(chatConversations.id, sourceConversation.id));
+        }
         const issueRuns = await db.select({ id: heartbeatRuns.id, wakeupRequestId: heartbeatRuns.wakeupRequestId,
           contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns).where(and(
           eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId)));
@@ -552,6 +595,9 @@ describe("durable inbound chat scheduler receipts", () => {
           ? sourceRun.runnerProfileJson as Record<string, unknown> : {};
         if (!receipt || receipt.runId !== sourceRun.id || sourceRun.runtimeMode !== "native" ||
             !profile.nativeExecutionInput || recovery?.kind !== "bootstrap" || recovery.providerWorkStarted !== false ||
+            !sourceRun.runnerInstanceId || !sourceRun.nativeSessionId || sourceRun.nativePhase !== "observed" ||
+            sourceRun.nativeInputSourceProtocolVersion !== 0 || sourceRun.processPid !== null ||
+            sourceRun.processGroupId !== null || sourceRun.processStartedAt !== null || sourceRun.sessionIdAfter !== null ||
             facts().providerCallCount !== 0)
           throw new Error("durable_retry_fixture_source_run_binding_invalid");
         await closeManagedAgentHostForRun(sourceRun.id);

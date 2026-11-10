@@ -46,6 +46,8 @@ export function queueIssueAssignmentWakeup(input: {
   /** Latest issue comment that caused this wakeup. Included in both payload
    * and context so the heartbeat can build the exact turn that was requested. */
   wakeCommentId?: string | null;
+  /** Exact generation from the authorized canonical chat conversation row. */
+  conversationSessionGeneration?: number | null;
   /** Closed, server-derived omission counts for provider attachments on the
    * exact wake comment. These are prompt diagnostics, never authorization. */
   attachmentOmissionReasons?: Record<string, number> | null;
@@ -77,6 +79,9 @@ export function queueIssueAssignmentWakeup(input: {
         source: input.contextSource,
         ...(input.taskKey ? { taskKey: input.taskKey } : {}),
         ...(input.wakeCommentId ? { wakeCommentId: input.wakeCommentId } : {}),
+        ...(typeof input.conversationSessionGeneration === "number"
+          ? { conversationSessionGeneration: input.conversationSessionGeneration }
+          : {}),
         ...(input.wakeCommentId && input.attachmentOmissionReasons
           ? {
               externalAttachmentOmissions: [

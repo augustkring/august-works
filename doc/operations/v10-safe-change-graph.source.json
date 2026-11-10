@@ -21,7 +21,7 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2017,
+    "sourceDeltaPathCount": 2018,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
@@ -4512,6 +4512,12 @@
           "sha256": "24769d49ec221f329c6b069041ce85a957cc2e3267cdeda370e6e737ba01c9f9"
         },
         {
+          "path": "server/src/services/issue-assignment-wakeup.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5c5f25afc665935963eb3c2049959556ecf07e157fa49550512538fb8c3e2897"
+        },
+        {
           "path": "server/src/services/issues.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -4708,6 +4714,7 @@
         "server/src/services/execution-workspaces.ts",
         "server/src/services/explicit-native-continuation.test.ts",
         "server/src/services/heartbeat.ts",
+        "server/src/services/issue-assignment-wakeup.ts",
         "server/src/services/issues.ts",
         "server/src/services/native-execution-failure-log.test.ts",
         "server/src/services/native-runtime/assigned-mcp-tools.ts",
@@ -4809,6 +4816,7 @@
         "server/src/services/execution-workspaces.ts",
         "server/src/services/explicit-native-continuation.test.ts",
         "server/src/services/heartbeat.ts",
+        "server/src/services/issue-assignment-wakeup.ts",
         "server/src/services/issues.ts",
         "server/src/services/native-execution-failure-log.test.ts",
         "server/src/services/native-runtime/assigned-mcp-tools.ts",

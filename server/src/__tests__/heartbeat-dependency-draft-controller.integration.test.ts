@@ -2701,4 +2701,161 @@ describe("dependency scheduling through the installed Native text draft controll
     });
   }, 60_000);
 
+
+  it("joins concurrent Stops through the installed Native text owner without duplicating the dispatch", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
+    let calls = 0;
+    let observedAbort = false;
+    let activeSignal: AbortSignal | undefined;
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      calls++;
+      expect(calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      const signal = init.signal;
+      if (!(signal instanceof AbortSignal)) throw new Error("native_text_duplicate_stop_signal_missing");
+      activeSignal = signal;
+      await new Promise<never>((_resolve, reject) => {
+        const onAbort = () => {
+          observedAbort = true;
+          const error = new Error("Concurrent Stop reached installed Native text request");
+          error.name = "AbortError";
+          reject(error);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        if (signal.aborted) onAbort();
+      });
+    };
+
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      entry = await createDraftPlan(fixture, "Join concurrent Stops for one installed Native text request");
+      const wake = await heartbeat.wakeup(f.presence.id, {
+        source: "automation", triggerDetail: "system", reason: "issue_assigned",
+        requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: entry.task.id },
+        contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" },
+      });
+      if (!wake) throw new Error("native_text_duplicate_stop_run_missing");
+      await vi.waitFor(() => expect(calls).toBe(1), { timeout: 20_000, interval: 25 });
+      const stops = await Promise.all([
+        heartbeat.cancelRun(wake.id, "First concurrent Native text Stop"),
+        heartbeat.cancelRun(wake.id, "Second concurrent Native text Stop"),
+      ]);
+      await vi.waitFor(() => expect(observedAbort).toBe(true), { timeout: 10_000, interval: 25 });
+      expect(activeSignal?.aborted).toBe(true);
+      expect(stops).toHaveLength(2);
+      for (const stop of stops)
+        expect(stop).toMatchObject({ id: wake.id, status: "cancelled", runtimeMode: "native" });
+      await heartbeat.drainActiveRunExecutions();
+
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
+      expect(run).toMatchObject({ status: "cancelled", runtimeMode: "native", driverKind: "aw_text_messages" });
+      expect(await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, wake.id))).toHaveLength(1);
+      expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entry.plan.id))).toHaveLength(1);
+      expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id)))
+        .toEqual([expect.objectContaining({ status: "unknown", providerResponseHash: null, usage: null })]);
+      expect(calls).toBe(1);
+    });
+  }, 60_000);
+
+  it("keeps an installed Native text request live when durable Stop intent cannot be written, then retries once", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    let calls = 0;
+    let observedAbort = false;
+    let activeSignal: AbortSignal | undefined;
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      calls++;
+      expect(calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      const signal = init.signal;
+      if (!(signal instanceof AbortSignal)) throw new Error("native_text_stop_intent_signal_missing");
+      activeSignal = signal;
+      await new Promise<never>((_resolve, reject) => {
+        const onAbort = () => {
+          observedAbort = true;
+          const error = new Error("Retry reached installed Native text request");
+          error.name = "AbortError";
+          reject(error);
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        if (signal.aborted) onAbort();
+      });
+    };
+
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const entry = await createDraftPlan(fixture, "Retry Stop after durable intent write failure");
+      const wake = await heartbeat.wakeup(f.presence.id, {
+        source: "automation", triggerDetail: "system", reason: "issue_assigned",
+        requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: entry.task.id },
+        contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" },
+      });
+      if (!wake) throw new Error("native_text_stop_intent_run_missing");
+      await vi.waitFor(() => expect(calls).toBe(1), { timeout: 20_000, interval: 25 });
+
+      const suffix = randomUUID().replaceAll("-", "");
+      const trigger = `aw_test_native_stop_intent_${suffix}`;
+      const procedure = `aw_test_native_stop_intent_fn_${suffix}`;
+      let triggerInstalled = false;
+      try {
+        await db.execute(sql.raw(`CREATE FUNCTION ${procedure}() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN
+            IF NEW.id = '${wake.id}'::uuid AND NEW.result_json->'nativeCancellation'->>'dispatchState' = 'pending' THEN
+              RAISE EXCEPTION 'injected_native_cancel_intent_write_failure';
+            END IF;
+            RETURN NEW;
+          END
+        $$`));
+        await db.execute(sql.raw(`CREATE TRIGGER ${trigger} BEFORE UPDATE OF result_json ON heartbeat_runs
+          FOR EACH ROW EXECUTE FUNCTION ${procedure}()`));
+        triggerInstalled = true;
+
+        const writeFailure = await heartbeat.cancelRun(wake.id, "Stop intent write fault").then(
+          () => null,
+          (error: unknown) => error,
+        );
+        const failureCauses: string[] = [];
+        for (let cause = writeFailure; cause instanceof Error; cause = cause.cause)
+          failureCauses.push(cause.message);
+        expect(failureCauses.join("\n")).toContain("injected_native_cancel_intent_write_failure");
+        expect(observedAbort).toBe(false);
+        expect(activeSignal?.aborted).toBe(false);
+        expect(calls).toBe(1);
+        const [stillRunning] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
+        expect(stillRunning).toMatchObject({ status: "running", runtimeMode: "native" });
+        expect(stillRunning?.resultJson).not.toHaveProperty("nativeCancellation");
+        const [reservationBeforeRetry] = await db.select().from(orchestrationModelReservations)
+          .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+        expect(reservationBeforeRetry).toMatchObject({ status: "dispatched", maximumMinor: 3 });
+
+        await db.execute(sql.raw(`DROP TRIGGER ${trigger} ON heartbeat_runs`));
+        triggerInstalled = false;
+        await db.execute(sql.raw(`DROP FUNCTION ${procedure}()`));
+        const cancelled = await heartbeat.cancelRun(wake.id, "Retry Stop after intent write recovery");
+        await vi.waitFor(() => expect(observedAbort).toBe(true), { timeout: 10_000, interval: 25 });
+        expect(activeSignal?.aborted).toBe(true);
+        expect(cancelled).toMatchObject({ id: wake.id, status: "cancelled", runtimeMode: "native" });
+        await heartbeat.drainActiveRunExecutions();
+
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
+        expect(run).toMatchObject({ status: "cancelled", runtimeMode: "native", driverKind: "aw_text_messages" });
+        expect(run?.resultJson).toMatchObject({ nativeCancellation: { dispatchState: "acknowledged", dispatched: true } });
+        expect(await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, wake.id))).toHaveLength(1);
+        expect(await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, entry.plan.id))).toHaveLength(1);
+        expect(await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, entry.plan.id)))
+          .toEqual([expect.objectContaining({ status: "unknown", providerResponseHash: null, usage: null })]);
+        expect(calls).toBe(1);
+      } finally {
+        if (triggerInstalled) await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${trigger} ON heartbeat_runs`));
+        await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${procedure}()`));
+        if (!observedAbort) await heartbeat.cancelRun(wake.id, "Cleanup after Stop intent write test").catch(() => undefined);
+        await heartbeat.drainActiveRunExecutions();
+      }
+    });
+  }, 60_000);
+
 });

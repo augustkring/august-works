@@ -14450,6 +14450,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         requestedByActorId: request.requestedByActorId,
         taskKey: context.issue.identifier,
         wakeCommentId: request.commentId,
+        conversationSessionGeneration: claimed.payload.sessionGeneration as number,
         attachmentOmissionReasons: claimed.payload.attachmentOmissionReasons as
           | Record<string, number>
           | undefined,

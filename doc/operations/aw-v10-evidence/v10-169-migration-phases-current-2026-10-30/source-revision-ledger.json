@@ -2675,5 +2675,192 @@
     ],
     "qualificationBoundary": "Deterministic generator check and Help metadata/validator checks only; no search ranking, external provider or V10 completion promotion.",
     "historicalRequirementStatusesPromoted": 0
+  },
+  "managedNativeWakeupAuthoritySourceReview20261110": {
+    "sourceHead": "5966242526b757987dcc572c42c00d2858299196",
+    "worktreeDisposition": "6 exact Root-accepted Managed Native wakeup source/test paths changed after sourceHead",
+    "changes": [
+      {
+        "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
+        "oldSha256": "63efc037735e1345a1e73e0db1db02414e46fe386167df909f0270401fb22044",
+        "newSha256": "2ec17e3dd3b5e8bde84e4165f184f18d82f82ce480098109c5ecbfe2b60dcf65",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+        "oldSha256": "d4a8a2618a214cd6925da2c770d9cdf31e5e3e621fcbca70d772c2ad8a968773",
+        "newSha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+        "sourceGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "oldSha256": "9480fb3937b0a4d718f81d5dc0a99d2824d99a1ef019406924ca9939787c839b",
+        "newSha256": "c210ca5c1f8648f6da31861ff8c620096c0218af2c130d950212bd7b43719c6c",
+        "sourceGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/services/chat-channels.ts",
+        "oldSha256": "c47eae4dff32e7c2b4b080e762dd73510569b4dca6ebe333e6195cedc0c1056a",
+        "newSha256": "52fc828496ac817d006106d57827e6caf2b58827cdbb8685c19709583be16dee",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/heartbeat.ts",
+        "oldSha256": "c3116fe5767a778ba85d89b6258c4f4d06d5b1dffae9cee560ab4b34f08a1af4",
+        "newSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07",
+          "SCR-V10-HOTSPOT-08",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/issue-assignment-wakeup.ts",
+        "oldSha256": "5c5f25afc665935963eb3c2049959556ecf07e157fa49550512538fb8c3e2897",
+        "newSha256": "e76a16e492cb0ea46ddd657c8c72fde8a43b5a1434fdf20a896dc74b94a3b65e",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02"
+        ]
+      }
+    ],
+    "reason": "Preserve a minimal carry-forward of the exact already-authorized immutable chat generation into assignment wakeups. Defer heartbeat under the current repository-mode condition and callback; serialize wake/stop decisions against the same lifecycle owner and keep strict Native fixture setup/close ownership. This records only the accepted source overlay.",
+    "qualificationBoundary": {
+      "scope": "bounded current software evidence only",
+      "receipts": {
+        "r314": {
+          "status": "passed",
+          "seconds": 33.91
+        },
+        "r315": {
+          "status": "passed",
+          "seconds": 69.78,
+          "peakOwnedDescendantRssBytes": 6467788800,
+          "ownedDescendantRssLimitBytes": 8589934592,
+          "sourcePinsStable": true,
+          "oom": false
+        },
+        "currentRetry": {
+          "status": "unqualified",
+          "summary": "The generic test-only pre-Runner handoff failure now reaches the current retry coordinator and is correctly denied as ineligible. A real Native bootstrap-initialization failure fixture is under construction; no retry success is claimed."
+        },
+        "additionalReceipts": [
+          {
+            "name": "native-stop-intent-write-fault-r320",
+            "status": "passed",
+            "receiptPath": "/workspace/v10-preparation/combined-source-20261109/native-text-stop-intent-write-fault-r320-receipt.json",
+            "receiptSha256": "6ac24b15789b6ab398f759109efb0297b6d9ab8e198e7df6d255b58b47bc1044"
+          },
+          {
+            "name": "server-typecheck-r327",
+            "status": "passed",
+            "receiptPath": "/workspace/v10-preparation/combined-source-20261109/native-wakeup-current-typecheck-r327/build-receipt.json",
+            "receiptSha256": "76378287e75cd436e91cd7a2cd300a18b37e44e1421abc4e6cfeaf8766bdc407"
+          }
+        ]
+      },
+      "excludedClaims": [
+        "external provider",
+        "production/customer",
+        "Human operations",
+        "GA",
+        "aggregate V10"
+      ]
+    },
+    "sourceGraphOwnersVerified": {
+      "server/src/__tests__/durable-chat-wakeup.test.ts": [
+        "SCR-V10-HOTSPOT-02"
+      ],
+      "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": [
+        "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+      ],
+      "server/src/services/chat-channels.ts": [
+        "SCR-V10-HOTSPOT-01",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07"
+      ],
+      "server/src/services/heartbeat.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-03",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07",
+        "SCR-V10-HOTSPOT-08",
+        "SCR-V10-HOTSPOT-11"
+      ],
+      "server/src/services/issue-assignment-wakeup.ts": [
+        "SCR-V10-HOTSPOT-02"
+      ]
+    },
+    "sourceInventoryDisposition": "Existing graph owner count and 169 requirement rows unchanged; one approved new changedSourcePath is already registered under SCR-V10-HOTSPOT-02.",
+    "phaseMatrixPinsUpdated": [
+      {
+        "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+        "oldSha256": "d4a8a2618a214cd6925da2c770d9cdf31e5e3e621fcbca70d772c2ad8a968773",
+        "newSha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb"
+      }
+    ],
+    "compatibilityPinsUpdated": [],
+    "helpReviewDisposition": {
+      "updatedExistingPairs": [
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete",
+          "article": "docs/help/export-and-delete.md",
+          "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+          "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+          "decision": "no_change",
+          "rationale": "Reviewed the exact non-conversation sandbox preparation routing against the English deletion guide. Native termination, runtime-file erasure verification, retention and external-provider limits are unchanged; deferred preparation does not turn a request or Memory deletion into proof of completed erasure."
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "export-and-delete-da",
+          "article": "docs/da/help/export-and-delete.md",
+          "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+          "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+          "decision": "no_change",
+          "rationale": "Gennemg\u00e5et den pr\u00e6cise \u00e6ndring i chatopgavers forberedelsesfase mod den danske slettevejledning. Native-stop, verificeret filoprydning, opbevaring og begr\u00e6nsningen for udbyderdata er u\u00e6ndrede; vejledningens kvitteringer og afventende status er fortsat korrekte."
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work",
+          "article": "docs/help/recovering-work.md",
+          "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+          "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+          "decision": "no_change",
+          "rationale": "Reviewed the managed sandbox preparation phase change against the English recovery guide. It reuses the existing source-bound workspace callback for qualified non-conversation chat Tasks; available retry actions, original-task recovery, pending Stop and unknown-outcome guidance remain accurate."
+        },
+        {
+          "source": "server/src/services/heartbeat.ts",
+          "articleId": "recovering-work-da",
+          "article": "docs/da/help/recovering-work.md",
+          "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+          "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+          "decision": "no_change",
+          "rationale": "Gennemg\u00e5et den udskudte workspace-forberedelse mod den danske genoprettelsesvejledning. \u00c6ndringen bruger den eksisterende kildebundne callback for kvalificerede chatopgaver; vejledningen om oprindelig opgave, viste genfors\u00f8g, afventende stop og ukendt resultat er fortsat korrekt."
+        }
+      ],
+      "canonicalPairCount": 4,
+      "noNewPairsAdded": true,
+      "noBlanketDecisions": true
+    },
+    "historicalRequirementStatusesPromoted": 0,
+    "migrationRegisterChanged": false
   }
 }

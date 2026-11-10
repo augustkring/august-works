@@ -1,0 +1,105 @@
+{
+  "root": "/workspace/blentera-v10",
+  "head": "5966242526b757987dcc572c42c00d2858299196",
+  "statusPorcelain": "M server/src/__tests__/durable-chat-wakeup.test.ts\n M server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts\n M server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts\n M server/src/services/chat-channels.ts\n M server/src/services/heartbeat.ts\n M server/src/services/issue-assignment-wakeup.ts",
+  "files": {
+    ".nvmrc": {
+      "sha256": "73fb1b615e2043a933be1c0895cde4358036acc28d785692509b822aa53c761f",
+      "bytes": 8
+    },
+    "package.json": {
+      "sha256": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "bytes": 14972
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "bytes": 634978
+    },
+    "server/package.json": {
+      "sha256": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "bytes": 6179
+    },
+    "server/src/__tests__/durable-chat-wakeup.test.ts": {
+      "sha256": "2ec17e3dd3b5e8bde84e4165f184f18d82f82ce480098109c5ecbfe2b60dcf65",
+      "bytes": 63632
+    },
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": {
+      "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+      "bytes": 210079
+    },
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": {
+      "sha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+      "bytes": 27192
+    },
+    "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": {
+      "sha256": "c210ca5c1f8648f6da31861ff8c620096c0218af2c130d950212bd7b43719c6c",
+      "bytes": 401342
+    },
+    "server/src/services/chat-channels.ts": {
+      "sha256": "52fc828496ac817d006106d57827e6caf2b58827cdbb8685c19709583be16dee",
+      "bytes": 1454047
+    },
+    "server/src/services/heartbeat.ts": {
+      "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+      "bytes": 1269358
+    },
+    "server/src/services/issue-assignment-wakeup.ts": {
+      "sha256": "e76a16e492cb0ea46ddd657c8c72fde8a43b5a1434fdf20a896dc74b94a3b65e",
+      "bytes": 3875
+    },
+    "server/src/services/native-direct-input.ts": {
+      "sha256": "860654da71dd4451cb4a90ca8861eb68357694b7727231219156dc3784b422f4",
+      "bytes": 527535
+    },
+    "server/src/services/native-runtime/native-execution-input.test.ts": {
+      "sha256": "18ad2db8f88d675dac8cc3a4854fd6928b3c79e733e878e51f4cb03e308ad3b0",
+      "bytes": 136739
+    },
+    "server/src/services/native-runtime/native-execution-input.ts": {
+      "sha256": "67f1300f890faa92d875c45eb146c53ac87edbd1e24144006812ac6687d7eb9e",
+      "bytes": 130393
+    },
+    "server/src/services/native-runtime/native-project-repository-source.test.ts": {
+      "sha256": "3d663c8cbc73c823275963e06bb6d5d394f2a89652e1a129a811529575bfd711",
+      "bytes": 14778
+    },
+    "server/src/services/native-runtime/native-project-repository-source.ts": {
+      "sha256": "f7ecb0e5a49e4c6443d9deca9394764db238f351c659f208ec3425aa98395c26",
+      "bytes": 9673
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts": {
+      "sha256": "75ce1a0a2892c6d825da11feb5320841e5977a279f5670812ad6ab8a1f100f0b",
+      "bytes": 8437
+    },
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts": {
+      "sha256": "d49e78356477d0703d52af08775adbfdfc08df0abfecc8fac5b4af1d8ec8c0e7",
+      "bytes": 12734
+    },
+    "server/vitest.config.ts": {
+      "sha256": "1c32f3f46cb9206de3cdbb1745d43abf17bd2b5c385183675835ba928c2d31b3",
+      "bytes": 1883
+    }
+  },
+  "qualificationInputPaths": [
+    "server/src/services/heartbeat.ts",
+    "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/native-execution-input.ts",
+    "server/src/services/native-runtime/native-project-repository-source.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.ts",
+    "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+    "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+    "server/src/services/native-runtime/native-execution-input.test.ts",
+    "server/src/services/native-runtime/native-project-repository-source.test.ts",
+    "server/src/services/optimizer/optimizer-workflow-runtime.test.ts",
+    "server/vitest.config.ts",
+    "server/package.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".nvmrc",
+    "server/src/__tests__/durable-chat-wakeup.test.ts"
+  ],
+  "scope": "exact involved production/tests and tool configuration plus dirty server/package files; HEAD identifies unchanged repository bytes, not a loaded-module trace",
+  "fixturePoolMax": null,
+  "fixturePoolScope": "Read actual fixture createDb options; not inferred by this harness",
+  "sourceWritesByThisHarness": false
+}

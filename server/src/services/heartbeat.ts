@@ -23065,11 +23065,12 @@ export function heartbeatService(
         process.env.PAPERCLIP_RUNNER_NETWORK_ACCESS !== "disabled";
       // A managed Worker cannot execute infrastructure commands until its
       // locked Native input and existing managed source authority are sealed.
-      // This is a phase decision, never a no-repository claim: the later sync
-      // still discovers Git and applies its existing ignore/source rules.
+      // This is a phase decision: the later sync keeps the existing repository
+      // and source rules for the exact verified workspace.
       const deferManagedNativeWorkspace = agent.adapterType === "paperclip_runner" &&
         executionTarget?.kind === "remote" && executionTarget.transport === "sandbox" &&
-        nativeChatWorkspaceScope === null && resolvePaperclipRunnerProviderProfile(agent.adapterConfig).provider === "opencode";
+        !isConversation(issueContext) && (nativeChatWorkspaceScope === null || qualifiedPrivateConversationSandbox) &&
+        resolvePaperclipRunnerProviderProfile(agent.adapterConfig).provider === "opencode";
       const prepareGitEnvironment = async (nativeWorkspacePreparation = false): Promise<Record<string, string>> => {
         const discovered = await prepareGitHubExecutionEnvironment({
           target: executionTarget, cwd: executionWorkspace.cwd,
@@ -25399,7 +25400,8 @@ export function heartbeatService(
                         workspaceLocalDir: executionWorkspace.cwd, target: executionTarget,
                         lease: activeEnvironmentLease!.lease, restartRecovery: runOptions.nativeRestartRecovery,
                         sameRunRecovery: Boolean(runOptions.nativeLeaseOwner), resourceDisposition: providerResourceDispositionForRun,
-                        workspaceRepositoryMode: "discover", nativeWorkspacePreparation: true });
+                        workspaceRepositoryMode: projectlessNativeConversation ? "server_verified_none" : "discover",
+                        nativeWorkspacePreparation: true });
                       if (!nativeWorkspaceSync) throw new Error("native_workspace_preparation_descriptor_missing");
                       // Discover the target's real metadata only after its
                       // authoritative workspace and Git/ignore snapshot were staged.
