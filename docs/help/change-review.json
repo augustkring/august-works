@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "0f18d3bfa218283cd46a5a39e5e22dd5154d092b84920eaba7f0523ebb38e043",
+      "sourceSha256": "c53a42f29a3370f5722f6911709a304e9f5be9b7613a16fcb0005522c1e4bcff",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The generated search projection now includes the updated runtime and workflow Help articles and their verification dates. The human-support article and its customer steps remain unchanged."
+      "rationale": "Reviewed the exact regenerated English and Danish company-guide search bodies. Only product wording and the Danish extra specification link change; indexed Help identities, search access, ranking inputs, support routes and this English Help guidance remain accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "0f18d3bfa218283cd46a5a39e5e22dd5154d092b84920eaba7f0523ebb38e043",
+      "sourceSha256": "c53a42f29a3370f5722f6911709a304e9f5be9b7613a16fcb0005522c1e4bcff",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Den genererede s\u00f8gevisning indeholder nu de opdaterede runtime- og workflowartikler samt deres kontroldatoer. Artiklen om menneskelig support og dens kundetrin er u\u00e6ndret."
+      "rationale": "Gennemg\u00e5et de pr\u00e6cist regenererede s\u00f8getekster fra virksomhedsvejledningerne. Kun produktnavnet og den danske ekstra specifikationshenvisning \u00e6ndres; Help-id\u2019er, s\u00f8geadgang, supportveje og den danske vejledning er fortsat korrekte."
     },
     {
       "source": "server/src/services/company-search.ts",
