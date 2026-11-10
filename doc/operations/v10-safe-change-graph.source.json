@@ -21,13 +21,13 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1966,
+    "sourceDeltaPathCount": 1971,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13969,
+    "fullDiffPathCount": 13970,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -16343,6 +16343,12 @@
           "sha256": "a8abbc5a2bfbc5291b1335e190aa073e235faf66e615607f43186e0af803bef2"
         },
         {
+          "path": "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "packages/paperclip-runner/generated/capability/capabilities.yaml",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -16865,6 +16871,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/services/explicit-native-continuation.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "73829a4cc69a291f160c7b618d08c1f12d00298d66be2ea53ff2122bcd5f18b1"
+        },
+        {
           "path": "server/src/services/issue-execution-policy.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -16974,6 +16986,24 @@
         },
         {
           "path": "server/src/services/native-runtime/native-artifact-preparation.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/native-runtime/native-attachment-remote-stage.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/native-runtime/native-attachment-remote-stage.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
           "sha256": null
@@ -17350,6 +17380,7 @@
         "packages/adapters/kimi-local/src/server/test.ts",
         "packages/adapters/opencode-local/src/server/test.ts",
         "packages/adapters/pi-local/src/server/test.ts",
+        "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
@@ -17437,6 +17468,7 @@
         "server/src/services/execution-sandbox/sandbox-guardian.ts",
         "server/src/services/execution-workspace-policy.ts",
         "server/src/services/experience/private-0565/maintenance-runner.ts",
+        "server/src/services/explicit-native-continuation.ts",
         "server/src/services/issue-execution-policy.ts",
         "server/src/services/issue-execution-stage-wakeup.ts",
         "server/src/services/legacy-execution-recovery.ts",
@@ -17456,6 +17488,9 @@
         "server/src/services/native-runtime/management-analytical-tools.test.ts",
         "server/src/services/native-runtime/management-analytical-tools.ts",
         "server/src/services/native-runtime/native-artifact-preparation.ts",
+        "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts",
+        "server/src/services/native-runtime/native-attachment-remote-stage.test.ts",
+        "server/src/services/native-runtime/native-attachment-remote-stage.ts",
         "server/src/services/native-runtime/native-chat-workspace.ts",
         "server/src/services/native-runtime/native-execution-input.test.ts",
         "server/src/services/native-runtime/native-execution-input.ts",
@@ -17534,6 +17569,7 @@
         "packages/adapters/kimi-local/src/server/test.ts",
         "packages/adapters/opencode-local/src/server/test.ts",
         "packages/adapters/pi-local/src/server/test.ts",
+        "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
@@ -17621,6 +17657,7 @@
         "server/src/services/execution-sandbox/sandbox-guardian.ts",
         "server/src/services/execution-workspace-policy.ts",
         "server/src/services/experience/private-0565/maintenance-runner.ts",
+        "server/src/services/explicit-native-continuation.ts",
         "server/src/services/issue-execution-policy.ts",
         "server/src/services/issue-execution-stage-wakeup.ts",
         "server/src/services/legacy-execution-recovery.ts",
@@ -17640,6 +17677,9 @@
         "server/src/services/native-runtime/management-analytical-tools.test.ts",
         "server/src/services/native-runtime/management-analytical-tools.ts",
         "server/src/services/native-runtime/native-artifact-preparation.ts",
+        "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts",
+        "server/src/services/native-runtime/native-attachment-remote-stage.test.ts",
+        "server/src/services/native-runtime/native-attachment-remote-stage.ts",
         "server/src/services/native-runtime/native-chat-workspace.ts",
         "server/src/services/native-runtime/native-execution-input.test.ts",
         "server/src/services/native-runtime/native-execution-input.ts",

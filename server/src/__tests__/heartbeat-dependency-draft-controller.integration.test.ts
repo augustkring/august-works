@@ -9,7 +9,7 @@ import express from "express";
 import request from "supertest";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { activityLog, agents, agentRuntimeState, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues,
+import { activityLog, agents, agentRuntimeState, agentExecutionManifests, agentWakeupRequests, createDb, documentRevisions, documents, heartbeatRuns, issueDocuments, issues, issueRecoveryActions,
   nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, toolInvocations, issueTreeHolds, issueComments, companyMemberships, issueThreadInteractions, executionWorkspaces, workspaceOperations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -24,6 +24,8 @@ import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { issueService } from "../services/issues.js";
+import { attentionService } from "../services/attention.js";
+import { getExecutionBlocker } from "../services/execution-blocker.js";
 import { accessService } from "../services/access.js";
 import { documentService } from "../services/documents.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
@@ -31,6 +33,7 @@ import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/nat
 import { verificationService } from "../services/supervision/verification-service.js";
 import { issueTreeControlService } from "../services/issue-tree-control.js";
 import { heartbeatService, nativeExecutionFailureLogFields } from "../services/heartbeat.js";
+import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { agentPauseService } from "../services/experience/agent-pause.js";
 import {
   CHAT_CONTROL_RECOVERY_ADMISSION_KEY,
@@ -355,6 +358,258 @@ describe("dependency scheduling through the installed Native text draft controll
       } finally {
         await settings.updateExperimental({ supervision_v7: priorFeatures.supervision_v7, verifier_v7: priorFeatures.verifier_v7 });
       }
+    });
+  }, 60_000);
+
+  it("runs one bounded review-path recovery before exposing the stalled Human decision", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    const outputs = [
+      "Initial internal draft retained for Human review.",
+      "One bounded review-path recovery draft retained for Human review.",
+    ];
+    let calls = 0;
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      const index = ++calls - 1;
+      expect(index).toBeLessThan(outputs.length);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: outputs[index] }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const entry = await createDraftPlan(fixture, "Recover the lost review path once", undefined, undefined,
+        { maxModelCostMinor: 9, maxToolActions: 5 });
+      const initial = await heartbeat.wakeup(f.presence.id, {
+        source: "automation", triggerDetail: "system", reason: "issue_commented",
+        payload: { issueId: entry.task.id, interactionId: "superseded-confirmation",
+          reviewPathLost: true, reviewPathConsumedRef: "superseded-confirmation" },
+        requestedByActorType: "user", requestedByActorId: f.userId,
+        contextSnapshot: { issueId: entry.task.id, taskId: entry.task.id, wakeReason: "issue_commented",
+          interactionId: "superseded-confirmation", reviewPathLost: true,
+          reviewPathConsumedRef: "superseded-confirmation" },
+      });
+      expect(initial).not.toBeNull();
+      await heartbeat.drainActiveRunExecutions();
+
+      const recoveryWakes = await db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "issue_review_path_lost")));
+      expect(recoveryWakes).toHaveLength(1);
+      expect(recoveryWakes[0]).toMatchObject({ status: "completed", payload: expect.objectContaining({
+        issueId: entry.task.id, reviewPathConsumedRef: "superseded-confirmation",
+        reviewPathRecoveryAttempt: 1, maxReviewPathRecoveryAttempts: 1,
+      }) });
+      expect(calls).toBe(2);
+      const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
+        notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
+      expect(runs).toHaveLength(2);
+      expect(runs.map(run => ({ status: run.status, runtimeMode: run.runtimeMode }))).toEqual([
+        { status: "succeeded", runtimeMode: "native" }, { status: "succeeded", runtimeMode: "native" },
+      ]);
+      const attention = await issueService(db).listReviewAttention(f.home,
+        [{ id: entry.task.id, companyId: f.home, status: "in_review" }]);
+      expect(attention.get(entry.task.id)).toMatchObject({ state: "stalled", paths: [] });
+      const feed = await attentionService(db).list(f.home, { userId: f.userId });
+      expect(feed.items.find(item => item.subject.id === entry.task.id)).toMatchObject({ sourceKind: "review",
+        decisionVerbs: expect.arrayContaining([expect.objectContaining({ id: "choose_review_path", label: "Choose review path" })]) });
+    });
+  }, 60_000);
+
+  it("coalesces wakes behind an owner-managed active execution hold and resumes through the installed controller", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model } = fixture;
+    let calls = 0;
+    const output = "One internal draft retained for Human review after execution recovery.";
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      expect(++calls).toBe(1);
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      const entry = await createDraftPlan(fixture, "Native recovery hold");
+      const recovery = issueRecoveryActionService(db);
+      const action = await recovery.upsertSourceScoped({ companyId: f.home, sourceIssueId: entry.task.id,
+        kind: "active_run_watchdog", ownerType: "board", returnOwnerAgentId: f.presence.id,
+        cause: "legacy_execution_requires_reconciliation", fingerprint: entry.task.id,
+        nextAction: "Reconcile the stopped native execution before admitting a replacement Run." });
+      await Promise.all(Array.from({ length: 6 }, (_, i) => heartbeat.wakeup(f.presence.id, {
+        source: "automation", triggerDetail: "system", reason: "issue_continuation_needed",
+        requestedByActorType: "system", requestedByActorId: "native-recovery-hold-test",
+        idempotencyKey: `native-recovery-hold:${i}`, payload: { issueId: entry.task.id },
+        contextSnapshot: { issueId: entry.task.id },
+      })));
+      const holds = await db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "issue_continuation_needed")));
+      expect(holds).toHaveLength(1);
+      expect(holds[0]).toMatchObject({ status: "skipped", runId: null,
+        reason: "execution_reconciliation_required", coalescedCount: 5 });
+      expect(calls).toBe(0);
+      expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
+        notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toHaveLength(0);
+      await recovery.resolveActiveForIssue({ companyId: f.home, sourceIssueId: entry.task.id,
+        actionId: action.id, status: "resolved", outcome: "restored",
+        resolutionNote: "The Human resolved the execution recovery hold." });
+
+      const resumed = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: entry.task.id }, contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" } });
+      expect(resumed).not.toBeNull();
+      await heartbeat.drainActiveRunExecutions();
+      expect(calls).toBe(1);
+      const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
+        notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
+      expect(runs).toHaveLength(1);
+      await assertCompletedDraft(fixture, entry, resumed!.id, output);
+      expect((await db.select().from(issues).where(eq(issues.id, entry.task.id)))[0]!.status).not.toBe("done");
+    });
+  }, 60_000);
+
+  it("retains a resolved no-replay fence until an execution owner records safe continuation", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f } = fixture;
+    await withInstalledDraftTransport(fixture, async () => {
+      throw new Error("A replay-blocked hold must stop before Native Text dispatch");
+    }, async heartbeat => {
+      const entry = await createDraftPlan(fixture, "Keep blocked execution from replaying");
+      const recovery = issueRecoveryActionService(db);
+      const action = await recovery.upsertSourceScoped({ companyId: f.home, sourceIssueId: entry.task.id,
+        kind: "active_run_watchdog", ownerType: "board", returnOwnerAgentId: f.presence.id,
+        cause: "legacy_execution_requires_reconciliation", fingerprint: entry.task.id,
+        evidence: { automaticRecovery: { replay: "blocked", actionOutcome: "unknown" } },
+        nextAction: "Reconcile the stopped execution before admitting a replacement Run." });
+      await recovery.resolveActiveForIssue({ companyId: f.home, sourceIssueId: entry.task.id,
+        actionId: action.id, status: "resolved", outcome: "blocked",
+        resolutionNote: "The recovery record is resolved for display; replay remains blocked." });
+
+      await Promise.all(Array.from({ length: 6 }, (_, i) => heartbeat.wakeup(f.presence.id, {
+        source: "automation", triggerDetail: "system", reason: "issue_continuation_needed",
+        requestedByActorType: "system", requestedByActorId: "native-no-replay-fence-test",
+        idempotencyKey: `native-no-replay:${i}`, payload: { issueId: entry.task.id },
+        contextSnapshot: { issueId: entry.task.id },
+      })));
+      expect(await getExecutionBlocker(db, f.home, entry.task.id)).toMatchObject({ recoveryActionId: action.id });
+      const waits = await db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, f.home), eq(agentWakeupRequests.reason, "issue_continuation_needed")));
+      expect(waits).toHaveLength(1);
+      expect(waits[0]).toMatchObject({ status: "skipped", runId: null,
+        reason: "execution_reconciliation_required", coalescedCount: 5 });
+      expect(await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home),
+        notInArray(heartbeatRuns.id, fixture.conformanceRunIds)))).toHaveLength(0);
+    });
+  }, 60_000);
+
+  it("keeps an unknown NativeText charge blocked until a Human continues through the stopped-run owner", async () => {
+    const fixture = await seedInstalledDraft();
+    const { f, model, human } = fixture;
+    let entry: Awaited<ReturnType<typeof createDraftPlan>> | undefined;
+    let calls = 0;
+    const observed: { signal?: AbortSignal; reservationId?: string; aborted: boolean } = { aborted: false };
+    const output = "Fresh internal draft after explicit Human continuation.";
+    const fetch: typeof guardedRemoteHttpFetch = async (url, init) => {
+      calls++;
+      expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
+      expect(JSON.parse(String(init.body))).toMatchObject({ model, max_tokens: 256 });
+      expect(JSON.parse(String(init.body)).tools).toBeUndefined();
+      if (calls === 1) {
+        const signal = init.signal;
+        if (!(signal instanceof AbortSignal) || !entry) throw new Error("native_text_stop_fixture_missing");
+        observed.signal = signal;
+        const [reservation] = await db.select().from(orchestrationModelReservations)
+          .where(eq(orchestrationModelReservations.planId, entry.plan.id));
+        if (!reservation?.providerWireReceipt) throw new Error("native_text_unknown_charge_receipt_missing");
+        observed.reservationId = reservation.id;
+        await new Promise<never>((_resolve, reject) => {
+          const onAbort = () => {
+            observed.aborted = true;
+            const error = new Error("Controlled NativeText request observed canonical Stop");
+            error.name = "AbortError";
+            reject(error);
+          };
+          signal.addEventListener("abort", onAbort, { once: true });
+          if (signal.aborted) onAbort();
+        });
+      }
+      if (calls !== 2) throw new Error("native_text_continuation_dispatch_count_invalid");
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model, stop_reason: "end_turn",
+        content: [{ type: "text", text: output }], usage: { input_tokens: 10, output_tokens: 20 } }),
+      { status: 200, headers: { "content-type": "application/json" } });
+    };
+    await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
+      entry = await createDraftPlan(fixture, "Stop an unknown NativeText model response");
+      const stopped = await heartbeat.wakeup(f.presence.id, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: entry.task.id }, contextSnapshot: { issueId: entry.task.id, wakeReason: "issue_assigned" } });
+      expect(stopped).not.toBeNull();
+      if (!stopped) throw new Error("native_text_stoppable_run_missing");
+      await vi.waitFor(() => expect(observed.reservationId).toEqual(expect.any(String)), { timeout: 20_000, interval: 25 });
+      expect(observed.signal?.aborted).toBe(false);
+      const cancellation = heartbeat.cancelRun(stopped.id, "Human stopped the in-flight NativeText request", {
+        resultJson: { cancelledByActorType: "user", cancelledByUserId: f.userId },
+      });
+      await vi.waitFor(() => expect(observed.aborted).toBe(true), { timeout: 10_000, interval: 25 });
+      expect(observed.signal?.aborted).toBe(true);
+      expect(await cancellation).toMatchObject({ id: stopped.id, status: "cancelled", runtimeMode: "native" });
+      await heartbeat.drainActiveRunExecutions();
+
+      const [sourceRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, stopped.id));
+      expect(sourceRun).toMatchObject({ status: "cancelled", runtimeMode: "native", driverKind: "aw_text_messages",
+        nativeIssueId: entry.task.id, responsibleUserId: f.userId });
+      const [sourceReservation] = await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.id, observed.reservationId!));
+      expect(sourceReservation).toMatchObject({ status: "unknown", providerResponseHash: null, usage: null });
+      const [hold] = await db.select().from(issueRecoveryActions).where(and(
+        eq(issueRecoveryActions.companyId, f.home), eq(issueRecoveryActions.sourceIssueId, entry.task.id)));
+      expect(hold).toMatchObject({ status: "active", cause: "uncertain_provider_action", evidence: {
+        runId: stopped.id, modelReservationId: observed.reservationId,
+        automaticRecovery: { actionOutcome: "unknown", replay: "blocked", runId: stopped.id,
+          reservationId: observed.reservationId },
+      } });
+      await issueRecoveryActionService(db).resolveActiveForIssue({ companyId: f.home,
+        sourceIssueId: entry.task.id, actionId: hold!.id, status: "resolved", outcome: "blocked",
+        resolutionNote: "The notice is resolved; the unknown model response remains a no-replay fence." });
+      expect(await getExecutionBlocker(db, f.home, entry.task.id)).toMatchObject({ recoveryActionId: hold!.id, runId: stopped.id });
+
+      const plans = orchestrationService(db);
+      const [pausedPlan] = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, entry.plan.id));
+      if (!pausedPlan) throw new Error("native_text_unknown_plan_missing");
+      if (pausedPlan.status !== "cancelled") await plans.decide(human, f.home, pausedPlan.id, {
+        expectedVersion: pausedPlan.version, action: "cancel", rationale: "Replace the stopped plan with a fresh Human-reviewed continuation.",
+      });
+      const [task] = await db.select().from(issues).where(eq(issues.id, entry.task.id));
+      if (!task) throw new Error("native_text_recovery_task_missing");
+      const nextPlan = await plans.create(human, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
+        workload: "semantic", riskClass: "C0", completionContract: { objective: "Continue after review of the stopped request",
+          requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"] },
+        budgets: { maxModelCostMinor: 3, maxToolActions: 3 }, workers: [{ key: "native-writer-recovery", issueId: task.id }] });
+      await plans.decide(human, f.home, nextPlan.id, { expectedVersion: nextPlan.version, action: "start",
+        rationale: "Authorize one fresh text-only internal draft after inspecting the stopped NativeText request." });
+      const comment = await issueService(db).addComment(task.id,
+        "Continue with one fresh internal draft; do not replay or infer the stopped response.", { userId: f.userId },
+        { authorType: "user", manualInputActor: human });
+      const resumed = await heartbeat.wakeup(f.presence.id, { source: "automation", triggerDetail: "system",
+        reason: "issue_commented", requestedByActorType: "user", requestedByActorId: f.userId,
+        payload: { issueId: task.id, commentId: comment.id },
+        contextSnapshot: { issueId: task.id, wakeReason: "issue_commented", wakeCommentId: comment.id } });
+      expect(resumed).not.toBeNull();
+      await heartbeat.drainActiveRunExecutions();
+      expect(calls).toBe(2);
+      expect(await getExecutionBlocker(db, f.home, task.id)).toBeNull();
+      const [continuedHold] = await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.id, hold!.id));
+      expect(continuedHold).toMatchObject({ status: "resolved", outcome: "cancelled", evidence: {
+        explicitUserContinuation: { previousRunId: stopped.id, commentId: comment.id, runId: resumed!.id },
+        automaticRecovery: { actionOutcome: "unknown", replay: "explicit_user_continuation" },
+      } });
+      await assertCompletedDraft(fixture, { task, plan: nextPlan }, resumed!.id, output);
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, stopped.id)))[0]?.status).toBe("cancelled");
+      expect((await db.select().from(orchestrationModelReservations)
+        .where(eq(orchestrationModelReservations.id, sourceReservation!.id)))[0])
+        .toMatchObject({ status: "unknown", providerResponseHash: null, usage: null });
     });
   }, 60_000);
 
@@ -1444,7 +1699,8 @@ describe("dependency scheduling through the installed Native text draft controll
   // Same current-Human/Plan and installed HTTP/listener owners as the two
   // cases above. The new cases share only their identical local setup/proofs.
   async function createDraftPlan(fixture: Awaited<ReturnType<typeof seedInstalledDraft>>, title: string, parentId?: string,
-    project?: { projectId: string; projectWorkspaceId: string }) {
+    project?: { projectId: string; projectWorkspaceId: string }, budgets: { maxModelCostMinor: number; maxToolActions: number } =
+      { maxModelCostMinor: 6, maxToolActions: 3 }) {
     const { f, human } = fixture;
     const tasks = issueService(db), plans = orchestrationService(db);
     const draft = await tasks.create(f.home, { title, description: "Retain one internal document for Human review; no interactive tools or external effects.",
@@ -1457,7 +1713,7 @@ describe("dependency scheduling through the installed Native text draft controll
     const plan = await plans.create(human, f.home, { issueId: task.id, expectedIssueUpdatedAt: task.updatedAt.toISOString(),
       workload: "semantic", riskClass: "C0", completionContract: { objective: title,
         requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Human review remains required"] },
-      budgets: { maxModelCostMinor: 6, maxToolActions: 3 }, workers: [{ key: "native-writer", issueId: task.id }] });
+      budgets, workers: [{ key: "native-writer", issueId: task.id }] });
     await plans.decide(human, f.home, plan.id, { expectedVersion: plan.version, action: "start",
       rationale: "Admit one eligible internal document through the installed controller and real scheduler" });
     return { task, plan };

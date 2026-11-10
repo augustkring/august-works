@@ -373,7 +373,9 @@ async function hasExactStoppedWorkloadRemovalReceipt(db: Db, locator: RemoteRunt
         descriptor.policyHash !== startBinding.policyHash || descriptor.imageDigest !== proof.imageDigest ||
         !reply.success || reply.data.action !== "erase_native_session") continue;
     const actual = reply.data;
-    if (actual.erased !== true || actual.upperLayerAbsent !== true || actual.mergedViewAbsent !== true ||
+    const expectedAttachmentNonces = Array.isArray(descriptor.attachmentStageNonces) ? descriptor.attachmentStageNonces : [];
+    if (nativeSha256(actual.attachmentStageNoncesAbsent ?? []) !== nativeSha256(expectedAttachmentNonces) ||
+        actual.erased !== true || actual.upperLayerAbsent !== true || actual.mergedViewAbsent !== true ||
         actual.stoppedBefore !== true || actual.stoppedAfter !== true ||
         descriptor.schema !== actual.schema || descriptor.startBindingDigest !== stop.startBindingDigest ||
         descriptor.runId !== locator.runId || descriptor.runnerInstanceId !== locator.runnerInstanceId ||

@@ -195,6 +195,9 @@ import {
   stageNativeRunnerWakeAttachments,
   type NativeRunnerAttachmentSourceCapture,
 } from "./native-runner-file-handoff.js";
+import { executeNativeRemoteAttachmentStage, readNativeAttachmentStageCleanupReceipts,
+  type NativeAttachmentStageIntent } from "./native-attachment-remote-stage.js";
+import { captureNativeRemoteAttachmentStageOwner } from "./native-attachment-remote-stage-owner.js";
 import { nativeToolContractFingerprintForTarget } from "./native-session-resume.js";
 import { verifyRetainedMaintenanceNoLaunch } from "./native-maintenance-no-launch.js";
 import { registerRunnerPrpAuthority } from "../../realtime/runner-prp-ws.js";
@@ -7500,6 +7503,82 @@ export async function renewNativeSessionExecutionLease(input: {
   if (!updated) throw new Error("native_session_lease_lost");
 }
 
+async function persistNativeRemoteAttachmentStageIntent(input: {
+  db: Db; companyId: string; issueId: string; runId: string; agentId: string; leaseId: string;
+  taskRoot: string; attachmentId: string; stageNonce: string; sha256: string; byteSize: number; phase: "staging" | "committed";
+  owner: Exclude<Awaited<ReturnType<typeof captureNativeRemoteAttachmentStageOwner>>, { cleanupOnly: true }>;
+}) {
+  const sourceBinding = { kind: "attachment", issueId: input.owner.attachmentInput.issueId,
+    attachmentId: input.owner.attachmentInput.attachmentId, commentId: input.owner.attachmentInput.commentId,
+    assetId: input.owner.attachmentInput.assetId, sha256: input.owner.attachmentInput.sha256,
+    byteSize: input.owner.attachmentInput.byteSize };
+  const sourceSnapshot = input.owner.attachmentSnapshot;
+  const relativePath = `.paperclip-inbound/${input.runId}/${input.stageNonce}/payload`;
+  const unsigned = { schema: "paperclip.native-attachment-stage-intent.v1" as const,
+    runId: input.runId, companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+    leaseId: input.leaseId, attachmentId: input.attachmentId, stageNonce: input.stageNonce,
+    sha256: input.sha256, byteSize: input.byteSize, relativePath, sourceBinding,
+    sourceSnapshot, sourceSnapshotHash: nativeSha256(sourceSnapshot), phase: input.phase };
+  const intent: NativeAttachmentStageIntent = { ...unsigned, integrityHash: nativeSha256(unsigned) };
+  await input.db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    await lockAnalyticalCompany(tx, input.companyId);
+    await lockMemoryPrivacy(tx, input.companyId);
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).for("update").limit(1);
+    const [lease] = await tx.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.id, input.leaseId),
+      eq(environmentLeases.heartbeatRunId, input.runId), eq(environmentLeases.status, "active"),
+    )).for("share").limit(1);
+    if (!run || !lease) throw new Error("native_attachment_stage_intent_binding_changed");
+    const profile = record(run.runnerProfileJson);
+    let execution: NativeExecutionInput;
+    try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); }
+    catch { throw new Error("native_attachment_stage_intent_binding_changed"); }
+    if (execution.binding.companyId !== input.companyId || execution.binding.runId !== input.runId ||
+        execution.binding.issueId !== input.issueId || execution.binding.agentId !== input.agentId ||
+        execution.workspace.cwd !== input.taskRoot)
+      throw new Error("native_attachment_stage_intent_binding_changed");
+    const operation = input.phase === "staging"
+      ? { phase: "init" as const, runId: input.runId, stageNonce: input.stageNonce, attachmentId: input.attachmentId }
+      : { phase: "commit" as const, runId: input.runId, stageNonce: input.stageNonce, attachmentId: input.attachmentId,
+        totalBytes: input.byteSize, sha256: input.sha256 };
+    const currentOwner = await captureNativeRemoteAttachmentStageOwner(tx, { companyId: input.companyId,
+      issueId: input.issueId, runId: input.runId, agentId: input.agentId, taskRoot: input.taskRoot, operation });
+    if ("cleanupOnly" in currentOwner || currentOwner.sourceHash.toLowerCase() !== input.sha256 ||
+        currentOwner.byteSize !== input.byteSize || currentOwner.attachmentInput.attachmentId !== input.owner.attachmentInput.attachmentId ||
+        currentOwner.attachmentInput.assetId !== input.owner.attachmentInput.assetId ||
+        nativeSha256(currentOwner.attachmentSnapshot) !== nativeSha256(input.owner.attachmentSnapshot))
+      throw new Error("native_attachment_stage_intent_source_changed");
+    readNativeAttachmentStageCleanupReceipts(profile, input.runId, input.leaseId);
+    const intents = Array.isArray(profile.nativeAttachmentStageIntents) ? profile.nativeAttachmentStageIntents : [];
+    if (!Array.isArray(profile.nativeAttachmentStageIntents) && profile.nativeAttachmentStageIntents !== undefined)
+      throw new Error("native_attachment_stage_intent_binding_changed");
+    const existingIndex = intents.findIndex(value => record(value).stageNonce === input.stageNonce);
+    if (input.phase === "staging") {
+      if (existingIndex >= 0 || intents.length >= 1280) throw new Error("native_attachment_stage_intent_binding_changed");
+      intents.push(intent);
+    } else {
+      const existing = existingIndex >= 0 ? record(intents[existingIndex]) : null;
+      const { integrityHash: existingIntegrity, ...existingUnsigned } = existing ?? {};
+      const expectedStaging = { ...unsigned, phase: "staging" as const };
+      if (!existing || existingIntegrity !== nativeSha256(existingUnsigned) || existing.phase !== "staging" ||
+          nativeSha256(existingUnsigned) !== nativeSha256(expectedStaging))
+        throw new Error("native_attachment_stage_intent_binding_changed");
+      intents[existingIndex] = intent;
+    }
+    const nextProfile = { ...profile, nativeAttachmentStageIntents: intents };
+    if (Buffer.byteLength(JSON.stringify(nextProfile.nativeAttachmentStageIntents)) > 2 * 1024 * 1024)
+      throw new Error("native_attachment_stage_intent_budget_exceeded");
+    await tx.update(heartbeatRuns).set({ runnerProfileJson: nextProfile, updatedAt: new Date() })
+      .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+        eq(heartbeatRuns.status, "running")));
+  });
+}
+
 type NativeAttachmentStageReceipt = {
   eventSeq: number;
   attempt: number;
@@ -7510,6 +7589,7 @@ type NativeAttachmentStageReceipt = {
   descriptorHash: string;
   stageHash: string;
   sourceCaptures: readonly NativeRunnerAttachmentSourceCapture[];
+  remoteStageReceipts: readonly { attachmentId: string; stageNonce: string; sha256: string; byteSize: number }[];
 };
 
 function nativeTaskDigest(task: unknown): string {
@@ -7536,6 +7616,17 @@ function nativeAttachmentStageRecord(profile: Record<string, unknown>, run: type
   if (!isDeepStrictEqual(sourceInputs, attachmentInputs) || typedSourceCaptures.some(capture =>
     capture.input.kind !== "attachment" || capture.input.disposition !== "delivered" ||
     !capture.input.assetId || !capture.input.sha256 || capture.input.byteSize === null)) return null;
+  const remoteStageReceipts = Array.isArray(raw.remoteStageReceipts) ? raw.remoteStageReceipts : [];
+  if (remoteStageReceipts.some(value => {
+    const item = record(value);
+    return typeof item.attachmentId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.stageNonce as string) ||
+      !/^[a-f0-9]{64}$/.test(item.sha256 as string) || !Number.isSafeInteger(item.byteSize) || (item.byteSize as number) < 1;
+  }) || new Set(remoteStageReceipts.map(value => record(value).attachmentId)).size !== remoteStageReceipts.length ||
+    remoteStageReceipts.some(value => {
+      const item = record(value);
+      const source = typedSourceCaptures.find(capture => capture.input.attachmentId === item.attachmentId)?.input;
+      return !source || source.sha256 !== item.sha256 || source.byteSize !== item.byteSize;
+    })) return null;
   let execution: NativeExecutionInput;
   try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { return null; }
   const baseTaskDigest = nativeTaskDigest(execution.task);
@@ -7548,10 +7639,12 @@ function nativeAttachmentStageRecord(profile: Record<string, unknown>, run: type
     raw.baseTaskDigest !== baseTaskDigest || sourceCaptureHash !== nativeSha256(sourceCaptures) ||
     !/^[0-9a-f]{64}$/.test(descriptorHash) ||
     stageHash !== nativeSha256({ eventSeq: raw.eventSeq, attempt: raw.attempt,
-      responsibleUserId: raw.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest, sourceCaptureHash, descriptorHash })) return null;
+      responsibleUserId: raw.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest, sourceCaptureHash, descriptorHash,
+      ...(Array.isArray(raw.remoteStageReceipts) ? { remoteStageReceipts } : {}) })) return null;
   return { eventSeq: raw.eventSeq as number, attempt: raw.attempt as number,
     responsibleUserId: (raw.responsibleUserId ?? null) as string | null, baseTaskDigest, finalTaskDigest,
-    sourceCaptureHash, descriptorHash, stageHash, sourceCaptures: typedSourceCaptures };
+    sourceCaptureHash, descriptorHash, stageHash, sourceCaptures: typedSourceCaptures,
+    remoteStageReceipts: remoteStageReceipts as NativeAttachmentStageReceipt["remoteStageReceipts"] };
 }
 
 function nativeAttachmentStageReceipt(profile: Record<string, unknown>, run: typeof heartbeatRuns.$inferSelect,
@@ -9993,6 +10086,44 @@ export async function executePaperclipNativeSession(input: {
         workspaceRoot: input.execution.workspace.cwd,
         executionTargetKind: targetKind,
       },
+      ...(input.runnerExecutionTarget?.kind === "remote" && input.runnerExecutionTarget.transport === "sandbox" && input.runnerExecutionTarget.runner
+        ? { remoteStage: async (stage: { attachmentId: string; stageNonce: string; bytes: Buffer; sha256: string;
+            sourceCapture: NativeRunnerAttachmentSourceCapture }) => {
+            const target = input.runnerExecutionTarget;
+            if (!target || target.kind !== "remote" || target.transport !== "sandbox" || !target.runner || !target.leaseId)
+              throw new Error("native_attachment_remote_target_unavailable");
+            const operation = { phase: "init" as const, runId: input.execution.binding.runId,
+              stageNonce: stage.stageNonce, attachmentId: stage.attachmentId };
+            const owner = await captureNativeRemoteAttachmentStageOwner(input.db, { companyId: input.execution.binding.companyId,
+              issueId: input.execution.binding.issueId, runId: input.execution.binding.runId,
+              agentId: input.execution.binding.agentId, taskRoot: target.remoteCwd, operation });
+            if ("cleanupOnly" in owner || owner.sourceHash.toLowerCase() !== stage.sha256 || owner.byteSize !== stage.bytes.length ||
+                owner.attachmentInput.attachmentId !== stage.sourceCapture.input.attachmentId ||
+                owner.attachmentInput.assetId !== stage.sourceCapture.input.assetId ||
+                nativeSha256(owner.attachmentSnapshot) !== nativeSha256(stage.sourceCapture.payloadSourceSnapshot))
+              throw new Error("native_attachment_stage_intent_source_changed");
+            const intentInput = { db: input.db, companyId: input.execution.binding.companyId,
+              issueId: input.execution.binding.issueId, runId: input.execution.binding.runId,
+              agentId: input.execution.binding.agentId, leaseId: target.leaseId, taskRoot: target.remoteCwd,
+              attachmentId: stage.attachmentId, stageNonce: stage.stageNonce, sha256: stage.sha256,
+              byteSize: stage.bytes.length, owner };
+            await persistNativeRemoteAttachmentStageIntent({ ...intentInput, phase: "staging" });
+            const runner = serializeNativeRemoteCommands(target.runner);
+            let staged: Awaited<ReturnType<typeof executeNativeRemoteAttachmentStage>> | undefined;
+            try {
+              staged = await executeNativeRemoteAttachmentStage({ runner, taskRoot: target.remoteCwd,
+                runId: input.execution.binding.runId, attachmentId: stage.attachmentId, bytes: stage.bytes,
+                sha256: stage.sha256, stageNonce: stage.stageNonce });
+              await readVerifiedRemoteWorkspaceFile({ runner, workspaceRoot: target.remoteCwd,
+                contentRef: staged.relativePath, byteSize: stage.bytes.length, sha256: stage.sha256 });
+              await persistNativeRemoteAttachmentStageIntent({ ...intentInput, phase: "committed" });
+              return staged;
+            } catch (error) {
+              if (staged) await staged.cleanup().catch(() => undefined);
+              throw error;
+            }
+          } }
+        : {}),
     });
     cleanupStagedAttachments = async () => {
       const cleanupResults = await Promise.allSettled([
@@ -10038,7 +10169,7 @@ export async function executePaperclipNativeSession(input: {
         }) };
     }
     return await executePaperclipNativeSessionWithinScope(preparedInput, attachmentStage.sourceCaptures,
-      attachmentStage.attachments, input.execution);
+      attachmentStage.attachments, input.execution, attachmentStage.remoteStageReceipts);
   } catch (error) {
     executionFailure = error;
     throw error;
@@ -10385,6 +10516,7 @@ async function executePaperclipNativeSessionWithinScope(
   stagedAttachmentSources?: readonly NativeRunnerAttachmentSourceCapture[],
   stagedAttachments?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["attachments"],
   baseExecution?: NativeExecutionInput,
+  remoteStageReceipts?: Awaited<ReturnType<typeof stageNativeRunnerWakeAttachments>>["remoteStageReceipts"],
 ): Promise<AdapterExecutionResult> {
   const runId = input.execution.binding.runId;
   if (
@@ -11286,16 +11418,24 @@ async function executePaperclipNativeSessionWithinScope(
                     input.bootstrapSourceClosure?.taskEnvelopeDigest !== finalTaskDigest))
                     throw new Error("native_attachment_stage_capture_binding_changed");
                   const sourceCaptureHash = nativeSha256(stagedAttachmentSources);
+                  const normalizedRemoteStageReceipts = remoteStageReceipts ?? [];
+                  if (normalizedRemoteStageReceipts.some(receipt => !stagedAttachmentSources.some(capture =>
+                    capture.input.attachmentId === receipt.attachmentId && capture.input.sha256 === receipt.sha256 &&
+                    capture.input.byteSize === receipt.byteSize && capture.input.disposition === "delivered")))
+                    throw new Error("native_attachment_stage_capture_binding_changed");
                   // The descriptor hash excludes workspace paths. The final task digest binds those exact paths
                   // without retaining temporary filesystem paths in the run profile.
                   const descriptorHash = nativeSha256(stagedAttachments.map(({ id, filename, contentType, byteSize, unavailableReason }) =>
                     ({ id, filename, contentType, byteSize, unavailableReason })));
                   const stageHash = nativeSha256({ eventSeq: launchIntent.row.seq, attempt,
                     responsibleUserId: run.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest,
-                    sourceCaptureHash, descriptorHash });
+                    sourceCaptureHash, descriptorHash,
+                    ...(normalizedRemoteStageReceipts.length ? { remoteStageReceipts: normalizedRemoteStageReceipts } : {}) });
                   const currentCapture = { eventSeq: launchIntent.row.seq, attempt,
                     responsibleUserId: run.responsibleUserId ?? null, baseTaskDigest, finalTaskDigest,
-                    sourceCaptureHash, descriptorHash, stageHash, sourceCaptures: stagedAttachmentSources };
+                    sourceCaptureHash, descriptorHash,
+                    ...(normalizedRemoteStageReceipts.length ? { remoteStageReceipts: normalizedRemoteStageReceipts } : {}),
+                    stageHash, sourceCaptures: stagedAttachmentSources };
                   const captures = [...previous, currentCapture];
                   if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
                     throw new Error("native_attachment_stage_capture_budget_exceeded");

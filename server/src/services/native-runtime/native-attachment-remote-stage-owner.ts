@@ -1,0 +1,161 @@
+import { and, eq, isNull } from "drizzle-orm";
+import {
+  agentWakeupRequests,
+  assets,
+  heartbeatRuns,
+  issueAttachments,
+  issueComments,
+  issues,
+  type Db,
+} from "@paperclipai/db";
+import {
+  nativePayloadSourceSnapshotSchema,
+  nativePayloadSourceInputSchema,
+  type NativePayloadSourceInput,
+  type NativePayloadSourcePolicy,
+} from "@paperclipai/shared";
+import { forbidden } from "../../errors.js";
+import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
+import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { nativeSha256 } from "./canonical.js";
+import { readNativeAttachmentStageCleanupReceipts, type NativeRemoteAttachmentStageOperation } from "./native-attachment-remote-stage.js";
+
+type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+function uuid(value: unknown): value is string { return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value); }
+function denied(): never { throw forbidden("Native remote attachment staging source changed"); }
+
+export type NativeRemoteAttachmentStageOwner = {
+  runId: string;
+  companyId: string;
+  issueId: string;
+  agentId: string;
+  responsibleUserId: string;
+  attachmentInput: Extract<NativePayloadSourceInput, { kind: "attachment" }>;
+  attachmentPolicy: NativePayloadSourcePolicy;
+  attachmentSnapshot: Record<string, unknown>;
+  sourceHash: string;
+  byteSize: number;
+  filename: string;
+  contentType: string;
+  stageNonce: string;
+} | { cleanupOnly: true; runId: string; companyId: string; issueId: string; agentId: string; stageNonce: string };
+
+/** Independently reconstruct the current Human wake, exact rendered attachment,
+ * attachment/asset owner, and ACL for each remote write command. This source
+ * check is deliberately separate from the command syntax predicate. */
+export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string; taskRoot: string;
+  operation: NativeRemoteAttachmentStageOperation;
+}): Promise<NativeRemoteAttachmentStageOwner> {
+  if (!uuid(input.companyId) || !uuid(input.issueId) || !uuid(input.runId) || !uuid(input.agentId) ||
+      !uuid(input.operation.attachmentId) || !uuid(input.operation.stageNonce)) return denied();
+  const [run] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+    eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+    eq(heartbeatRuns.runtimeMode, "native"),
+  )).for("share").limit(1);
+  const [task] = await db.select().from(issues).where(and(
+    eq(issues.companyId, input.companyId), eq(issues.id, input.issueId),
+  )).for("share").limit(1);
+  const profile = record(run?.runnerProfileJson);
+  if (run && task && input.operation.phase === "cleanup") {
+    let cleanupExecution: ReturnType<typeof parseNativeExecutionInput> | null = null;
+    try { cleanupExecution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { cleanupExecution = null; }
+    let retained = false;
+    try {
+      retained = readNativeAttachmentStageCleanupReceipts(profile, input.runId).some(receipt =>
+        receipt.attachmentId === input.operation.attachmentId && receipt.stageNonce === input.operation.stageNonce);
+    } catch { retained = false; }
+    if (cleanupExecution && retained && ["running", "succeeded", "failed", "cancelled"].includes(run.status) &&
+      run.nativeIssueId === input.issueId && run.agentId === input.agentId &&
+      cleanupExecution.binding.companyId === input.companyId && cleanupExecution.binding.runId === input.runId &&
+      cleanupExecution.binding.issueId === input.issueId && cleanupExecution.binding.agentId === input.agentId &&
+      cleanupExecution.workspace.cwd === input.taskRoot && task.companyId === input.companyId && task.id === input.issueId) {
+      return { cleanupOnly: true, runId: input.runId, companyId: input.companyId, issueId: input.issueId,
+        agentId: input.agentId, stageNonce: input.operation.stageNonce };
+    }
+  }
+  const executionValue = profile.nativeExecutionInput;
+  let execution: ReturnType<typeof parseNativeExecutionInput>;
+  try { execution = parseNativeExecutionInput(executionValue); } catch { return denied(); }
+  const context = record(run?.contextSnapshot);
+  const taskCapture = record(profile.nativeBootstrapTaskSource);
+  const taskInput = nativePayloadSourceInputSchema.safeParse(taskCapture.input);
+  const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(taskCapture.payloadSourceSnapshot);
+  const authority = record(profile.nativeOpenCodeSourceAuthority);
+  const refs = record(profile.nativeBootstrapTaskMarkdownSourceMap).references;
+  const attachmentRefs = Array.isArray(refs) ? refs.filter(value => {
+    const ref = record(value);
+    return ref.kind === "attachment" && ref.id === input.operation.attachmentId;
+  }).map(record) : [];
+  const wakeSources = record(profile.nativeBootstrapWakeCommentSources);
+  const wakeRequest = record(wakeSources.request);
+  const commentInput = nativePayloadSourceInputSchema.safeParse(wakeRequest.input);
+  const commentSnapshot = nativePayloadSourceSnapshotSchema.safeParse(wakeRequest.payloadSourceSnapshot);
+  const request = run?.wakeupRequestId ? (await db.select().from(agentWakeupRequests).where(and(
+    eq(agentWakeupRequests.companyId, input.companyId), eq(agentWakeupRequests.id, run.wakeupRequestId),
+    eq(agentWakeupRequests.runId, input.runId), eq(agentWakeupRequests.agentId, input.agentId),
+  )).for("share").limit(1))[0] : undefined;
+  const requestPayload = record(request?.payload);
+  if (!run || run.status !== "running" || !task || !run.startedAt || !run.responsibleUserId || task.hiddenAt ||
+      task.assigneeAgentId !== input.agentId || task.responsibleUserId !== run.responsibleUserId || task.executionRunId !== input.runId ||
+      task.status === "done" || task.status === "cancelled" ||
+      execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+      execution.binding.companyId !== input.companyId || execution.binding.runId !== input.runId ||
+      execution.binding.issueId !== input.issueId || execution.binding.agentId !== input.agentId ||
+      execution.workspace.cwd !== input.taskRoot ||
+      authority.version !== 1 || authority.executionInputHash !== nativeSha256(executionValue) ||
+      !taskInput.success || taskInput.data.kind !== "task" || taskInput.data.issueId !== input.issueId || !taskSnapshot.success ||
+      taskSnapshot.data.owner.kind !== "issue" || taskSnapshot.data.owner.companyId !== input.companyId ||
+      taskSnapshot.data.owner.id !== input.issueId ||
+      !request || request.reason !== "issue_commented" || request.requestedByActorType !== "user" ||
+      request.requestedByActorId !== run.responsibleUserId || requestPayload.issueId !== input.issueId ||
+      requestPayload.commentId !== context.wakeCommentId) return denied();
+  // Keep the comment ID equality explicit outside the combined structural guard
+  // so malformed source values cannot be coerced through a conditional.
+  if (!commentInput.success || commentInput.data.kind !== "comment" || commentInput.data.issueId !== input.issueId ||
+      commentInput.data.commentId !== context.wakeCommentId || requestPayload.commentId !== commentInput.data.commentId ||
+      attachmentRefs.length !== 1 || attachmentRefs[0]?.commentId !== commentInput.data.commentId ||
+      !commentSnapshot.success || commentSnapshot.data.owner.kind !== "comment" ||
+      commentSnapshot.data.owner.companyId !== input.companyId || commentSnapshot.data.owner.id !== commentInput.data.commentId)
+    return denied();
+  const [comment] = await db.select({ id: issueComments.id }).from(issueComments).where(and(
+    eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+    eq(issueComments.id, commentInput.data.commentId), isNull(issueComments.deletedAt),
+  )).for("share").limit(1);
+  if (!comment) return denied();
+  const [row] = await db.select({ attachment: issueAttachments, asset: assets }).from(issueAttachments)
+    .innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId)))
+    .where(and(eq(issueAttachments.companyId, input.companyId), eq(issueAttachments.issueId, input.issueId),
+      eq(issueAttachments.id, input.operation.attachmentId))).for("share").limit(1);
+  const snapshot = nativePayloadSourceSnapshotSchema.safeParse(row?.attachment.payloadSourceSnapshot);
+  const reference = attachmentRefs[0]!;
+  if (!row || !snapshot.success || row.attachment.payloadSourceSnapshotInvalidated ||
+      row.attachment.issueCommentId !== commentInput.data.commentId || row.attachment.payloadSourceProtocolVersion !== 1 ||
+      reference.byteSize !== row.asset.byteSize || typeof reference.filename !== "string" ||
+      reference.contentType !== row.asset.contentType || snapshot.data.owner.kind !== "attachment" ||
+      snapshot.data.owner.companyId !== input.companyId || snapshot.data.owner.id !== input.operation.attachmentId)
+    return denied();
+  const attachmentInput = nativePayloadSourceInputSchema.safeParse({ kind: "attachment", issueId: input.issueId,
+    attachmentId: row.attachment.id, commentId: row.attachment.issueCommentId, assetId: row.asset.id,
+    sha256: row.asset.sha256, byteSize: row.asset.byteSize, disposition: "delivered" });
+  if (!attachmentInput.success || attachmentInput.data.kind !== "attachment" || (input.operation.phase === "commit" &&
+      (input.operation.totalBytes !== row.asset.byteSize || input.operation.sha256 !== row.asset.sha256)) ||
+      (input.operation.phase === "append" && input.operation.totalBytes !== row.asset.byteSize)) return denied();
+  const actor = { type: "agent" as const, source: "none" as const, companyId: input.companyId,
+    agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId };
+  await assertNativeTaskSourceOwnerCurrent(db, { companyId: input.companyId, actor: { type: "board", source: "session", userId: run.responsibleUserId }, source: taskInput.data });
+  await assertNativePayloadSourceSetCurrent(db, { companyId: input.companyId, issueId: input.issueId, runId: input.runId,
+    actor, policy: commentSnapshot.data.policy, inputs: [commentInput.data] });
+  await assertNativePayloadSourceSetCurrent(db, { companyId: input.companyId, issueId: input.issueId, runId: input.runId,
+    actor, policy: snapshot.data.policy, inputs: [attachmentInput.data] });
+  return { runId: input.runId, companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+    responsibleUserId: run.responsibleUserId, attachmentInput: attachmentInput.data, attachmentPolicy: snapshot.data.policy,
+    attachmentSnapshot: snapshot.data as unknown as Record<string, unknown>,
+    sourceHash: row.asset.sha256, byteSize: row.asset.byteSize, filename: reference.filename,
+    contentType: row.asset.contentType, stageNonce: input.operation.stageNonce };
+}

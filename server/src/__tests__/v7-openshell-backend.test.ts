@@ -34,6 +34,19 @@ const executable = process.env.AW_V7_OPENSHELL_PROVER;
   });
   it("rejects scope swaps, changed images, expired deadlines and degraded controls", async () => { const b = backend(); await expect(b.prepareSandbox({ ...identity, companyId: "other" })).rejects.toMatchObject({ status: 403 }); image = "fixture.invalid/sandbox@sha256:" + "b".repeat(64); await expect(b.prepareSandbox(identity)).rejects.toMatchObject({ status: 409 }); image = snapshot.sandboxImageDigest; await b.applyPolicy(input()); await expect(b.startWorkload({ ...identity, policy: compilation(), expiresAt: new Date(0).toISOString(), idempotencyKey: "start" })).rejects.toMatchObject({ status: 403 }); const old = compilation(); snapshot.forceStop = false; await expect(b.startWorkload({ ...identity, policy: old, expiresAt: new Date(Date.now() + 30000).toISOString(), idempotencyKey: "start" })).rejects.toMatchObject({ status: 409 }); expect(bridge.start).not.toHaveBeenCalled(); });
   it("requires recreation for a static-policy change", async () => { expect(await backend().applyPolicy({ ...input(), currentStaticFingerprint: "different" })).toMatchObject({ applied: false, requiresRecreate: true }); expect(bridge.apply).not.toHaveBeenCalled(); });
+  it("proves a credentialless run against an empty maximum broker allowlist without admitting an empty brokered run", async () => {
+    const boundary = policy(); boundary.credentials = { mode: "brokered", bindings: [] };
+    const compile = (candidate: typeof boundary) => compileSandboxPolicy({ boundary, candidate, capabilities: snapshot,
+      authorizedConnectionGrantHashes: {}, sourcePolicyRefs: ["fixture-only"] });
+    expect(compile(boundary).failedBoundaries).toContain("credential_broker_binding_missing");
+    const b = openShellBackend({ identity, boundary, bridge, prover: { executable: executable!,
+      executableSha256: "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1" } });
+    const compiled = compile(policy());
+    expect(compiled.proverResult).toBe("pass");
+    expect(await b.applyPolicy({ ...input(), policy: compiled })).toMatchObject({ applied: true, unsupportedFeatures: [] });
+    await expect(b.startWorkload({ ...identity, policy: compiled, expiresAt: input().expiresAt,
+      idempotencyKey: "credentialless-start" })).resolves.toEqual({ operationId: "actual-native-start" });
+  });
   it("rejects an expired original deadline before any host policy command", async () => { await expect(backend().applyPolicy({ ...input(), expiresAt: new Date(0).toISOString() })).rejects.toMatchObject({ status: 403 }); expect(bridge.apply).not.toHaveBeenCalled(); });
   it("re-proves the composed effective policy and rejects provider-added destinations or writes", async () => { bridge.effectivePolicy = async () => { const document = projectOpenShellPolicy(policy()).document; document.filesystem_policy.read_write = ["/tmp"]; return document; }; await expect(backend().applyPolicy(input())).rejects.toMatchObject({ status: 409 }); expect(bridge.start).not.toHaveBeenCalled(); });
   it("rejects provider composition that fits the maximum but widens the run candidate", async () => {

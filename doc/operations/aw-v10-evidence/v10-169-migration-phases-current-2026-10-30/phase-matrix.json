@@ -17,9 +17,9 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 571,
-    "latestOfficialMigration": "0571_issue_native_stage_source_transform",
-    "latestOfficialMigrationCommit": "e31c09662af4851560bf3ef50dc64fc341c6df3a",
+    "last": 572,
+    "latestOfficialMigration": "0572_sandbox_hidden_conformance_policy",
+    "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
   "promotion": "phase-index-only; no whole-program or production rollout qualification claimed",
@@ -543,31 +543,34 @@
       "id": "sandbox-protected-qualification-and-stopped-policy",
       "migrations": [
         567,
-        568
+        568,
+        572
       ],
-      "purpose": "Require all19 closed protected-host qualification probes and current target evidence at sandbox readiness/admission; permit policy recompile only against original stopped/current execution conditions.",
+      "purpose": "Preserve all19 protected-host qualification and current stopped-cell controls; permit only exact zero-tool hidden Native OpenCode conformance policies with current Human, manifest, Plan, Run, lease and private workspace bindings.",
       "authority": "Original sandbox binding/policy guards use current runtime cell generation, protected qualification report, capability expiry and actual execution manifest/Run/Task identity. Neither container lifecycle nor this index establishes physical host enforcement.",
       "durableState": [
         "runtime_sandbox_bindings capability and qualification target snapshots",
         "sandbox_qualification_runs protected_host_report19-case results",
         "runtime policy compilation/status and immutable boundary policy"
       ],
-      "compatibility": "No backfill or automatic readiness. Existing incomplete/expired reports fail closed; require actual current protected report and stopped cell/current manifest policy. Old writers lacking these conditions must remain isolated/drained.",
+      "compatibility": "No backfill or automatic readiness. Ordinary visible-Task policy guards remain intact. Hidden policies require the current exact C0 conformance owner, empty capability and connection authority, model-broker-only network and exact Task/runtime-helper/qualified-binary read scope. Incomplete or stale writers fail closed.",
       "owners": [
         "packages/db/src/migrations/0567_sandbox_qualification_probe_gate.sql",
         "packages/db/src/migrations/0568_sandbox_recompile_stopped_policy.sql",
         "packages/db/src/schema/execution_sandbox.ts",
         "server/src/services/execution-sandbox/sandbox-service.ts",
         "server/src/services/execution-sandbox/qualification.ts",
-        "server/src/services/execution-sandbox/policy-compiler.ts"
+        "server/src/services/execution-sandbox/policy-compiler.ts",
+        "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql"
       ],
       "tests": [
         "server/src/__tests__/v7-sandbox.integration.test.ts",
         "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
-        "server/src/__tests__/v7-sandbox-policy.test.ts"
+        "server/src/__tests__/v7-sandbox-policy.test.ts",
+        "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts"
       ],
       "recovery": "Stop/revoke remains original sandbox owner; stale capabilities cannot revive admission. No physical sandbox target, privileged provider, fleet rollback or deployed restore qualification is inferred.",
-      "qualificationScope": "Current published SQL/service/test source inventory only; no new execution or protected physical-host report is claimed."
+      "qualificationScope": "Source inventory and controlled PostgreSQL policy-contract coverage only. The actual six-probe managed conformance and protected physical-host qualification remain open."
     }
   ],
   "phaseCases": [
@@ -1067,12 +1070,16 @@
       "sha256": "7e141a4c058cbb85119d36dd55155e2b5adae123294ab87b0dbf35c8630b0f4d"
     },
     {
+      "path": "packages/db/src/migrations/0572_sandbox_hidden_conformance_policy.sql",
+      "sha256": "3ec846391a072e6969b3751efab5059bedd8f8f032747b1e3a8ea593a907a14d"
+    },
+    {
       "path": "packages/db/src/migrations/meta/0565_snapshot.json",
       "sha256": "c28d535a3ab777a13f82cabd90ad05e0261de899a0391819fc32d7a6f121795e"
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "a1c07a3d5293a29a66a97997b7fc75e126f838e91009826a5735ea41d35c17c3"
+      "sha256": "80cc747c2f785ae4520208cc7916d5fa3c2a5d9836fa50dde7393fb610539ed4"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1344,7 +1351,7 @@
     },
     {
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "03b5097ac02adc90d9a1216a1e4ab106e4af17141bc239ebf6b1f521681786cc"
+      "sha256": "6d96282f7049263562c12e7ad1f1ca949a367ee4fc64a7a9b1db5854099126a9"
     },
     {
       "path": "server/src/services/experience/company-responsibility-attention.ts",
@@ -1392,7 +1399,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "4be7260030b6e4ac0e8d597fdfd0b5b1ffaea0791c62f717f2f8df577ea257b4"
+      "sha256": "b7a318a9742ed5ebfde526e551c4249b9c4dd8904f6765fc551322d239e51d98"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",
@@ -1429,6 +1436,10 @@
     {
       "path": "ui/src/pages/CompanySettingsRenameHint.test.tsx",
       "sha256": "0357a097b6d40c7b938f46eb3867d7d25797b71c22475b205feafb6900bacd4e"
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "sha256": "885a03c13a5ccfa907e8b8f0fec88e61da90df5729db5f3817ac7b37b5808f36"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1436,16 +1447,16 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 70,
+    "currentAffectedCount": 71,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0571_issue_native_stage_source_transform"
+    "currentAffectedLast": "0572_sandbox_hidden_conformance_policy"
   },
   "sourcePinFinality": "INTERIM PRIVATE COMPOSED INVENTORY: two approved code/test source pins and two own-documentation pins are recorded individually. The exact 28-file source manifest identifies the current code. Prior b1 checks remain historical exact-input receipts; current composed consistency requires its own capture. Runtime/SDK, fleet compatibility, rollback/restore and operator/physical/provider/Human qualification remain separately gated.",
   "latestMigrationPublication": {
-    "migration": "0571_issue_native_stage_source_transform",
-    "sourceCommit": "e31c09662af4851560bf3ef50dc64fc341c6df3a",
-    "sourceState": "Published official journal and SQL source; no new migration apply or native test execution performed by this register revision.",
-    "qualificationScope": "Inventory only. Exact dated receipts linked elsewhere retain their source boundaries; publication alone does not qualify compatibility or admission."
+    "migration": "0572_sandbox_hidden_conformance_policy",
+    "sourceCommit": null,
+    "sourceState": "Current branch source; this inventory is updated before its next commit. Historical migration files are unchanged.",
+    "qualificationScope": "Controlled local policy-contract evidence is separate from runtime, fleet, rollback, restore and production migration qualification."
   },
   "affectedMigrationReasons": {
     "0502": "Extends auth_security_events action contract with board_api_key_id, owner/user and company-null constraints, and expiry index; board-key audit rows use the existing user-auth event writer.",
@@ -1456,7 +1467,8 @@
     "0568": "Require all19 closed protected-host qualification probes and current target evidence at sandbox readiness/admission; permit policy recompile only against original stopped/current execution conditions.",
     "0569": "Native process cleanup pending marker and bounded lease lookup index for crash/restart cleanup reconciliation. 0569 extends only the original event projection to confirmed remote workload stop events; no historical rewrite.",
     "0570": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding. Also inventories append-only workspace binding and Native Stage policy source transforms preserving the original Task literal and closure.",
-    "0571": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding. Also inventories append-only workspace binding and Native Stage policy source transforms preserving the original Task literal and closure."
+    "0571": "Native Project/Memory source provenance and payload Context binding, immutable source snapshots, reference retention, invalidation and dispatch receipt binding. Also inventories append-only workspace binding and Native Stage policy source transforms preserving the original Task literal and closure.",
+    "0572": "Preserve all19 protected-host qualification and current stopped-cell controls; permit only exact zero-tool hidden Native OpenCode conformance policies with current Human, manifest, Plan, Run, lease and private workspace bindings."
   },
   "revisionDate": "2026-11-03",
   "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

@@ -519,23 +519,7 @@
     "qualificationBoundary": "147 selected software cases include two actual pinned managed SDK/software Host journeys, all77 gateway cases,15 Project owners,45 selected dispatch owners and eight helper cases. One legacy attachment test remains unresolved and excluded from the selected dispatch run. No migration execution, phase-status promotion, external provider, physical Host or whole-brief/release qualification."
   },
   "nativeConformanceAndSerialSourceReview20261110": {
-    "changes": [
-      {
-        "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-        "oldSha256": "613d7a004361e49cda6ccee71156280ab88ff7feff4a982529e3f272ac8d4bb1",
-        "newSha256": "03b5097ac02adc90d9a1216a1e4ab106e4af17141bc239ebf6b1f521681786cc"
-      },
-      {
-        "path": "server/src/services/native-runtime/native-session-executor.ts",
-        "oldSha256": "4a1e1cd0163d3e87c3f1ca8e877b51eadafbd2a51f4d0cffae141f0f1b5c93f4",
-        "newSha256": "4be7260030b6e4ac0e8d597fdfd0b5b1ffaea0791c62f717f2f8df577ea257b4"
-      },
-      {
-        "path": "server/src/services/saas/platform.ts",
-        "oldSha256": "32f2d6d0d883d012d9091c9b0f710fb00bdf1843dadb86d237ded90bc83d0e79",
-        "newSha256": "2f6a636dc7d08f29cc08bee8011d86821fd5876cd8b812641aaf0c944480bc18"
-      }
-    ],
+    "changes": [],
     "reason": "Retain exact complete dispatch receipt membership alongside consumed prefixes, with downstream original wire and completed reservation checks. Add a server-owned managed OpenCode qualification lane using exact zero-tool manifests and the existing Sandbox compile/admit and Host owners; keep public configured-operator controls and actual per-Run source, budget and Stop checks.",
     "qualificationBoundary": "Source hash refresh only. Exact test windows and source pins are recorded separately. The actual two-Run serial SDK window precedes the cold-start owner changes. Conformance runtime qualification and final-head full checks remain open unless an exact later receipt proves them. No migration execution, historical phase-status promotion, live paid provider, physical production Host, or release qualification."
   }

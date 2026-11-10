@@ -1,4 +1,6 @@
 import { exactNativeManagedArtifactCommand } from "../native-runtime/native-artifact-preparation.js";
+import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
+import { captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
 import { NATIVE_GIT_CONTEXT_PROBE_SCRIPT } from "@paperclipai/adapter-utils/execution-target";
 import { buildWorkspaceTarExtractCommand, buildRemoveDeletedPathsCommand } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
 import { hostVersionMeetsMinimum } from "./catalog.js";
@@ -558,7 +560,7 @@ function sandboxExecutionCwdAllowed(cwd: string, filesystem: { readPaths?: unkno
 }
 
 type CurrentSandboxTaskSource = NonNullable<Awaited<ReturnType<ReturnType<typeof executionSandboxService>["assertTaskExecutionContext"]>>>;
-const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare", "native_provider_data_erasure_probe"]);
+const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare", "native_provider_data_erasure_probe", NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE]);
 const CONFORMANCE_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_session_start", "native_provider_data_erasure_probe"]);
 
 async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandboxTaskSource,
@@ -3180,7 +3182,9 @@ export function runtimeControlService(
       leaseId: locator.environmentLeaseId, taskRoot, sessionDigest: locator.normalizedSessionIdDigest,
       policyHash: owner.session.policyHash, sandboxId: owner.proof.sandboxId, containerId: owner.proof.containerId,
       imageDigest: owner.imageDigest, dockerEngineIdHash: target.dockerEngineIdHash,
-      cellGeneration: owner.session.cellGeneration, runId: locator.runId, runnerInstanceId: locator.runnerInstanceId };
+      cellGeneration: owner.session.cellGeneration, runId: locator.runId, runnerInstanceId: locator.runnerInstanceId,
+      ...(owner.attachmentStageReceipts.length ? { attachmentStageNonces: owner.attachmentStageReceipts
+        .map(receipt => receipt.stageNonce).sort() } : {}) };
     const result = await nativeSandboxHostTransport(db).eraseStoppedNativeSession({ locator, ...input, descriptor });
     const receipt: RemoteRuntimeAssetRemovalReceipt = {
       schema: "paperclip.remote-runtime-asset-removal.v1", locatorDigest: remoteRuntimeAssetLocatorDigest(locator),
@@ -3751,7 +3755,9 @@ export function runtimeControlService(
         nativePreparationPurpose !== "native_session_start" && nativePreparationPurpose !== "native_harness_state" &&
         nativePreparationPurpose !== "native_workspace_prepare" &&
         nativePreparationPurpose !== "native_runtime_context_prepare" &&
-        nativePreparationPurpose !== "native_provider_data_erasure_probe")
+        nativePreparationPurpose !== "native_provider_data_erasure_probe" &&
+        nativePreparationPurpose !== NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE &&
+        nativePreparationPurpose !== NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE)
         throw forbidden("Sandbox preparation purpose is unsupported");
       const providerArtifactPreparation = nativePreparationPurpose === "provider_artifact";
       const nativeSessionStart = nativePreparationPurpose === "native_session_start";
@@ -3759,6 +3765,8 @@ export function runtimeControlService(
       const nativeWorkspacePrepare = nativePreparationPurpose === "native_workspace_prepare";
       const nativeRuntimeContextPrepare = nativePreparationPurpose === "native_runtime_context_prepare";
       const nativeRuntimeAssetErasureProbe = nativePreparationPurpose === "native_provider_data_erasure_probe";
+      const nativeAttachmentStage = nativePreparationPurpose === NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE;
+      const nativeAttachmentCleanup = nativePreparationPurpose === NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE;
       const sessionModelRefresh = nativeHarnessState && request.modelBrokerSession?.phase === "refresh" &&
         request.modelBrokerCredential !== undefined;
       let nativeSessionStartValid = false;
@@ -3840,7 +3848,17 @@ export function runtimeControlService(
           "PAPERCLIP_SANDBOX_BROKER_TOKEN", "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID",
           "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
           "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS"].includes(key));
-        const exactCommand = nativeWorkspacePrepare
+        const attachmentOperation = nativeAttachmentStage || nativeAttachmentCleanup
+          ? parseNativeRemoteAttachmentStageCommand(request, workerPreparationRoot) : null;
+        const attachmentOwner = attachmentOperation
+          ? await captureNativeRemoteAttachmentStageOwner(tx as unknown as Db, { companyId: source.run.companyId,
+              issueId: source.source.task.id, runId: source.run.id, agentId: source.run.agentId!,
+              taskRoot: workerPreparationRoot, operation: attachmentOperation }) : null;
+        const exactCommand = nativeAttachmentStage || nativeAttachmentCleanup
+          ? !!attachmentOperation && !!attachmentOwner &&
+            ((nativeAttachmentCleanup && attachmentOperation.phase === "cleanup") ||
+              (nativeAttachmentStage && attachmentOperation.phase !== "cleanup"))
+          : nativeWorkspacePrepare
           ? exactNativeWorkspacePrepareCommand({ request, taskRoot: workerPreparationRoot, execution })
           : nativeRuntimeContextPrepare
             ? exactNativeRuntimeContextPreparationOwner({ request, taskRoot: workerPreparationRoot, execution,
@@ -4424,7 +4442,7 @@ export function runtimeControlService(
     env?: Record<string, string>;
     stdin?: string;
     timeoutMs?: number;
-    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
     modelBrokerSessionPhase?: "start" | "refresh" | "stop";
     signal?: AbortSignal;
     onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
@@ -4439,7 +4457,9 @@ export function runtimeControlService(
       requestedNativePreparationPurpose !== "native_session_start" && requestedNativePreparationPurpose !== "native_harness_state" &&
       requestedNativePreparationPurpose !== "native_workspace_prepare" &&
       requestedNativePreparationPurpose !== "native_runtime_context_prepare" &&
-      requestedNativePreparationPurpose !== "native_provider_data_erasure_probe")
+      requestedNativePreparationPurpose !== "native_provider_data_erasure_probe" &&
+      requestedNativePreparationPurpose !== NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE &&
+      requestedNativePreparationPurpose !== NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE)
       throw conflict("Sandbox preparation purpose is unsupported");
     if (!cwd || !cwd.startsWith("/")) throw conflict("Sandbox execution requires an absolute workspace path");
     const env = { ...(input.env ?? {}) };

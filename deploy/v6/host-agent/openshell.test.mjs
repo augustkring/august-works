@@ -8,7 +8,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import http from "node:http";
 import { PassThrough, Readable, Writable } from "node:stream";
-import { archiveStatusProvesAbsence, dockerInspectRunAsMatches, hasExactManagedModelBrokerPolicy, openShellHostEngine, NATIVE_SESSION_UPPER_ERASE_SCRIPT } from "./openshell.mjs";
+import { archiveStatusProvesAbsence, dockerInspectRunAsMatches, hasExactManagedModelBrokerPolicy, openShellHostEngine,
+  NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT, NATIVE_SESSION_UPPER_ERASE_SCRIPT } from "./openshell.mjs";
 import { sandboxCapabilitySnapshotSchema, sandboxHostRequestSchema, sandboxHostReplySchema } from "../../../packages/shared/dist/index.js";
 
 const scope = {
@@ -3318,6 +3319,62 @@ test("fixed stopped-session eraser uses nofollow traversal and refuses identity 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("attachment eraser executes its anchored descriptor walk and removes only the listed nonce", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "aw-native-attachment-erase-"));
+  try {
+    const proofDir = path.join(root, "proof"), taskRoot = "/workspace/task";
+    const runId = "12345678-1234-4234-9234-123456789abc";
+    const nonce = "22345678-1234-4234-9234-123456789abc";
+    const neighborNonce = "32345678-1234-4234-9234-123456789abc";
+    const runRoot = path.join(proofDir, taskRoot.slice(1), ".paperclip-inbound", runId);
+    const target = path.join(runRoot, nonce), neighbor = path.join(runRoot, neighborNonce);
+    await mkdir(target, { recursive: true }); await writeFile(path.join(target, "payload"), "erase exact stage");
+    await mkdir(neighbor, { recursive: true }); await writeFile(path.join(neighbor, "payload"), "neighbor survives");
+    const script = NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT
+      .replace("try{safeMounts();", "try{")
+      .replaceAll('"/proof"', JSON.stringify(proofDir))
+      .replaceAll('"/attachments"', JSON.stringify(runRoot));
+    const mountAdapter = `
+const __fdAccess = new Map();
+const __openSync = fs.openSync.bind(fs), __closeSync = fs.closeSync.bind(fs);
+fs.openSync = function(target, ...args) {
+  const fd = __openSync(target, ...args), value = String(target);
+  const parent = __fdFromPath(value);
+  const access = value === ${JSON.stringify(proofDir)} ? "readonly" : value === ${JSON.stringify(runRoot)} ? "writable" :
+    parent !== null ? __fdAccess.get(parent) : undefined;
+  if (access) __fdAccess.set(fd, access);
+  return fd;
+};
+fs.closeSync = function(fd) { __fdAccess.delete(fd); return __closeSync(fd); };
+const __fdFromPath = target => {
+  const prefix = "/proc/self/fd/", value = String(target);
+  if (!value.startsWith(prefix)) return null;
+  const head = value.slice(prefix.length).split("/", 1)[0];
+  return /^[0-9]+$/.test(head) ? Number(head) : null;
+};
+const __assertWritable = target => {
+  const parent = __fdFromPath(target);
+  if (parent === null || __fdAccess.get(parent) !== "writable") {
+    const error = new Error("read-only proof descriptor mutation"); error.code = "EROFS"; throw error;
+  }
+};
+for (const name of ["unlinkSync", "rmdirSync", "chmodSync"]) {
+  const original = fs[name].bind(fs);
+  fs[name] = function(target, ...args) { __assertWritable(target); return original(target, ...args); };
+}
+`;
+    const guardedScript = script.replace('const fs=require("node:fs"),p=require("node:path"),C=fs.constants;',
+      source => `${source}\n${mountAdapter}`);
+    assert.notEqual(guardedScript, script, "the read-only proof adapter must be installed");
+    const result = spawnSync(process.execPath,
+      ["-e", guardedScript, runId, taskRoot, JSON.stringify([nonce]), String(Date.now() + 30_000)], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), JSON.stringify({ runId, attachmentStageNoncesAbsent: [nonce] }));
+    await assert.rejects(lstat(target), { code: "ENOENT" });
+    assert.equal(await readFile(path.join(neighbor, "payload"), "utf8"), "neighbor survives");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("erase_native_session action runs the pinned helper against one stopped Docker target and rejects unknown-session replay", async () => {
   const hostRoot = await mkdtemp(path.join(os.tmpdir(), "aw-native-erasure-action-"));
   const dockerRoot = path.join(hostRoot, "docker"), layerId = "f".repeat(64);
@@ -3328,6 +3385,9 @@ test("erase_native_session action runs the pinned helper against one stopped Doc
   const sessionDigest = first.session.nativeSessionIdDigest;
   const sessionsPath = path.join(upperDir, taskRoot.slice(1), ".paperclip-runtime", "paperclip-runner", "sessions");
   const targetPath = path.join(sessionsPath, sessionDigest), neighborPath = path.join(sessionsPath, "neighbor-session");
+  const runId = first.request.runId, stageNonce = "12345678-1234-4234-9234-123456789abc";
+  const stageRunRoot = path.join(upperDir, taskRoot.slice(1), ".paperclip-inbound", runId);
+  const stagedAttachmentPath = path.join(stageRunRoot, stageNonce), stagedNeighborPath = path.join(stageRunRoot, "22345678-1234-4234-9234-123456789abc");
   const hostProcRoot = path.join(hostRoot, "proc"), namespace = "mnt:[4026531840]";
   const hostContainerId = "b".repeat(64), hostImageId = "sha256:" + "9".repeat(64);
   const hostImageRef = "fixture.invalid/aw-runtime-host@sha256:" + "8".repeat(64);
@@ -3343,6 +3403,10 @@ test("erase_native_session action runs the pinned helper against one stopped Doc
     await writeFile(path.join(targetPath, "nested", "session-state"), "erase this session");
     await mkdir(neighborPath, { recursive: true });
     await writeFile(path.join(neighborPath, "keep"), "neighbor survives");
+    await mkdir(stagedAttachmentPath, { recursive: true });
+    await writeFile(path.join(stagedAttachmentPath, "payload"), "staged attachment bytes");
+    await mkdir(stagedNeighborPath, { recursive: true });
+    await writeFile(path.join(stagedNeighborPath, "payload"), "unlisted stage survives");
     await mkdir(path.join(hostProcRoot, "1", "ns"), { recursive: true });
     await mkdir(path.join(hostProcRoot, "100", "ns"), { recursive: true });
     await mkdir(path.join(hostProcRoot, "101", "ns"), { recursive: true });
@@ -3396,7 +3460,8 @@ test("erase_native_session action runs the pinned helper against one stopped Doc
           return { handled: true, value: { stdout: JSON.stringify([helpersById.get(args[1])]) } };
         if (args[0] === "create" && args.includes("--name")) {
           const name = args[args.indexOf("--name") + 1];
-          if (!name.startsWith("aw-native-lower-") && !name.startsWith("aw-native-proof-") && !name.startsWith("aw-native-erase-"))
+          if (!name.startsWith("aw-native-lower-") && !name.startsWith("aw-native-proof-") && !name.startsWith("aw-native-erase-") &&
+              !name.startsWith("aw-native-attachments-erase-"))
             return { handled: false };
           const id = createHash("sha256").update(`native-erasure-helper:${name}`).digest("hex");
           const imagePosition = args.indexOf("--entrypoint") >= 0 ? args.indexOf("--entrypoint") + 2 : args.length - 1;
@@ -3429,14 +3494,17 @@ test("erase_native_session action runs the pinned helper against one stopped Doc
           if (info.Config.Cmd[0] === "-e") {
             const proof = info.Mounts.find(value => value.Destination === "/proof")?.Source;
             const sessionMount = info.Mounts.find(value => value.Destination === "/sessions")?.Source;
+            const attachmentMount = info.Mounts.find(value => value.Destination === "/attachments")?.Source;
             const helperName = info.Config.Labels["aw.native_session_erasure_name"];
             const fakeMountInfo = path.join(hostRoot, `${helperName}.mountinfo`);
             const mountRows = ["36 25 0:32 / /proof rw - bind fixture rw"];
             if (sessionMount) mountRows.push("37 25 0:33 / /sessions rw - bind fixture rw");
+            if (attachmentMount) mountRows.push("38 25 0:34 / /attachments rw - bind fixture rw");
             await writeFile(fakeMountInfo, `${mountRows.join("\n")}\n`);
             let script = info.Config.Cmd[1]
               .replace('fs.openSync("/proof",', `fs.openSync(${JSON.stringify(proof)},`)
               .replace('fs.openSync("/sessions",', `fs.openSync(${JSON.stringify(sessionMount ?? path.join(hostRoot, "unused-sessions"))},`)
+              .replace('fs.openSync("/attachments",', `fs.openSync(${JSON.stringify(attachmentMount ?? path.join(hostRoot, "unused-attachments"))},`)
               .replace('fs.readFileSync("/proc/self/mountinfo",', `fs.readFileSync(${JSON.stringify(fakeMountInfo)},`);
             const result = spawnSync(process.execPath, ["-e", script, ...info.Config.Cmd.slice(2)], { encoding: "utf8", timeout: 10_000 });
             info.stdout = result.stdout ?? "";
@@ -3539,6 +3607,7 @@ test("erase_native_session action runs the pinned helper against one stopped Doc
         imageDigest: first.request && input("prepare").imageDigest,
         dockerEngineIdHash: createHash("sha256").update("fixture-docker-engine").digest("hex"),
         cellGeneration: scope.cellGeneration, runId: first.request.runId, runnerInstanceId: first.session.runnerInstanceId,
+        attachmentStageNonces: [stageNonce],
       };
       const { requesterUserId: _requester, ...eraseBase } = input("erase_native_session");
       const erasureRequest = { ...eraseBase, nativeSessionErasure: descriptor };
@@ -3566,10 +3635,13 @@ test("erase_native_session action runs the pinned helper against one stopped Doc
         containerId: descriptor.containerId, imageDigest: descriptor.imageDigest,
         dockerEngineIdHash: descriptor.dockerEngineIdHash, cellGeneration: descriptor.cellGeneration,
         runId: descriptor.runId, runnerInstanceId: descriptor.runnerInstanceId,
+        attachmentStageNoncesAbsent: [stageNonce],
         upperLayerAbsent: true, mergedViewAbsent: true, stoppedBefore: true, stoppedAfter: true,
       });
       await assert.rejects(lstat(targetPath), { code: "ENOENT" });
+      await assert.rejects(lstat(stagedAttachmentPath), { code: "ENOENT" });
       assert.equal(await readFile(path.join(neighborPath, "keep"), "utf8"), "neighbor survives");
+      assert.equal(await readFile(path.join(stagedNeighborPath, "payload"), "utf8"), "unlisted stage survives");
       assert.ok(archiveCalls.some(value => value.containerId === descriptor.containerId && value.archivePath === "/"),
         "the Docker archive root control must be observed on the exact original container");
       assert.ok(archiveCalls.some(value => value.containerId === descriptor.containerId && value.archivePath === targetPath.replace(upperDir, "")),

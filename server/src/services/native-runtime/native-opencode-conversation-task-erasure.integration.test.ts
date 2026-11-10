@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -64,13 +64,20 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
     const callId = `conversation-task-${suffix}`;
     const idempotencyKey = randomUUID();
     const initialPlan = "# Execution plan\n\nCreate this private Task and verify that its producing Run controls retained output access.";
+    const attachmentBytes = Buffer.from("Actual managed remote attachment bytes.\n", "utf8");
+    const attachmentSha256 = createHash("sha256").update(attachmentBytes).digest("hex");
+    let providerReceivedStagedAttachmentPath = false;
     let createdTaskId: string | null = null;
     let providerConsumedResult = false;
     let erasureChecked = false;
     const result = await runManagedNativeConversationFrame({ db, root, opencodeBinary: binary,
       conversationWorkMode: "standard", timeoutSec: 180,
+      conversationPrompt: "Please respond briefly and complete this conversation turn.\n\nPlease inspect the attached brief before responding.",
+      firstCommentAttachment: { filename: "brief.txt", contentType: "text/plain", bytes: attachmentBytes },
       providerReply: ({ body, callIndex }) => {
         if (callIndex === 1) {
+          providerReceivedStagedAttachmentPath = JSON.stringify(body.messages).includes(".paperclip-inbound") &&
+            JSON.stringify(body.messages).includes("brief.txt");
           const tools = Array.isArray(body.tools) ? body.tools as Array<Record<string, unknown>> : [];
           const tool = tools.find(value => typeof value.name === "string" && value.name.endsWith("create_task"));
           if (!tool) throw new Error("conversation_task_create_tool_not_advertised");
@@ -114,6 +121,17 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
         expect(edges).toContainEqual({ sourceKind: "run_copy", sourceId: runId });
         expect(edges).not.toContainEqual({ sourceKind: "run", sourceId: runId });
         expect(await canActorReadIssuePrivacy(db, aliceActor, { id: child.id, companyId })).toBe(true);
+        const profile = facts.run.runnerProfileJson as Record<string, unknown>;
+        const stageCaptures = Array.isArray(profile.nativeAttachmentStageSources)
+          ? profile.nativeAttachmentStageSources as Array<Record<string, unknown>> : [];
+        const delivered = stageCaptures.flatMap(value => Array.isArray(value.sourceCaptures)
+          ? value.sourceCaptures as Array<Record<string, unknown>> : []).map(value => value.input as Record<string, unknown>)
+          .find(value => value.kind === "attachment" && value.sha256 === attachmentSha256);
+        expect(delivered).toMatchObject({ disposition: "delivered", sha256: attachmentSha256, byteSize: attachmentBytes.length });
+        const remoteReceipts = stageCaptures.flatMap(value => Array.isArray(value.remoteStageReceipts)
+          ? value.remoteStageReceipts as Array<Record<string, unknown>> : []);
+        expect(remoteReceipts).toContainEqual(expect.objectContaining({ attachmentId: delivered?.attachmentId,
+          sha256: attachmentSha256, byteSize: attachmentBytes.length, stageNonce: expect.any(String) }));
 
         await db.transaction(async rawTx => {
           const tx = rawTx as unknown as typeof db;
@@ -153,6 +171,12 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
     });
     expect(result.runStatus).toBe("succeeded");
     expect(providerConsumedResult).toBe(true);
+    expect(providerReceivedStagedAttachmentPath).toBe(true);
     expect(erasureChecked).toBe(true);
+    const stageCounts = result.sandboxRuntimeFacts?.sandboxStageCounts as Record<string, { calls?: number; nonzeroExits?: number; timeouts?: number }> | undefined;
+    expect(stageCounts?.native_attachment_stage).toMatchObject({ calls: expect.any(Number), nonzeroExits: 0, timeouts: 0 });
+    expect(stageCounts?.native_attachment_stage?.calls).toBeGreaterThan(0);
+    expect(stageCounts?.native_attachment_cleanup).toMatchObject({ calls: expect.any(Number), nonzeroExits: 0, timeouts: 0 });
+    expect(stageCounts?.native_attachment_cleanup?.calls).toBeGreaterThan(0);
   }, 240_000);
 });

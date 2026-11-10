@@ -16,6 +16,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
+  agentExecutionManifests,
   agents,
   agentPresenceRuntimeBindings,
   agentProviderBindings,
@@ -26,6 +27,7 @@ import {
   companyMemberships,
   connectionGrants,
   createDb,
+  contextManifests,
   environmentLeases,
   environments,
   runtimeCells,
@@ -39,6 +41,7 @@ import {
   runtimeHostCommands,
   runtimeHosts,
   runtimePolicySnapshots,
+  orchestrationPlans,
   runtimeHostRequestNonces,
   runtimeSandboxBindings,
   runtimeVersionCatalog,
@@ -58,6 +61,7 @@ import { seedV5Companies } from "./helpers/v5-fixtures.js";
 import { policyFixture } from "./helpers/sandbox-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { executionSandboxService, sandboxCapabilityFacts } from "../services/execution-sandbox/sandbox-service.js";
+import { writeOrchestrationContract } from "../services/orchestration/orchestration-contracts.js";
 import { executionSandboxRoutes } from "../routes/execution-sandbox.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { nativeSandboxHostTransport } from "../services/execution-sandbox/native-host-bridge.js";
@@ -1982,6 +1986,133 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         });
         expect(compiled.status).toBe("qualified");
         expect(compiled.expiresAt.getTime()).toBeLessThanOrEqual(firstPolicyExpiry);
+        // Build a separate insert-only conformance provenance fixture. Native
+        // manifests are immutable, so this test never edits the existing Run's manifest.
+        const groupId = randomUUID(), workspaceRoot = `/tmp/aw-conformance-${randomUUID()}`;
+        const [sourceRunBeforeConformance] = await db.select().from(heartbeatRuns)
+          .where(eq(heartbeatRuns.id, run!.id)).limit(1);
+        await db.update(heartbeatRuns).set({ status: "paused" }).where(eq(heartbeatRuns.id, run!.id));
+        const conformanceTaskId = randomUUID(), conformanceRunId = randomUUID(), conformanceLeaseId = randomUUID();
+        const conformanceWorkspaceId = randomUUID(), conformanceSessionId = randomUUID();
+        const [conformanceTask] = await db.insert(issues).values({ companyId: f.home,
+          title: "Synthetic managed OpenCode qualification",
+          description: "Operator-created probe only. No customer source, company context, or platform tools are admitted.",
+          status: "in_progress", hiddenAt: new Date(), harnessKind: "provider_conformance",
+          assigneeAgentId: run!.agentId, responsibleUserId: f.userId }).returning();
+        const planContract = await writeOrchestrationContract(db, f.home, conformanceTask!.id, {
+          objective: "Retain exact provider conformance evidence", requiredOutputs: [{ key: "probe-evidence" }],
+          businessInvariants: ["Qualification grants no ordinary execution authority"], evidenceRequirements: [],
+          prohibitedOutcomes: [], requiredPostconditions: [],
+        }, f.userId);
+        const [conformancePlan] = await db.insert(orchestrationPlans).values({ companyId: f.home,
+          issueId: conformanceTask!.id, completionContractId: planContract.id, mode: "single_worker",
+          actionClass: "internal_draft", riskClass: "C0", supervisionMode: "none",
+          verificationMode: "deterministic", humanOversightMode: "human_review", status: "paused",
+          startedAt: new Date(), createdBy: f.userId, executionPrincipal: { type: "user", userId: f.userId },
+          budgets: { maxModelCostMinor: 0, maxToolActions: 0, maxWallClockSeconds: 300, maxRetries: 0,
+            maxDelegationDepth: 0, maxWorkerCount: 1, maxParallelWorkers: 1 } }).returning();
+        const now = new Date();
+        const contextManifestId = randomUUID();
+        const conformanceExecution = { schema: "paperclip.native-execution-input.v2", binding: {
+          companyId: f.home, runId: conformanceRunId, issueId: conformanceTask!.id, agentId: run!.agentId,
+          executionWorkspaceId: conformanceWorkspaceId },
+          task: { identifier: conformanceTask!.id, title: conformanceTask!.title, description: conformanceTask!.description,
+            prompt: "Server-controlled synthetic provider conformance. No company context or platform tools are provided.", workMode: "standard" },
+          workspace: { cwd: workspaceRoot, repoUrl: null, repoRef: null, branchName: null },
+          session: { normalizedSessionId: conformanceSessionId, driverKind: "opencode_server", protocolVersion: 1,
+            lifecyclePolicy: { mode: "per_turn", idleTimeoutMs: null } }, provider: { kind: "opencode", model: "anthropic/fixture" },
+          completionContract: { id: planContract.id, sha256: planContract.canonicalSha256, schemaVersion: 1,
+            contract: { revision: String(planContract.revision), objective: "Retain exact provider conformance evidence",
+              criteria: [{ id: "probe-evidence", requirement: "Retain the conformance probe evidence." }] } },
+          interactionResponses: [], credentialBindings: [], executionMode: "default", planningContext: null };
+        await db.insert(heartbeatRuns).values({ id: conformanceRunId, companyId: f.home, agentId: run!.agentId,
+          scopeKind: "issue", issueId: conformanceTask!.id, nativeIssueId: conformanceTask!.id,
+          responsibleUserId: f.userId, triggerDetail: "provider_conformance", status: "running", startedAt: now,
+          runtimeMode: "native", runtimeModeResolvedAt: now, runnerProfileJson: {
+            nativeExecutionInput: conformanceExecution, nativeOpenCodeConformanceWorkspace: {
+              schema: "paperclip.native-opencode-conformance-workspace/v1", groupId, companyId: f.home,
+              agentId: run!.agentId, taskId: conformanceTask!.id, taskRoot: workspaceRoot, localCwd: workspaceRoot,
+              remoteCwd: workspaceRoot, workspaceId: conformanceWorkspaceId, leaseId: conformanceLeaseId,
+              providerLeaseId: "provider-conformance-lease", creationReceipt: "a".repeat(64), createdEmpty: true,
+              authorityHash: null,
+            },
+          }, contextSnapshot: { providerConformanceGroupId: groupId, providerConformancePlanId: conformancePlan!.id,
+            containsCompanyContext: false, platformToolsGranted: false } });
+        await db.update(issues).set({ executionRunId: conformanceRunId }).where(eq(issues.id, conformanceTask!.id));
+        await db.insert(contextManifests).values({ id: contextManifestId, companyId: f.home, runId: conformanceRunId,
+          agentId: run!.agentId, issueId: conformanceTask!.id, queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64) });
+        const [conformanceEnvironment] = await db.insert(environments).values({ name: `conformance-${conformanceRunId}`,
+          driver: "sandbox", config: { provider: "fake" } }).returning();
+        await db.insert(environmentLeases).values({ id: conformanceLeaseId, companyId: f.home,
+          environmentId: conformanceEnvironment!.id, issueId: conformanceTask!.id, heartbeatRunId: conformanceRunId,
+          provider: "fake", providerLeaseId: "provider-conformance-lease", status: "active",
+          expiresAt: new Date(Date.now() + 60_000), metadata: { remoteCwd: workspaceRoot } });
+        const [currentBinding] = await db.select().from(runtimeSandboxBindings)
+          .where(eq(runtimeSandboxBindings.id, sandboxBinding.id)).limit(1);
+        const conformanceCapabilities = { ...(currentBinding!.capabilitySnapshot as Record<string, any>),
+          modelBrokerProviderProfile: { id: "provider-conformance-fixture", hash: "f".repeat(64),
+            origin: "https://paperclip.example.test/", binaries: ["/usr/bin/curl"] } };
+        const conformanceCapabilityHash = nativeSha256(conformanceCapabilities);
+        await db.update(runtimeSandboxBindings).set({ capabilitySnapshot: conformanceCapabilities,
+          capabilitySnapshotHash: conformanceCapabilityHash }).where(eq(runtimeSandboxBindings.id, sandboxBinding.id));
+        const conformanceManifestValue = { schemaVersion: 5, runId: conformanceRunId, companyId: f.home,
+          agentId: run!.agentId, agentIdentityId: manifest!.record.agentIdentityId, homeCompanyId: f.home,
+          responsibleUserId: f.userId,
+          executionScope: { primaryCompanyId: f.home, primaryAgentPresenceId: run!.agentId, delegatedScopes: [] },
+          rolePack: null, contextManifests: [{ companyId: f.home, contextManifestId }], skills: [], playbooks: [],
+          capabilities: [], providers: [], executionPolicy: { deterministicPreference: true, policies: [], approvalRefs: [],
+            restrictions: ["Synthetic conformance only", "No company context", "No tools or delegated scope"],
+            policySnapshotHash: "c".repeat(64) }, inventoryEstimatedTokens: 0, warnings: [] };
+        const [conformanceManifest] = await db.insert(agentExecutionManifests).values({ companyId: f.home,
+          runId: conformanceRunId, agentId: run!.agentId, agentIdentityId: manifest!.record.agentIdentityId,
+          contextManifestId, manifest: conformanceManifestValue, policySnapshotHash: "c".repeat(64), hash: "d".repeat(64) }).returning();
+        const conformanceCompilation = { ...compiled.compilation,
+          modelBrokerEndpoint: { hostname: "paperclip.example.test", port: 443, path: "/runtime-tools/model/v1/messages", binaries: ["/usr/bin/curl"] },
+          compiledPolicy: { ...compiled.compilation.compiledPolicy, riskClass: "C0",
+            filesystem: { ...compiled.compilation.compiledPolicy.filesystem,
+              readPaths: [workspaceRoot, "/usr/bin/curl", "/.openshell/runtime/openshell-sandbox"].sort(), writePaths: [workspaceRoot] },
+            credentials: { mode: "none", bindings: [] },
+            network: { ...compiled.compilation.compiledPolicy.network, defaultDeny: true, denyPrivateAndMetadata: true,
+              destinations: [{ hostname: "paperclip.example.test", port: 443,
+                methods: ["POST"], pathPrefixes: ["/runtime-tools/model/v1/messages"] }] },
+          },
+        };
+        const conformancePolicy = { ...compiled, executionManifestId: conformanceManifest!.id,
+          capabilitySnapshotHash: conformanceCapabilityHash, compilation: conformanceCompilation };
+        const insertConformanceSnapshot = async (suffix: number, executionManifestId = conformanceManifest!.id) =>
+          db.insert(runtimePolicySnapshots).values({ ...conformancePolicy, executionManifestId,
+            id: randomUUID(), policyVersion: compiled.policyVersion + suffix, status: "qualified" })
+            .then(() => null, error => error as { cause?: { code?: string; message?: string } });
+        const [acceptedHiddenConformance] = await db.insert(runtimePolicySnapshots).values({
+          ...conformancePolicy, id: randomUUID(), policyVersion: compiled.policyVersion + 100, status: "qualified",
+        }).returning();
+        expect(acceptedHiddenConformance?.status).toBe("qualified");
+        await db.update(heartbeatRuns).set({ contextSnapshot: { providerConformanceGroupId: randomUUID(),
+          providerConformancePlanId: conformancePlan!.id, containsCompanyContext: false, platformToolsGranted: false } })
+          .where(eq(heartbeatRuns.id, conformanceRunId));
+        expect((await insertConformanceSnapshot(101))?.cause?.code).toBe("23514");
+        await db.update(heartbeatRuns).set({ contextSnapshot: { providerConformanceGroupId: groupId,
+          providerConformancePlanId: conformancePlan!.id, containsCompanyContext: false, platformToolsGranted: false } })
+          .where(eq(heartbeatRuns.id, conformanceRunId));
+        expect((await insertConformanceSnapshot(102, manifest!.record.id))?.cause?.code).toBe("23514");
+        // Plan budgets and manifests are immutable after start. Exercise the
+        // current zero-tool context without rewriting either original owner.
+        await db.update(heartbeatRuns).set({ contextSnapshot: { providerConformanceGroupId: groupId,
+          providerConformancePlanId: conformancePlan!.id, containsCompanyContext: false, platformToolsGranted: true } })
+          .where(eq(heartbeatRuns.id, conformanceRunId));
+        expect((await insertConformanceSnapshot(103))?.cause?.code).toBe("23514");
+        await db.update(heartbeatRuns).set({ contextSnapshot: { providerConformanceGroupId: groupId,
+          providerConformancePlanId: conformancePlan!.id, containsCompanyContext: false, platformToolsGranted: false } })
+          .where(eq(heartbeatRuns.id, conformanceRunId));
+        await db.update(issues).set({ harnessKind: null }).where(eq(issues.id, conformanceTask!.id));
+        expect((await insertConformanceSnapshot(104))?.cause?.code).toBe("23514");
+        await db.update(issues).set({ harnessKind: "provider_conformance" }).where(eq(issues.id, conformanceTask!.id));
+        await db.update(runtimePolicySnapshots).set({ status: "revoked" })
+          .where(eq(runtimePolicySnapshots.id, acceptedHiddenConformance!.id));
+        await db.update(runtimeSandboxBindings).set({ capabilitySnapshot: currentBinding!.capabilitySnapshot,
+          capabilitySnapshotHash: currentBinding!.capabilitySnapshotHash }).where(eq(runtimeSandboxBindings.id, sandboxBinding.id));
+        await db.update(heartbeatRuns).set({ status: sourceRunBeforeConformance!.status })
+          .where(eq(heartbeatRuns.id, run!.id));
         expect(compiled.id).not.toBe(firstPolicySnapshotId);
         const [bindingAfterRecompile] = await db.select({ version: runtimeSandboxBindings.version })
           .from(runtimeSandboxBindings).where(eq(runtimeSandboxBindings.id, sandboxBinding.id)).limit(1);

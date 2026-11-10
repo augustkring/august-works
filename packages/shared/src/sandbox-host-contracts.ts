@@ -214,6 +214,7 @@ export const sandboxHostRequestSchema = z
       cellGeneration: runtimeGenerationSchema,
       runId: z.string().uuid(),
       runnerInstanceId: z.string().uuid(),
+      attachmentStageNonces: z.array(z.string().uuid()).max(1280).optional(),
     }).strict().optional(),
     /** Server-signed attenuation to the original admitted physical workload. */
     expectedTarget: z.object({ sandboxId: z.string().uuid(), containerId: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
@@ -339,6 +340,7 @@ export const sandboxHostReplySchema = z.discriminatedUnion("action", [
     cellGeneration: runtimeGenerationSchema,
     runId: z.string().uuid(),
     runnerInstanceId: z.string().uuid(),
+    attachmentStageNoncesAbsent: z.array(z.string().uuid()).max(1280).optional(),
     upperLayerAbsent: z.literal(true),
     mergedViewAbsent: z.literal(true),
     stoppedBefore: z.literal(true),

@@ -19,17 +19,17 @@ import { PassThrough } from "node:stream";
 import { once } from "node:events";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, posix } from "node:path";
+import { dirname, isAbsolute, join, posix, sep } from "node:path";
 import express from "express";
 import { WebSocket } from "ws";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
-  agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
+  activityLog, agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
   chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, companies, createDb,
   agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
-  runtimeVersionCatalog, runtimeHostCommands, runtimeSandboxBindings, sandboxQualificationRuns, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
+  runtimeVersionCatalog, runtimeHostCommands, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
 } from "@paperclipai/db";
-import { SANDBOX_CONTROLS, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
+import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
 import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/native-direct-input.js";
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
@@ -39,7 +39,7 @@ import { environmentRuntimeService } from "../../services/environment-runtime.js
 import { executionSandboxService } from "../../services/execution-sandbox/sandbox-service.js";
 import { openShellBackend } from "../../services/execution-sandbox/openshell-backend.js";
 import { checkOpenShellBoundary } from "../../services/execution-sandbox/openshell-prover.js";
-import { sandboxProbeCases, type SandboxIdentity, type SandboxProbeCase } from "../../services/execution-sandbox/backend.js";
+import { sandboxProbeCases, type SandboxAdmissionCleanup, type SandboxIdentity, type SandboxProbeCase } from "../../services/execution-sandbox/backend.js";
 import { nativeSandboxHostTransport } from "../../services/execution-sandbox/native-host-bridge.js";
 import { agentProviderBindingService } from "../../services/agent-provider-bindings.js";
 import { assertV5Authorization, v5HumanActorId } from "../../services/v5-authorization.js";
@@ -109,9 +109,10 @@ export function projectCompletedNativeStartupSpans(payloads: readonly unknown[])
 }
 
 const hostAgentRequire = createRequire(import.meta.url);
-const { openShellHostEngine, NATIVE_SESSION_UPPER_ERASE_SCRIPT } = hostAgentRequire("../../../../deploy/v6/host-agent/openshell.mjs") as {
+const { openShellHostEngine, NATIVE_SESSION_UPPER_ERASE_SCRIPT, NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT } = hostAgentRequire("../../../../deploy/v6/host-agent/openshell.mjs") as {
   openShellHostEngine: (input: Record<string, unknown>) => any;
   NATIVE_SESSION_UPPER_ERASE_SCRIPT: string;
+  NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT: string;
 };
 
 const imageDigest = `fixture.invalid/openshell@sha256:${"a".repeat(64)}`;
@@ -238,6 +239,9 @@ type ManagedSandboxHostInput = {
   ordinaryWorker?: true;
   /** Closed test-fixture admission for the registered six-probe Native OpenCode owner. */
   nativeOpenCodeConformance?: true;
+  /** Test-only revocation hook after the real signed Host start receipt is persisted. */
+  afterSandboxStartReceipt?: (facts: { scope: SandboxIdentity; cleanup: SandboxAdmissionCleanup;
+    attemptStop(cleanup: SandboxAdmissionCleanup): Promise<unknown> }) => Promise<void>;
   /** Existing constructor-only controlled backend: this component performs no model dispatch. */
   controlledNativeSessionBackendFactory?: (execution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput) =>
     import("../../vendor/paperclip-runner/index.js").NativeSessionBackend;
@@ -1225,18 +1229,84 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const executableSha256 = "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1";
       if (createHashHex(readFileSync(executable)) !== executableSha256)
         throw new Error("conversation_software_host_prover_pin_mismatch");
+      const bridge = transport.bridge(currentActor, conformance);
       const backend = openShellBackend({
         identity: { companyId: currentBinding.companyId, bindingId: currentBinding.id,
           cellId: currentBinding.runtimeCellId, cellGeneration: currentBinding.cellGeneration,
           sandboxRef: currentBinding.sandboxRef ?? `aw-v7-${currentBinding.id}` },
         boundary: currentBinding.boundaryPolicy,
-        bridge: transport.bridge(currentActor, conformance), evidenceKind: "protected_host_report",
+        bridge, evidenceKind: "protected_host_report",
         prover: { executable, executableSha256 },
         credentialBrokerDatabase: db, credentialBrokerOrigin: brokerOrigin,
         resolveCredentialBrokerBindings: resolveCurrentCredentialBrokerBindings,
       });
       const applyPolicy = backend.applyPolicy;
-      return { ...backend, applyPolicy: async (applyInput: Parameters<typeof applyPolicy>[0]) => {
+      const startWorkload = backend.startWorkload;
+      return { ...backend,
+        startWorkload: async (startInput: Parameters<typeof startWorkload>[0]) => {
+          const started = await startWorkload(startInput);
+          if (conformance && input.afterSandboxStartReceipt) {
+            const startParts = startInput.idempotencyKey.split(":");
+            const claimVersion = Number(startParts[3]);
+            if (startParts.length !== 5 || startParts[0] !== "v7-sandbox-start" || startParts[1] !== currentBinding.id ||
+                startParts[2] !== currentBinding.cellGeneration || !Number.isSafeInteger(claimVersion) || claimVersion < 1 ||
+                startParts[4] !== conformance.policySnapshotId)
+              throw new Error("conversation_host_admission_start_claim_key_invalid");
+            const [claim] = await db.select().from(activityLog).where(and(
+              eq(activityLog.companyId, currentBinding.companyId), eq(activityLog.entityType, "runtime_sandbox"),
+              eq(activityLog.entityId, currentBinding.id), eq(activityLog.action, "sandbox.admission_claimed"),
+              sql`${activityLog.details}->>'claimVersion' = ${String(claimVersion)}`,
+              sql`${activityLog.details}->>'generation' = ${currentBinding.cellGeneration}`,
+              sql`${activityLog.details}->>'policySnapshotId' = ${conformance.policySnapshotId}`,
+              sql`${activityLog.details}->>'policyHash' = ${conformance.policyHash}`,
+              sql`${activityLog.details}->>'executionManifestId' = ${conformance.manifestId}`,
+              sql`${activityLog.details}->>'executionManifestHash' = ${conformance.manifestHash}`,
+            )).limit(1);
+            const claimDetails = claim?.details && typeof claim.details === "object" && !Array.isArray(claim.details)
+              ? claim.details as Record<string, unknown> : {};
+            const claimKey = typeof claimDetails.claimKey === "string" ? claimDetails.claimKey : "";
+            const expectedClaimKey = `v7-sandbox-admission:${currentBinding.id}:${currentBinding.cellGeneration}:${currentBinding.version}:${conformance.policySnapshotId}`;
+            if (!claim || claim.actorType !== "user" || claim.actorId !== currentActor.userId ||
+                claimDetails.claimVersion !== claimVersion || claimDetails.generation !== currentBinding.cellGeneration ||
+                claimDetails.expectedVersion !== currentBinding.version || claimKey !== expectedClaimKey ||
+                claimDetails.policySnapshotId !== conformance.policySnapshotId || claimDetails.policyHash !== conformance.policyHash ||
+                claimDetails.executionManifestId !== conformance.manifestId || claimDetails.executionManifestHash !== conformance.manifestHash)
+              throw new Error("conversation_host_admission_claim_receipt_mismatch");
+            const [prepared] = await db.select().from(runtimeHostCommands).where(and(
+              eq(runtimeHostCommands.companyId, currentBinding.companyId),
+              eq(runtimeHostCommands.runtimeHostId, host.id),
+              eq(runtimeHostCommands.runtimeCellId, currentBinding.runtimeCellId),
+              eq(runtimeHostCommands.cellGeneration, BigInt(currentBinding.cellGeneration)),
+              eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+              sql`${runtimeHostCommands.payload}->'provisioning'->>'purpose' = 'admission'`,
+              sql`${runtimeHostCommands.payload}->'provisioning'->>'operationKey' = ${claimKey}`,
+              sql`${runtimeHostCommands.payload}->'provisioning'->>'policyHash' = ${conformance.policyHash}`,
+              sql`${runtimeHostCommands.payload}->'provisioning'->>'bindingVersion' = ${String(claimVersion)}`,
+            )).limit(1);
+            const prepareRequest = prepared?.payload as Record<string, any> | undefined;
+            const prepareReply = prepared?.safeResult as Record<string, any> | undefined;
+            const provisioning = prepareRequest?.provisioning as Record<string, any> | undefined;
+            if (!prepared || !prepareRequest || !prepareReply || !provisioning || prepareRequest.action !== "prepare" ||
+              prepareReply.action !== "prepare" || provisioning.policyHash !== conformance.policyHash ||
+              provisioning.operationKey !== claimKey || provisioning.bindingVersion !== claimVersion || !prepareReply.sandboxId || !prepareReply.containerId ||
+              prepareReply.hostEpoch !== prepareRequest.hostEpoch || prepareReply.imageDigest !== prepareRequest.imageDigest)
+              throw new Error("conversation_host_admission_start_receipt_owner_missing");
+            const cleanup: SandboxAdmissionCleanup = { requesterUserId: currentActor.userId!,
+              claimKey: provisioning.operationKey, claimVersion: provisioning.bindingVersion,
+              policySnapshotId: conformance.policySnapshotId, policyHash: conformance.policyHash,
+              manifestId: conformance.manifestId, manifestHash: conformance.manifestHash,
+              hostEpoch: prepareRequest.hostEpoch, imageDigest: prepareRequest.imageDigest,
+              sandboxId: prepareReply.sandboxId, containerId: prepareReply.containerId };
+            const scope: SandboxIdentity = { companyId: currentBinding.companyId, bindingId: currentBinding.id,
+              cellId: currentBinding.runtimeCellId, cellGeneration: currentBinding.cellGeneration,
+              sandboxRef: currentBinding.sandboxRef ?? `aw-v7-${currentBinding.id}` };
+            await input.afterSandboxStartReceipt({ scope, cleanup, attemptStop: candidate => bridge.stop({ ...scope,
+              idempotencyKey: `v7-sandbox-admission-contain:${currentBinding.id}:${currentBinding.cellGeneration}:${candidate.claimVersion}:${candidate.policySnapshotId}`,
+              nativeAdmissionCleanup: candidate }) });
+          }
+          return started;
+        },
+        applyPolicy: async (applyInput: Parameters<typeof applyPolicy>[0]) => {
         const result = await applyPolicy(applyInput);
         if (!result.applied && result.unsupportedFeatures.includes("boundary:unsupported")) {
           const candidateProjection = projectOpenShellPolicy(applyInput.policy.compiledPolicy,
@@ -2261,7 +2331,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         if (args[0] === "create" && args.includes("--name")) {
           const option = (name: string) => args.includes(name) ? args[args.indexOf(name) + 1] : undefined;
           const name = option("--name")!;
-          if (!name.startsWith("aw-native-lower-") && !name.startsWith("aw-native-proof-") && !name.startsWith("aw-native-erase-"))
+          if (!name.startsWith("aw-native-lower-") && !name.startsWith("aw-native-proof-") && !name.startsWith("aw-native-erase-") &&
+              !name.startsWith("aw-native-attachments-erase-"))
             throw new Error("fixture_unexpected_cleanup_helper");
           const id = createHash("sha256").update(`native-session-erasure:${name}`).digest("hex");
           const entrypointIndex = args.indexOf("--entrypoint");
@@ -2294,15 +2365,22 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           if (info.Config.Cmd[0] === "-e") {
             const proof = info.Mounts.find((mount: any) => mount.Destination === "/proof")?.Source;
             const sessions = info.Mounts.find((mount: any) => mount.Destination === "/sessions")?.Source;
+            const attachments = info.Mounts.find((mount: any) => mount.Destination === "/attachments")?.Source;
             const name = info.Config.Labels["aw.native_session_erasure_name"];
             const mountInfoFile = join(hostRoot, `${name}.mountinfo`);
             const mountRows = ["36 25 0:32 / /proof rw - bind fixture rw"];
             if (sessions) mountRows.push("37 25 0:33 / /sessions rw - bind fixture rw");
+            if (attachments) mountRows.push("38 25 0:34 / /attachments rw - bind fixture rw");
             writeFileSync(mountInfoFile, `${mountRows.join("\n")}\n`);
             const unusedSessions = join(hostRoot, "unused-sessions");
-            let script = NATIVE_SESSION_UPPER_ERASE_SCRIPT
+            const rawScript = info.Config.Cmd[1];
+            let script = rawScript === NATIVE_SESSION_UPPER_ERASE_SCRIPT ? NATIVE_SESSION_UPPER_ERASE_SCRIPT :
+              rawScript === NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT ? NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT : null;
+            if (!script) throw new Error("fixture_unknown_native_erasure_script");
+            script = script
               .replace('fs.openSync("/proof",', `fs.openSync(${JSON.stringify(proof)},`)
               .replace('fs.openSync("/sessions",', `fs.openSync(${JSON.stringify(sessions ?? unusedSessions)},`)
+              .replace('fs.openSync("/attachments",', `fs.openSync(${JSON.stringify(attachments ?? join(hostRoot, "unused-attachments"))},`)
               .replace('fs.readFileSync("/proc/self/mountinfo",', `fs.readFileSync(${JSON.stringify(mountInfoFile)},`);
             const result = spawnSync(process.execPath, ["-e", script, ...info.Config.Cmd.slice(2)],
               { encoding: "utf8", timeout: 10_000 });
@@ -2907,7 +2985,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           reply = observed.reply;
           if (action === "erase_native_session") {
             const descriptor = command.nativeSessionErasure;
-            const exactReply = reply.erased === true && reply.schema === descriptor?.schema &&
+            const attachmentStageNonces = Array.isArray(descriptor?.attachmentStageNonces) ? descriptor.attachmentStageNonces : [];
+            const exactReply = nativeSha256(reply.attachmentStageNoncesAbsent ?? []) === nativeSha256(attachmentStageNonces) &&
+              reply.erased === true && reply.schema === descriptor?.schema &&
               reply.startBindingDigest === descriptor?.startBindingDigest && reply.sessionKey === descriptor?.sessionKey &&
               reply.leaseId === descriptor?.leaseId && reply.sessionDigest === descriptor?.sessionDigest &&
               reply.policyHash === descriptor?.policyHash && reply.sandboxId === descriptor?.sandboxId &&
@@ -2920,13 +3000,23 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             const sessionPath = descriptor?.sessionDigest ? join(upperSessions, descriptor.sessionDigest) : "";
             const logicalSessionPath = descriptor?.taskRoot && descriptor?.sessionDigest
               ? join(descriptor.taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions", descriptor.sessionDigest) : "";
+            const attachmentStagePaths = attachmentStageNonces.map((nonce: string) => join(fixtureOverlayPath(descriptor.taskRoot),
+              ".paperclip-inbound", descriptor.runId, nonce));
+            for (const attachmentPath of attachmentStagePaths) {
+              if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(attachmentPath.split(sep).at(-1) ?? "") ||
+                !attachmentPath.startsWith(join(fixtureOverlayPath(descriptor.taskRoot), ".paperclip-inbound", descriptor.runId) + sep))
+                throw new Error("conversation_native_attachment_stage_cleanup_scope_invalid");
+            }
+            const attachmentStagesAbsent = attachmentStagePaths.every((value: string) => {
+              try { lstatSync(value); return false; } catch (error) { return (error as NodeJS.ErrnoException).code === "ENOENT"; }
+            });
             const neighborPath = join(upperSessions, "f".repeat(64), "retained-neighbor.txt");
             let targetAbsent = false, neighborPresent = false;
             try { lstatSync(sessionPath); } catch (error) { targetAbsent = (error as NodeJS.ErrnoException).code === "ENOENT"; }
             let logicalTargetAbsent = false;
             try { lstatSync(logicalSessionPath); } catch (error) { logicalTargetAbsent = (error as NodeJS.ErrnoException).code === "ENOENT"; }
             try { neighborPresent = readFileSync(neighborPath, "utf8") === "neighbor remains"; } catch { neighborPresent = false; }
-            nativeSessionBackingObservations.push({ exactReply, targetAbsent, logicalTargetAbsent, neighborPresent,
+            nativeSessionBackingObservations.push({ exactReply, targetAbsent, logicalTargetAbsent, neighborPresent, attachmentStagesAbsent,
               actualRunnerFilesBacked: Boolean(nativeSessionBacking?.fileCount && nativeSessionBacking.fileCount > 0),
               backingMoved: nativeSessionBacking?.moved === true,
               replayAliasExact: nativeSessionBacking?.replayAliasExact === true,
@@ -2938,7 +3028,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
               originalContainerArchiveRoot200: httpArchiveObservations.some(value => value.originalContainer && value.root && value.status === 200),
               originalContainerArchiveTarget404: httpArchiveObservations.some(value => value.originalContainer && !value.root && value.status === 404),
               helperContainersRemoved: helperContainersByName.size === 0 });
-            if (!exactReply || !targetAbsent || !logicalTargetAbsent || !neighborPresent ||
+            if (!exactReply || !targetAbsent || !logicalTargetAbsent || !neighborPresent || !attachmentStagesAbsent ||
                 !nativeSessionBacking?.originalTreeDigest || helperContainersByName.size !== 0)
               throw new Error("conversation_native_session_erasure_receipt_mismatch");
           }
@@ -3557,7 +3647,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
               ? "runner_launch" : requestLabel === "paperclip-runner-failure-check"
                 ? "runner_failure_cleanup" : "other");
     const noBrokerPreparation = ["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare",
-      "native_provider_data_erasure", "native_provider_data_erasure_probe"]
+      "native_provider_data_erasure", "native_provider_data_erasure_probe", "native_attachment_stage", "native_attachment_cleanup"]
       .includes(nativePreparationPurpose ?? "");
     const managedModelOriginMatches = requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin &&
       Boolean(request.modelBrokerCredential);
@@ -3582,7 +3672,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       if (sessionStop?.phase === "refresh") relayPreflightFacts.push({
         phase: "refresh",
         nativePreparationPurpose: ["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare",
-          "native_provider_data_erasure", "native_provider_data_erasure_probe"].includes(nativePreparationPurpose ?? "")
+          "native_provider_data_erasure", "native_provider_data_erasure_probe", "native_attachment_stage", "native_attachment_cleanup"]
+          .includes(nativePreparationPurpose ?? "")
           ? nativePreparationPurpose : null,
         brokerCredentialPresent: Boolean(request.brokerCredential),
         modelCredentialPresent: Boolean(request.modelBrokerCredential),
@@ -4240,7 +4331,9 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   }
 
   return {
-    prepareNativeOpenCodeConformanceRun: service.prepareNativeOpenCodeConformanceRun,
+    prepareNativeOpenCodeConformanceRun: (currentActor: AuthorizationActor,
+      bootstrap: Parameters<typeof service.prepareNativeOpenCodeConformanceRun>[1]) =>
+      driveHost(service.prepareNativeOpenCodeConformanceRun(currentActor, bootstrap)),
     configuredSandboxOperatorUserIds: () => [...sandboxOperatorUserIds],
     leaseExpiryForRun: (runStartedAt: Date, callerDeadlineAt: Date) => {
       const runStartedAtMs = runStartedAt instanceof Date ? runStartedAt.getTime() : Number.NaN;

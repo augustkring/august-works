@@ -545,7 +545,7 @@ export interface EnvironmentDriverExecuteInput extends EnvironmentDriverLeaseInp
   bypassSession?: boolean;
   /** Private Native setup phase for pinned artifacts, exact run-owned harness
    * state access, immutable runtime context staging, or the conversation Runnerd launch. Never user/model-supplied. */
-  nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+  nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
   modelBrokerSessionPhase?: "start" | "refresh" | "stop";
   /**
    * Force the command onto the lease's persistent session even when no run step
@@ -1301,7 +1301,7 @@ function createSandboxEnvironmentDriver(
       stdin?: string;
       timeoutMs?: number;
       signal?: AbortSignal;
-      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
       modelBrokerSessionPhase?: "start" | "refresh" | "stop";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;
@@ -3787,7 +3787,7 @@ export function environmentRuntimeService(
       stdin?: string;
       timeoutMs?: number;
       signal?: AbortSignal;
-      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+      nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
       modelBrokerSessionPhase?: "start" | "refresh" | "stop";
       onOutput?: (stream: "stdout" | "stderr", chunk: string) => void | Promise<void>;
     }) => Promise<PluginEnvironmentExecuteResult | null>;

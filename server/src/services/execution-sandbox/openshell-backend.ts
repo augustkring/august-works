@@ -69,6 +69,13 @@ export function openShellBackend(options: {
   resolveCredentialBrokerBindings?: (policy: SandboxPolicyCompilation) => Promise<{ authorizedConnectionGrantHashes: Record<string, string>; bindings: ResolvedSandboxBrokerBinding[] }>;
 }): ExecutionSandboxBackend {
   const { bridge, identity } = options;
+  // An empty maximum broker allowlist grants no connection authority. Its
+  // physical boundary is credentialless; execution policies still reject
+  // brokered mode without an actual current binding.
+  const projectionBoundary = options.boundary.credentials.mode === "brokered" &&
+    options.boundary.credentials.bindings.length === 0
+    ? { ...options.boundary, credentials: { mode: "none" as const, bindings: [] } }
+    : options.boundary;
   let preparedEvidence: PreparedSandbox | null = null;
   function scope(input: SandboxIdentity) {
     if (nativeSha256(input) !== nativeSha256(identity)) throw forbidden("OpenShell bridge belongs to another immutable runtime scope");
@@ -140,7 +147,7 @@ export function openShellBackend(options: {
       ...(qualificationProbeFixture ? { probeFixtureHash: qualificationProbeFixture.fixtureHash, qualificationProbeFixture } : {}) };
   }
   async function boundaryProof(candidate: OpenShellPolicyDocument, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"], credentialBrokerEndpoints?: SandboxPolicyCompilation["credentialBrokerEndpoints"]) {
-    const boundary = projectOpenShellPolicy(options.boundary, modelBrokerEndpoint, credentialBrokerEndpoints);
+    const boundary = projectOpenShellPolicy(projectionBoundary, modelBrokerEndpoint, credentialBrokerEndpoints);
     if (boundary.unsupportedFeatures.length) throw conflict("OpenShell alone cannot enforce the configured maximum boundary", { code: "sandbox_projection_unsupported", unsupportedFeatures: boundary.unsupportedFeatures });
     const effective = await bridge.effectivePolicy(identity);
     const proof = await checkOpenShellBoundary({ ...options.prover, candidate: effective, boundary: boundary.document });
@@ -204,7 +211,7 @@ export function openShellBackend(options: {
       const current = await observed(input);
       if (input.currentStaticFingerprint && input.currentStaticFingerprint !== input.policy.staticPolicyFingerprint) return { applied: false, requiresRecreate: true, observedPolicyHash: null, unsupportedFeatures: [] };
       if (current.state === "running") throw conflict("Stop the workload before its first policy application");
-      const boundary = projectOpenShellPolicy(options.boundary, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
+      const boundary = projectOpenShellPolicy(projectionBoundary, input.policy.modelBrokerEndpoint, input.policy.credentialBrokerEndpoints);
       if (boundary.unsupportedFeatures.length) return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: boundary.unsupportedFeatures };
       const requestedProof = await checkOpenShellBoundary({ ...options.prover, candidate: projection.document, boundary: boundary.document });
       if (requestedProof.result !== "within_boundary") return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: [`boundary:${requestedProof.result}`] };

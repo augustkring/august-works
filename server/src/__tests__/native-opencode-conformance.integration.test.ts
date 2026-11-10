@@ -3,10 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
-import { agentProviderBindings, createDb, environmentLeases, heartbeatRunEvents, heartbeatRuns, issues, orchestrationModelReservations,
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { agentProviderBindings, companyMemberships, createDb, environmentLeases, heartbeatRunEvents, heartbeatRuns, issues, orchestrationModelReservations,
   orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, runtimeCells, runtimeHostCommands } from "@paperclipai/db";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
+import { accessService } from "../services/access.js";
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { assertV7Authorization } from "../services/v7-authorization.js";
 import { nativeOpenCodeConformanceService, registerNativeOpenCodeConformance } from "../services/native-opencode-conformance.js";
 import { providerConformanceService } from "../services/provider-conformance.js";
 import { quoteModelReservation } from "../services/orchestration/model-reservations.js";
@@ -115,7 +118,19 @@ const support = await getEmbeddedPostgresTestSupport();
                     ? row.constraint_name : null });
                 cause = row.cause;
               }
-              console.info("native_conformance_valid_prepare_failure", JSON.stringify({ frames, database }));
+              const details = error && typeof error === "object" && "details" in error ? error.details : null;
+              const code = details && typeof details === "object" && "code" in details && typeof details.code === "string"
+                && /^(?:sandbox|native|runtime|conformance|tool)_[a-z0-9_]{1,100}$/.test(details.code) ? details.code : null;
+              const failedHostCommands = await db.select({ status: runtimeHostCommands.status,
+                errorCode: runtimeHostCommands.errorCode,
+                action: sql<string | null>`${runtimeHostCommands.payload}->>'action'` }).from(runtimeHostCommands)
+                .where(and(eq(runtimeHostCommands.companyId, input.companyId),
+                  inArray(runtimeHostCommands.status, ["FAILED", "CANCELED", "EXPIRED"])));
+              console.info("native_conformance_valid_prepare_failure", JSON.stringify({ frames, database, code,
+                failedHostCommands: failedHostCommands.map(row => ({ status: row.status,
+                  errorCode: row.errorCode && /^(?:sandbox|native|runtime|conformance|tool)_[a-z0-9_]{1,100}$/.test(row.errorCode)
+                    ? row.errorCode : null,
+                  action: ["capabilities", "prepare", "inspect", "apply", "start", "stop"].includes(row.action ?? "") ? row.action : null })) }));
               throw error;
             }
           },
@@ -250,4 +265,107 @@ const support = await getEmbeddedPostgresTestSupport();
     })).toBe(true);
     expect(result.unknownChargeReservationIds.length).toBeLessThanOrEqual(1);
   }, 1_200_000);
+
+  it("stops the exact started workload when Human runtime rights are withdrawn before admission returns", async () => {
+    let revoked = false;
+    let revokedCompanyId: string | null = null;
+    let revokedUserId: string | null = null;
+    let seededOwnerId: string | null = null;
+    let providerDispatches = 0;
+    await withManagedNativeHeartbeatFixture({
+      db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+      schedulerMode: "serial", managedOpenCodeConformance: true, sandboxRelay: true,
+      afterSandboxStartReceipt: async ({ scope, cleanup, attemptStop }) => {
+        if (!revokedCompanyId || !revokedUserId || revoked) throw new Error("revocation_test_start_receipt_scope_missing");
+        const cells = await db.select({ hostId: runtimeCells.runtimeHostId }).from(runtimeCells)
+          .where(eq(runtimeCells.companyId, revokedCompanyId));
+        const hostIds = [...new Set(cells.flatMap(cell => cell.hostId ? [cell.hostId] : []))];
+        const beforeInvalidCleanup = hostIds.length ? await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+          .where(inArray(runtimeHostCommands.runtimeHostId, hostIds)) : [];
+        await expect(attemptStop({ ...cleanup, claimVersion: cleanup.claimVersion + 1 })).rejects.toThrow();
+        await expect(attemptStop({ ...cleanup, sandboxId: randomUUID() })).rejects.toThrow();
+        const afterInvalidCleanup = hostIds.length ? await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+          .where(inArray(runtimeHostCommands.runtimeHostId, hostIds)) : [];
+        expect(afterInvalidCleanup).toHaveLength(beforeInvalidCleanup.length);
+        expect(scope.companyId).toBe(revokedCompanyId);
+        const [member] = await db.select().from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, revokedCompanyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, revokedUserId))).limit(1);
+        const owners = await db.select({ principalId: companyMemberships.principalId }).from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, revokedCompanyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.status, "active"), eq(companyMemberships.membershipRole, "owner")));
+        seededOwnerId = owners.find(owner => owner.principalId !== revokedUserId)?.principalId ?? null;
+        if (!member || !seededOwnerId) throw new Error("revocation_test_second_owner_required");
+        await accessService(db).updateMemberAndPermissions(revokedCompanyId, member.id,
+          { membershipRole: "viewer", grants: grantsForHumanRole("viewer") }, seededOwnerId);
+        await expect(assertV7Authorization(db, { type: "board", source: "session", userId: revokedUserId },
+          revokedCompanyId, "runtime:manage")).rejects.toThrow();
+        await expect(assertV7Authorization(db, { type: "board", source: "session", userId: revokedUserId },
+          revokedCompanyId, "tasks:assign")).rejects.toThrow();
+        revoked = true;
+      },
+      providerReply: () => { providerDispatches++; throw new Error("revoked admission must stop before provider dispatch"); },
+      driveScheduler: async () => { throw new Error("conformance branch must not start an ordinary Run"); },
+      runOpenCodeConformance: async context => {
+        revokedCompanyId = context.companyIds.primary;
+        revokedUserId = context.actor.userId ?? null;
+        const reservationsBefore = await db.select({ id: orchestrationModelReservations.id })
+          .from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, context.companyIds.primary));
+        registerNativeOpenCodeConformance(db, nativeOpenCodeConformanceService(db, {
+          profiles: [...context.profiles.values()], sourceSha: context.sourceSha,
+          protectedEvidenceOrigin: "https://protected.test.invalid", modelBrokerOrigin: context.origin,
+          environmentRuntime: context.environmentRuntime, runnerInstanceId: randomUUID(),
+          prepareSandboxRun: context.prepareSandboxRun,
+        }));
+        try {
+          const result = await providerConformanceService(db).test(context.actor, context.companyIds.primary,
+            context.agentIds.primary, { acknowledgeProviderRuns: true, maximumCostCents: 100,
+              isolationPeer: { companyId: context.companyIds.peer, agentId: context.agentIds.peer } });
+          expect(result.failure).toBeTruthy();
+        } finally {
+          const [member] = await db.select().from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, context.companyIds.primary), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, context.actor.userId!))).limit(1);
+          if (member && seededOwnerId) await accessService(db).updateMemberAndPermissions(context.companyIds.primary, member.id,
+            { membershipRole: "owner", grants: grantsForHumanRole("owner") }, seededOwnerId);
+        }
+        expect(revoked).toBe(true);
+        expect(providerDispatches).toBe(0);
+        expect(context.providerKeyObservations()).toEqual([]);
+        const reservationsAfter = await db.select({ id: orchestrationModelReservations.id })
+          .from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, context.companyIds.primary));
+        expect(reservationsAfter).toEqual(reservationsBefore);
+        const cells = await db.select({ hostId: runtimeCells.runtimeHostId }).from(runtimeCells)
+          .where(eq(runtimeCells.companyId, context.companyIds.primary));
+        const hostIds = [...new Set(cells.flatMap(cell => cell.hostId ? [cell.hostId] : []))];
+        const commands = hostIds.length ? await db.select().from(runtimeHostCommands)
+          .where(inArray(runtimeHostCommands.runtimeHostId, hostIds)) : [];
+        const starts = commands.filter(command => (command.payload as any)?.action === "start" && command.status === "SUCCEEDED");
+        expect(starts).toHaveLength(1);
+        const startRequest = starts[0]!.payload as Record<string, any>;
+        const startReply = starts[0]!.safeResult as Record<string, any>;
+        expect(startReply).toMatchObject({ action: "start", started: true });
+        expect(typeof startReply.sandboxId).toBe("string");
+        expect(typeof startReply.containerId).toBe("string");
+        const expectedTarget = { sandboxId: startReply.sandboxId, containerId: startReply.containerId };
+        const stops = commands.filter(command => (command.payload as any)?.action === "stop" && command.status === "SUCCEEDED");
+        expect(stops).toHaveLength(1);
+        expect((stops[0]!.payload as any).expectedTarget).toEqual(expectedTarget);
+        expect(stops[0]!.runtimeCellId).toBe(starts[0]!.runtimeCellId);
+        expect(stops[0]!.cellGeneration).toBe(starts[0]!.cellGeneration);
+        const inspections = commands.filter(command => (command.payload as any)?.action === "inspect" && command.status === "SUCCEEDED");
+        expect(inspections.some(command => (command.payload as any).expectedTarget?.sandboxId === expectedTarget.sandboxId &&
+          (command.payload as any).expectedTarget?.containerId === expectedTarget.containerId &&
+          (command.safeResult as any)?.state === "stopped")).toBe(true);
+        const runs = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+          .where(eq(heartbeatRuns.companyId, context.companyIds.primary));
+        const runIds = runs.map(run => run.id);
+        const launches = runIds.length ? await db.select().from(heartbeatRunEvents).where(and(
+          inArray(heartbeatRunEvents.runId, runIds), eq(heartbeatRunEvents.eventType, "native.process_start_requested"))) : [];
+        expect(launches).toEqual([]);
+        expect(startRequest.scope.companyId).toBe(context.companyIds.primary);
+        expect(startRequest.expectedTarget).toBeUndefined();
+      },
+    });
+  }, 600_000);
 });

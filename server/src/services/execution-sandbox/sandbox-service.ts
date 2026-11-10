@@ -1552,7 +1552,9 @@ export function executionSandboxService(db: Db, options: {
       const boundary = initial.binding.boundaryPolicy;
       const candidate: SandboxPolicy = {
         ...structuredClone(boundary), broadAutonomy: false, riskClass: "C0",
-        filesystem: { readPaths: [...new Set([input.workspaceRoot,
+        // The Host must still observe the qualified syscall mechanism after
+        // applying this policy, before it can start the hidden workload.
+        filesystem: { readPaths: [...new Set([input.workspaceRoot, "/.openshell/runtime/openshell-sandbox",
           ...(initial.capability.modelBrokerProviderProfile?.binaries ?? [])])].sort(),
           writePaths: [input.workspaceRoot], deniedPaths: [...boundary.filesystem.deniedPaths] },
         process: { ...boundary.process, allowedBinaries: [], allowedSyscalls: [] },

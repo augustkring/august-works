@@ -16,7 +16,7 @@ import {
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "../__tests__/helpers/embedded-postgres.js";
 import { issueService } from "./issues.js";
 import { seedCurrentHumanSourceActor } from "../__tests__/helpers/current-human-source-fixture.js";
-import { admitExplicitNativeContinuation } from "./explicit-native-continuation.js";
+import { admitExplicitNativeContinuation, isExactUnknownNativeTextCharge } from "./explicit-native-continuation.js";
 import { buildExecutionContinuation } from "./execution-continuation.js";
 import { heartbeatService, persistHeartbeatRunProcessMetadata, type HeartbeatEnvironmentRuntime } from "./heartbeat.js";
 import { createRemoteRuntimeAssetLocator } from "./native-runtime/runtime-asset-retention.js";
@@ -1229,5 +1229,55 @@ const support = await getEmbeddedPostgresTestSupport();
       status: "resolved", outcome: "blocked", nextAction: "Could not start", evidence: { runId: rejectedRunId, automaticRecovery: { replay: "blocked" } } });
     expect(await admit(f)).toMatchObject({ previousRunId: f.sourceRunId });
     expect(await getExecutionBlocker(db, f.companyId, f.issueId)).toBeNull();
+  });
+});
+
+
+type NativeTextChargeProof = Parameters<typeof isExactUnknownNativeTextCharge>[0];
+const nativeChargeRunId = "10000000-0000-4000-8000-000000000001";
+const nativeChargeCompanyId = "10000000-0000-4000-8000-000000000002";
+const nativeChargeIssueId = "10000000-0000-4000-8000-000000000003";
+const nativeChargeAgentId = "10000000-0000-4000-8000-000000000004";
+const nativeChargeReservationId = "10000000-0000-4000-8000-000000000005";
+const nativeChargePlanId = "10000000-0000-4000-8000-000000000006";
+const nativeChargeAttemptId = "10000000-0000-4000-8000-000000000007";
+const nativeChargeRequestHash = "a".repeat(64);
+const nativeChargeBodyHash = "b".repeat(64);
+
+function nativeTextChargeProof(): NativeTextChargeProof {
+  return {
+    run: { id: nativeChargeRunId, companyId: nativeChargeCompanyId, agentId: nativeChargeAgentId,
+      nativeIssueId: nativeChargeIssueId, runtimeMode: "native", driverKind: "aw_text_messages" },
+    issueId: nativeChargeIssueId, actionCause: "uncertain_provider_action",
+    actionEvidence: { runId: nativeChargeRunId, modelReservationId: nativeChargeReservationId,
+      automaticRecovery: { replay: "blocked", actionOutcome: "unknown" } },
+    reservation: { id: nativeChargeReservationId, companyId: nativeChargeCompanyId, purpose: "worker_model", status: "unknown",
+      workerAttemptId: nativeChargeAttemptId, planId: nativeChargePlanId, requestHash: nativeChargeRequestHash,
+      providerWireReceipt: { version: 1, reservationId: nativeChargeReservationId, requestHash: nativeChargeRequestHash,
+        method: "POST", endpoint: "https://api.anthropic.com/v1/messages", bodySha256: nativeChargeBodyHash, callId: null } },
+    binding: { runId: nativeChargeRunId, agentId: nativeChargeAgentId, planIssueId: nativeChargeIssueId,
+      workerIssueId: nativeChargeIssueId, workerAgentId: nativeChargeAgentId },
+    wireIntents: [{ reservationId: nativeChargeReservationId, requestHash: nativeChargeRequestHash,
+      wireBodyHash: nativeChargeBodyHash, method: "POST", endpoint: "https://api.anthropic.com/v1/messages",
+      modelPurpose: "worker_model" }],
+  };
+}
+
+describe("unknown NativeText charge continuation proof", () => {
+  it("accepts only the exact dispatched unknown source and Text driver", () => {
+    expect(isExactUnknownNativeTextCharge(nativeTextChargeProof())).toBe(true);
+  });
+  it.each([
+    ["reservation", (value: NativeTextChargeProof) => { value.actionEvidence.modelReservationId = "10000000-0000-4000-8000-000000000099"; }],
+    ["source run", (value: NativeTextChargeProof) => { value.actionEvidence.runId = "10000000-0000-4000-8000-000000000099"; }],
+    ["worker run binding", (value: NativeTextChargeProof) => { value.binding.runId = "10000000-0000-4000-8000-000000000099"; }],
+    ["status", (value: NativeTextChargeProof) => { value.reservation.status = "completed"; }],
+    ["driver", (value: NativeTextChargeProof) => { value.run.driverKind = "paperclip_runner"; }],
+    ["company", (value: NativeTextChargeProof) => { value.reservation.companyId = "10000000-0000-4000-8000-000000000099"; }],
+    ["wire intent", (value: NativeTextChargeProof) => { value.wireIntents = []; }],
+  ] as const)("rejects mismatched %s evidence", (_label, mutate) => {
+    const value = nativeTextChargeProof();
+    mutate(value);
+    expect(isExactUnknownNativeTextCharge(value)).toBe(false);
   });
 });

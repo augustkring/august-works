@@ -2013,10 +2013,10 @@
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "9b334eec762bf63326eea35f65e4d2e5fc2d0e2a9773f3a01c00f2bdc0caca39",
+      "sourceSha256": "a806e5a2f86478815af58e095ff94370ce6f981d3b36651a4bef1b5736098068",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Remote cleanup now also requires the exact successful signed session-start binding for the run, lease, runner, host/cell generation, manifest, and policy. The article already says cleanup remains pending until stop and managed-storage removal are confirmed, and excludes provider-held data."
+      "rationale": "Remote attachment staging cleanup follows the existing retained runtime asset retirement owner and its current Source authorization. The Human attachment, retention and deletion controls described in Help are unchanged."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
@@ -2037,10 +2037,10 @@
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "9b334eec762bf63326eea35f65e4d2e5fc2d0e2a9773f3a01c00f2bdc0caca39",
+      "sourceSha256": "a806e5a2f86478815af58e095ff94370ce6f981d3b36651a4bef1b5736098068",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Ekstern oprydning kr\u00e6ver nu ogs\u00e5 den pr\u00e6cise, vellykkede signerede sessionsstartbinding for k\u00f8rsel, lease, runner, host-/celle-generation, manifest og politik. Artiklen siger allerede, at oprydning afventer bekr\u00e6ftet stop og fjernelse fra administreret lager, og at data hos udbyderen ikke er omfattet."
+      "rationale": "Remote attachment staging cleanup follows the existing retained runtime asset retirement owner and its current Source authorization. The Human attachment, retention and deletion controls described in Help are unchanged."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",

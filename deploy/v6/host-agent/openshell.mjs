@@ -26,6 +26,45 @@ export function archiveStatusProvesAbsence(rootStatus, targetStatus) {
 export function dockerInspectRunAsMatches(containerInfo, expectedUser) {
   return typeof expectedUser === "string" && containerInfo?.Config?.User === expectedUser;
 }
+export const NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT = `
+const fs=require("node:fs"),p=require("node:path"),C=fs.constants;
+const fail=()=>process.exit(23),uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const run=process.argv[1],taskRoot=process.argv[2],raw=process.argv[3],expiresAt=Number(process.argv[4]),nonces=JSON.parse(raw||"null");
+if(!uuid.test(run||"")||typeof taskRoot!=="string"||!taskRoot.startsWith("/")||p.posix.normalize(taskRoot)!==taskRoot||!Array.isArray(nonces)||nonces.length>1280||!Number.isSafeInteger(expiresAt)||expiresAt<=Date.now()||
+ nonces.some(n=>!uuid.test(n))||new Set(nonces).size!==nonces.length||nonces.some((n,i)=>n!==nonces.slice().sort()[i]))fail();
+const deadline=()=>{if(Date.now()>=expiresAt)fail()};
+const child=(fd,name)=>p.join("/proc/self/fd",String(fd),name),same=(a,b)=>a.dev===b.dev&&a.ino===b.ino;
+function openDir(parent,name){const fd=fs.openSync(child(parent,name),C.O_RDONLY|C.O_DIRECTORY|C.O_NOFOLLOW|C.O_CLOEXEC);const st=fs.fstatSync(fd);if(!st.isDirectory()){fs.closeSync(fd);fail()}return fd}
+function safeMounts(){const dec=v=>v.replace(/\\\\([0-7]{3})/g,(_,n)=>String.fromCharCode(parseInt(n,8)));let proof=0,attachments=0;
+ for(const line of fs.readFileSync("/proc/self/mountinfo","utf8").split("\\n")){if(!line)continue;const m=dec(line.split(" ")[4]||"");if(m==="/proof")proof++;if(m==="/attachments")attachments++;if(m.startsWith("/proof/")||m.startsWith("/attachments/"))fail()}
+ if(proof!==1||attachments!==1)fail()}
+let proof,workspace,inbound,runRoot,mounted,count=0;
+function removeTree(fd,rootDev,depth){if(depth>128)fail();const dir=fs.opendirSync("/proc/self/fd/"+fd);try{for(let ent;(ent=dir.readSync())!==null;){deadline();if(++count>50000)fail();const n=ent.name;if(!n||n==="."||n===".."||n.includes("/")||n.includes("\\\\")||n.includes("\\0"))fail();
+ const path=child(fd,n),before=fs.lstatSync(path);if(before.dev!==rootDev)fail();
+ if(before.isSymbolicLink()){const after=fs.lstatSync(path);if(!same(before,after)||!after.isSymbolicLink())fail();fs.unlinkSync(path)}
+ else if(before.isDirectory()){const c=openDir(fd,n);try{const opened=fs.fstatSync(c);if(!same(before,opened)||opened.dev!==rootDev)fail();fs.chmodSync("/proc/self/fd/"+c,(opened.mode&0o777)|0o700);removeTree(c,rootDev,depth+1);const after=fs.lstatSync(path);if(!same(after,fs.fstatSync(c)))fail();fs.rmdirSync(path)}finally{fs.closeSync(c)}}
+ else if(before.isFile()&&before.nlink===1){const after=fs.lstatSync(path);if(!same(before,after)||!after.isFile()||after.isSymbolicLink())fail();fs.unlinkSync(path)}else fail();}}
+ finally{dir.closeSync()}}
+try{safeMounts();
+ proof=fs.openSync("/proof",C.O_RDONLY|C.O_DIRECTORY|C.O_NOFOLLOW|C.O_CLOEXEC);
+ const proofStat=fs.fstatSync(proof);
+ workspace=fs.openSync("/proc/self/fd/"+proof+"/.",C.O_RDONLY|C.O_DIRECTORY|C.O_NOFOLLOW|C.O_CLOEXEC);
+ if(!same(proofStat,fs.fstatSync(workspace)))fail();
+ for(const part of taskRoot.slice(1).split("/"))if(part) {const next=openDir(workspace,part);fs.closeSync(workspace);workspace=next}
+ inbound=openDir(workspace,".paperclip-inbound");runRoot=openDir(inbound,run);mounted=fs.openSync("/attachments",C.O_RDONLY|C.O_DIRECTORY|C.O_NOFOLLOW|C.O_CLOEXEC);
+ const before=fs.fstatSync(runRoot),mountStat=fs.fstatSync(mounted);if(!same(before,mountStat))fail();
+ // The proof view is read-only; mutations use the verified writable mount.
+ for(const nonce of nonces){deadline();const path=child(mounted,nonce);let item;try{item=fs.lstatSync(path)}catch(e){if(e.code==="ENOENT")continue;throw e}
+  if(item.isSymbolicLink()){const again=fs.lstatSync(path);if(!same(item,again)||!again.isSymbolicLink())fail();fs.unlinkSync(path);continue}
+  if(!item.isDirectory()||item.dev!==before.dev)fail();const fd=openDir(mounted,nonce);try{const opened=fs.fstatSync(fd);if(!same(item,opened)||opened.dev!==before.dev)fail();
+   fs.chmodSync("/proc/self/fd/"+fd,(opened.mode&0o777)|0o700);removeTree(fd,before.dev,0);const again=fs.lstatSync(path);if(!same(again,fs.fstatSync(fd))||!again.isDirectory())fail();fs.rmdirSync(path);
+  }finally{fs.closeSync(fd)}
+  try{fs.lstatSync(path);fail()}catch(e){if(e.code!=="ENOENT")throw e}
+ }
+ process.stdout.write(JSON.stringify({runId:run,attachmentStageNoncesAbsent:nonces})+"\\n");
+}catch{fail()}finally{for(const fd of [mounted,runRoot,inbound,workspace,proof])if(fd!==undefined)try{fs.closeSync(fd)}catch{}}
+`;
+
 export const NATIVE_SESSION_UPPER_ERASE_SCRIPT = `
 const fs = require("node:fs");
 const p = require("node:path");
@@ -891,7 +930,10 @@ export function openShellHostEngine({
     const applied = scopeEntry?.policy;
     const session = journal.modelBrokerSessions?.[descriptor?.sessionKey];
     const taskRoot = descriptor?.taskRoot;
-    if (!descriptor || descriptor.schema !== "paperclip.remote-native-session-erasure.v1" ||
+    const stageNonces = descriptor?.attachmentStageNonces ?? [];
+    if (!descriptor || !Array.isArray(stageNonces) || stageNonces.length > 1280 || stageNonces.some(n => !uuid.test(n)) ||
+      new Set(stageNonces).size !== stageNonces.length || stageNonces.some((n, i) => n !== stageNonces.slice().sort()[i]) ||
+      descriptor.schema !== "paperclip.remote-native-session-erasure.v1" ||
       !/^[a-f0-9]{64}$/.test(descriptor.startBindingDigest ?? "") ||
       !/^[a-f0-9]{64}$/.test(descriptor.sessionKey ?? "") || !uuid.test(descriptor.leaseId ?? "") ||
       !/^[a-f0-9]{64}$/.test(descriptor.sessionDigest ?? "") || !/^[a-f0-9]{64}$/.test(descriptor.policyHash ?? "") ||
@@ -939,6 +981,8 @@ export function openShellHostEngine({
       gid: Number(gidText),
       targetPath: path.posix.join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions", descriptor.sessionDigest),
       sessionsPath: path.posix.join(taskRoot, ".paperclip-runtime", "paperclip-runner", "sessions"),
+      attachmentStagesPath: path.posix.join(taskRoot, ".paperclip-inbound", descriptor.runId),
+      attachmentStageNonces: descriptor.attachmentStageNonces ?? [],
     };
   }
   async function readArchivePresence(containerId, targetPath, deadlineAt) {
@@ -1028,6 +1072,119 @@ export function openShellHostEngine({
       throw new Error("sandbox_observation_unavailable");
     return { info: current, reconciled: true };
   }
+  function attachmentStageErasureHelperOutput(info, expected) {
+    const mounts = Array.isArray(info.Mounts) ? info.Mounts.map(m => ({ source: m.Source, destination: m.Destination, rw: m.RW }))
+      .sort((a,b) => a.destination.localeCompare(b.destination)) : [];
+    const wanted = expected.mounts.slice().sort((a,b) => a.destination.localeCompare(b.destination));
+    if (!["created","running","exited"].includes(info.State?.Status) ||
+      info.Config?.Labels?.["aw.native_session_erasure_name"] !== expected.name ||
+      info.Image !== expected.imageId || info.Config?.Image !== expected.imageId ||
+      info.Config?.Entrypoint?.length !== 1 || info.Config.Entrypoint[0] !== expected.nodePath ||
+      !Array.isArray(info.Config?.Cmd) || info.Config.Cmd.length !== 6 || info.Config.Cmd[0] !== "-e" ||
+      info.Config.Cmd[1] !== NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT || info.Config.Cmd[2] !== expected.runId ||
+      info.Config.Cmd[3] !== expected.taskRoot || info.Config.Cmd[4] !== JSON.stringify(expected.nonces) ||
+      info.Config.Cmd[5] !== String(expected.expiresAt) || info.HostConfig?.NetworkMode !== "none" ||
+      info.HostConfig?.ReadonlyRootfs !== true || !dockerInspectRunAsMatches(info, `${expected.uid}:${expected.gid}`) ||
+      info.HostConfig?.Privileged !== false || info.HostConfig?.CapAdd?.length || info.HostConfig?.Devices?.length ||
+      info.HostConfig?.PidsLimit !== 16 || info.HostConfig?.Memory !== 67108864 || info.HostConfig?.MemorySwap !== 67108864 ||
+      info.HostConfig?.CpuPeriod !== 100000 || info.HostConfig?.CpuQuota !== 25000 ||
+      !Array.isArray(info.HostConfig?.CapDrop) || !info.HostConfig.CapDrop.includes("ALL") ||
+      !Array.isArray(info.HostConfig?.SecurityOpt) || !info.HostConfig.SecurityOpt.includes("no-new-privileges:true") ||
+      (info.HostConfig?.UsernsMode && info.HostConfig.UsernsMode !== "") || mounts.length !== wanted.length ||
+      mounts.some((m,i)=>m.source!==wanted[i].source||m.destination!==wanted[i].destination||m.rw!==wanted[i].rw) ||
+      !Array.isArray(info.Config?.Env) || info.Config.Env.some(value=>typeof value!=="string"||/(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(value)))
+      throw new Error("sandbox_scope_changed");
+  }
+  async function eraseAttachmentStageNonces({ commandId, target, offline, hostImage, uid, gid, expiresAt, deadlineAt }) {
+    const nonces = target.attachmentStageNonces;
+    if (!nonces.length) return [];
+    const name = "aw-native-attachments-erase-" + commandId.replaceAll("-", "").slice(0, 24);
+    const attachmentsPath = path.posix.join(offline.upperDir, target.attachmentStagesPath.slice(1));
+    if ([offline.upperDir, attachmentsPath].some(value => value.includes(","))) throw new Error("sandbox_operation_unsupported");
+    const expected = { name, imageId: hostImage.imageId, nodePath: hostImage.nodePath, runId: target.descriptor.runId,
+      taskRoot: target.taskRoot, nonces, expiresAt, uid, gid,
+      mounts: [{ source: offline.upperDir, destination: "/proof", rw: false },
+        { source: attachmentsPath, destination: "/attachments", rw: true }] };
+    let record = journal.commands[commandId]?.nativeSessionErasure;
+    let priorStage = record?.attachmentStageHelper;
+    if (!record || !["upper_preflight_complete", "upper_erased"].includes(record.phase) ||
+      record.sessionKey !== target.descriptor.sessionKey ||
+      (priorStage && (priorStage.name !== name || hash(JSON.stringify(priorStage.nonces)) !== hash(JSON.stringify(nonces)) ||
+        (priorStage.helperId !== undefined && !/^[a-f0-9]{64}$/.test(priorStage.helperId)) ||
+        !["claimed", "created", "started", "complete"].includes(priorStage.phase) ||
+        (priorStage.phase === "complete" && (!/^[a-f0-9]{64}$/.test(priorStage.helperId ?? "") || priorStage.exitCode !== 0 ||
+          !Number.isFinite(Date.parse(priorStage.finishedAt ?? "")) || Date.parse(priorStage.finishedAt) > expiresAt ||
+          JSON.stringify(priorStage.output) !== JSON.stringify({ runId: target.descriptor.runId, attachmentStageNoncesAbsent: nonces }))))))
+      throw new Error("sandbox_scope_changed");
+    if (priorStage?.phase === "complete") {
+      const completedHelper = await namedErasureHelper(name, deadlineAt);
+      if (completedHelper) {
+        attachmentStageErasureHelperOutput(completedHelper, expected);
+        const completedOutput = (await docker(["logs", "--tail", "2", completedHelper.Id], deadlineAt, false)).trim();
+        if (completedHelper.Id !== priorStage.helperId || completedHelper.State?.Status !== "exited" ||
+          completedHelper.State?.ExitCode !== 0 || completedOutput !== JSON.stringify({ runId: target.descriptor.runId,
+            attachmentStageNoncesAbsent: nonces })) throw new Error("sandbox_scope_changed");
+        await removeOwnedErasureHelper(completedHelper, name, deadlineAt);
+      }
+      return nonces;
+    }
+    if (!priorStage) {
+      priorStage = { name, nonces, phase: "claimed" };
+      await recordNativeErasure(commandId, record.phase, { attachmentStageHelper: priorStage });
+    }
+    let info = await namedErasureHelper(name, deadlineAt);
+    if (!info && priorStage.helperId) {
+      const byId = await docker(["ps", "-aq", "--no-trunc", "--filter", `id=${priorStage.helperId}`], deadlineAt, false);
+      if (byId.trim()) throw new Error("sandbox_scope_changed");
+      priorStage = { name, nonces, phase: "claimed" };
+      await recordNativeErasure(commandId, record.phase, { attachmentStageHelper: priorStage });
+    }
+    if (!info) {
+      const helperLabels = ["--label", "aw.native_session_erasure=true", "--label", `aw.native_session_erasure_name=${name}`];
+      const mounts = [`type=bind,src=${offline.upperDir},dst=/proof,readonly`, `type=bind,src=${attachmentsPath},dst=/attachments`];
+      const args = ["create", "--pull=never", "--name", name, ...helperLabels, "--network", "none", "--read-only",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true", "--user", `${uid}:${gid}`,
+        "--pids-limit", "16", "--memory", "67108864", "--memory-swap", "67108864", "--cpu-period", "100000",
+        "--cpu-quota", "25000", "--mount", mounts[0], "--mount", mounts[1], "--entrypoint", hostImage.nodePath,
+        hostImage.imageId, "-e", NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT, target.descriptor.runId,
+        target.taskRoot, JSON.stringify(nonces), String(expiresAt)];
+      try { await docker(args, deadlineAt, false); } catch { /* Resolve create uncertainty by exact deterministic name. */ }
+      info = await namedErasureHelper(name, deadlineAt);
+      if (!info) throw new Error("sandbox_observation_unavailable");
+    }
+    attachmentStageErasureHelperOutput(info, expected);
+    record = journal.commands[commandId]?.nativeSessionErasure;
+    priorStage = record?.attachmentStageHelper;
+    if (!priorStage || priorStage.name !== name || hash(JSON.stringify(priorStage.nonces)) !== hash(JSON.stringify(nonces)) ||
+      (priorStage.helperId && priorStage.helperId !== info.Id)) throw new Error("sandbox_scope_changed");
+    priorStage = { ...priorStage, helperId: info.Id, phase: info.State?.Status === "created" ? "created" : "started" };
+    await recordNativeErasure(commandId, record.phase, { attachmentStageHelper: priorStage });
+    if (info.State?.Status === "created") {
+      try { await docker(["start", info.Id], deadlineAt, false); } catch { /* Reconcile from the exact helper ID below. */ }
+      const helperId = info.Id;
+      info = (await docker(["inspect", helperId], deadlineAt))[0];
+      if (!info || info.Id !== helperId) throw new Error("sandbox_scope_changed");
+      attachmentStageErasureHelperOutput(info, expected);
+    }
+    if (info.State?.Status === "running") {
+      try { await docker(["wait", info.Id], deadlineAt, false, 15000); }
+      catch { throw new Error("sandbox_host_unavailable"); }
+      info = (await docker(["inspect", info.Id], deadlineAt))[0];
+    }
+    if (!info || info.State?.Status !== "exited" || info.State?.ExitCode !== 0) throw new Error("sandbox_observation_unavailable");
+    attachmentStageErasureHelperOutput(info, expected);
+    const output = (await docker(["logs", "--tail", "2", info.Id], deadlineAt, false)).trim();
+    const expectedOutput = JSON.stringify({ runId: target.descriptor.runId, attachmentStageNoncesAbsent: nonces });
+    const finishedAt = Date.parse(info.State?.FinishedAt ?? "");
+    if (output !== expectedOutput || !Number.isFinite(finishedAt) || finishedAt > expiresAt)
+      throw new Error("sandbox_observation_unavailable");
+    await recordNativeErasure(commandId, record.phase, { attachmentStageHelper: { name, nonces,
+      helperId: info.Id, phase: "complete", finishedAt: info.State?.FinishedAt, exitCode: info.State?.ExitCode,
+      output: JSON.parse(output) } });
+    await removeOwnedErasureHelper(info, name, deadlineAt);
+    return nonces;
+  }
+
   async function runErasureHelper({ name, hostImage, upperDir, sessionsPath, target, digest, mode, uid, gid,
     parentDev, parentIno, expiresAt, deadlineAt, commandId, request, mergedDir }) {
     let info = await namedErasureHelper(name, deadlineAt);
@@ -1162,6 +1319,7 @@ export function openShellHostEngine({
       containerId: descriptor.containerId, imageDigest: descriptor.imageDigest,
       dockerEngineIdHash: descriptor.dockerEngineIdHash, cellGeneration: descriptor.cellGeneration,
       runId: descriptor.runId, runnerInstanceId: descriptor.runnerInstanceId,
+      ...(descriptor.attachmentStageNonces?.length ? { attachmentStageNoncesAbsent: descriptor.attachmentStageNonces } : {}),
       upperLayerAbsent: true, mergedViewAbsent: true, stoppedBefore: true, stoppedAfter: true,
     };
   }
@@ -1229,6 +1387,61 @@ export function openShellHostEngine({
           }
         }
         await removeOwnedErasureHelper(stopped, name, recoveryDeadlineAt);
+      }
+    }
+    const attachmentStage = operation?.attachmentStageHelper;
+    if (attachmentStage) {
+      const name = "aw-native-attachments-erase-" + commandId.replaceAll("-", "").slice(0, 24);
+      if (attachmentStage.name !== name || !Array.isArray(attachmentStage.nonces) ||
+        hash(JSON.stringify(attachmentStage.nonces)) !== hash(JSON.stringify(descriptor.attachmentStageNonces ?? [])) ||
+        !["claimed", "created", "started", "complete"].includes(attachmentStage.phase) ||
+        (attachmentStage.phase === "complete" && (!/^[a-f0-9]{64}$/.test(attachmentStage.helperId ?? "") ||
+          attachmentStage.exitCode !== 0 || !Number.isFinite(Date.parse(attachmentStage.finishedAt ?? "")) ||
+          Date.parse(attachmentStage.finishedAt) > Date.parse(originalDeadlineAt) ||
+          JSON.stringify(attachmentStage.output) !== JSON.stringify({ runId: descriptor.runId,
+            attachmentStageNoncesAbsent: descriptor.attachmentStageNonces ?? [] }))))
+        throw new Error("sandbox_scope_changed");
+      const helper = await namedErasureHelper(name, recoveryDeadlineAt);
+      if (attachmentStage.phase === "complete") {
+        if (helper) {
+          const hostImage = await inspectHostAgentImage(recoveryDeadlineAt);
+          const expected = { name, imageId: hostImage.imageId, nodePath: hostImage.nodePath, runId: descriptor.runId,
+            taskRoot: target.taskRoot, nonces: descriptor.attachmentStageNonces ?? [], expiresAt: Date.parse(originalDeadlineAt),
+            uid: target.uid, gid: target.gid, mounts: [{ source: offline.upperDir, destination: "/proof", rw: false },
+              { source: path.posix.join(offline.upperDir, target.attachmentStagesPath.slice(1)), destination: "/attachments", rw: true }] };
+          if (helper.Id !== attachmentStage.helperId || helper.State?.Status !== "exited" || helper.State?.ExitCode !== 0)
+            throw new Error("sandbox_scope_changed");
+          attachmentStageErasureHelperOutput(helper, expected);
+          const output = (await docker(["logs", "--tail", "2", helper.Id], recoveryDeadlineAt, false)).trim();
+          if (output !== JSON.stringify({ runId: descriptor.runId, attachmentStageNoncesAbsent: descriptor.attachmentStageNonces ?? [] }))
+            throw new Error("sandbox_scope_changed");
+          await removeOwnedErasureHelper(helper, name, recoveryDeadlineAt);
+        }
+      } else {
+        if (helper) {
+          const hostImage = await inspectHostAgentImage(recoveryDeadlineAt);
+          const expected = { name, imageId: hostImage.imageId, nodePath: hostImage.nodePath, runId: descriptor.runId,
+            taskRoot: target.taskRoot, nonces: descriptor.attachmentStageNonces ?? [], expiresAt: Date.parse(originalDeadlineAt),
+            uid: target.uid, gid: target.gid, mounts: [{ source: offline.upperDir, destination: "/proof", rw: false },
+              { source: path.posix.join(offline.upperDir, target.attachmentStagesPath.slice(1)), destination: "/attachments", rw: true }] };
+          if (attachmentStage.helperId && helper.Id !== attachmentStage.helperId) throw new Error("sandbox_scope_changed");
+          attachmentStageErasureHelperOutput(helper, expected);
+          let stopped = helper;
+          if (helper.State?.Status === "running") {
+            try { await docker(["kill", helper.Id], recoveryDeadlineAt, false); } catch { /* Inspect exact helper ID below. */ }
+            stopped = (await docker(["inspect", helper.Id], recoveryDeadlineAt))[0];
+          }
+          if (!stopped || stopped.Id !== helper.Id || stopped.State?.Status === "running")
+            throw new Error("sandbox_observation_unavailable");
+          attachmentStageErasureHelperOutput(stopped, expected);
+          await removeOwnedErasureHelper(stopped, name, recoveryDeadlineAt);
+        } else if (attachmentStage.helperId) {
+          const byId = await docker(["ps", "-aq", "--no-trunc", "--filter", `id=${attachmentStage.helperId}`], recoveryDeadlineAt, false);
+          if (byId.trim()) throw new Error("sandbox_scope_changed");
+        }
+        await recordNativeErasure(commandId, operation.phase, { attachmentStageHelper: {
+          name, nonces: descriptor.attachmentStageNonces ?? [], phase: "claimed" } });
+        throw new Error("sandbox_observation_unavailable");
       }
     }
     const after = await observed(request.scope, recoveryDeadlineAt, expectedTarget);
@@ -1344,6 +1557,19 @@ export function openShellHostEngine({
         upperHelperOutput: result.stdout.trim(),
       });
       await removeOwnedErasureHelper(result.info, eraseName, deadlineAt);
+    }
+    const attachmentStageNoncesAbsent = [];
+    for (const nonce of target.attachmentStageNonces) {
+      const attachmentPath = path.posix.join(target.attachmentStagesPath, nonce);
+      if (!(await archiveAbsence(workloadBefore.Id, attachmentPath, deadlineAt))) attachmentStageNoncesAbsent.push(nonce);
+    }
+    if (attachmentStageNoncesAbsent.length) {
+      await eraseAttachmentStageNonces({ commandId, target, offline: offlineBefore, hostImage, uid: target.uid, gid: target.gid,
+        expiresAt, deadlineAt });
+    }
+    for (const nonce of target.attachmentStageNonces) {
+      if (!(await archiveAbsence(workloadBefore.Id, path.posix.join(target.attachmentStagesPath, nonce), deadlineAt)))
+        throw new Error("sandbox_observation_unavailable");
     }
     const afterDetail = await observed(scope, deadlineAt, originalTarget);
     const workloadAfter = await container(scope, afterDetail, request.imageDigest, deadlineAt);
@@ -2236,7 +2462,14 @@ export function openShellHostEngine({
     // Any missing fresh observation or policy drift must not be hidden by old
     // sampled facts.
     if (qualificationSample?.capabilityFacts?.syscallPolicy === true &&
-      !syscallObserved) return failedCapabilityRefresh("syscall_probe_unavailable");
+      !syscallObserved) {
+      if (globalThis.process?.env?.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+        globalThis.process.stderr.write(`${JSON.stringify({event:"openshell_syscall_refresh_observation",
+          helperReadOnly:readOnlyPathAllows(currentPolicy.policy,runtimeHelper),
+          helperWritableOverlap:(currentPolicy.policy?.filesystem_policy?.read_write ?? []).some(value =>
+            pathContains(value,runtimeHelper)||pathContains(runtimeHelper,value)),workloadRunning,workloadStopped})}\n`);
+      return failedCapabilityRefresh("syscall_probe_unavailable");
+    }
     const resourceLimits = provisioning.resourceLimits;
     let resourceHostObserved = Boolean(resourceHostConfigMatches(workload, resourceLimits, currentPolicy.policy) &&
       await dockerDiskQuotaBackendSupported(deadlineAt));
@@ -4263,11 +4496,16 @@ export function openShellHostEngine({
           (request.action === "erase_native_session" && (request.cleanupAttestation !== undefined ||
             request.expectedTarget !== undefined || request.probe !== undefined || request.admission !== undefined ||
             request.start !== undefined || request.provisioning !== undefined || request.requesterUserId !== undefined ||
-            Object.keys(request.nativeSessionErasure ?? {}).sort().join(",") !==
-              "cellGeneration,containerId,dockerEngineIdHash,imageDigest,leaseId,policyHash,runId,runnerInstanceId,sandboxId,schema,sessionDigest,sessionKey,startBindingDigest,taskRoot" ||
+            !["cellGeneration,containerId,dockerEngineIdHash,imageDigest,leaseId,policyHash,runId,runnerInstanceId,sandboxId,schema,sessionDigest,sessionKey,startBindingDigest,taskRoot",
+              "attachmentStageNonces,cellGeneration,containerId,dockerEngineIdHash,imageDigest,leaseId,policyHash,runId,runnerInstanceId,sandboxId,schema,sessionDigest,sessionKey,startBindingDigest,taskRoot"]
+                .includes(Object.keys(request.nativeSessionErasure ?? {}).sort().join(",")) ||
             request.nativeSessionErasure.schema !== "paperclip.remote-native-session-erasure.v1" ||
             typeof request.nativeSessionErasure.taskRoot !== "string" || !path.posix.isAbsolute(request.nativeSessionErasure.taskRoot) ||
-            path.posix.normalize(request.nativeSessionErasure.taskRoot) !== request.nativeSessionErasure.taskRoot)) ||
+            path.posix.normalize(request.nativeSessionErasure.taskRoot) !== request.nativeSessionErasure.taskRoot ||
+            (request.nativeSessionErasure.attachmentStageNonces !== undefined && (!Array.isArray(request.nativeSessionErasure.attachmentStageNonces) ||
+              request.nativeSessionErasure.attachmentStageNonces.length > 1280 || request.nativeSessionErasure.attachmentStageNonces.some(n => !uuid.test(n)) ||
+              new Set(request.nativeSessionErasure.attachmentStageNonces).size !== request.nativeSessionErasure.attachmentStageNonces.length ||
+              request.nativeSessionErasure.attachmentStageNonces.some((n, i) => n !== request.nativeSessionErasure.attachmentStageNonces.slice().sort()[i]))))) ||
           (request.provisioning !== undefined && request.action !== "prepare") ||
           (request.action === "prepare" && request.provisioning !== undefined && !request.provisioning) ||
           (request.expectedTarget !== undefined && (!request.expectedTarget ||

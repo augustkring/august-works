@@ -85,6 +85,8 @@ export async function runManagedNativeConversationFrame(input: {
   /** Bounded run timeout for relay roundtrips; defaults to the normal 180s fixture limit. */
   timeoutSec?: number;
   conversationWorkMode?: "standard" | "planning" | "ask";
+  conversationPrompt?: string;
+  firstCommentAttachment?: { filename: string; contentType: string; bytes: Buffer };
   budgetMonthlyCents?: number;
   tariff?: WorkerModelProfile["tariff"];
   providerReply?: (facts:{body:Record<string,unknown>;callIndex:number}) => {
@@ -641,8 +643,9 @@ export async function runManagedNativeConversationFrame(input: {
     let conversationIssueId: string;
     let firstCommentId: string;
     const originHeaders: Record<string, string> = conversationOrigin ? { origin: conversationOrigin } : {};
-    const conversationPrompt = "Please respond briefly and complete this conversation turn.";
+    const conversationPrompt = input.conversationPrompt ?? "Please respond briefly and complete this conversation turn.";
     if (input.driveConversation) {
+      if (input.firstCommentAttachment) throw new Error("conversation_fixture_attachment_requires_default_comment_driver");
       if (!input.createConversationApp)
         throw new Error("conversation_fixture_browser_driver_requires_composed_app");
       const [company] = await db.select({ issuePrefix: companies.issuePrefix }).from(companies)
@@ -674,9 +677,21 @@ export async function runManagedNativeConversationFrame(input: {
           throw new Error(`conversation_fixture_work_mode_update_failed_${mode.status}_${error}`);
         }
       }
+      let attachmentIds: string[] | undefined;
+      if (input.firstCommentAttachment) {
+        const uploaded = await import("supertest").then(({ default: request }) => request(app)
+          .post(`/api/companies/${companyId}/issues/${conversationIssueId}/attachments`)
+          .set("cookie", humanCookie).set(originHeaders)
+          .attach("file", input.firstCommentAttachment!.bytes, {
+            filename: input.firstCommentAttachment!.filename, contentType: input.firstCommentAttachment!.contentType,
+          }));
+        if (uploaded.status !== 201 || typeof uploaded.body?.id !== "string")
+          throw new Error(`conversation_fixture_attachment_upload_failed_${uploaded.status}`);
+        attachmentIds = [uploaded.body.id];
+      }
       const sent = await import("supertest").then(({ default: request }) => request(app)
         .post(`/api/issues/${conversationIssueId}/comments`).set("cookie", humanCookie).set(originHeaders)
-        .send({ body: conversationPrompt, clientRequestId: randomUUID() }));
+        .send({ body: conversationPrompt, clientRequestId: randomUUID(), ...(attachmentIds ? { attachmentIds } : {}) }));
       if (sent.status !== 201) throw new Error(`conversation_fixture_first_comment_failed_${sent.status}`);
       firstCommentId = sent.body.id;
     }

@@ -102,6 +102,7 @@ export interface NativeRunnerAttachmentStage {
   /** Explicit recovery-owner inputs are mandatory. They cannot degrade into
    * an unavailable prompt followed by a provider turn. */
   readonly requiredSavedSources?: readonly { attachmentId: string; sha256: string }[];
+  readonly remoteStageReceipts?: readonly { attachmentId: string; stageNonce: string; sha256: string; byteSize: number }[];
   cleanup(): Promise<void>;
 }
 
@@ -853,6 +854,8 @@ export async function stageNativeRunnerWakeAttachments(input: {
     | "executionTargetKind"
   >;
   readonly storage?: StorageService;
+  readonly remoteStage?: (input: { attachmentId: string; stageNonce: string; bytes: Buffer; sha256: string;
+    sourceCapture: NativeRunnerAttachmentSourceCapture }) => Promise<{ relativePath: string; cleanup(): Promise<void> }> ;
 }): Promise<NativeRunnerAttachmentStage> {
   const [run] = await input.db
     .select({
@@ -1054,23 +1057,46 @@ export async function stageNativeRunnerWakeAttachments(input: {
     payloadSourceSnapshot: row?.payloadSourceSnapshot ?? null,
   });
   if (input.binding.executionTargetKind === "remote") {
-    return {
-      requiredSavedSources,
-      sourceCaptures: selections.map(selection => capture(selection, rowById.get(selection.id),
-        rowById.has(selection.id) ? "remote_workspace_staging_unsupported" : "attachment_binding_unavailable")),
-      attachments: selections.map((selection) => {
-        const row = rowById.get(selection.id);
-        return {
-          id: selection.id,
-          filename: row?.filename?.trim() || "attachment",
-          contentType: row?.contentType ?? "application/octet-stream",
-          byteSize: row?.byteSize ?? 0,
-          workspaceRelativePath: null,
-          unavailableReason: row ? "remote_workspace_staging_unsupported" : "attachment_binding_unavailable",
-        };
-      }),
-      cleanup: async () => undefined,
-    };
+    const storage = input.storage ?? getStorageService();
+    const attachments: NativeRunnerStagedAttachment[] = [];
+    const sourceCaptures: NativeRunnerAttachmentSourceCapture[] = [];
+    const cleanups: Array<() => Promise<void>> = [];
+    const remoteStageReceipts: Array<{ attachmentId: string; stageNonce: string; sha256: string; byteSize: number }> = [];
+    for (const selection of selections) {
+      const row = rowById.get(selection.id);
+      if (!row) {
+        sourceCaptures.push(capture(selection, undefined, "attachment_binding_unavailable"));
+        attachments.push({ id: selection.id, filename: "attachment", contentType: "application/octet-stream",
+          byteSize: 0, workspaceRelativePath: null, unavailableReason: "attachment_binding_unavailable" });
+        continue;
+      }
+      if (!input.remoteStage) {
+        sourceCaptures.push(capture(selection, row, "remote_workspace_staging_unsupported"));
+        attachments.push({ id: selection.id, filename: row.filename?.trim() || "attachment", contentType: row.contentType,
+          byteSize: row.byteSize, workspaceRelativePath: null, unavailableReason: "remote_workspace_staging_unsupported" });
+        continue;
+      }
+      try {
+        const bytes = await readBoundedStorageObject({ storage, companyId: input.binding.companyId,
+          objectKey: row.objectKey, expectedByteSize: row.byteSize, expectedSha256: row.sha256 });
+        const stageNonce = randomUUID();
+        const sourceCapture = capture(selection, row, "delivered");
+        const staged = await input.remoteStage({ attachmentId: row.id, stageNonce, bytes, sha256: row.sha256.toLowerCase(), sourceCapture });
+        cleanups.push(staged.cleanup);
+        remoteStageReceipts.push({ attachmentId: row.id, stageNonce, sha256: row.sha256.toLowerCase(), byteSize: row.byteSize });
+        sourceCaptures.push(sourceCapture);
+        attachments.push({ id: row.id, filename: row.filename?.trim() || "attachment", contentType: row.contentType,
+          byteSize: row.byteSize, workspaceRelativePath: staged.relativePath, unavailableReason: null });
+      } catch {
+        sourceCaptures.push(capture(selection, row, "attachment_staging_failed"));
+        attachments.push({ id: row.id, filename: row.filename?.trim() || "attachment", contentType: row.contentType,
+          byteSize: row.byteSize, workspaceRelativePath: null, unavailableReason: "attachment_staging_failed" });
+      }
+    }
+    return { requiredSavedSources, sourceCaptures, attachments, remoteStageReceipts, cleanup: async () => {
+      const results = await Promise.allSettled(cleanups.map(cleanup => cleanup()));
+      if (results.some(result => result.status === "rejected")) throw new Error("paperclip_runner_attachment_staging_cleanup_failed");
+    } };
   }
 
   if (!workspaceRoot) {

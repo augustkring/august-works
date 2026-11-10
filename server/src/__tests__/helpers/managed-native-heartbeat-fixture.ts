@@ -120,6 +120,10 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   managedTwoAgentSignoff?: true;
   /** Execute the registered OpenCode conformance owner before any ordinary Run is created. */
   managedOpenCodeConformance?: true;
+  /** Test-only revocation hook after the actual signed Sandbox Host start receipt. */
+  afterSandboxStartReceipt?: (facts: { scope: import("../../services/execution-sandbox/backend.js").SandboxIdentity;
+    cleanup: import("../../services/execution-sandbox/backend.js").SandboxAdmissionCleanup;
+    attemptStop(cleanup: import("../../services/execution-sandbox/backend.js").SandboxAdmissionCleanup): Promise<unknown> }) => Promise<void>;
   runOpenCodeConformance?: (context: {
     db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyIds: { primary: string; peer: string };
     agentIds: { primary: string; peer: string }; profiles: ReadonlyMap<string, WorkerModelProfile>;
@@ -191,6 +195,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       if (input.schedulerMode === "serial") return configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
         preparedRegistration: registrationsByAgent.get(context.agentId),
         ...(input.managedOpenCodeConformance ? { nativeOpenCodeConformance: true as const } : {}),
+        ...(input.afterSandboxStartReceipt ? { afterSandboxStartReceipt: input.afterSandboxStartReceipt } : {}),
         observeAssignedToolGateway: (owner, kind) => assignedGatewayObserver?.observe(owner, kind),
         controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory,
         ...(input.ordinaryWorkerProject ? { ordinaryWorkerProject: input.ordinaryWorkerProject() } : {}),

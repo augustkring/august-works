@@ -64,6 +64,13 @@ import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupR
 import { fenceSandboxAdmissionOutcome } from "./sandbox-guardian.js";
 const RUN_LEASE_CLEANUP = "__runLeaseCleanup";
 const STOPPED_NATIVE_ERASURE = "__stoppedNativeErasure";
+const NATIVE_CONFORMANCE_ADMISSION_CLEANUP = "__nativeConformanceAdmissionCleanup";
+type NativeConformanceAdmissionCleanupClaim = Readonly<{
+  version: 1;
+  conformance: NativeOpenCodeConformanceHostAuthority;
+  cleanup: SandboxAdmissionCleanup;
+  idempotencyKey: string;
+}>;
 export type StoppedNativeErasureClaim = {
   locatorDigest: string; jobId: string; jobKey: string; jobAttemptNumber: number;
   executionOwnerId: string; companyPurgeOperationId: string | null;
@@ -139,6 +146,18 @@ function storedQualificationCredentialHashes(value: unknown): { commandId: strin
     throw conflict("Qualification credential envelope is invalid");
   return { commandId: envelope.commandId, tokenSha256: envelope.tokenSha256, nonceSha256: envelope.nonceSha256 };
 }
+function storedNativeConformanceAdmissionCleanup(value: unknown): NativeConformanceAdmissionCleanupClaim | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw conflict("Native sandbox command payload is invalid");
+  const claim = (value as Record<string, unknown>)[NATIVE_CONFORMANCE_ADMISSION_CLEANUP];
+  if (claim === undefined) return undefined;
+  if (!claim || typeof claim !== "object" || Array.isArray(claim)) throw conflict("Admission cleanup claim is invalid");
+  const row = claim as Record<string, unknown>;
+  if (row.version !== 1 || !row.conformance || typeof row.conformance !== "object" || Array.isArray(row.conformance) ||
+      !row.cleanup || typeof row.cleanup !== "object" || Array.isArray(row.cleanup) ||
+      typeof row.idempotencyKey !== "string" || row.idempotencyKey.length < 1 || row.idempotencyKey.length > 300)
+    throw conflict("Admission cleanup claim is invalid");
+  return structuredClone(row) as unknown as NativeConformanceAdmissionCleanupClaim;
+}
 function requestWithoutQualificationCredential(request: SandboxHostRequest): SandboxHostRequest {
   const copy = structuredClone(request);
   if (copy.probe) {
@@ -155,6 +174,7 @@ function parseStoredSandboxHostRequest(value: unknown, hydrateCredential = false
   delete stored[SEALED_QUALIFICATION_CREDENTIAL];
   delete stored[RUN_LEASE_CLEANUP];
   delete stored[STOPPED_NATIVE_ERASURE];
+  delete stored[NATIVE_CONFORMANCE_ADMISSION_CLEANUP];
   const parsed = sandboxHostRequestSchema.parse(stored);
   if (sealed === undefined || !hydrateCredential) return parsed;
   if (!hashes || typeof (sealed as Record<string, unknown>).sealed !== "string") throw conflict("Qualification credential envelope is invalid");
@@ -216,8 +236,26 @@ export function nativeSandboxHostTransport(
     commandId?: string,
     cleanup?: RunLeaseCleanup,
     erasure?: StoppedNativeErasureClaim,
+    nativeAdmissionCleanup?: NativeConformanceAdmissionCleanupClaim,
   ) {
     if (erasure) await stoppedErasureCurrent(tx, request, hostId, erasure);
+    if (nativeAdmissionCleanup) {
+      const { cleanup: original, conformance, idempotencyKey } = nativeAdmissionCleanup;
+      const cleanupActor: AuthorizationActor = { type: "board", source: "session", userId: original.requesterUserId };
+      if (cleanup || erasure || request.requesterUserId !== original.requesterUserId)
+        throw conflict("Native conformance cleanup owner changed");
+      await assertNativeConformanceAdmissionCleanup(tx, cleanupActor, request.scope, conformance, original,
+        request.action, idempotencyKey, request.expectedTarget);
+      if (commandId) {
+        const [command] = await tx.select({ idempotencyKey: runtimeHostCommands.idempotencyKey, payload: runtimeHostCommands.payload })
+          .from(runtimeHostCommands).where(eq(runtimeHostCommands.id, commandId)).limit(1);
+        const expectedStoredKey = `v7-openshell:${nativeSha256({ scope: request.scope, action: request.action, idempotencyKey })}`;
+        const persistedClaim = storedNativeConformanceAdmissionCleanup(command?.payload);
+        if (!command || command.idempotencyKey !== expectedStoredKey || !persistedClaim ||
+            nativeSha256(persistedClaim) !== nativeSha256(nativeAdmissionCleanup))
+          throw conflict("Native conformance cleanup command lost its immutable server claim");
+      }
+    }
     const cleanupScope = cleanup ? await readRunLeaseCleanup(tx, cleanup, cleanup) : null;
     if (cleanupScope && (!["stop", "inspect"].includes(request.action) || request.requesterUserId !== cleanupScope.startRequest.requesterUserId ||
       nativeSha256(cleanupScope.scope) !== nativeSha256(request.scope) ||
@@ -307,6 +345,9 @@ export function nativeSandboxHostTransport(
         throw conflict("Stopped Native erasure target resumed before dispatch");
       await stoppedErasureCurrent(tx, request, hostId, erasure);
       // Exact claimed privacy job and canonical stopped workload; no Human grant or business renewal.
+    } else if (nativeAdmissionCleanup) {
+      // The original server admission claim and prepared Host target authorize
+      // only this exact Stop/inspection lifecycle, even after Human rights fall.
     } else if (cleanupScope) {
       // Cleanup authority is the original signed run/lease, never a renewed business grant.
     } else if (request.cleanupAttestation) {
@@ -517,6 +558,11 @@ export function nativeSandboxHostTransport(
     };
     const userId = v7HumanActorId(actor),
       now = new Date();
+    if (safetyCleanup && (!conformance || !["stop", "inspect"].includes(action)))
+      throw forbidden("Admission cleanup authority is restricted to its exact conformance Stop and inspection commands");
+    const admissionCleanupClaim: NativeConformanceAdmissionCleanupClaim | undefined = conformance && safetyCleanup
+      ? { version: 1, conformance: structuredClone(conformance), cleanup: structuredClone(safetyCleanup), idempotencyKey }
+      : undefined;
     const authorize = async (tx?: Db, cleanup?: SandboxAdmissionCleanup) => {
       if (!conformance) return assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
       const reader = tx ?? db;
@@ -586,7 +632,7 @@ export function nativeSandboxHostTransport(
       const modelOrigin = capability?.success ? capability.data.modelBrokerProviderProfile?.origin : undefined;
       let modelUrl: URL | null = null;
       try { modelUrl = modelOrigin ? new URL(modelOrigin) : null; } catch { modelUrl = null; }
-      const expectedReadPaths = [...new Set([conformance.workspaceRoot,
+      const expectedReadPaths = [...new Set([conformance.workspaceRoot, "/.openshell/runtime/openshell-sandbox",
         ...(capability?.success ? capability.data.modelBrokerProviderProfile?.binaries ?? [] : [])])].sort();
       const expectedAuthorityRef = policy?.compilation.sourcePolicyRefs.find(ref => ref.startsWith("authority:"));
       const expectedManifestRef = policy?.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:"));
@@ -709,7 +755,10 @@ export function nativeSandboxHostTransport(
           .where(eq(runtimeHostCommands.idempotencyKey, key));
         if (existing) {
           const previous = parseStoredSandboxHostRequest(existing.payload, false);
-          await current(tx, request, host.id, now, existing.id);
+          const previousAdmissionCleanup = storedNativeConformanceAdmissionCleanup(existing.payload);
+          if (admissionCleanupClaim && nativeSha256(previousAdmissionCleanup ?? null) !== nativeSha256(admissionCleanupClaim))
+            throw conflict("Admission cleanup operation key belongs to another exact Host claim");
+          await current(tx, request, host.id, now, existing.id, undefined, undefined, previousAdmissionCleanup);
           if (action === "prepare" && provisioning && previous.provisioning?.operationKey === provisioning.operationKey) {
             const comparable = (value: SandboxHostRequest) => ({ ...value, provisioning: value.provisioning && {
               ...value.provisioning, expiresAt: null, idleUntilUnixSeconds: null, requestId: null,
@@ -736,7 +785,7 @@ export function nativeSandboxHostTransport(
           await authorize(tx as unknown as Db, safetyCleanup);
           return existing;
         }
-        await current(tx, request, host.id, now, qualificationCredential?.commandId);
+        await current(tx, request, host.id, now, qualificationCredential?.commandId, undefined, undefined, admissionCleanupClaim);
         const active = await tx
           .select({ id: runtimeHostCommands.id })
           .from(runtimeHostCommands)
@@ -761,7 +810,8 @@ export function nativeSandboxHostTransport(
             cellGeneration: BigInt(scope.cellGeneration),
             commandType: SANDBOX_HOST_COMMAND,
             idempotencyKey: key,
-            payload: storedSandboxHostRequest(request, qualificationCredential?.commandId),
+            payload: { ...storedSandboxHostRequest(request, qualificationCredential?.commandId),
+              ...(admissionCleanupClaim ? { [NATIVE_CONFORMANCE_ADMISSION_CLEANUP]: admissionCleanupClaim } : {}) },
             deadlineAt: commandDeadlineAt,
           })
           .onConflictDoNothing()
@@ -807,6 +857,9 @@ export function nativeSandboxHostTransport(
             record.runtimeHostId,
             new Date(),
             record.id,
+            undefined,
+            undefined,
+            storedNativeConformanceAdmissionCleanup(record.payload),
           );
           if (qualificationCredential && Date.parse(qualificationCredential.expiresAt) <= Date.now())
             throw conflict("Qualification credential expired before receipt reconciliation");
@@ -994,6 +1047,9 @@ export function nativeSandboxHostTransport(
     await assertRemoteRuntimeAssetErasureClaimCurrent(tx, locator, claim.companyPurgeOperationId ?? undefined);
     await assertRemoteRuntimeAssetErasureReady(tx, locator, claim.companyPurgeOperationId ?? undefined);
     const original = await readRunLeaseCleanup(tx, { companyId: locator.companyId, runId: locator.runId, leaseId: locator.environmentLeaseId });
+    const retainedStageNonces = original.attachmentStageReceipts.map(stage => stage.stageNonce).sort();
+    if (nativeSha256(descriptor.attachmentStageNonces ?? []) !== nativeSha256(retainedStageNonces))
+      throw conflict("Stopped Native erasure attachment-stage receipts changed");
     const receipt = await verifyNativeCleanupRuntimeState(tx, original.proof, original.lease.metadata?.remoteExecutionTermination);
     const metadata = original.lease.metadata as Record<string, unknown> | null;
     const taskRoot = typeof metadata?.remoteCwd === "string" ? metadata.remoteCwd.trim() : "";
@@ -1073,8 +1129,10 @@ export function nativeSandboxHostTransport(
         const reply = sandboxHostReplySchema.parse(row.safeResult);
         const { taskRoot: _taskRoot, ...expected } = input.descriptor;
         if (reply.action !== "erase_native_session" || nativeSha256(reply) !== nativeSha256({ ...expected,
-          action: "erase_native_session", erased: true, upperLayerAbsent: true, mergedViewAbsent: true,
-          stoppedBefore: true, stoppedAfter: true })) throw conflict("Stopped Native erasure did not prove exact stored-layer absence");
+          action: "erase_native_session", erased: true,
+          ...(input.descriptor.attachmentStageNonces?.length ? { attachmentStageNoncesAbsent: input.descriptor.attachmentStageNonces } : {}),
+          upperLayerAbsent: true, mergedViewAbsent: true, stoppedBefore: true, stoppedAfter: true }))
+          throw conflict("Stopped Native erasure did not prove exact stored-layer absence");
         return { command: row, reply, receipt, claim };
       }
       if (["FAILED", "CANCELED", "EXPIRED"].includes(row.status) || row.deadlineAt <= new Date())
@@ -1314,7 +1372,10 @@ export function nativeSandboxHostTransport(
         const request = parseStoredSandboxHostRequest(command.payload, false);
         let host;
         try {
-          ({ host } = await current(tx, request, hostId, now, command.id, command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined, command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined));
+          ({ host } = await current(tx, request, hostId, now, command.id,
+            command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
+            command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
+            storedNativeConformanceAdmissionCleanup(command.payload)));
         } catch {
           await tx
             .update(runtimeHostCommands)
@@ -1339,7 +1400,10 @@ export function nativeSandboxHostTransport(
           })
           .where(eq(runtimeHostCommands.id, command.id));
         const hydratedRequest = parseStoredSandboxHostRequest(command.payload, true);
-        await current(tx, hydratedRequest, hostId, now, command.id, command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined, command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined);
+        await current(tx, hydratedRequest, hostId, now, command.id,
+          command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
+          command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
+          storedNativeConformanceAdmissionCleanup(command.payload));
         return {
           id: command.id,
           deadlineAt: command.deadlineAt,
@@ -1377,7 +1441,10 @@ export function nativeSandboxHostTransport(
         )
           throw forbidden("Native sandbox claim mismatch");
         const request = parseStoredSandboxHostRequest(command.payload, false);
-        await current(tx, request, hostId, now, command.id, command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined, command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined);
+        await current(tx, request, hostId, now, command.id,
+          command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
+          command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
+          storedNativeConformanceAdmissionCleanup(command.payload));
         if (input.reply && input.reply.action !== request.action)
           throw forbidden("Native sandbox action mismatch");
         if (["SUCCEEDED", "FAILED"].includes(command.status)) {
@@ -1398,7 +1465,10 @@ export function nativeSandboxHostTransport(
         // The sealed bearer token is opened only while this exact durable
         // command still owns a live CLAIMED lease and current host scope.
         const hydratedRequest = parseStoredSandboxHostRequest(command.payload, true);
-        await current(tx, hydratedRequest, hostId, now, command.id, command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined, command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined);
+        await current(tx, hydratedRequest, hostId, now, command.id,
+          command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
+          command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
+          storedNativeConformanceAdmissionCleanup(command.payload));
         await tx
           .update(runtimeHostCommands)
           .set({

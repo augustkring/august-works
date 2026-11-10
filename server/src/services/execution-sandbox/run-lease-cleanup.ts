@@ -5,6 +5,7 @@ import { conflict } from "../../errors.js";
 import { readNativeRemoteWorkloadIntent } from "../remote-execution-termination.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { readRemoteRuntimeAssetLocator, readRemoteNativeSessionStartBinding } from "../native-runtime/runtime-asset-retention.js";
+import { readNativeAttachmentStageCleanupReceipts, type NativeAttachmentStageCleanupReceipt } from "../native-runtime/native-attachment-remote-stage.js";
 
 /** Private durable cleanup authority. Never included in a Host wire request. */
 export type RunLeaseCleanup = {
@@ -104,11 +105,13 @@ export async function readRunLeaseCleanup(db: Db, input: {
     sql`not coalesce(${runtimeHostCommands.status} = 'SUCCEEDED' and ${runtimeHostCommands.completedAt} <
       (select original.created_at from runtime_host_commands original where original.id = ${start.id}), false)`,
   )).limit(1);
+  const attachmentStageReceipts = run ? readNativeAttachmentStageCleanupReceipts(run.runnerProfileJson, input.runId, input.leaseId) : [];
   const proof: RunLeaseCleanup = { companyId: input.companyId, runId: input.runId, leaseId: input.leaseId, startCommandId: start.id,
     startBindingDigest: nativeSha256(session), containerId: reply.containerId, sandboxId: reply.sandboxId, intent };
   if (!launch || successor || recreated || (expected && nativeSha256(expected) !== nativeSha256(proof)))
     throw conflict("Sandbox cleanup lost its exclusive original signed workload binding");
-  return { proof, lease, session, binding, claimKey, scope: request.scope, startRequest: request, imageDigest: request.imageDigest };
+  return { proof, lease, session, binding, claimKey, scope: request.scope, startRequest: request, imageDigest: request.imageDigest,
+    attachmentStageReceipts };
 }
 
 /** A caller-supplied object or provider void never proves physical termination. */

@@ -107,7 +107,7 @@ export interface CommandManagedRuntimeRunner {
     /** Server-owned Native setup phase: pinned artifacts, verified task-root
      * workspace staging, immutable runtime-context staging, run-scoped
      * harness-state access, or the one conversation Runnerd launch. Never model supplied. */
-    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe";
+    nativePreparationPurpose?: "provider_artifact" | "native_session_start" | "native_harness_state" | "native_workspace_prepare" | "native_runtime_context_prepare" | "native_provider_data_erasure_probe" | "native_attachment_stage" | "native_attachment_cleanup";
     /** Server-owned lifecycle for the managed model provider bound to a Native OpenCode runner. */
     modelBrokerSessionPhase?: "start" | "refresh" | "stop";
   }): Promise<RunProcessResult>;
