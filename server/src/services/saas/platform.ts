@@ -163,7 +163,8 @@ export function saasPlatform(
       binding.backend === "openshell" && config.runtime.openshellProver ? openShellBackend({
         identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId,
           cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
-        boundary: binding.boundaryPolicy, bridge: sandboxHosts.bridge(actor, conformance), evidenceKind: "protected_host_report",
+        boundary: binding.boundaryPolicy, bridge: sandboxHosts.bridge(actor, conformance), conformance,
+        evidenceKind: "protected_host_report",
         prover: config.runtime.openshellProver, credentialBrokerOrigin: origins.primaryAppOrigin,
         credentialBrokerDatabase: db, resolveCredentialBrokerBindings: policy => resolveSandboxBrokerBindings(binding.companyId, policy),
       }) : undefined,

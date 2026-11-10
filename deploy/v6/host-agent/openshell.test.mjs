@@ -10,7 +10,7 @@ import http from "node:http";
 import { PassThrough, Readable, Writable } from "node:stream";
 import { archiveStatusProvesAbsence, dockerInspectRunAsMatches, hasExactManagedModelBrokerPolicy, openShellHostEngine,
   NATIVE_ATTACHMENT_STAGE_ERASE_SCRIPT, NATIVE_SESSION_UPPER_ERASE_SCRIPT,
-  materializePolicyProofNamespaceTree, policyProofWorkspaceNamespacePlan,
+  materializePolicyProofNamespaceTree, policyProofWorkspaceNamespacePlan, policyProofAncestorMetadataMatches,
   tmpfsSizeBytesFromMountOption } from "./openshell.mjs";
 import { sandboxCapabilitySnapshotSchema, sandboxHostRequestSchema, sandboxHostReplySchema } from "../../../packages/shared/dist/index.js";
 
@@ -75,6 +75,19 @@ test("policy proof preserves an exact private namespace ancestor without admitti
     doc(["/workspace/private-run"]), taskRoot), null);
 });
 
+test("exact TaskRoot proof audits every ancestor and rejects an immutable-image symlink component", () => {
+  const taskRoot = "/workspace/private-run/conformance/task-4a2/task";
+  const doc = { filesystem_policy: { read_only: [taskRoot], read_write: [taskRoot] }, network_policies: {} };
+  assert.deepEqual(policyProofWorkspaceNamespacePlan(doc, doc, taskRoot), {
+    namespaceRoot: null, directories: [],
+    outerDirectories: ["/workspace", "/workspace/private-run", "/workspace/private-run/conformance",
+      "/workspace/private-run/conformance/task-4a2"],
+  });
+  const imageFallback = { guestPath: "/workspace/private-run", imageFallback: true };
+  assert.equal(policyProofAncestorMetadataMatches(imageFallback, ["directory", "755", "0", "0"]), true);
+  assert.equal(policyProofAncestorMetadataMatches(imageFallback, ["symbolic link", "777", "0", "0"]), false);
+});
+
 test("policy proof normalizes Linux tmpfs size suffixes before exact capacity comparison", () => {
   assert.equal(tmpfsSizeBytesFromMountOption("size=786432k"), 768 * 1024 * 1024);
   assert.equal(tmpfsSizeBytesFromMountOption("size=768m"), 768 * 1024 * 1024);
@@ -111,7 +124,7 @@ test("policy proof recreates only verified namespace ancestors and the exact Tas
   }
 });
 
-test("real Docker runs the pinned policy prover against a staged nested private TaskRoot", {
+test("real Docker checks exact read-only snapshots and reports literal-path containment limits", {
   skip: !/^sha256:[a-f0-9]{64}$/.test(process.env.AW_POLICY_PROOF_TEST_IMAGE ?? "") ||
     !process.env.AW_POLICY_PROOF_TEST_BOOTSTRAP || !/^[a-f0-9]{64}$/.test(process.env.AW_POLICY_PROOF_TEST_BOOTSTRAP_SHA256 ?? "") ||
     !process.env.AW_POLICY_PROOF_TEST_PROVER || !/^[a-f0-9]{64}$/.test(process.env.AW_POLICY_PROOF_TEST_PROVER_SHA256 ?? ""),
@@ -130,11 +143,13 @@ test("real Docker runs the pinned policy prover against a staged nested private 
   const proverInfo = await lstat(prover);
   assert.ok(proverInfo.isFile() && !proverInfo.isSymbolicLink() && (proverInfo.mode & 0o111));
   assert.equal(createHash("sha256").update(await readFile(prover)).digest("hex"), proverSha256);
-  const docker = (args) => {
-    const result = spawnSync("docker", args, { encoding: "utf8", timeout: 20_000, maxBuffer: 262144,
-      env: { ...process.env, DOCKER_HOST: "unix:///var/run/docker.sock" } });
+  const docker = (args, expectedStatus = 0) => {
+    const env = { ...process.env };
+    for (const key of ["DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"]) delete env[key];
+    const result = spawnSync("docker", ["--host=unix:///var/run/docker.sock", ...args], {
+      encoding: "utf8", timeout: 20_000, maxBuffer: 262144, env });
     if (result.error) throw result.error;
-    assert.equal(result.status, 0, `docker ${args[0]} failed: ${String(result.stderr).slice(0, 1000)}`);
+    assert.equal(result.status, expectedStatus, `docker ${args[0]} returned an unexpected status: ${String(result.stderr).slice(0, 1000)}`);
     return result.stdout.trim();
   };
   assert.equal(JSON.parse(docker(["image", "inspect", image]))[0]?.Id, image, "test uses only the exact local image ID");
@@ -147,38 +162,65 @@ test("real Docker runs the pinned policy prover against a staged nested private 
     const sourceRoot = path.join(root, "namespace");
     const taskSource = path.join(sourceRoot, "private", path.posix.basename(taskRoot));
     await mkdir(taskSource, { recursive: true, mode: 0o700 });
+    await chmod(sourceRoot, 0o755);
+    await chmod(path.join(sourceRoot, "private"), 0o755);
+    await chmod(taskSource, 0o755);
     await writeFile(path.join(taskSource, "proof-payload"), "nested task content", { mode: 0o600 });
-    const mountedSnapshot = path.join(root, "readonly-mount-snapshot");
-    await mkdir(mountedSnapshot, { mode: 0o755 });
-    await writeFile(path.join(mountedSnapshot, "mounted-payload"), "read-only snapshot content", { mode: 0o644 });
-    const mountedGuestPath = "/.__aw_mount_snapshot";
-    const candidate = { version: 1, filesystem_policy: { include_workdir: false, read_only: ["/etc", mountedGuestPath], read_write: [taskRoot] },
-      landlock: { compatibility: "hard_requirement" }, process: { run_as_user: uid, run_as_group: gid }, network_policies: {} };
-    const boundary = { ...candidate,
-      filesystem_policy: { ...candidate.filesystem_policy, read_write: [namespaceRoot] } };
-    const candidatePath = path.join(root, "candidate.json"), boundaryPath = path.join(root, "boundary.json");
-    await writeFile(candidatePath, JSON.stringify(candidate), { mode: 0o600 });
-    await writeFile(boundaryPath, JSON.stringify(boundary), { mode: 0o600 });
-    const bootstrapPath = "/.__aw_policy_bootstrap";
+    const runtimeSnapshot = path.join(root, "runtime-snapshot");
+    await mkdir(runtimeSnapshot, { mode: 0o755 });
+    await chmod(runtimeSnapshot, 0o755);
     const stagedBootstrap = path.join(root, "openshell-sandbox-bootstrap");
     await writeFile(stagedBootstrap, await readFile(bootstrap), { flag: "wx", mode: 0o555 });
     await chmod(stagedBootstrap, 0o555);
+    await writeFile(path.join(runtimeSnapshot, "openshell-sandbox"), await readFile(stagedBootstrap), { mode: 0o555 });
+    await chmod(path.join(runtimeSnapshot, "openshell-sandbox"), 0o555);
+    const proofInputs = path.join(root, "proof-inputs");
+    await mkdir(proofInputs, { mode: 0o700 });
+    const mountedSnapshot = path.join(root, "readonly-mount-snapshot");
+    await mkdir(mountedSnapshot, { mode: 0o755 });
+    await chmod(mountedSnapshot, 0o755);
+    await writeFile(path.join(mountedSnapshot, "mounted-payload"), "read-only snapshot content", { mode: 0o644 });
+    await chmod(path.join(mountedSnapshot, "mounted-payload"), 0o644);
+    const mountedGuestPath = "/.__aw_mount_snapshot";
+    const candidate = { version: 1, filesystem_policy: { include_workdir: false, read_only: ["/etc", mountedGuestPath], read_write: [taskRoot] },
+      landlock: { compatibility: "hard_requirement" }, process: { run_as_user: uid, run_as_group: gid }, network_policies: {} };
+    const boundary = candidate;
+    const candidatePath = path.join(root, "candidate.json"), boundaryPath = path.join(root, "boundary.json");
+    const ancestorBoundary = { ...candidate,
+      filesystem_policy: { ...candidate.filesystem_policy, read_write: [namespaceRoot] } };
+    const ancestorBoundaryPath = path.join(root, "boundary-ancestor.json");
+    await writeFile(candidatePath, JSON.stringify(candidate), { mode: 0o444 });
+    await chmod(candidatePath, 0o444);
+    await writeFile(boundaryPath, JSON.stringify(boundary), { mode: 0o444 });
+    await chmod(boundaryPath, 0o444);
+    await writeFile(ancestorBoundaryPath, JSON.stringify(ancestorBoundary), { mode: 0o444 });
+    await chmod(ancestorBoundaryPath, 0o444);
+    await writeFile(path.join(proofInputs, "candidate.json"), await readFile(candidatePath), { mode: 0o444 });
+    await chmod(path.join(proofInputs, "candidate.json"), 0o444);
+    await writeFile(path.join(proofInputs, "boundary.json"), await readFile(boundaryPath), { mode: 0o444 });
+    await chmod(path.join(proofInputs, "boundary.json"), 0o444);
+    await writeFile(path.join(proofInputs, "boundary-ancestor.json"), await readFile(ancestorBoundaryPath), { mode: 0o444 });
+    await chmod(path.join(proofInputs, "boundary-ancestor.json"), 0o444);
+    const stagedProver = path.join(proofInputs, "prover");
+    await writeFile(stagedProver, await readFile(prover), { flag: "wx", mode: 0o555 });
+    await chmod(stagedProver, 0o555);
+    await chmod(proofInputs, 0o755);
+    const bootstrapPath = "/.__aw_policy_bootstrap";
     const stagedBootstrapInfo = await lstat(stagedBootstrap);
     assert.ok(stagedBootstrapInfo.isFile() && !stagedBootstrapInfo.isSymbolicLink());
     assert.equal(stagedBootstrapInfo.mode & 0o777, 0o555);
     assert.equal(createHash("sha256").update(await readFile(stagedBootstrap)).digest("hex"), bootstrapSha256);
     const expiresAt = Math.floor(Date.now() / 1000) + 90;
-    const tmpfs = [
-      `${namespaceRoot}:rw,nosuid,nodev,size=256m,uid=${uid},gid=${gid},mode=0750`,
-      "/.openshell/runtime:rw,nosuid,nodev,size=128m,uid=0,gid=0,mode=0755",
-      "/.__aw_policy_proof:rw,nosuid,nodev,size=128m,uid=0,gid=0,mode=0755",
-    ];
+    const runtimeGuestPath = "/.openshell/runtime";
+    const proofGuestPath = "/.__aw_policy_proof";
     helperId = docker(["create", "--pull=never", "--name", helperName, "--network", "none", "--read-only",
       "--pids-limit", "16", "--memory", "805306368", "--memory-swap", "805306368", "--cpu-period", "100000",
       "--cpu-quota", "25000", "--log-driver", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
       "--user", `${uid}:${gid}`, ...["HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "ALL_PROXY", "NO_PROXY",
         "http_proxy", "https_proxy", "ftp_proxy", "all_proxy", "no_proxy"].flatMap(key => ["--env", `${key}=`]),
-      ...tmpfs.flatMap(value => ["--tmpfs", value]), "--mount",
+      "--mount", `type=bind,src=${sourceRoot},dst=${namespaceRoot},readonly,bind-propagation=rprivate`, "--mount",
+      `type=bind,src=${runtimeSnapshot},dst=${runtimeGuestPath},readonly,bind-propagation=rprivate`, "--mount",
+      `type=bind,src=${proofInputs},dst=${proofGuestPath},readonly,bind-propagation=rprivate`, "--mount",
       `type=bind,src=${mountedSnapshot},dst=${mountedGuestPath},readonly,bind-propagation=rprivate`,
       "--mount", `type=bind,src=${stagedBootstrap},dst=${bootstrapPath},readonly,bind-propagation=rprivate`,
       "--entrypoint", bootstrapPath, image,
@@ -187,6 +229,9 @@ test("real Docker runs the pinned policy prover against a staged nested private 
     const before = JSON.parse(docker(["inspect", helperId]))[0];
     assert.equal(before.HostConfig.ReadonlyRootfs, true);
     assert.equal(before.HostConfig.NetworkMode, "none");
+    assert.equal(before.Mounts.length, 5, "the helper receives only the five required private snapshot binds");
+    assert.ok(before.Mounts.every(mount => mount.Type === "bind" && mount.RW === false),
+      "every helper input is a read-only bind with no writable copy-in mount");
     assert.equal(before.Image, image);
     assert.ok(before.Mounts.some(mount => mount.Type === "bind" && mount.Source === mountedSnapshot &&
       mount.Destination === mountedGuestPath && mount.RW === false), "proof inputs are a read-only snapshot bind");
@@ -195,37 +240,60 @@ test("real Docker runs the pinned policy prover against a staged nested private 
       assert.ok(before.Config.Env.includes(`${key}=`), `helper explicitly clears ${key}`);
     assert.ok(before.Mounts.some(mount => mount.Type === "bind" && mount.Source === stagedBootstrap &&
       mount.Destination === bootstrapPath && mount.RW === false), "bootstrap is an exact read-only staged bind");
+    for (const [source, destination] of [[sourceRoot, namespaceRoot], [runtimeSnapshot, runtimeGuestPath],
+      [proofInputs, proofGuestPath]])
+      assert.ok(before.Mounts.some(mount => mount.Type === "bind" && mount.Source === source &&
+        mount.Destination === destination && mount.RW === false), `${destination} is an exact read-only snapshot bind`);
     docker(["start", helperId]);
     assert.equal(JSON.parse(docker(["inspect", helperId]))[0]?.State?.Running, true);
     const bootstrapReadback = path.join(root, "bootstrap-readback");
     docker(["cp", `${helperId}:${bootstrapPath}`, bootstrapReadback]);
     assert.equal(createHash("sha256").update(await readFile(bootstrapReadback)).digest("hex"), bootstrapSha256,
       "read-only bootstrap bind must preserve the configured binary bytes");
-    await unlink(bootstrapReadback);
-    const stagedProver = path.join(root, "prover");
-    await writeFile(stagedProver, await readFile(prover), { flag: "wx", mode: 0o555 });
-    docker(["cp", stagedProver, `${helperId}:/.__aw_policy_proof/prover`]);
+    await rm(bootstrapReadback);
     const proverReadback = path.join(root, "prover-readback");
-    docker(["cp", `${helperId}:/.__aw_policy_proof/prover`, proverReadback]);
+    docker(["cp", `${helperId}:${proofGuestPath}/prover`, proverReadback]);
     assert.equal(createHash("sha256").update(await readFile(proverReadback)).digest("hex"), proverSha256,
-      "the proof helper must execute the configured prover bytes");
-    await unlink(proverReadback);
-    docker(["cp", candidatePath, `${helperId}:/.__aw_policy_proof/candidate.json`]);
-    docker(["cp", boundaryPath, `${helperId}:/.__aw_policy_proof/boundary.json`]);
-    docker(["cp", "-a", `${sourceRoot}/.`, `${helperId}:${namespaceRoot}`]);
+      "the proof helper reads the configured prover bytes from its snapshot bind");
+    await rm(proverReadback);
+    const candidateReadback = path.join(root, "candidate-readback");
+    docker(["cp", `${helperId}:${proofGuestPath}/candidate.json`, candidateReadback]);
+    assert.equal(createHash("sha256").update(await readFile(candidateReadback)).digest("hex"),
+      createHash("sha256").update(await readFile(candidatePath)).digest("hex"));
+    await rm(candidateReadback);
+    const boundaryReadback = path.join(root, "boundary-readback");
+    docker(["cp", `${helperId}:${proofGuestPath}/boundary.json`, boundaryReadback]);
+    assert.equal(createHash("sha256").update(await readFile(boundaryReadback)).digest("hex"),
+      createHash("sha256").update(await readFile(boundaryPath)).digest("hex"));
+    await rm(boundaryReadback);
+    const runtimeReadback = path.join(root, "runtime-readback");
+    docker(["cp", `${helperId}:${runtimeGuestPath}`, runtimeReadback]);
+    assert.equal(createHash("sha256").update(await readFile(path.join(runtimeReadback, "openshell-sandbox"))).digest("hex"),
+      bootstrapSha256, "runtime snapshot bind preserves the retained qualified binary bytes");
+    await rm(runtimeReadback, { recursive: true });
     const taskReadback = path.join(root, "task-readback");
     await mkdir(taskReadback);
     docker(["cp", "-a", `${helperId}:${taskRoot}`, taskReadback]);
     assert.equal(await readFile(path.join(taskReadback, path.posix.basename(taskRoot), "proof-payload"), "utf8"), "nested task content");
+    const mountReadback = path.join(root, "mount-readback");
+    docker(["cp", `${helperId}:${mountedGuestPath}`, mountReadback]);
+    assert.equal(await readFile(path.join(mountReadback, "mounted-payload"), "utf8"), "read-only snapshot content");
+    await rm(mountReadback, { recursive: true });
     const proof = JSON.parse(docker(["exec", "--user", `${uid}:${gid}`, helperId,
-      "/.__aw_policy_proof/prover", "check", "/.__aw_policy_proof/candidate.json",
-      "--boundary", "/.__aw_policy_proof/boundary.json", "--output", "json", "--timeout", "3s"]));
+      `${proofGuestPath}/prover`, "check", `${proofGuestPath}/candidate.json`,
+      "--boundary", `${proofGuestPath}/boundary.json`, "--output", "json", "--timeout", "3s"]));
     assert.equal(proof.schema_version, 1);
     assert.equal(proof.prover_version, "0.1.2");
     assert.equal(proof.result, "within_boundary");
     assert.equal(proof.exit_code, 0);
     assert.deepEqual([...new Set(proof.coverage?.domains)].sort(),
       ["filesystem", "landlock", "network_l4", "network_rest", "process"]);
+    const unresolved = JSON.parse(docker(["exec", "--user", `${uid}:${gid}`, helperId,
+      `${proofGuestPath}/prover`, "check", `${proofGuestPath}/candidate.json`,
+      "--boundary", `${proofGuestPath}/boundary-ancestor.json`, "--output", "json", "--timeout", "3s"], 3));
+    assert.equal(unresolved.exit_code, 3);
+    assert.equal(unresolved.result, "unsupported");
+    assert.equal(unresolved.reason_code, "unresolved_filesystem_path");
   } finally {
     if (helperId) {
       const removed = spawnSync("docker", ["rm", "--force", helperId], { encoding: "utf8", timeout: 10_000,

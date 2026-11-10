@@ -17,6 +17,35 @@ export interface OpenShellPolicyDocument {
   }>;
 }
 function within(path: string, root: string) { return root === "/" || path === root || path.startsWith(root + "/"); }
+
+/** Derives a Task-scoped proof maximum from an already compiled candidate and
+ * the unchanged operator maximum. This is only an attenuation: all non-FS
+ * proof dimensions remain exactly those of the operator projection. Callers
+ * must separately validate the current server-owned workspace receipt. */
+export function deriveNativeConformanceProofMaximum(input: {
+  operatorMaximum: OpenShellPolicyDocument;
+  candidate: OpenShellPolicyDocument;
+  taskRoot: string;
+  modelBinaries: readonly string[];
+}): OpenShellPolicyDocument | null {
+  const { operatorMaximum, candidate, taskRoot } = input;
+  if (typeof taskRoot !== "string" || !path.posix.isAbsolute(taskRoot) || path.posix.normalize(taskRoot) !== taskRoot ||
+      taskRoot === "/" || taskRoot === "/workspace" || taskRoot.split("/").some(part => part === "." || part === "..")) return null;
+  const modelBinaries = [...new Set(input.modelBinaries)].sort();
+  if (!modelBinaries.length || modelBinaries.some(binary => typeof binary !== "string" || !path.posix.isAbsolute(binary) ||
+      path.posix.normalize(binary) !== binary || binary === "/" || binary.split("/").some(part => part === "." || part === ".."))) return null;
+  const expectedReads = [...new Set([taskRoot, "/.openshell/runtime/openshell-sandbox", ...modelBinaries])].sort();
+  const candidateReads = candidate.filesystem_policy.read_only;
+  const candidateWrites = candidate.filesystem_policy.read_write;
+  if (candidate.filesystem_policy.include_workdir !== false ||
+      nativeSha256(candidateReads) !== nativeSha256(expectedReads) ||
+      nativeSha256(candidateWrites) !== nativeSha256([taskRoot])) return null;
+  const parentReads = [...operatorMaximum.filesystem_policy.read_only, ...operatorMaximum.filesystem_policy.read_write];
+  if (candidateReads.some(value => !parentReads.some(root => within(value, root))) ||
+      candidateWrites.some(value => !operatorMaximum.filesystem_policy.read_write.some(root => within(value, root)))) return null;
+  return { ...operatorMaximum, filesystem_policy: { ...operatorMaximum.filesystem_policy,
+    read_only: [...candidateReads], read_write: [...candidateWrites] } };
+}
 export function projectOpenShellPolicy(raw: SandboxPolicy, modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"], credentialBrokerEndpoints: SandboxPolicyCompilation["credentialBrokerEndpoints"] = []) {
   const policy = sandboxPolicySchema.parse(raw), unsupported: string[] = [];
   const modelRoute = modelBrokerEndpoint?.path === "/runtime-tools/model/v1/messages" &&

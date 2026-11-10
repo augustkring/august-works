@@ -29,7 +29,7 @@ import {
   agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
   runtimeVersionCatalog, runtimeHostCommands, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
 } from "@paperclipai/db";
-import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
+import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
 import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/native-direct-input.js";
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
@@ -40,7 +40,7 @@ import { executionSandboxService } from "../../services/execution-sandbox/sandbo
 import { openShellBackend } from "../../services/execution-sandbox/openshell-backend.js";
 import { checkOpenShellBoundary } from "../../services/execution-sandbox/openshell-prover.js";
 import { sandboxProbeCases, type SandboxAdmissionCleanup, type SandboxIdentity, type SandboxProbeCase } from "../../services/execution-sandbox/backend.js";
-import { nativeSandboxHostTransport } from "../../services/execution-sandbox/native-host-bridge.js";
+import { nativeSandboxHostTransport, type NativeOpenCodeConformanceHostAuthority } from "../../services/execution-sandbox/native-host-bridge.js";
 import { agentProviderBindingService } from "../../services/agent-provider-bindings.js";
 import { assertV5Authorization, v5HumanActorId } from "../../services/v5-authorization.js";
 import { entitlementService } from "../../services/billing/entitlements.js";
@@ -58,7 +58,7 @@ import { secretService } from "../../services/secrets.js";
 import { registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import { mcpGatewayProtocolRoutes } from "../../routes/tool-gateway.js";
 import { errorHandler } from "../../middleware/error-handler.js";
-import { projectOpenShellPolicy, projectOpenShellQualificationProbePolicy } from "../../services/execution-sandbox/openshell-policy.js";
+import { deriveNativeConformanceProofMaximum, projectOpenShellPolicy, projectOpenShellQualificationProbePolicy } from "../../services/execution-sandbox/openshell-policy.js";
 import { open as unseal } from "../../services/saas/crypto.js";
 import { nativeSha256 } from "../../services/native-runtime/canonical.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
@@ -1053,6 +1053,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const qualificationToolResponses:Array<{caseId:string;status:number;reasonCode:string|null;marker:string|null;replayDenied?:boolean}>=[];
   const hostCapabilityObservations:Array<Record<string,unknown>>=[];
   const hostLifecycleObservations:Array<Record<string,unknown>>=[];
+  const softwareOnlyPolicyProofObservations:Array<Record<string,unknown>>=[];
+  const softwareOnlyPolicyProofSidecarHashes = new Map<string, string>();
   const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[baseQualificationActor.userId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:"conversation-software-canary",
     remoteHttpRequest:async(url,init)=>{
       if (url !== `${brokerOrigin}/mcp/qualification/credential-echo` && input.assignedToolGatewayHttpRequest)
@@ -1240,6 +1242,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           cellId: currentBinding.runtimeCellId, cellGeneration: currentBinding.cellGeneration,
           sandboxRef: currentBinding.sandboxRef ?? `aw-v7-${currentBinding.id}` },
         boundary: currentBinding.boundaryPolicy,
+        ...(conformance ? { conformance } : {}),
         bridge, evidenceKind: "protected_host_report",
         prover: { executable, executableSha256 },
         credentialBrokerDatabase: db, credentialBrokerOrigin: brokerOrigin,
@@ -2807,6 +2810,252 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     elapsedMs: driveHostObservation.startedAt ? Math.min(600_000, Math.max(0, Date.now() - driveHostObservation.startedAt)) : 0,
     lastCommandAgeMs: driveHostObservation.lastCommandAt ? Math.min(600_000, Math.max(0, Date.now() - driveHostObservation.lastCommandAt)) : null,
     workSettled: driveHostObservation.workSettled });
+  // This signed peer is a software integration fixture, never physical Host qualification.
+  // It uses the pinned prover on unchanged DB-derived documents and does not start Docker.
+  const softwareOnlyConformanceProof = async (commandId: string, command: Record<string, any>) => {
+    if (command.action !== "prove_policy" || !command.policyProof || !sessionHostJournalFile)
+      throw new Error("software_only_host_peer_proof_scope_invalid");
+    const proof = command.policyProof as NonNullable<SandboxHostRequest["policyProof"]>;
+    if (typeof command.requesterUserId !== "string" || !command.requesterUserId)
+      throw new Error("software_only_host_peer_human_requester_missing");
+    const requesterUserId = command.requesterUserId;
+    if (!binding || command.scope?.companyId !== companyId || command.scope?.bindingId !== binding.id ||
+        command.scope?.cellId !== cell.id || command.scope?.cellGeneration !== cell.generation.toString() ||
+        command.requesterUserId !== actor.userId || proof.proverSha256 !== "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1" ||
+        !["requested", "effective"].includes(proof.stage) ||
+        proof.candidateDocumentHash !== nativeSha256(proof.candidateDocument) ||
+        proof.boundaryDocumentHash !== nativeSha256(proof.boundaryDocument))
+      throw new Error("software_only_host_peer_proof_request_changed");
+    const [currentCell] = await db.select().from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, cell.id))).limit(1);
+    const [currentBinding] = await db.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, binding.id))).limit(1);
+    if (!currentCell || currentCell.status !== "STOPPED" || observedSandboxPhase !== "Stopped" ||
+        currentCell.generation.toString() !== command.scope.cellGeneration ||
+        !currentBinding || currentBinding.status !== "admitting" || currentBinding.version !== proof.bindingVersion ||
+        currentBinding.cellGeneration !== command.scope.cellGeneration ||
+        (currentCell.activeImageDigest ?? currentCell.desiredImageDigest) !== command.imageDigest)
+      throw new Error("software_only_host_peer_stopped_target_changed");
+    const [snapshot, ...extraSnapshots] = await db.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, binding.id),
+      eq(runtimePolicySnapshots.policyHash, proof.policyHash), eq(runtimePolicySnapshots.status, "qualified"))).limit(2);
+    if (!snapshot || extraSnapshots.length || snapshot.expiresAt <= new Date() ||
+        snapshot.compilation.proverResult !== "pass" || nativeSha256(snapshot.compilation) !== proof.policyHash ||
+        snapshot.compilation.boundaryPolicyHash !== currentBinding.boundaryPolicyHash ||
+        !snapshot.compilation.sourcePolicyRefs.includes(`boundary:${currentBinding.boundaryPolicyHash}`))
+      throw new Error("software_only_host_peer_compilation_changed");
+    const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.id, snapshot.executionManifestId))).limit(1);
+    if (!manifest || !snapshot.compilation.sourcePolicyRefs.includes(`manifest:${manifest.id}:${manifest.hash}`))
+      throw new Error("software_only_host_peer_manifest_hash_changed");
+    const [run] = manifest ? await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, manifest.runId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.responsibleUserId, requesterUserId),
+      eq(heartbeatRuns.status, "running"))).limit(1) : [];
+    const [lease] = run ? await db.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, run.id),
+      eq(environmentLeases.environmentId, input.preparedRegistration!.environment.id), eq(environmentLeases.status, "active"))).limit(1) : [];
+    if (!manifest || !run || !lease?.expiresAt || lease.expiresAt <= new Date() ||
+        manifest.id !== snapshot.executionManifestId ||
+        !snapshot.compilation.sourcePolicyRefs.includes(`manifest:${manifest.id}:${manifest.hash}`))
+      throw new Error("software_only_host_peer_run_lease_changed");
+    const responsibleUserId = run.responsibleUserId;
+    if (typeof responsibleUserId !== "string") throw new Error("software_only_host_peer_human_owner_missing");
+    let taskRoot: string;
+    let expectedSidecar: Record<string, unknown> | null = null;
+    let currentConformanceClaim: NativeOpenCodeConformanceHostAuthority | null = null;
+    if (nativeConformanceMode) {
+      const context = run.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+        ? run.contextSnapshot as Record<string, any> : {};
+      const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, any> : {};
+      const workspace = profile.nativeOpenCodeConformanceWorkspace && typeof profile.nativeOpenCodeConformanceWorkspace === "object"
+        ? profile.nativeOpenCodeConformanceWorkspace as Record<string, any> : {};
+      const taskRootCandidate = workspace.taskRoot;
+      const creationReceipt = workspace.creationReceipt;
+      const taskId = run.nativeIssueId, planId = context.providerConformancePlanId, groupId = context.providerConformanceGroupId;
+      if (typeof taskId !== "string" || typeof planId !== "string" || typeof groupId !== "string" ||
+          typeof taskRootCandidate !== "string" || typeof creationReceipt !== "string" ||
+          !/^[a-f0-9]{64}$/.test(creationReceipt) || run.responsibleUserId !== command.requesterUserId ||
+          snapshot.capabilitySnapshotHash !== currentBinding.capabilitySnapshotHash)
+        throw new Error("software_only_host_peer_current_authority_changed");
+      const authorityInput = { runId: run.id, taskId, planId, groupId,
+        manifestId: manifest.id, manifestHash: manifest.hash, leaseId: lease.id,
+        workspaceRoot: taskRootCandidate, creationReceipt, policySnapshotId: snapshot.id, policyHash: snapshot.policyHash };
+      const currentOwner = await executionSandboxService(db).assertNativeConformanceProofOwner(db, actor, companyId, authorityInput);
+      taskRoot = currentOwner.workspaceRoot;
+      if (snapshot.authorityHash !== currentOwner.sourceAuthorityHash ||
+          !snapshot.compilation.sourcePolicyRefs.includes(`authority:${currentOwner.sourceAuthorityHash}`))
+        throw new Error("software_only_host_peer_current_authority_changed");
+      currentConformanceClaim = {
+        runId: run.id, taskId, planId, groupId,
+        manifestId: manifest.id, manifestHash: manifest.hash, leaseId: lease.id,
+        workspaceRoot: taskRoot, creationReceipt,
+        policySnapshotId: snapshot.id, policyHash: snapshot.policyHash,
+      };
+      expectedSidecar = { version: 1, conformance: currentConformanceClaim };
+    } else {
+      // Ordinary managed Native Task proof uses its existing exact Run/Task
+      // workspace owner and the unchanged operator maximum.
+      const workerRun = ordinaryWorkerMode ? await assertFixtureOrdinaryWorker(input, run.id) : null;
+      const [task] = workerRun?.nativeIssueId
+        ? await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, workerRun.nativeIssueId))).limit(1)
+        : run.nativeIssueId ? await db.select().from(issues).where(and(
+          eq(issues.companyId, companyId), eq(issues.id, run.nativeIssueId),
+          eq(issues.executionRunId, run.id), eq(issues.assigneeAgentId, run.agentId),
+          eq(issues.conversationAgentId, run.agentId),
+          eq(issues.conversationUserId, responsibleUserId),
+          eq(issues.conversationState, "active"), isNull(issues.conversationRetiredAt), isNull(issues.hiddenAt))).limit(1) : [];
+      taskRoot = expectedTaskRoot ?? "";
+      if (!task || !taskRoot || run.nativeIssueId !== task.id || responsibleUserId !== requesterUserId ||
+          task.assigneeAgentId !== run.agentId || task.executionRunId !== run.id ||
+          (workerRun ? task.conversationAgentId !== null || task.conversationUserId !== null
+            : task.conversationAgentId !== run.agentId || task.conversationUserId !== run.responsibleUserId) ||
+          Object.prototype.hasOwnProperty.call((await db.select({ payload: runtimeHostCommands.payload })
+            .from(runtimeHostCommands).where(eq(runtimeHostCommands.id, commandId)).limit(1))[0]?.payload ?? {},
+            "__nativeConformancePolicyProof"))
+        throw new Error("software_only_host_peer_current_task_owner_changed");
+    }
+    if (snapshot.capabilitySnapshotHash !== currentBinding.capabilitySnapshotHash)
+      throw new Error("software_only_host_peer_current_authority_changed");
+    const capability = currentBinding.capabilitySnapshot
+      ? sandboxCapabilitySnapshotSchema.safeParse(currentBinding.capabilitySnapshot) : null;
+    const modelBinaries = capability?.success ? capability.data.modelBrokerProviderProfile?.binaries ?? [] : [];
+    const endpointBinaries = snapshot.compilation.modelBrokerEndpoint?.binaries ?? [];
+    if (!capability?.success || capability.data.evidenceKind !== "protected_host_report" ||
+        capability.data.backend !== "openshell" || capability.data.expiresAt <= new Date().toISOString() ||
+        !modelBinaries.length || nativeSha256(modelBinaries) !== nativeSha256(endpointBinaries))
+      throw new Error("software_only_host_peer_model_binary_authority_changed");
+    const expectedReads = [...new Set([taskRoot, "/.openshell/runtime/openshell-sandbox", ...modelBinaries])].sort();
+    const compiledReads = snapshot.compilation.compiledPolicy.filesystem.readPaths;
+    const readScopeValid = nativeConformanceMode
+      ? nativeSha256(compiledReads) === nativeSha256(expectedReads)
+      : expectedReads.every(path => compiledReads.includes(path));
+    if (!readScopeValid ||
+        nativeSha256(snapshot.compilation.compiledPolicy.filesystem.writePaths) !== nativeSha256([taskRoot]))
+      throw new Error("software_only_host_peer_task_scope_changed");
+    const candidate = projectOpenShellPolicy(snapshot.compilation.compiledPolicy, snapshot.compilation.modelBrokerEndpoint,
+      snapshot.compilation.credentialBrokerEndpoints);
+    const sourceBoundary = currentBinding.boundaryPolicy.credentials.mode === "brokered" &&
+      currentBinding.boundaryPolicy.credentials.bindings.length === 0
+      ? { ...currentBinding.boundaryPolicy, credentials: { mode: "none" as const, bindings: [] } }
+      : currentBinding.boundaryPolicy;
+    const parent = projectOpenShellPolicy(sourceBoundary, snapshot.compilation.modelBrokerEndpoint,
+      snapshot.compilation.credentialBrokerEndpoints);
+    const maximum = nativeConformanceMode && candidate.document && parent.document ? deriveNativeConformanceProofMaximum({
+      operatorMaximum: parent.document, candidate: candidate.document, taskRoot, modelBinaries,
+    }) : null;
+    const proofMaximum = nativeConformanceMode ? maximum : parent.document;
+    if (!candidate.document || candidate.unsupportedFeatures.length || !parent.document || parent.unsupportedFeatures.length || !proofMaximum ||
+        nativeSha256(proof.candidateDocument) !== nativeSha256(candidate.document) ||
+        nativeSha256(proof.boundaryDocument) !== nativeSha256(proofMaximum))
+      throw new Error("software_only_host_peer_derived_documents_changed");
+    const prepares = await db.select().from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeHostId, host.id),
+      eq(runtimeHostCommands.runtimeCellId, cell.id), eq(runtimeHostCommands.cellGeneration, BigInt(command.scope.cellGeneration)),
+      eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+      sql`${runtimeHostCommands.payload}->>'action' = 'prepare'`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'purpose' = 'admission'`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'operationKey' = ${proof.operationKey}`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'bindingVersion' = ${String(proof.bindingVersion)}`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'policyHash' = ${proof.policyHash}`)).limit(2);
+    const prepare = prepares[0];
+    if (prepares.length !== 1 || !prepare || prepare.safeResult === null || typeof prepare.safeResult !== "object" || Array.isArray(prepare.safeResult))
+      throw new Error("software_only_host_peer_prepare_receipt_missing");
+    let wrongParentOwnerRejected = false;
+    if (nativeConformanceMode && proof.stage === "requested" &&
+        !softwareOnlyPolicyProofObservations.some(row => row.wrongParentOwnerRejected === true)) {
+      const wrongCompilation = { ...snapshot.compilation, boundaryPolicyHash: "e".repeat(64) };
+      const [latestSnapshot] = await db.select({ policyVersion: runtimePolicySnapshots.policyVersion }).from(runtimePolicySnapshots)
+        .where(and(eq(runtimePolicySnapshots.companyId, companyId), eq(runtimePolicySnapshots.bindingId, currentBinding.id)))
+        .orderBy(desc(runtimePolicySnapshots.policyVersion)).limit(1);
+      const [wrongSnapshot] = await db.insert(runtimePolicySnapshots).values({
+        companyId: snapshot.companyId, bindingId: snapshot.bindingId, runtimeCellId: snapshot.runtimeCellId,
+        agentId: snapshot.agentId, executionManifestId: snapshot.executionManifestId,
+        policyVersion: (latestSnapshot?.policyVersion ?? snapshot.policyVersion) + 1,
+        policyHash: nativeSha256(wrongCompilation), capabilitySnapshotHash: snapshot.capabilitySnapshotHash,
+        compilation: wrongCompilation, authorityHash: snapshot.authorityHash, sourcePolicyRefs: snapshot.sourcePolicyRefs,
+        status: "qualified", expiresAt: snapshot.expiresAt,
+      }).returning();
+      if (!wrongSnapshot) throw new Error("software_only_host_peer_negative_snapshot_missing");
+      const wrongConformance: NativeOpenCodeConformanceHostAuthority = { ...currentConformanceClaim!,
+        policySnapshotId: wrongSnapshot.id, policyHash: wrongSnapshot.policyHash };
+      const wrongProof: NonNullable<SandboxHostRequest["policyProof"]> = { ...proof, policyHash: wrongSnapshot.policyHash,
+        operationKey: "software-only-wrong-parent-owner" };
+      const before = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+        .where(and(eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeCellId, cell.id),
+          eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND)));
+      try {
+        await nativeSandboxHostTransport(db).bridge(actor, wrongConformance).provePolicy!(
+          command.scope, wrongProof, `${wrongProof.operationKey}:idempotency`);
+      } catch (error) {
+        const details = error && typeof error === "object" && "details" in error
+          ? (error as { details?: { code?: unknown } }).details : undefined;
+        wrongParentOwnerRejected = details?.code === "sandbox_conformance_proof_attenuation_changed";
+      } finally {
+        await db.delete(runtimePolicySnapshots).where(eq(runtimePolicySnapshots.id, wrongSnapshot.id));
+      }
+      const after = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands)
+        .where(and(eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.runtimeCellId, cell.id),
+          eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND)));
+      if (!wrongParentOwnerRejected || after.length !== before.length)
+        throw new Error("software_only_host_peer_wrong_parent_owner_not_rejected");
+    }
+    const prepareRequest = prepare.payload as Record<string, any>;
+    const prepareReply = prepare.safeResult as Record<string, any>;
+    const prepareProvisioning = prepareRequest.provisioning as Record<string, any> | undefined;
+    if (prepareRequest.action !== "prepare" || nativeSha256(prepareRequest.scope) !== nativeSha256(command.scope) ||
+        prepareRequest.requesterUserId !== command.requesterUserId || prepareRequest.hostEpoch !== command.hostEpoch ||
+        prepareRequest.imageDigest !== command.imageDigest || !prepareProvisioning ||
+        prepareProvisioning.purpose !== "admission" || prepareProvisioning.operationKey !== proof.operationKey ||
+        prepareProvisioning.bindingVersion !== proof.bindingVersion || prepareProvisioning.policyHash !== proof.policyHash ||
+        nativeSha256(prepareProvisioning.document) !== nativeSha256(candidate.document) ||
+        prepareReply.action !== "prepare" || prepareReply.hostEpoch !== command.hostEpoch ||
+        prepareReply.imageDigest !== command.imageDigest || prepareReply.bindingVersion !== proof.bindingVersion ||
+        prepareReply.provisioningHash !== proof.provisioningHash || prepareReply.policyHash !== proof.policyHash ||
+        prepareReply.probePolicyHash !== nativeSha256(prepareProvisioning.document) ||
+        prepareReply.sandboxId !== proof.sandboxId || prepareReply.containerId !== proof.containerId)
+      throw new Error("software_only_host_peer_prepare_target_changed");
+    const stored = await db.select({ payload: runtimeHostCommands.payload }).from(runtimeHostCommands)
+      .where(eq(runtimeHostCommands.id, commandId)).limit(1);
+    const payload = stored[0]?.payload && typeof stored[0].payload === "object" && !Array.isArray(stored[0].payload)
+      ? stored[0].payload as Record<string, any> : {};
+    const sidecar = payload.__nativeConformancePolicyProof;
+    if (nativeSha256(sidecar ?? null) !== nativeSha256(expectedSidecar) ||
+        Object.prototype.hasOwnProperty.call(command, "__nativeConformancePolicyProof"))
+      throw new Error("software_only_host_peer_private_claim_changed");
+    if (nativeConformanceMode) softwareOnlyPolicyProofSidecarHashes.set(commandId, nativeSha256(sidecar));
+    const journal = JSON.parse(readFileSync(sessionHostJournalFile, "utf8")) as Record<string, any>;
+    const currentScope = journal.scopes?.[binding.id];
+    const currentDocument = currentScope?.policy?.document;
+    if (!currentDocument || currentScope?.creation?.purpose !== "admission" ||
+        currentScope.creation.sandboxId !== proof.sandboxId || currentScope.creation.containerId !== proof.containerId ||
+        currentScope.sandboxId !== proof.sandboxId || currentScope.containerId !== proof.containerId ||
+        activeHostIdentity?.sandboxId !== proof.sandboxId || activeHostIdentity?.containerId !== proof.containerId ||
+        (proof.stage === "effective" && nativeSha256(currentDocument) !== proof.candidateDocumentHash))
+      throw new Error("software_only_host_peer_effective_policy_changed");
+    const executable = process.env.AW_V7_OPENSHELL_PROVER ?? "/workspace/v10-preparation/tools/openshell-prover-v0.1.2/openshell-prover";
+    const executableSha256 = "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1";
+    const checked = await checkOpenShellBoundary({ executable, executableSha256,
+      candidate: proof.candidateDocument, boundary: proof.boundaryDocument });
+    const expectedDomains = ["filesystem", "landlock", "network_l4", "network_rest", "process"];
+    if (checked.result !== "within_boundary" || checked.candidateHash !== proof.candidateDocumentHash ||
+        checked.boundaryHash !== proof.boundaryDocumentHash || nativeSha256(checked.coveredDomains) !== nativeSha256(expectedDomains))
+      throw new Error("software_only_host_peer_actual_prover_rejected_policy");
+    const target = { hostEpoch: command.hostEpoch, imageDigest: command.imageDigest, sandboxId: proof.sandboxId,
+      containerId: proof.containerId, bindingVersion: proof.bindingVersion, provisioningHash: proof.provisioningHash,
+      policyHash: proof.policyHash };
+    const result = checked.result, coveredDomains = checked.coveredDomains, effectiveDocumentHash = nativeSha256(currentDocument);
+    const proofFields = { schema: "paperclip.sandbox-host-policy-proof.v1", stage: proof.stage, result, coveredDomains,
+      candidateDocumentHash: proof.candidateDocumentHash, boundaryDocumentHash: proof.boundaryDocumentHash,
+      effectiveDocumentHash, proverVersion: "0.1.2", proverSha256: executableSha256, target };
+    const reply = { action: "prove_policy", ...proofFields, evidenceHash: nativeSha256(proofFields) };
+    softwareOnlyPolicyProofObservations.push({ peer: "software_only_host_peer", physicalQualification: false, stage: proof.stage,
+      persistedCompilationMatched: true, conformanceClaimPersisted: nativeConformanceMode, claimAbsentFromHostEnvelope: true,
+      exactStoppedPreparedTarget: true, actualPinnedProver: true, result: "within_boundary", completedSuccessfully: false,
+      ...(nativeConformanceMode ? { wrongParentOwnerRejected:
+        wrongParentOwnerRejected || softwareOnlyPolicyProofObservations.some(row => row.wrongParentOwnerRejected === true) } : {}) });
+    return reply;
+  };
   const driveHost = async <T>(work: Promise<T>): Promise<T> => {
     let settled = false;
     driveHostObservation.active = true; driveHostObservation.phase = "claiming";
@@ -2886,6 +3135,11 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           reply={action,verdict:passed ? "pass" : "fail",observationHash:nativeSha256({caseId:test.caseId,status:response.status,reasonCode,marker}),contractHash:test.contractHash,targetQualificationHash:protectedQualificationTarget?.targetHash};
         }else reply=await observeSoftwareBoundary(command.probe);
       }
+      else if (action === "prove_policy") {
+        // Exercise the production signed command/claim/complete path while
+        // keeping this controlled peer's evidence explicitly software-only.
+        reply = await softwareOnlyConformanceProof(claim.id, command);
+      }
       else {
         // Lifecycle and effective-policy replies come only from the production
         // Host engine below; local maps cannot serve as observed receipts.
@@ -2895,7 +3149,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const needsEngineReceipt = sessionHostEngine && (
         (action === "prepare" && command.provisioning) ||
         action === "capabilities" ||
-        ["inspect", "effective_policy", "apply", "start", "prove_policy", "stop", "revoke_providers", "destroy", "erase_native_session"].includes(action));
+        ["inspect", "effective_policy", "apply", "start", "prove_policy", "stop", "revoke_providers", "destroy", "erase_native_session"].includes(action) &&
+        !(action === "prove_policy"));
       if (needsEngineReceipt) {
         const now = Date.now();
         const deadlines = [command.deadlineAt, command.provisioning?.expiresAt,
@@ -3110,6 +3365,21 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       }
       await completeHostCommand(claim.id, { claimToken: command.claimToken, generation: command.scope.cellGeneration,
         success: true, reply, errorCode: null }, { action, ...(command.probe?.caseId ? { probeCaseId: command.probe.caseId } : {}) });
+      if (action === "prove_policy") {
+        const [completed] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.id, claim.id)).limit(1);
+        const observation = softwareOnlyPolicyProofObservations.at(-1);
+        const storedPayload = completed?.payload && typeof completed.payload === "object" && !Array.isArray(completed.payload)
+          ? completed.payload as Record<string, any> : {};
+        const sidecarHash = softwareOnlyPolicyProofSidecarHashes.get(claim.id);
+        const exactCompletion = completed?.status === "SUCCEEDED" && completed.safeResult?.action === "prove_policy" &&
+          nativeSha256(completed.safeResult) === nativeSha256(reply) &&
+          (nativeConformanceMode
+            ? typeof sidecarHash === "string" && nativeSha256(storedPayload.__nativeConformancePolicyProof ?? null) === sidecarHash
+            : !Object.prototype.hasOwnProperty.call(storedPayload, "__nativeConformancePolicyProof"));
+        if (!exactCompletion || !observation) throw new Error("software_only_host_peer_completion_receipt_mismatch");
+        observation.completedSuccessfully = true;
+        softwareOnlyPolicyProofSidecarHashes.delete(claim.id);
+      }
       driveHostObservation.currentAction = "none"; driveHostObservation.phase = "waiting";
     }
     if (!settled) { driveHostObservation.phase = "deadline"; driveHostObservation.active = false;
@@ -4464,6 +4734,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       sandboxExecutionFailures,
       sandboxStageCounts,
       nativeConformanceStartTupleObservations: [...nativeConformanceStartTupleObservations],
+      softwareOnlyPolicyProofObservations: [...softwareOnlyPolicyProofObservations],
       execCount: execFacts.length, exactPrivateCwdCount: execFacts.filter(fact => fact.cwdExact).length,
       managedModelCredentialCount: execFacts.filter(fact => fact.modelCredentialPresent).length,
       execFacts,

@@ -776,6 +776,49 @@ describe("native bootstrap rendered-source closure", () => {
       wake: { requestedByActorType: "user", requestedByActorId: responsibleUserId, reason: "issue_commented", originCommentIds: [commentId] } };
     const check = (capture: NativeTaskContinuationCapture) => exactNativeTaskContinuation({ value: capture.envelope,
       companyId, issueId, agentId, runId, responsibleUserId, wakeupRequestId, wakeReason: capture.wake.reason, capture });
+    const withdrawal = structuredClone(base), withdrawalId = randomUUID(), withdrawalSourceRunId = randomUUID();
+    const opaqueHumanId = "human-user-8f194f2e";
+    const cancelledResult = { version: 1, answers: [], cancelled: true, cancellationReason: "Review withdrawn." };
+    const cancelledResponse: NativeInteractionResponseEnvelope = { interactionId: withdrawalId, kind: "ask_user_questions",
+      response: { status: "cancelled", result: cancelledResult } };
+    const cancelledSource = { kind: "interaction" as const, issueId, interactionId: withdrawalId, sourceVersion: "2",
+      contentHash: nativeSha256(cancelledResponse) };
+    const cancelledOutcome = { id: withdrawalId, kind: "ask_user_questions", status: "cancelled", result: cancelledResult };
+    const withdrawalProjection = { version: 1 as const, companyId, issueId, interactionId: withdrawalId,
+      sourceVersion: "2", kind: "ask_user_questions" as const, status: "cancelled" as const,
+      interactionSourceRunId: withdrawalSourceRunId,
+      resultHash: nativeSha256(cancelledResult), humanResponseDigest: null, nativeResponseDigest: cancelledSource.contentHash,
+      owner: { sourceKind: "native_interaction" as const, sourceRunId: withdrawalSourceRunId,
+        resolvedByUserId: opaqueHumanId, resolvedAt: "2026-10-01T00:00:00.000Z", planId: randomUUID(), workerId: randomUUID(),
+        workerAttemptId: randomUUID(), sourceRunStatus: "succeeded" as const, sourceReceiptHash: "a".repeat(64), finalizationResultId: randomUUID(),
+        finalizationResultHash: "b".repeat(64) } };
+    withdrawal.humanReviewWithdrawals = [{ companyId, issueId, agentId, runId, nativeSource: cancelledSource,
+      continuationSource: { ...cancelledSource, contentHash: nativeSha256({ rendition: "native_human_review_withdrawal_v1",
+        projection: withdrawalProjection, interactionOutcome: cancelledOutcome }) }, nativeResponse: cancelledResponse,
+      projection: withdrawalProjection, interactionOutcome: cancelledOutcome }];
+    withdrawal.envelope.trigger = { reason: "issue_commented", interactionId: withdrawalId, sourceRunId: withdrawalSourceRunId };
+    withdrawal.envelope.interactionOutcomes = [cancelledOutcome];
+    withdrawal.wake = { requestedByActorType: "user", requestedByActorId: opaqueHumanId, reason: "issue_commented",
+      originCommentIds: [commentId], interaction: { interactionId: withdrawalId, interactionKind: "ask_user_questions",
+        interactionStatus: "cancelled", sourceRunId: withdrawalSourceRunId } };
+    expect(check(withdrawal)).toBe(withdrawal);
+    const unfinishedSource = structuredClone(withdrawal);
+    const unfinishedProjection = unfinishedSource.humanReviewWithdrawals![0]!.projection;
+    unfinishedProjection.owner.sourceRunStatus = "running" as never;
+    unfinishedSource.humanReviewWithdrawals![0]!.continuationSource = { ...unfinishedSource.humanReviewWithdrawals![0]!.nativeSource,
+      contentHash: nativeSha256({ rendition: "native_human_review_withdrawal_v1", projection: unfinishedProjection,
+        interactionOutcome: unfinishedSource.humanReviewWithdrawals![0]!.interactionOutcome }) };
+    expect(check(unfinishedSource)).toBeNull();
+    const malformedOwner = structuredClone(withdrawal);
+    (malformedOwner.humanReviewWithdrawals![0]!.projection as unknown as { owner: unknown }).owner = null;
+    expect(check(malformedOwner)).toBeNull();
+    const statusKindMismatch = structuredClone(withdrawal);
+    statusKindMismatch.humanReviewWithdrawals![0]!.projection.status = "rejected" as never;
+    statusKindMismatch.wake.interaction!.interactionStatus = "rejected";
+    expect(check(statusKindMismatch)).toBeNull();
+    const resolverMismatch = structuredClone(withdrawal);
+    resolverMismatch.humanReviewWithdrawals![0]!.projection.owner.resolvedByUserId = "another-human";
+    expect(check(resolverMismatch)).toBeNull();
     for (const status of ["executed", "failed", "rejected"] as const) {
       const c = structuredClone(base), interactionStatus = status === "rejected" ? "rejected" : "accepted";
       const result = status === "rejected" ? { version: 1, outcome: interactionStatus } :

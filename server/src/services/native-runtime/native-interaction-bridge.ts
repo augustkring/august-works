@@ -15,6 +15,7 @@ import {
   statusDecisions,
   workAssessments,
   activityLog,
+  orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
 } from "@paperclipai/db";
 import { getAgentWorkEligibility, askUserQuestionsPayloadSchema, askUserQuestionsResultSchema, requestConfirmationResultSchema, type ExecutionContinuationEnvelope, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
@@ -48,6 +49,24 @@ export type NativeGovernedInteractionContinuationCapture = {
     humanResponse: NonNullable<ExecutionContinuationEnvelope["humanResponses"]>[number];
     interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number];
   };
+};
+
+/** Human withdrawal/rejection is a bounded review-path decision, not an answer,
+ * approval, or governed tool action. This owner records the immutable interaction
+ * and its actual Native producer/Plan attempt so the recovery turn can be re-read. */
+export type NativeHumanReviewWithdrawalCapture = {
+  companyId: string; issueId: string; runId: string; agentId: string;
+  nativeSource: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  continuationSource: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  nativeResponse: NativeInteractionResponseEnvelope;
+  projection: { version: 1; companyId: string; issueId: string; interactionId: string; sourceVersion: string;
+    kind: "ask_user_questions" | "request_confirmation" | "request_checkbox_confirmation";
+    status: "cancelled" | "rejected"; resultHash: string; humanResponseDigest: string | null; nativeResponseDigest: string;
+    interactionSourceRunId: string;
+    owner: { sourceKind: "native_interaction"; sourceRunId: string; resolvedByUserId: string; resolvedAt: string;
+      planId: string; workerId: string; workerAttemptId: string; sourceRunStatus: "succeeded";
+      sourceReceiptHash: string; finalizationResultId: string; finalizationResultHash: string } };
+  interactionOutcome: ExecutionContinuationEnvelope["interactionOutcomes"][number];
 };
 
 /** Ordinary Human answers are read context, never a governed action owner. */
@@ -520,12 +539,13 @@ export async function materializeNativeInteractionResponses(input: {
   onSourceCapture?: (source: Extract<NativePayloadSourceInput, { kind: "interaction" }>) => void;
   onContinuationSourceCapture?: (capture: NativeGovernedInteractionContinuationCapture) => void;
   onAnsweredQuestionCapture?: (capture: NativeAnsweredQuestionContinuationCapture) => void;
+  onHumanReviewWithdrawalCapture?: (capture: NativeHumanReviewWithdrawalCapture) => void;
 }): Promise<NativeInteractionResponseEnvelope[]> {
   const requestedIds = new Set(input.interactionIds.filter(Boolean));
   if (requestedIds.size === 0) return [];
   const selectedVersions = new Map<string, string>();
   const [interactions, issue] = await Promise.all([
-    issueThreadInteractionService(input.db).listForIssue(input.issueId, (input.onSourceCapture || input.onContinuationSourceCapture || input.onAnsweredQuestionCapture) ? {
+    issueThreadInteractionService(input.db).listForIssue(input.issueId, (input.onSourceCapture || input.onContinuationSourceCapture || input.onAnsweredQuestionCapture || input.onHumanReviewWithdrawalCapture) ? {
       onSourceVersionSelected: (id, version) => { selectedVersions.set(id, version); },
     } : undefined),
     input.db.select({ status: issues.status }).from(issues).where(and(
@@ -697,6 +717,11 @@ export async function materializeNativeInteractionResponses(input: {
     }
 
     if (interaction.kind === "ask_user_questions") {
+      if (interaction.status === "cancelled" && interaction.result && interaction.result.cancelled === true) {
+        responses.push({ interactionId: interaction.id, kind: interaction.kind,
+          response: { status: interaction.status, result: structuredClone(interaction.result) as unknown as Record<string, unknown> } });
+        continue;
+      }
       if (interaction.status !== "answered" || !interaction.result || interaction.result.cancelled === true) {
         throw new NativeInteractionBridgeError(
           "native_interaction_unresolved",
@@ -788,7 +813,7 @@ export async function materializeNativeInteractionResponses(input: {
     input.issueId,
     responses.sort((left, right) => left.interactionId.localeCompare(right.interactionId)),
   );
-  if (input.onSourceCapture || input.onContinuationSourceCapture || input.onAnsweredQuestionCapture) {
+  if (input.onSourceCapture || input.onContinuationSourceCapture || input.onAnsweredQuestionCapture || input.onHumanReviewWithdrawalCapture) {
     for (const response of redacted) {
       const sourceVersion = selectedVersions.get(response.interactionId);
       if (!sourceVersion) throw new NativeInteractionBridgeError(
@@ -797,6 +822,86 @@ export async function materializeNativeInteractionResponses(input: {
       const nativeSource = { kind: "interaction" as const, issueId: input.issueId,
         interactionId: response.interactionId, sourceVersion, contentHash: nativeSha256(response) };
       input.onSourceCapture?.(nativeSource);
+      if (input.onHumanReviewWithdrawalCapture) {
+        const selected = interactions.find(row => row.id === response.interactionId);
+        const result = selected?.result && typeof selected.result === "object" && !Array.isArray(selected.result)
+          ? selected.result as unknown as Record<string, unknown> : null;
+        const withdrawalCandidate = Boolean(selected &&
+          ["ask_user_questions", "request_confirmation", "request_checkbox_confirmation"].includes(selected.kind) &&
+          ["cancelled", "rejected"].includes(selected.status));
+        const resultValid = selected?.kind === "ask_user_questions"
+          ? selected.status === "cancelled" && result?.cancelled === true && askUserQuestionsResultSchema.safeParse(result).success
+          : selected?.kind === "request_confirmation" || selected?.kind === "request_checkbox_confirmation"
+            ? selected.status === "rejected" && result?.version === 1 && result?.outcome === "rejected"
+            : false;
+        const resolverValid = Boolean(selected?.resolvedByUserId && selected.resolvedAt &&
+          !selected.resolvedByAgentId && !selected.resolvedByRunId);
+        const policyValid = Boolean(selected && ["none", "wake_assignee", "wake_assignee_on_accept"].includes(selected.continuationPolicy));
+        if (withdrawalCandidate && selected?.sourceRunId && resultValid && resolverValid && policyValid) {
+          const [producer] = await input.db.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.id, selected.sourceRunId), eq(heartbeatRuns.companyId, input.companyId),
+            eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+            eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.nativeInputSourceProtocolVersion, 1),
+            eq(heartbeatRuns.status, "succeeded"))).limit(1);
+          const attempts = producer ? await input.db.select({ plan: orchestrationPlans, worker: orchestrationWorkers,
+            attempt: orchestrationWorkerAttempts }).from(orchestrationWorkerAttempts)
+            .innerJoin(orchestrationWorkers, and(eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+              eq(orchestrationWorkers.planId, orchestrationWorkerAttempts.planId), eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId)))
+            .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkers.companyId),
+              eq(orchestrationPlans.id, orchestrationWorkers.planId)))
+            .where(and(eq(orchestrationWorkerAttempts.companyId, input.companyId),
+              eq(orchestrationWorkerAttempts.runId, producer.id), eq(orchestrationWorkerAttempts.agentId, input.agentId),
+              eq(orchestrationWorkers.issueId, input.issueId), eq(orchestrationPlans.issueId, input.issueId)))
+            .limit(2) : [];
+          const profile = producer?.runnerProfileJson && typeof producer.runnerProfileJson === "object" && !Array.isArray(producer.runnerProfileJson)
+            ? producer.runnerProfileJson as Record<string, unknown> : {};
+          const receipt = producer ? nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt) : null;
+          const receiptValid = Boolean(producer && receipt?.success && receipt.data.binding.companyId === input.companyId &&
+            receipt.data.binding.issueId === input.issueId && receipt.data.binding.runId === producer.id &&
+            receipt.data.binding.agentId === input.agentId &&
+            receipt.data.binding.responsibleUserId === (producer.responsibleUserId ?? null) &&
+            receipt.data.bootstrap.inputs.some(source => source.kind === "task" && source.issueId === input.issueId));
+          const sourceReceiptHash = receipt?.success && receiptValid ? receipt.data.digest : null;
+          const finals = producer?.finishedAt ? await input.db.select({ finalization: nativeRunFinalizations, result: nativeRunResults })
+            .from(nativeRunFinalizations).innerJoin(nativeRunResults, and(eq(nativeRunResults.companyId, nativeRunFinalizations.companyId),
+              eq(nativeRunResults.issueId, nativeRunFinalizations.issueId), eq(nativeRunResults.runId, nativeRunFinalizations.runId),
+              eq(nativeRunResults.id, nativeRunFinalizations.resultId), eq(nativeRunResults.schemaStatus, "accepted")))
+            .where(and(eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+              eq(nativeRunFinalizations.runId, producer.id), inArray(nativeRunFinalizations.phase, ["committed", "applied"]))).limit(2) : [];
+          const finalized = finals.length === 1 && finals[0]!.result.runId === producer?.id &&
+            finals[0]!.finalization.resultId === finals[0]!.result.id;
+          const owner = producer?.finishedAt && sourceReceiptHash && finalized && attempts.length === 1 &&
+              attempts[0]!.attempt.runId === producer.id && ["running", "succeeded"].includes(attempts[0]!.attempt.status) &&
+              attempts[0]!.worker.agentId === input.agentId && attempts[0]!.plan.status !== "cancelled" &&
+              attempts[0]!.plan.status !== "failed"
+            ? { sourceKind: "native_interaction" as const, sourceRunId: producer.id,
+                resolvedByUserId: selected.resolvedByUserId!, resolvedAt: new Date(selected.resolvedAt!).toISOString(),
+                planId: attempts[0]!.plan.id, workerId: attempts[0]!.worker.id, workerAttemptId: attempts[0]!.attempt.id,
+                sourceRunStatus: "succeeded" as const, sourceReceiptHash,
+                finalizationResultId: finals[0]!.result.id, finalizationResultHash: finals[0]!.result.canonicalSha256 }
+            : undefined;
+          if (owner) {
+            const humanResponse = selected.kind === "ask_user_questions" ? null : {
+              id: selected.id, kind: selected.kind, status: selected.status, resolvedByUserId: selected.resolvedByUserId!,
+              resolvedAt: new Date(selected.resolvedAt!).toISOString(), result: { outcome: "rejected", reason: result!.reason,
+                ...(Array.isArray(result!.selectedOptionIds) ? { selectedOptionIds: result!.selectedOptionIds } : {}) },
+            };
+            const projection = { version: 1 as const, companyId: input.companyId, issueId: input.issueId,
+              interactionId: selected.id, sourceVersion, kind: selected.kind as NativeHumanReviewWithdrawalCapture["projection"]["kind"],
+              interactionSourceRunId: selected.sourceRunId,
+              status: selected.status as "cancelled" | "rejected", resultHash: nativeSha256(result),
+              humanResponseDigest: humanResponse ? nativeSha256(humanResponse) : null,
+              nativeResponseDigest: nativeSource.contentHash, owner };
+            const interactionOutcome = { id: selected.id, kind: selected.kind, status: selected.status,
+              result: structuredClone(result!) };
+            const capture: NativeHumanReviewWithdrawalCapture = { companyId: input.companyId, issueId: input.issueId,
+              runId: input.runId, agentId: input.agentId, nativeSource, nativeResponse: response, projection,
+              interactionOutcome, continuationSource: { ...nativeSource, contentHash: nativeSha256({
+                rendition: "native_human_review_withdrawal_v1", projection, interactionOutcome }) } };
+            input.onHumanReviewWithdrawalCapture(capture);
+          }
+        }
+      }
       const owner = governedOwners.get(response.interactionId);
       const selected = interactions.find(row => row.id === response.interactionId);
       if (input.onAnsweredQuestionCapture && selected?.kind === "ask_user_questions") {

@@ -6,8 +6,9 @@ import { conflict, forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import type { ExecutionSandboxBackend, PreparedSandbox, SandboxAdmissionCleanup, SandboxIdentity, SandboxObservation, SandboxProbeCase, SandboxProbeResult, SandboxProvisioningIntent } from "./backend.js";
 import { compileSandboxPolicy, type ResolvedSandboxBrokerBinding } from "./policy-compiler.js";
-import { projectOpenShellQualificationProbePolicy } from "./openshell-policy.js";
+import { deriveNativeConformanceProofMaximum, projectOpenShellQualificationProbePolicy } from "./openshell-policy.js";
 import { projectOpenShellPolicy, type OpenShellPolicyDocument } from "./openshell-policy.js";
+import type { NativeOpenCodeConformanceHostAuthority } from "./native-host-bridge.js";
 import { checkOpenShellBoundary } from "./openshell-prover.js";
 
 type SandboxHostPolicyProofRequest = NonNullable<SandboxHostRequest["policyProof"]>;
@@ -68,6 +69,8 @@ export function composeOpenShellBrokerCapabilities(snapshot: SandboxCapabilitySn
 
 export function openShellBackend(options: {
   identity: SandboxIdentity; boundary: SandboxPolicy; bridge: OpenShellHostBridge;
+  /** Server-minted exact conformance authority supplied only by the admission owner. */
+  conformance?: NativeOpenCodeConformanceHostAuthority;
   evidenceKind?: SandboxCapabilitySnapshot["evidenceKind"];
   prover: { executable: string; executableSha256: string };
   credentialBrokerOrigin?: string | null;
@@ -154,7 +157,8 @@ export function openShellBackend(options: {
       ...(qualificationProbeFixture ? { probeFixtureHash: qualificationProbeFixture.fixtureHash, qualificationProbeFixture } : {}) };
   }
   async function hostPolicyProof(stage: "requested" | "effective", candidate: OpenShellPolicyDocument,
-    boundary: OpenShellPolicyDocument, policyHash: string, idempotencyKey: string) {
+    boundary: OpenShellPolicyDocument, policyHash: string, idempotencyKey: string,
+    modelBrokerEndpoint?: SandboxPolicyCompilation["modelBrokerEndpoint"]) {
     const prepared = preparedEvidence, intent = preparedProvisioning;
     if (!prepared || !intent || intent.purpose !== "admission" ||
         !prepared.hostEpoch || !prepared.imageDigest || !prepared.sandboxId || !prepared.containerId ||
@@ -170,11 +174,26 @@ export function openShellBackend(options: {
       throw conflict("A protected Host policy proof owner is required for protected-host admission", {
         code: "sandbox_host_policy_proof_unavailable",
       });
-    const candidateDocumentHash = nativeSha256(candidate), boundaryDocumentHash = nativeSha256(boundary);
+    let proofMaximum = boundary;
+    if (options.conformance) {
+      const conformance = options.conformance;
+      if (conformance.policyHash !== policyHash || !conformance.policySnapshotId ||
+          !/^[a-f0-9]{64}$/.test(conformance.creationReceipt) || !modelBrokerEndpoint?.binaries?.length)
+        throw conflict("Current exact conformance authority is required to narrow the filesystem proof maximum", {
+          code: "sandbox_conformance_proof_authority_missing",
+        });
+      const narrowed = deriveNativeConformanceProofMaximum({ operatorMaximum: boundary, candidate,
+        taskRoot: conformance.workspaceRoot, modelBinaries: modelBrokerEndpoint.binaries });
+      if (!narrowed) throw conflict("The conformance candidate is not an exact attenuation of the retained operator maximum", {
+        code: "sandbox_conformance_proof_attenuation_invalid",
+      });
+      proofMaximum = narrowed;
+    }
+    const candidateDocumentHash = nativeSha256(candidate), boundaryDocumentHash = nativeSha256(proofMaximum);
     const proof = await provePolicy(identity, {
       version: 1, stage, operationKey: intent.operationKey, bindingVersion: prepared.bindingVersion,
       provisioningHash: prepared.provisioningHash, policyHash, sandboxId: prepared.sandboxId,
-      containerId: prepared.containerId, candidateDocument: candidate, boundaryDocument: boundary,
+      containerId: prepared.containerId, candidateDocument: candidate, boundaryDocument: proofMaximum,
       candidateDocumentHash, boundaryDocumentHash, proverSha256: options.prover.executableSha256,
     }, idempotencyKey);
     const expectedTarget = {
@@ -210,7 +229,7 @@ export function openShellBackend(options: {
       if (nativeSha256(effective) !== nativeSha256(candidate))
         throw conflict("Current effective Host policy differs from the exact compiled request", { code: "sandbox_effective_policy_mismatch" });
       return hostPolicyProof("effective", candidate, boundary.document, preparedProvisioning?.policyHash ?? "",
-        `${idempotencyKey}:policy-proof:effective`);
+        `${idempotencyKey}:policy-proof:effective`, modelBrokerEndpoint);
     }
     const effective = await bridge.effectivePolicy(identity);
     const proof = await checkOpenShellBoundary({ ...options.prover, candidate: effective, boundary: boundary.document });
@@ -280,7 +299,7 @@ export function openShellBackend(options: {
       const policyHash = nativeSha256(input.policy);
       if ((options.evidenceKind ?? "local_fixture") === "protected_host_report") {
         await hostPolicyProof("requested", projection.document, boundary.document, policyHash,
-          `${input.idempotencyKey}:policy-proof:requested`);
+          `${input.idempotencyKey}:policy-proof:requested`, input.policy.modelBrokerEndpoint);
       } else {
         const requestedProof = await checkOpenShellBoundary({ ...options.prover, candidate: projection.document, boundary: boundary.document });
         if (requestedProof.result !== "within_boundary") return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: [`boundary:${requestedProof.result}`] };

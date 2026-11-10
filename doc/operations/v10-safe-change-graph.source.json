@@ -21,13 +21,13 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1979,
+    "sourceDeltaPathCount": 1982,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13994,
+    "fullDiffPathCount": 14034,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -16727,6 +16727,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/__tests__/openshell-native-conformance-proof-maximum.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/__tests__/openshell-qualification-policy.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -16749,6 +16755,12 @@
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "c81f04daf24369db15f998507742754a8c6c46bd2bed5a8663600e15247f06c3"
+        },
+        {
+          "path": "server/src/__tests__/v7-governance.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "9897962717dbf9ce73d9f97f976539949c26506259ccbc72ab220d09d46af9ce"
         },
         {
           "path": "server/src/__tests__/v9-runtime-candidates.integration.test.ts",
@@ -16791,6 +16803,12 @@
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "afd857678c9c43aede2a401f965f38f4bf9ecb53c34ab2119df6dc497004c450"
+        },
+        {
+          "path": "server/src/services/ai-governance/governance-service.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ceb95891b2b566cc9ebb68e11a8c5cc075aad75a21ee75237f86d3a9e166992c"
         },
         {
           "path": "server/src/services/environment-execution-target.ts",
@@ -17492,10 +17510,12 @@
         "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
         "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
         "server/src/__tests__/native-opencode-conformance.integration.test.ts",
+        "server/src/__tests__/openshell-native-conformance-proof-maximum.test.ts",
         "server/src/__tests__/openshell-qualification-policy.test.ts",
         "server/src/__tests__/v6-commercial-runtime.integration.test.ts",
         "server/src/__tests__/v6-runtime-fleet.integration.test.ts",
         "server/src/__tests__/v6-runtime-relay.test.ts",
+        "server/src/__tests__/v7-governance.integration.test.ts",
         "server/src/__tests__/v9-runtime-candidates.integration.test.ts",
         "server/src/provider-conformance-runtime-tools-claim.ts",
         "server/src/routes/connection-intents.test.ts",
@@ -17503,6 +17523,7 @@
         "server/src/runtime-tools-token.test.ts",
         "server/src/runtime-tools-token.ts",
         "server/src/services/agent-packages/execution-gate.ts",
+        "server/src/services/ai-governance/governance-service.ts",
         "server/src/services/environment-execution-target.ts",
         "server/src/services/environment-runtime.ts",
         "server/src/services/execution-blocker.ts",
@@ -17689,10 +17710,12 @@
         "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
         "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
         "server/src/__tests__/native-opencode-conformance.integration.test.ts",
+        "server/src/__tests__/openshell-native-conformance-proof-maximum.test.ts",
         "server/src/__tests__/openshell-qualification-policy.test.ts",
         "server/src/__tests__/v6-commercial-runtime.integration.test.ts",
         "server/src/__tests__/v6-runtime-fleet.integration.test.ts",
         "server/src/__tests__/v6-runtime-relay.test.ts",
+        "server/src/__tests__/v7-governance.integration.test.ts",
         "server/src/__tests__/v9-runtime-candidates.integration.test.ts",
         "server/src/provider-conformance-runtime-tools-claim.ts",
         "server/src/routes/connection-intents.test.ts",
@@ -17700,6 +17723,7 @@
         "server/src/runtime-tools-token.test.ts",
         "server/src/runtime-tools-token.ts",
         "server/src/services/agent-packages/execution-gate.ts",
+        "server/src/services/ai-governance/governance-service.ts",
         "server/src/services/environment-execution-target.ts",
         "server/src/services/environment-runtime.ts",
         "server/src/services/execution-blocker.ts",

@@ -195,6 +195,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     ...(capture.acceptedPlanReview !== undefined ? ["acceptedPlanReview"] : []),
     ...(capture.explicitHumanSource !== undefined ? ["explicitHumanSource"] : []),
     ...(capture.answeredQuestions !== undefined ? ["answeredQuestions"] : []),
+    ...(capture.humanReviewWithdrawals !== undefined ? ["humanReviewWithdrawals"] : []),
     ...(capture.adminExpiredInteractions !== undefined ? ["adminExpiredInteractions"] : []),
     ...(capture.stageActions !== undefined ? ["stageActions"] : []),
     ...(capture.summary !== undefined ? ["summary"] : []),
@@ -212,8 +213,13 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const hasGoverned = Array.isArray(governed) && governed.length > 0 && governed.length <= 256;
   const questions = capture.answeredQuestions;
   const hasQuestions = Array.isArray(questions) && questions.length > 0 && questions.length <= 256;
+  const withdrawals = capture.humanReviewWithdrawals;
+  const hasReviewWithdrawals = Array.isArray(withdrawals) && withdrawals.length > 0 && withdrawals.length <= 64;
+  if (capture.humanReviewWithdrawals !== undefined && (!hasReviewWithdrawals || hasGoverned || hasQuestions ||
+    capture.acceptedPlanReview !== undefined || capture.adminExpiredInteractions !== undefined || capture.delivery !== undefined ||
+    capture.pendingInteractions !== undefined || capture.stageActions !== undefined || input.stageTrigger !== undefined)) return null;
   if (questions !== undefined && (!hasQuestions || governed !== undefined || capture.acceptedPlanReview !== undefined ||
-    capture.delivery !== undefined || capture.adminExpiredInteractions !== undefined || input.stageTrigger !== undefined)) return null;
+    capture.delivery !== undefined || capture.adminExpiredInteractions !== undefined || capture.humanReviewWithdrawals !== undefined || input.stageTrigger !== undefined)) return null;
   const administrativeExpiries = capture.adminExpiredInteractions;
   const hasAdministrativeExpiries = Array.isArray(administrativeExpiries) && administrativeExpiries.length > 0 &&
     administrativeExpiries.length <= 64;
@@ -326,7 +332,7 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     capture.wake.requestedByActorId === input.responsibleUserId && Array.isArray(c?.originCommentIds) &&
     c.originCommentIds.length === 0 && Array.isArray(capture.wake.originCommentIds) && capture.wake.originCommentIds.length === 0 &&
     c?.resumeDelta === undefined && capture.previousContext === undefined && capture.retainedSource === undefined &&
-    !capture.delivery && !capture.acceptedPlanReview && !capture.governedInteractions && !capture.answeredQuestions &&
+    !capture.delivery && !capture.acceptedPlanReview && !capture.governedInteractions && !capture.answeredQuestions && !capture.humanReviewWithdrawals &&
     (!capture.adminExpiredInteractions || hasAdministrativeExpiries) &&
     !capture.pendingInteractions && !capture.stageActions && !hasResolutionWake && !capture.wake.manualQueueAdoption &&
     c?.completedWork === (finalizedSummaryRecord?.body ?? summaryRendition?.body);
@@ -364,8 +370,8 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
     !Array.isArray(c.messages) || (c.messages.length === 0 && !hasStageTrigger && !hasSummaryAssignment) || c.messages.length > 256 ||
     !Array.isArray(c.originCommentIds) || (hasStageTrigger || hasSummaryAssignment ? c.originCommentIds.length !== 0 : c.originCommentIds.length === 0) || c.originCommentIds.length > 256 ||
     new Set(c.originCommentIds).size !== c.originCommentIds.length ||
-    (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && c.humanResponses.length !== 0))) ||
-    !Array.isArray(c.interactionOutcomes) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && c.interactionOutcomes.length !== 0) ||
+    (c.humanResponses !== undefined && (!Array.isArray(c.humanResponses) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && !hasReviewWithdrawals && c.humanResponses.length !== 0))) ||
+    !Array.isArray(c.interactionOutcomes) || (!hasGoverned && !hasAcceptedPlanReview && !hasQuestions && !hasAdministrativeExpiries && !hasReviewWithdrawals && c.interactionOutcomes.length !== 0) ||
     (c.recoveryOutcomes !== undefined && (!Array.isArray(c.recoveryOutcomes) || c.recoveryOutcomes.length !== 0)) ||
     (c.completedActions !== undefined && (!Array.isArray(c.completedActions) || c.completedActions.length > 64)) ||
     (c.completedWork !== null && c.completedWork !== capture.summary?.rendition?.body && c.completedWork !== capture.finalizedSummary?.body) || !Array.isArray(c.unresolvedInteractionIds) || c.unresolvedInteractionIds.length > 256 ||
@@ -521,7 +527,70 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const origins = c.originCommentIds.map(id => c.messages.find(message => message.id === id));
   const admittedWakeOrigins = capture.wake.originCommentIds.map(id =>
     c.messages.find(message => message.id === id));
-  if (hasGoverned) {
+  if (hasReviewWithdrawals) {
+    const ids = new Set<string>();
+    if (withdrawals!.length !== c.interactionOutcomes.length ||
+      new Set(withdrawals!.map(value => value?.projection?.interactionId)).size !== withdrawals!.length ||
+      !capture.wake.interaction || Object.keys(capture.wake.interaction).sort().join(",") !==
+        "interactionId,interactionKind,interactionStatus,sourceRunId" ||
+      (c.humanResponses?.length ?? 0) !== withdrawals!.filter(value => value?.projection?.kind !== "ask_user_questions").length) return null;
+    for (const value of withdrawals!) {
+      if (!value || Object.keys(value).sort().join(",") !== "agentId,companyId,continuationSource,interactionOutcome,issueId,nativeResponse,nativeSource,projection,runId" ||
+        value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId || value.runId !== input.runId ||
+        !value.nativeResponse || !value.nativeSource || !value.continuationSource || !value.projection || !value.interactionOutcome) return null;
+      const p = value.projection, o = p.owner;
+      if (Object.keys(p).sort().join(",") !== "companyId,humanResponseDigest,interactionId,interactionSourceRunId,issueId,kind,nativeResponseDigest,owner,resultHash,sourceVersion,status,version" ||
+        p.version !== 1 || p.companyId !== input.companyId || p.issueId !== input.issueId ||
+        !uuid.test(p.interactionId) || !/^\d+(?:\.\d+)?$/.test(p.sourceVersion) ||
+        !["ask_user_questions", "request_confirmation", "request_checkbox_confirmation"].includes(p.kind) ||
+        !["cancelled", "rejected"].includes(p.status) ||
+        (p.kind === "ask_user_questions" ? p.status !== "cancelled" : p.status !== "rejected") ||
+        !/^[a-f0-9]{64}$/.test(p.resultHash) ||
+        !o || typeof o !== "object" || Array.isArray(o) ||
+        !Object.prototype.hasOwnProperty.call(p, "interactionSourceRunId") ||
+        typeof p.interactionSourceRunId !== "string" || !uuid.test(p.interactionSourceRunId) ||
+        Object.keys(o).sort().join(",") !== "finalizationResultHash,finalizationResultId,planId,resolvedAt,resolvedByUserId,sourceKind,sourceReceiptHash,sourceRunId,sourceRunStatus,workerAttemptId,workerId" ||
+        ![p.interactionId, o.sourceRunId, o.planId, o.workerId, o.workerAttemptId].every(id => typeof id === "string" && uuid.test(id)) ||
+        o.sourceKind !== "native_interaction" || p.interactionSourceRunId !== o.sourceRunId || c.trigger.sourceRunId !== o.sourceRunId ||
+        o.sourceRunStatus !== "succeeded" || typeof o.sourceReceiptHash !== "string" || !/^[a-f0-9]{64}$/.test(o.sourceReceiptHash) ||
+        typeof o.finalizationResultId !== "string" || !uuid.test(o.finalizationResultId) ||
+        typeof o.finalizationResultHash !== "string" || !/^[a-f0-9]{64}$/.test(o.finalizationResultHash) ||
+        typeof o.resolvedByUserId !== "string" ||
+        !o.resolvedByUserId.trim() || o.resolvedByUserId.length > 512 ||
+        !Number.isFinite(Date.parse(o.resolvedAt)) ||
+        value.interactionOutcome.id !== p.interactionId || value.interactionOutcome.kind !== p.kind || value.interactionOutcome.status !== p.status ||
+        nativeSha256(value.interactionOutcome.result) !== p.resultHash ||
+        !isDeepStrictEqual(c.interactionOutcomes.find(outcome => outcome.id === p.interactionId), value.interactionOutcome) ||
+        Object.keys(value.nativeResponse).sort().join(",") !== "interactionId,kind,response" ||
+        Object.keys(value.nativeResponse.response).sort().join(",") !== "result,status" ||
+        Object.keys(value.interactionOutcome).sort().join(",") !== "id,kind,result,status" ||
+        value.nativeResponse.interactionId !== p.interactionId || value.nativeResponse.kind !== p.kind ||
+        value.nativeResponse.response.status !== p.status ||
+        (p.kind === "ask_user_questions" ? (value.nativeResponse.response.result as Record<string, unknown> | null)?.cancelled !== true :
+          (value.nativeResponse.response.result as Record<string, unknown> | null)?.outcome !== "rejected") ||
+        nativeSha256(value.nativeResponse) !== p.nativeResponseDigest ||
+        !nativePayloadSourceInputSchema.safeParse(value.nativeSource).success || value.nativeSource.kind !== "interaction" ||
+        value.nativeSource.issueId !== input.issueId || value.nativeSource.interactionId !== p.interactionId ||
+        value.nativeSource.sourceVersion !== p.sourceVersion || value.nativeSource.contentHash !== p.nativeResponseDigest ||
+        !isDeepStrictEqual(value.continuationSource, { ...value.nativeSource,
+          contentHash: nativeSha256({ rendition: "native_human_review_withdrawal_v1", projection: p,
+            interactionOutcome: value.interactionOutcome }) }) || ids.has(p.interactionId)) return null;
+      ids.add(p.interactionId);
+      const response = c.humanResponses?.find(row => row.id === p.interactionId);
+      if ((p.kind === "ask_user_questions" && (response || p.humanResponseDigest !== null)) ||
+        (p.kind !== "ask_user_questions" && (!response || !/^[a-f0-9]{64}$/.test(p.humanResponseDigest ?? "") ||
+          nativeSha256(response) !== p.humanResponseDigest || response.kind !== p.kind || response.status !== p.status ||
+          response.resolvedByUserId !== o.resolvedByUserId || response.resolvedAt !== o.resolvedAt ||
+          !response.result || typeof response.result !== "object" || Array.isArray(response.result) ||
+          !("outcome" in response.result) || response.result.outcome !== "rejected"))) return null;
+    }
+    const trigger = withdrawals!.find(value => value.projection.interactionId === c.trigger.interactionId)?.projection;
+    if (!trigger || capture.wake.interaction.interactionId !== c.trigger.interactionId ||
+      capture.wake.interaction.interactionKind !== trigger.kind || capture.wake.interaction.interactionStatus !== trigger.status ||
+      capture.wake.interaction.sourceRunId !== trigger.interactionSourceRunId || capture.wake.requestedByActorId !== trigger.owner.resolvedByUserId ||
+      capture.wake.requestedByActorType !== "user" || c.trigger.sourceRunId !== trigger.interactionSourceRunId ||
+      withdrawals!.some(value => !value.nativeSource || !value.continuationSource)) return null;
+  } else if (hasGoverned) {
     const captures = governed!;
     if (captures.some(value => !value || typeof value !== "object" || !value.projection || typeof value.projection !== "object" ||
       !value.projection.owner || typeof value.projection.owner !== "object" || !Array.isArray(value.projection.owner.originCommentIds) ||
@@ -678,10 +747,10 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
       response.kind !== "request_confirmation" || response.status !== "accepted" || response.resolvedByUserId !== plan.resolvedByUserId ||
       response.resolvedAt !== plan.resolvedAt || capture.delivery !== undefined || governed !== undefined) return null;
     if (origins.some(message => !message) || capture.wake.originCommentIds.some(id => !plan.originCommentIds.includes(id))) return null;
-  } else if (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && !hasSummaryAssignment && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null) ||
+  } else if (!hasReviewWithdrawals && (governed !== undefined || capture.delivery !== undefined || capture.wake.interaction || (!hasStageTrigger && !hasSummaryAssignment && (origins.some(message => !message || message.authorType !== "user" || message.createdByRunId !== null) ||
     admittedWakeOrigins.length === 0 || admittedWakeOrigins.some(message => !message || message.authorType !== "user" ||
       message.createdByRunId !== null || (!adoption && message.authorId !== capture.wake.requestedByActorId) ||
-      !c.originCommentIds.includes(message.id) || (adoption && !adoption.originCommentIds.includes(message.id)))))) return null;
+      !c.originCommentIds.includes(message.id) || (adoption && !adoption.originCommentIds.includes(message.id))))))) return null;
   const latest = c.messages.findLast(message => message.authorType === "user" && message.createdByRunId === null && message.body.trim());
   if ((!latest && !hasStageTrigger && !hasAcceptedPlanReview && !hasSummaryAssignment) ||
     c.objective !== (hasSummaryAssignment ? input.taskObjective : latest?.body ??
@@ -819,7 +888,7 @@ export function captureNativeTaskWakeSource(input: {
     issueId: input.issueId, runId: input.runId, agentId: input.agentId, responsibleUserId: input.responsibleUserId,
     wakeupRequestId: input.wakeupRequestId, wakeReason: input.persistedWakeReason,
     taskObjective: input.task.description ?? input.task.title, capture: input.continuationCapture, stageTrigger: input.stageTrigger, historicalPendingSources: input.historicalPendingSources });
-  const governedWake = closedContinuation?.governedInteractions?.length || closedContinuation?.acceptedPlanReview || closedContinuation?.answeredQuestions?.length
+  const governedWake = closedContinuation?.governedInteractions?.length || closedContinuation?.acceptedPlanReview || closedContinuation?.answeredQuestions?.length || closedContinuation?.humanReviewWithdrawals?.length
     ? closedContinuation.wake.interaction ?? null : null;
   const blocked = input.blockedHumanInteraction;
   const blockedBinding = blocked && blocked.companyId === input.companyId && blocked.issueId === input.issueId &&

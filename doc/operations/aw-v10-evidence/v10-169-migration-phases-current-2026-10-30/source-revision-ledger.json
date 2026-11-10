@@ -519,8 +519,14 @@
     "qualificationBoundary": "147 selected software cases include two actual pinned managed SDK/software Host journeys, all77 gateway cases,15 Project owners,45 selected dispatch owners and eight helper cases. One legacy attachment test remains unresolved and excluded from the selected dispatch run. No migration execution, phase-status promotion, external provider, physical Host or whole-brief/release qualification."
   },
   "nativeConformanceAndSerialSourceReview20261110": {
-    "changes": [],
-    "reason": "Bind the complete current Human upload set atomically to its first comment through forward migration 0573; retain original upload audits and monotonic invalidation. Preserve exact unknown-charge explicit Human continuation and durable input acknowledgement before provider dispatch. Keep original connected-knowledge authorization in server-only state. Add signed stopped-target Host policy proof with fresh command nonces, exact document and runtime pins, bounded snapshots, isolated actual prover and read-only staged bootstrap binding. Retain the existing current Source, budget, Stop and cleanup owners.",
-    "qualificationBoundary": "Source hash refresh only. Exact test windows and source pins are recorded separately. The native-source-and-host-proof-20261110 packet records separate exact windows, including upload, unknown-charge continuation, Host nonce and Node contract checks. The actual SDK attachment/conformance pipeline, Native review cancellation and final-head integrated checks remain open unless an exact later receipt proves them. No migration execution, historical phase-status promotion, live paid provider, physical production Host, or release qualification. The native-historical-source-and-ci-20261110 packet records the r130 historical-source regression, r131 current Runner pack rebuild and r132 server typecheck; AW V4 workflow execution remains open."
+    "changes": [
+      {
+        "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+        "oldSha256": "caf5e0e116a359139b2a03f12fd7f690e0413a60f2358d48a1624dad1637a7cb",
+        "newSha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada"
+      }
+    ],
+    "reason": "Retain current Human and Task authority for review withdrawal; reconcile Platform Skill inventory before governance authority hashing. Stage protected Host proof inputs as read-only binds and audit Task-root ancestors. Derive an exact provider-conformance filesystem proof maximum from the current source owner while retaining the original operator boundary and independent signed-bridge validation. Add a labeled software-only signed peer that executes the pinned prover and checks current DB ownership.",
+    "qualificationBoundary": "Source hash refresh only. Exact test windows and limits are in native-governance-and-proof-inputs-20261110. Host helper checks include actual local Docker and pinned binaries, but local vfs does not qualify the production Host. Shared governance first-result and component checks pass in their recorded windows. Native review withdrawal, actual six-probe conformance, complete SDK attachment consumption and final-head acceptance remain open. No historical migration status, physical Host, paid provider, release or merge qualification is promoted."
   }
 }

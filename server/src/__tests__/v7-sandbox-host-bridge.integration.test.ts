@@ -7,6 +7,8 @@ import { remoteExecutionHasStopped, recordNativeRemoteWorkloadStopped } from "..
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { constants, createHash, generateKeyPairSync, privateDecrypt, randomBytes, randomUUID, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
+import * as fs from "node:fs/promises";
+import path from "node:path";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import express from "express";
@@ -69,7 +71,8 @@ import { open as unseal } from "../services/saas/crypto.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
 import { sandboxProbeCases, type SandboxIdentity } from "../services/execution-sandbox/backend.js";
 import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
-import { projectOpenShellPolicy, projectOpenShellQualificationProbePolicy } from "../services/execution-sandbox/openshell-policy.js";
+import { deriveNativeConformanceProofMaximum, projectOpenShellPolicy, projectOpenShellQualificationProbePolicy } from "../services/execution-sandbox/openshell-policy.js";
+import { resolvePaperclipInstanceRoot } from "../home-paths.js";
 import { agentIdentityService } from "../services/agent-identities.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
@@ -194,6 +197,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       cell: typeof runtimeCells.$inferSelect,
       scope: SandboxIdentity;
     let priorQualificationJwtSecret: string | undefined;
+    let conformanceWorkspaceArtifacts: string[] = [];
     let credentialFixtureForTest: SandboxCapabilitySnapshot["qualificationCredentialFixture"] = undefined;
     let qualificationProbeFixtureForTest: SandboxQualificationProbeFixture | undefined;
     let qualificationSecretValueForTest: string | null = null;
@@ -265,6 +269,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       credentialFixtureForTest = undefined;
       qualificationProbeFixtureForTest = undefined;
       qualificationSecretValueForTest = null;
+      conformanceWorkspaceArtifacts = [];
       await instanceSettingsService(db).updateExperimental({
         sandbox_abstraction_v7: true,
         openshell_v7: true,
@@ -357,9 +362,10 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         sandboxRef: `aw-v7-${binding.id}`,
       };
     });
-    afterEach(() => {
+    afterEach(async () => {
       if (priorQualificationJwtSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
       else process.env.PAPERCLIP_AGENT_JWT_SECRET = priorQualificationJwtSecret;
+      await Promise.all(conformanceWorkspaceArtifacts.map(target => fs.rm(target, { recursive: true, force: true })));
     });
     async function pending() {
       await expect
@@ -2104,12 +2110,26 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         expect(compiled.expiresAt.getTime()).toBeLessThanOrEqual(firstPolicyExpiry);
         // Build a separate insert-only conformance provenance fixture. Native
         // manifests are immutable, so this test never edits the existing Run's manifest.
-        const groupId = randomUUID(), workspaceRoot = `/tmp/aw-conformance-${randomUUID()}`;
+        const groupId = randomUUID();
         const [sourceRunBeforeConformance] = await db.select().from(heartbeatRuns)
           .where(eq(heartbeatRuns.id, run!.id)).limit(1);
         await db.update(heartbeatRuns).set({ status: "paused" }).where(eq(heartbeatRuns.id, run!.id));
         const conformanceTaskId = randomUUID(), conformanceRunId = randomUUID(), conformanceLeaseId = randomUUID();
         const conformanceWorkspaceId = randomUUID(), conformanceSessionId = randomUUID();
+        const instanceRoot = await fs.realpath(resolvePaperclipInstanceRoot());
+        const workspaceRoot = path.join(instanceRoot, "chat-workspaces", f.home, run!.agentId!, conformanceTaskId);
+        await fs.mkdir(workspaceRoot, { recursive: true, mode: 0o700 });
+        const workspaceStat = await fs.lstat(workspaceRoot);
+        const proofRoot = path.join(instanceRoot, "chat-workspace-proofs");
+        await fs.mkdir(proofRoot, { recursive: true, mode: 0o700 });
+        const proofKey = createHash("sha256").update(`${groupId}\0${f.home}\0${run!.agentId}\0${conformanceTaskId}`).digest("hex");
+        const workspaceReceipt = { schema: "paperclip.native-opencode-conformance-workspace/v1", groupId,
+          companyId: f.home, agentId: run!.agentId!, taskId: conformanceTaskId, taskRoot: workspaceRoot,
+          workspaceId: conformanceWorkspaceId, cwd: workspaceRoot, dev: workspaceStat.dev, ino: workspaceStat.ino };
+        const creationReceipt = nativeSha256(workspaceReceipt);
+        const receiptPath = path.join(proofRoot, `${proofKey}.json`);
+        conformanceWorkspaceArtifacts.push(workspaceRoot, receiptPath);
+        await fs.writeFile(receiptPath, `${JSON.stringify(workspaceReceipt)}\n`, { flag: "wx", mode: 0o600 });
         const [conformanceTask] = await db.insert(issues).values({ companyId: f.home,
           title: "Synthetic managed OpenCode qualification",
           description: "Operator-created probe only. No customer source, company context, or platform tools are admitted.",
@@ -2149,7 +2169,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
               schema: "paperclip.native-opencode-conformance-workspace/v1", groupId, companyId: f.home,
               agentId: run!.agentId, taskId: conformanceTask!.id, taskRoot: workspaceRoot, localCwd: workspaceRoot,
               remoteCwd: workspaceRoot, workspaceId: conformanceWorkspaceId, leaseId: conformanceLeaseId,
-              providerLeaseId: "provider-conformance-lease", creationReceipt: "a".repeat(64), createdEmpty: true,
+              providerLeaseId: "provider-conformance-lease", creationReceipt, createdEmpty: true,
               authorityHash: null,
             },
           }, contextSnapshot: { providerConformanceGroupId: groupId, providerConformancePlanId: conformancePlan!.id,
@@ -2176,7 +2196,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           responsibleUserId: f.userId,
           executionScope: { primaryCompanyId: f.home, primaryAgentPresenceId: run!.agentId, delegatedScopes: [] },
           rolePack: null, contextManifests: [{ companyId: f.home, contextManifestId }], skills: [], playbooks: [],
-          capabilities: [], providers: [], executionPolicy: { deterministicPreference: true, policies: [], approvalRefs: [],
+          capabilities: [], providers: manifest!.record.manifest.providers, executionPolicy: { deterministicPreference: true, policies: [], approvalRefs: [],
             restrictions: ["Synthetic conformance only", "No company context", "No tools or delegated scope"],
             policySnapshotHash: "c".repeat(64) }, inventoryEstimatedTokens: 0, warnings: [] };
         const [conformanceManifest] = await db.insert(agentExecutionManifests).values({ companyId: f.home,
@@ -2203,6 +2223,15 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           ...conformancePolicy, id: randomUUID(), policyVersion: compiled.policyVersion + 100, status: "qualified",
         }).returning();
         expect(acceptedHiddenConformance?.status).toBe("qualified");
+        const wrongParentCompilation = { ...conformanceCompilation, boundaryPolicyHash: "e".repeat(64) };
+        const [wrongParentSnapshot] = await db.insert(runtimePolicySnapshots).values({ ...conformancePolicy,
+          id: randomUUID(), policyVersion: compiled.policyVersion + 99, status: "qualified",
+          policyHash: nativeSha256(wrongParentCompilation), compilation: wrongParentCompilation }).returning();
+        expect(wrongParentSnapshot?.status).toBe("qualified");
+        // This synthetic fixture exercises SQL qualification guards only. The
+        // current signed proof-owner path is covered by the real conformance
+        // service integration, which creates its full provider/Run authority.
+        await db.delete(runtimePolicySnapshots).where(eq(runtimePolicySnapshots.id, wrongParentSnapshot!.id));
         await db.update(heartbeatRuns).set({ contextSnapshot: { providerConformanceGroupId: randomUUID(),
           providerConformancePlanId: conformancePlan!.id, containsCompanyContext: false, platformToolsGranted: false } })
           .where(eq(heartbeatRuns.id, conformanceRunId));

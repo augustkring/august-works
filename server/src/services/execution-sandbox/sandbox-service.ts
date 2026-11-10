@@ -652,6 +652,14 @@ export function executionSandboxService(db: Db, options: {
       return result.receipt!;
     },
     assertTaskExecutionContext,
+    assertNativeConformanceProofOwner: async (tx: Db, actor: AuthorizationActor, companyId: string,
+      conformance: NativeOpenCodeConformanceHostAuthority) => {
+      const { policySnapshotId: _policySnapshotId, policyHash: _policyHash, ...bootstrap } = conformance;
+      const { source, lease } = await assertNativeConformanceBootstrap(tx, actor, companyId, bootstrap);
+      return { sourceAuthorityHash: source.authorityHash, runId: source.run.id,
+        taskId: source.task.id, manifestId: source.record.id, manifestHash: source.record.hash,
+        leaseId: lease.id, workspaceRoot: bootstrap.workspaceRoot };
+    },
     posture: async (actor: AuthorizationActor, companyId: string, cellId: string): Promise<SandboxPosture> => {
       await access(db, actor, companyId); const current = await cell(db, companyId, cellId);
       const [row] = await db.select().from(runtimeSandboxBindings).where(and(eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.runtimeCellId, cellId))).orderBy(desc(runtimeSandboxBindings.createdAt)).limit(1);

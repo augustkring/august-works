@@ -1274,7 +1274,7 @@
     },
     {
       "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
-      "sha256": "0982f3e1c5dd1faa29c07d43182c8a8db5082c2d01b0aad0003b70fa56f67b8b"
+      "sha256": "0c2453111e02292a244b8816156ce79891d27ac0e320554739cf4141a61f2ada"
     },
     {
       "path": "server/src/__tests__/v7-sandbox-policy.test.ts",
@@ -1366,7 +1366,7 @@
     },
     {
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "6d96282f7049263562c12e7ad1f1ca949a367ee4fc64a7a9b1db5854099126a9"
+      "sha256": "4074424f317522542743f48d838a059c82ee4def496c32e5384670fbd5493eb2"
     },
     {
       "path": "server/src/services/experience/company-responsibility-attention.ts",
@@ -1434,7 +1434,7 @@
     },
     {
       "path": "server/src/services/saas/platform.ts",
-      "sha256": "2f6a636dc7d08f29cc08bee8011d86821fd5876cd8b812641aaf0c944480bc18"
+      "sha256": "f5294702ef6b8748144b946224e0d70212c20749a2dd863092467c18b263e1ff"
     },
     {
       "path": "ui/src/api/companies.ts",

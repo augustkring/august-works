@@ -40,6 +40,7 @@ const support = await getEmbeddedPostgresTestSupport();
     let observedSourceSha: string | undefined;
     let observedProviderKeys: Array<{ runId: string; keyMatchesConfiguredAgent: boolean }> = [];
     let observedStartTuples: Array<{ runId: string; tuple: Record<string, string> }> = [];
+    let observedSoftwarePolicyProofs: Array<Record<string, unknown>> = [];
     let rejectedBootstrapScopes: string[] = [];
     const result = await withManagedNativeHeartbeatFixture({
       db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
@@ -145,7 +146,16 @@ const support = await getEmbeddedPostgresTestSupport();
         expect(hostFacts).toMatchObject({ mode: "controlled_two_agent_signed_host_relay" });
         observedStartTuples = Array.isArray(hostFacts?.nativeConformanceStartTupleObservations)
           ? hostFacts.nativeConformanceStartTupleObservations : [];
+        observedSoftwarePolicyProofs = Array.isArray(hostFacts?.softwareOnlyPolicyProofObservations)
+          ? hostFacts.softwareOnlyPolicyProofObservations : [];
         expect(observedStartTuples).toHaveLength(6);
+        expect(observedSoftwarePolicyProofs.length).toBeGreaterThan(0);
+        expect(observedSoftwarePolicyProofs.every(row => row.peer === "software_only_host_peer" && row.physicalQualification === false &&
+          row.persistedCompilationMatched === true && row.conformanceClaimPersisted === true &&
+          row.claimAbsentFromHostEnvelope === true && row.exactStoppedPreparedTarget === true &&
+          row.actualPinnedProver === true && row.result === "within_boundary" && row.completedSuccessfully === true &&
+          row.wrongParentOwnerRejected === true &&
+          ["requested", "effective"].includes(String(row.stage)))).toBe(true);
         expect(observedStartTuples.map(row => row.runId).sort()).toEqual([...result.runIds].sort());
         const imagePackProbes = Array.isArray(hostFacts?.execFacts)
           ? hostFacts.execFacts.filter((fact: Record<string, unknown>) => fact.providerPackImageProbe === true) : [];

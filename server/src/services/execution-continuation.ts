@@ -54,6 +54,7 @@ export type NativeTaskContinuationCapture = {
   pendingInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedPendingInteractionCapture[];
   governedInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[];
   answeredQuestions?: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[];
+  humanReviewWithdrawals?: import("./native-runtime/native-interaction-bridge.js").NativeHumanReviewWithdrawalCapture[];
   adminExpiredInteractions?: import("./native-runtime/native-interaction-bridge.js").NativeAdministrativeInteractionExpiryCapture[];
   acceptedPlanReview?: import("./native-runtime/accepted-plan-review-source.js").NativeAcceptedPlanReviewCapture;
   /** Persisted Human admission for one fresh turn after a stopped Native Text
@@ -847,6 +848,7 @@ export async function buildExecutionContinuation(input: {
 
     const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
     const answeredQuestions: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[] = [];
+    const humanReviewWithdrawals: import("./native-runtime/native-interaction-bridge.js").NativeHumanReviewWithdrawalCapture[] = [];
     const adminExpiredInteractions: import("./native-runtime/native-interaction-bridge.js").NativeAdministrativeInteractionExpiryCapture[] = [];
     const adminExpiryCandidates = wake?.reason === "issue_assigned" &&
       (assignmentFinalizedSummary || Boolean(input.summaryDocument?.source.payloadSourceSnapshot &&
@@ -872,7 +874,8 @@ export async function buildExecutionContinuation(input: {
       await materializeNativeInteractionResponses({ db, companyId, issueId, runId: receiver.id, agentId: input.agentId,
         interactionIds: materializableOutcomes.map(outcome => outcome.id),
         onContinuationSourceCapture: capture => { governedInteractions.push(capture); },
-        onAnsweredQuestionCapture: capture => { answeredQuestions.push(capture); } });
+        onAnsweredQuestionCapture: capture => { answeredQuestions.push(capture); },
+        onHumanReviewWithdrawalCapture: capture => { humanReviewWithdrawals.push(capture); } });
     }
     const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
     const pendingInteractions = wake && envelope.unresolvedInteractionIds.length
@@ -909,6 +912,7 @@ export async function buildExecutionContinuation(input: {
       responsibleUserId: receiver.responsibleUserId, wakeupRequestId: wake.id, envelope, commentSources: finalCommentSources,
       ...(governedInteractions.length ? { governedInteractions } : {}),
       ...(answeredQuestions.length ? { answeredQuestions } : {}),
+      ...(humanReviewWithdrawals.length ? { humanReviewWithdrawals } : {}),
       ...(adminExpiredInteractions.length ? { adminExpiredInteractions } : {}),
       ...(stageActions.length ? { stageActions } : {}),
       ...(delivery ? { delivery } : {}),

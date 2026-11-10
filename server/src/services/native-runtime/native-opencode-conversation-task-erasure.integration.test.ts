@@ -170,6 +170,14 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode conversation Task
       },
     });
     expect(result.runStatus).toBe("succeeded");
+    const softwarePolicyProofs = result.sandboxRuntimeFacts?.softwareOnlyPolicyProofObservations as
+      Array<Record<string, unknown>> | undefined;
+    expect(softwarePolicyProofs?.length).toBeGreaterThan(0);
+    expect(softwarePolicyProofs?.every(row => row.peer === "software_only_host_peer" &&
+      row.physicalQualification === false && row.persistedCompilationMatched === true &&
+      row.conformanceClaimPersisted === false && row.claimAbsentFromHostEnvelope === true &&
+      row.exactStoppedPreparedTarget === true && row.actualPinnedProver === true &&
+      row.result === "within_boundary" && row.completedSuccessfully === true)).toBe(true);
     expect(providerConsumedResult).toBe(true);
     expect(providerReceivedStagedAttachmentPath).toBe(true);
     expect(erasureChecked).toBe(true);

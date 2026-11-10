@@ -1968,6 +1968,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
   if (nativeSourceRecord(admittedWake.payload).manualUserWake === true) markNativeSourceProofsIncompatible(scope);
   const governedInteractions: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
   const answeredQuestions: import("./native-runtime/native-interaction-bridge.js").NativeAnsweredQuestionContinuationCapture[] = [];
+  const humanReviewWithdrawals: import("./native-runtime/native-interaction-bridge.js").NativeHumanReviewWithdrawalCapture[] = [];
   const adminExpiredInteractions: import("./native-runtime/native-interaction-bridge.js").NativeAdministrativeInteractionExpiryCapture[] = [];
   const outcomes = nativeSourceRecord(continuation).interactionOutcomes;
   if (run && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
@@ -1990,6 +1991,23 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
         !input.bootstrapInputs.some(source => isDeepStrictEqual(source, expected)) ||
         !input.inputs.some(source => isDeepStrictEqual(source, expected)))))
       throw forbidden("An answered question source is missing");
+  }
+  if (run && admittedWake && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
+    outcomes.every(value => { const row = nativeSourceRecord(value); return typeof row.id === "string" &&
+      ((row.kind === "ask_user_questions" && row.status === "cancelled") ||
+       (["request_confirmation", "request_checkbox_confirmation"].includes(String(row.kind)) && row.status === "rejected")); })) {
+    const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
+    await prepareNativeSourceEffectBoundary(scope);
+    await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, agentId: run.agentId, interactionIds: outcomes.map(value => String(nativeSourceRecord(value).id)),
+      onHumanReviewWithdrawalCapture: value => { humanReviewWithdrawals.push(value); } });
+    if (humanReviewWithdrawals.length !== outcomes.length || humanReviewWithdrawals.some(value =>
+      !isDeepStrictEqual(value.interactionOutcome, outcomes.find(outcome => nativeSourceRecord(outcome).id === value.projection.interactionId)) ||
+      !input.bootstrapInputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
+      !input.bootstrapInputs.some(source => isDeepStrictEqual(source, value.continuationSource)) ||
+      !input.inputs.some(source => isDeepStrictEqual(source, value.nativeSource)) ||
+      !input.inputs.some(source => isDeepStrictEqual(source, value.continuationSource))))
+      throw forbidden("A Human review-withdrawal source is missing or changed");
   }
   if (run && admittedWake && Array.isArray(outcomes) && outcomes.length > 0 && outcomes.length <= 256 &&
     outcomes.every(value => { const row = nativeSourceRecord(value); return typeof row.id === "string" &&
@@ -2266,6 +2284,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
       envelope: continuation as NativeTaskContinuationCapture["envelope"],
       ...(governedInteractions.length ? { governedInteractions } : {}),
       ...(answeredQuestions.length ? { answeredQuestions } : {}),
+      ...(humanReviewWithdrawals.length ? { humanReviewWithdrawals } : {}),
       ...(adminExpiredInteractions.length ? { adminExpiredInteractions } : {}),
       ...(acceptedPlanReview ? { acceptedPlanReview } : {}),
       ...(stageActions.length ? { stageActions } : {}),
@@ -2375,6 +2394,7 @@ async function assertNativeTaskWakeSourceCurrentInScope(db: Db | Transaction, sc
     !input.bootstrapInputs.some(value => value.kind === "native_task_wake" && isDeepStrictEqual(value, input.source)))
     throw forbidden("A Native task wake source changed");
   return [...answeredQuestions.flatMap(value => [value.nativeSource, value.continuationSource]),
+    ...humanReviewWithdrawals.flatMap(value => [value.nativeSource, value.continuationSource]),
     ...adminExpiredInteractions.map(value => value.source)];
 }
 
@@ -4305,7 +4325,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       await prepareNativeSourceEffectBoundary(scope);
       await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: source.issueId,
         runId: input.runId, agentId: run.agentId, interactionIds: [source.interactionId], onSourceCapture: value => { current.push(value); },
-        onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); } });
+        onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); },
+        onHumanReviewWithdrawalCapture: value => { continuationCurrent.push(value.continuationSource); } });
       continuationCurrent.push(...await readNativeQuestionContinuationSource(db, { companyId: input.companyId,
         issueId: source.issueId, runId: input.runId, agentId: run.agentId, kind: pendingOwner?.kind, source, normal: current }));
       let deliveryCurrent: Extract<NativePayloadSourceInput, { kind: "interaction" }> | undefined;
@@ -6251,7 +6272,8 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
       await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: source.issueId,
         runId: sourceDispatch!.runId, agentId: run.agentId, interactionIds: [source.interactionId],
         onSourceCapture: value => { current.push(value); },
-        onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); } });
+        onContinuationSourceCapture: value => { continuationCurrent.push(value.continuationSource); },
+        onHumanReviewWithdrawalCapture: value => { continuationCurrent.push(value.continuationSource); } });
       continuationCurrent.push(...await readNativeQuestionContinuationSource(db, { companyId: input.companyId,
         issueId: source.issueId, runId: sourceDispatch!.runId, agentId: run.agentId, kind: pendingOwner?.kind, source, normal: current }));
       let deliveryCurrent: Extract<NativePayloadSourceInput, { kind: "interaction" }> | undefined;

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { hkdfSync, randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
@@ -65,19 +66,24 @@ import { fenceSandboxAdmissionOutcome } from "./sandbox-guardian.js";
 const RUN_LEASE_CLEANUP = "__runLeaseCleanup";
 const STOPPED_NATIVE_ERASURE = "__stoppedNativeErasure";
 const NATIVE_CONFORMANCE_ADMISSION_CLEANUP = "__nativeConformanceAdmissionCleanup";
+const NATIVE_CONFORMANCE_POLICY_PROOF = "__nativeConformancePolicyProof";
 type NativeConformanceAdmissionCleanupClaim = Readonly<{
   version: 1;
   conformance: NativeOpenCodeConformanceHostAuthority;
   cleanup: SandboxAdmissionCleanup;
   idempotencyKey: string;
 }>;
+type NativeConformancePolicyProofClaim = Readonly<{
+  version: 1;
+  conformance: NativeOpenCodeConformanceHostAuthority;
+}>;
 export type StoppedNativeErasureClaim = {
   locatorDigest: string; jobId: string; jobKey: string; jobAttemptNumber: number;
   executionOwnerId: string; companyPurgeOperationId: string | null;
   stopReceiptDigest: string; descriptorDigest: string;
 };
-import { sandboxCapabilityFacts } from "./sandbox-service.js";
-import { projectOpenShellPolicy } from "./openshell-policy.js";
+import { executionSandboxService, sandboxCapabilityFacts } from "./sandbox-service.js";
+import { deriveNativeConformanceProofMaximum, projectOpenShellPolicy } from "./openshell-policy.js";
 import { REMOTE_NATIVE_RUNTIME_ASSET_ERASURE_PROFILE_HASH, nativeRuntimeErasurePolicyIsolated } from "../native-runtime/remote-runner-identity.js";
 
 export type RemoteRuntimeCleanupAttestation = {
@@ -159,6 +165,25 @@ function storedNativeConformanceAdmissionCleanup(value: unknown): NativeConforma
     throw conflict("Admission cleanup claim is invalid");
   return structuredClone(row) as unknown as NativeConformanceAdmissionCleanupClaim;
 }
+function storedNativeConformancePolicyProof(value: unknown): NativeConformancePolicyProofClaim | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw conflict("Native sandbox command payload is invalid");
+  const claim = (value as Record<string, unknown>)[NATIVE_CONFORMANCE_POLICY_PROOF];
+  if (claim === undefined) return undefined;
+  if (!claim || typeof claim !== "object" || Array.isArray(claim)) throw conflict("Conformance policy proof claim is invalid");
+  const row = claim as Record<string, unknown>, authority = row.conformance;
+  const expected = ["conformance", "version"].join(",");
+  const authorityKeys = ["creationReceipt", "groupId", "leaseId", "manifestHash", "manifestId", "planId", "policyHash",
+    "policySnapshotId", "runId", "taskId", "workspaceRoot"].sort().join(",");
+  if (Object.keys(row).sort().join(",") !== expected || row.version !== 1 || !authority || typeof authority !== "object" || Array.isArray(authority))
+    throw conflict("Conformance policy proof claim is invalid");
+  const input = authority as Record<string, unknown>;
+  if (Object.keys(input).sort().join(",") !== authorityKeys || Object.values(input).some(value => typeof value !== "string") ||
+      !/^[a-f0-9]{64}$/.test(String(input.creationReceipt)) || !/^[a-f0-9]{64}$/.test(String(input.manifestHash)) ||
+      !/^[a-f0-9]{64}$/.test(String(input.policyHash)) || !/^[0-9a-f-]{36}$/i.test(String(input.policySnapshotId)) ||
+      !path.isAbsolute(String(input.workspaceRoot)) || path.resolve(String(input.workspaceRoot)) !== input.workspaceRoot)
+    throw conflict("Conformance policy proof authority is invalid");
+  return structuredClone(row) as unknown as NativeConformancePolicyProofClaim;
+}
 function requestWithoutQualificationCredential(request: SandboxHostRequest): SandboxHostRequest {
   const copy = structuredClone(request);
   if (copy.probe) {
@@ -176,6 +201,7 @@ function parseStoredSandboxHostRequest(value: unknown, hydrateCredential = false
   delete stored[RUN_LEASE_CLEANUP];
   delete stored[STOPPED_NATIVE_ERASURE];
   delete stored[NATIVE_CONFORMANCE_ADMISSION_CLEANUP];
+  delete stored[NATIVE_CONFORMANCE_POLICY_PROOF];
   const parsed = sandboxHostRequestSchema.parse(stored);
   if (sealed === undefined || !hydrateCredential) return parsed;
   if (!hashes || typeof (sealed as Record<string, unknown>).sealed !== "string") throw conflict("Qualification credential envelope is invalid");
@@ -238,7 +264,16 @@ export function nativeSandboxHostTransport(
     cleanup?: RunLeaseCleanup,
     erasure?: StoppedNativeErasureClaim,
     nativeAdmissionCleanup?: NativeConformanceAdmissionCleanupClaim,
+    nativeConformanceProof?: NativeConformancePolicyProofClaim,
   ) {
+    let conformanceProofOwner: { sourceAuthorityHash: string; runId: string; taskId: string; manifestId: string;
+      manifestHash: string; leaseId: string; workspaceRoot: string } | null = null;
+    if (request.action === "prove_policy" && nativeConformanceProof) {
+      if (!request.requesterUserId) throw forbidden("A Human requester is required for conformance policy proof");
+      const conformanceActor: AuthorizationActor = { type: "board", source: "session", userId: request.requesterUserId };
+      conformanceProofOwner = await executionSandboxService(tx).assertNativeConformanceProofOwner(
+        tx, conformanceActor, request.scope.companyId, nativeConformanceProof.conformance);
+    }
     if (erasure) await stoppedErasureCurrent(tx, request, hostId, erasure);
     if (nativeAdmissionCleanup) {
       const { cleanup: original, conformance, idempotencyKey } = nativeAdmissionCleanup;
@@ -382,7 +417,8 @@ export function nativeSandboxHostTransport(
         await assertV7Authorization(tx, actor, request.scope.companyId, "runtime:manage");
       }
     }
-    if (request.action === "prove_policy") await assertPolicyProofRequestCurrent(tx, request, hostId, cell, binding, now);
+    if (request.action === "prove_policy") await assertPolicyProofRequestCurrent(tx, request, hostId, cell, binding, now,
+      nativeConformanceProof, conformanceProofOwner);
     if (request.probe?.qualificationCredentialCapability) {
       const claims = verifySandboxQualificationCredentialJwt(request.probe.qualificationCredentialCapability);
       const fixture = claims?.qualification_credential;
@@ -540,7 +576,10 @@ export function nativeSandboxHostTransport(
   }
 
   async function assertPolicyProofRequestCurrent(tx: Db, request: SandboxHostRequest, hostId: string,
-    cell: typeof runtimeCells.$inferSelect, binding: typeof runtimeSandboxBindings.$inferSelect, now: Date) {
+    cell: typeof runtimeCells.$inferSelect, binding: typeof runtimeSandboxBindings.$inferSelect, now: Date,
+    conformanceProof?: NativeConformancePolicyProofClaim,
+    conformanceProofOwner?: { sourceAuthorityHash: string; runId: string; taskId: string; manifestId: string;
+      manifestHash: string; leaseId: string; workspaceRoot: string } | null) {
     const proof = request.policyProof;
     if (request.action !== "prove_policy" || !proof || cell.status !== "STOPPED" ||
         binding.status !== "admitting" || binding.version !== proof.bindingVersion ||
@@ -566,10 +605,33 @@ export function nativeSandboxHostTransport(
       : binding.boundaryPolicy;
     const projectedBoundary = projectOpenShellPolicy(sourceBoundary,
       snapshot.compilation.modelBrokerEndpoint, snapshot.compilation.credentialBrokerEndpoints);
+    let expectedProofMaximum = projectedBoundary.document;
+    if (conformanceProof) {
+      const conformance = conformanceProof.conformance;
+      const capability = binding.capabilitySnapshot ? sandboxCapabilitySnapshotSchema.safeParse(binding.capabilitySnapshot) : null;
+      const modelBinaries = capability?.success ? capability.data.modelBrokerProviderProfile?.binaries ?? [] : [];
+      const authorityRef = snapshot.compilation.sourcePolicyRefs.find(ref => ref.startsWith("authority:"));
+      const expectedReads = [...new Set([conformance.workspaceRoot, "/.openshell/runtime/openshell-sandbox", ...modelBinaries])].sort();
+      const narrowed = conformanceProofOwner && deriveNativeConformanceProofMaximum({ operatorMaximum: projectedBoundary.document,
+        candidate: projectedCandidate.document, taskRoot: conformance.workspaceRoot, modelBinaries });
+      if (!conformanceProofOwner || !capability?.success || conformance.policySnapshotId !== snapshot.id ||
+          conformance.policyHash !== proof.policyHash || conformance.runId !== conformanceProofOwner.runId ||
+          conformance.taskId !== conformanceProofOwner.taskId || conformance.manifestId !== conformanceProofOwner.manifestId ||
+          conformance.manifestHash !== conformanceProofOwner.manifestHash || conformance.leaseId !== conformanceProofOwner.leaseId ||
+          conformance.workspaceRoot !== conformanceProofOwner.workspaceRoot || snapshot.authorityHash !== conformanceProofOwner.sourceAuthorityHash ||
+          snapshot.compilation.boundaryPolicyHash !== binding.boundaryPolicyHash ||
+          !snapshot.compilation.sourcePolicyRefs.includes(`boundary:${binding.boundaryPolicyHash}`) ||
+          authorityRef !== `authority:${conformanceProofOwner.sourceAuthorityHash}` ||
+          nativeSha256(snapshot.compilation.compiledPolicy.filesystem.readPaths) !== nativeSha256(expectedReads) ||
+          nativeSha256(snapshot.compilation.compiledPolicy.filesystem.writePaths) !== nativeSha256([conformance.workspaceRoot]) ||
+          nativeSha256(snapshot.compilation.modelBrokerEndpoint?.binaries ?? []) !== nativeSha256(modelBinaries) || !narrowed)
+        throw conflict("Current exact Task authority cannot narrow the retained operator maximum", { code: "sandbox_conformance_proof_attenuation_changed" });
+      expectedProofMaximum = narrowed;
+    }
     if (projectedCandidate.unsupportedFeatures.length || projectedBoundary.unsupportedFeatures.length ||
         nativeSha256(projectedCandidate.document) !== proof.candidateDocumentHash ||
-        nativeSha256(projectedBoundary.document) !== proof.boundaryDocumentHash)
-      throw conflict("Protected proof documents differ from the persisted compilation and maximum boundary", { code: "sandbox_policy_proof_document_changed" });
+        nativeSha256(expectedProofMaximum) !== proof.boundaryDocumentHash)
+      throw conflict("Protected proof documents differ from the persisted compilation and exact maximum", { code: "sandbox_policy_proof_document_changed" });
     const prepareCommands = await tx.select().from(runtimeHostCommands).where(and(
       eq(runtimeHostCommands.companyId, request.scope.companyId),
       eq(runtimeHostCommands.runtimeHostId, hostId),
@@ -640,6 +702,10 @@ export function nativeSandboxHostTransport(
     const admissionCleanupClaim: NativeConformanceAdmissionCleanupClaim | undefined = conformance && safetyCleanup
       ? { version: 1, conformance: structuredClone(conformance), cleanup: structuredClone(safetyCleanup), idempotencyKey }
       : undefined;
+    const conformancePolicyProofClaim: NativeConformancePolicyProofClaim | undefined =
+      conformance && action === "prove_policy" && policyProof
+        ? { version: 1, conformance: structuredClone(conformance) }
+        : undefined;
     const authorize = async (tx?: Db, cleanup?: SandboxAdmissionCleanup) => {
       if (!conformance) return assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
       const reader = tx ?? db;
@@ -834,9 +900,12 @@ export function nativeSandboxHostTransport(
         if (existing) {
           const previous = parseStoredSandboxHostRequest(existing.payload, false);
           const previousAdmissionCleanup = storedNativeConformanceAdmissionCleanup(existing.payload);
+          const previousConformanceProof = storedNativeConformancePolicyProof(existing.payload);
           if (admissionCleanupClaim && nativeSha256(previousAdmissionCleanup ?? null) !== nativeSha256(admissionCleanupClaim))
             throw conflict("Admission cleanup operation key belongs to another exact Host claim");
-          await current(tx, request, host.id, now, existing.id, undefined, undefined, previousAdmissionCleanup);
+          if (nativeSha256(previousConformanceProof ?? null) !== nativeSha256(conformancePolicyProofClaim ?? null))
+            throw conflict("Conformance proof operation key belongs to another exact Run authority");
+          await current(tx, request, host.id, now, existing.id, undefined, undefined, previousAdmissionCleanup, previousConformanceProof);
           if (action === "prepare" && provisioning && previous.provisioning?.operationKey === provisioning.operationKey) {
             const comparable = (value: SandboxHostRequest) => ({ ...value, provisioning: value.provisioning && {
               ...value.provisioning, expiresAt: null, idleUntilUnixSeconds: null, requestId: null,
@@ -863,7 +932,8 @@ export function nativeSandboxHostTransport(
           await authorize(tx as unknown as Db, safetyCleanup);
           return existing;
         }
-        await current(tx, request, host.id, now, qualificationCredential?.commandId, undefined, undefined, admissionCleanupClaim);
+        await current(tx, request, host.id, now, qualificationCredential?.commandId, undefined, undefined,
+          admissionCleanupClaim, conformancePolicyProofClaim);
         const active = await tx
           .select({ id: runtimeHostCommands.id })
           .from(runtimeHostCommands)
@@ -889,7 +959,8 @@ export function nativeSandboxHostTransport(
             commandType: SANDBOX_HOST_COMMAND,
             idempotencyKey: key,
             payload: { ...storedSandboxHostRequest(request, qualificationCredential?.commandId),
-              ...(admissionCleanupClaim ? { [NATIVE_CONFORMANCE_ADMISSION_CLEANUP]: admissionCleanupClaim } : {}) },
+              ...(admissionCleanupClaim ? { [NATIVE_CONFORMANCE_ADMISSION_CLEANUP]: admissionCleanupClaim } : {}),
+              ...(conformancePolicyProofClaim ? { [NATIVE_CONFORMANCE_POLICY_PROOF]: conformancePolicyProofClaim } : {}) },
             deadlineAt: commandDeadlineAt,
           })
           .onConflictDoNothing()
@@ -938,6 +1009,7 @@ export function nativeSandboxHostTransport(
             undefined,
             undefined,
             storedNativeConformanceAdmissionCleanup(record.payload),
+            storedNativeConformancePolicyProof(record.payload),
           );
           if (qualificationCredential && Date.parse(qualificationCredential.expiresAt) <= Date.now())
             throw conflict("Qualification credential expired before receipt reconciliation");
@@ -1476,7 +1548,8 @@ export function nativeSandboxHostTransport(
           ({ host } = await current(tx, request, hostId, now, command.id,
             command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
             command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
-            storedNativeConformanceAdmissionCleanup(command.payload)));
+            storedNativeConformanceAdmissionCleanup(command.payload),
+          storedNativeConformancePolicyProof(command.payload)));
         } catch {
           await tx
             .update(runtimeHostCommands)
@@ -1504,7 +1577,8 @@ export function nativeSandboxHostTransport(
         await current(tx, hydratedRequest, hostId, now, command.id,
           command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
           command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
-          storedNativeConformanceAdmissionCleanup(command.payload));
+          storedNativeConformanceAdmissionCleanup(command.payload),
+          storedNativeConformancePolicyProof(command.payload));
         return {
           id: command.id,
           deadlineAt: command.deadlineAt,
@@ -1545,7 +1619,8 @@ export function nativeSandboxHostTransport(
         await current(tx, request, hostId, now, command.id,
           command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
           command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
-          storedNativeConformanceAdmissionCleanup(command.payload));
+          storedNativeConformanceAdmissionCleanup(command.payload),
+          storedNativeConformancePolicyProof(command.payload));
         if (input.reply && input.reply.action !== request.action)
           throw forbidden("Native sandbox action mismatch");
         if (["SUCCEEDED", "FAILED"].includes(command.status)) {
@@ -1569,7 +1644,8 @@ export function nativeSandboxHostTransport(
         await current(tx, hydratedRequest, hostId, now, command.id,
           command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
           command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
-          storedNativeConformanceAdmissionCleanup(command.payload));
+          storedNativeConformanceAdmissionCleanup(command.payload),
+          storedNativeConformancePolicyProof(command.payload));
         await tx
           .update(runtimeHostCommands)
           .set({

@@ -38,6 +38,12 @@ export function archiveStatusProvesAbsence(rootStatus, targetStatus) {
 export function dockerInspectRunAsMatches(containerInfo, expectedUser) {
   return typeof expectedUser === "string" && containerInfo?.Config?.User === expectedUser;
 }
+export function policyProofAncestorMetadataMatches(item, fields) {
+  return Array.isArray(fields) && fields.length === 4 && fields[0] === "directory" && /^[0-7]{3,4}$/.test(fields[1]) &&
+    /^[0-9]{1,10}$/.test(fields[2]) && /^[0-9]{1,10}$/.test(fields[3]) &&
+    (item.imageFallback || Number.parseInt(fields[1], 8) === item.mode && Number(fields[2]) === item.uid &&
+      Number(fields[3]) === item.gid);
+}
 export function tmpfsSizeBytesFromMountOption(value) {
   const match = /^size=([1-9][0-9]*)([kKmMgGtT]?)$/.exec(value ?? "");
   if (!match) return null;
@@ -71,7 +77,19 @@ export function policyProofWorkspaceNamespacePlan(candidate, boundary, taskRoot)
     .flatMap(rule => (rule?.binaries ?? []).map(binary => binary?.path)));
   if (binaryRoots.some(root => typeof root !== "string" || !path.posix.isAbsolute(root) ||
     path.posix.normalize(root) !== root || contains("/workspace", root) && !contains(taskRoot, root))) return null;
-  if (!ancestors.size) return { namespaceRoot: null, directories: [] };
+  if (!ancestors.size) {
+    const taskParent = path.posix.dirname(taskRoot);
+    const relativeParent = path.posix.relative("/workspace", taskParent);
+    if (relativeParent.startsWith("..") || path.posix.isAbsolute(relativeParent)) return null;
+    const outerDirectories = ["/workspace"];
+    let current = "/workspace";
+    for (const component of relativeParent.split("/").filter(Boolean)) {
+      current = path.posix.join(current, component);
+      outerDirectories.push(current);
+    }
+    if (outerDirectories.length > 16) return null;
+    return { namespaceRoot: null, directories: [], outerDirectories };
+  }
   const namespaceRoot = [...ancestors].sort((a, b) => a.length - b.length || a.localeCompare(b))[0];
   const workspaceRelative = path.posix.relative("/workspace", namespaceRoot);
   if (!workspaceRelative || workspaceRelative.startsWith("..") || path.posix.isAbsolute(workspaceRelative)) return null;
@@ -1024,8 +1042,8 @@ export function openShellHostEngine({
     return values.sort();
   }
   async function inspectPolicyProofNamespaceAncestors(upperDir, plan, deadlineAt) {
-    if (!plan.namespaceRoot) return { namespace: [], outer: [] };
-    if (!Array.isArray(plan.directories) || plan.directories.length < 1 || plan.directories.length > 16)
+    if (plan.namespaceRoot && (!Array.isArray(plan.directories) || plan.directories.length < 1 || plan.directories.length > 16) ||
+      !plan.namespaceRoot && (!Array.isArray(plan.directories) || plan.directories.length !== 0))
       throw new Error("sandbox_operation_unsupported");
     const inspectPaths = async (guestPaths, allowImageFallback = false) => {
       const result = [];
@@ -1052,7 +1070,8 @@ export function openShellHostEngine({
     if (!Array.isArray(plan.outerDirectories) || plan.outerDirectories.length < 1 || plan.outerDirectories.length > 16)
       throw new Error("sandbox_operation_unsupported");
     const [namespace, outer] = await Promise.all([
-      inspectPaths(plan.directories), inspectPaths(plan.outerDirectories, true),
+      plan.namespaceRoot ? inspectPaths(plan.directories) : Promise.resolve([]),
+      inspectPaths(plan.outerDirectories, true),
     ]);
     return { namespace, outer };
   }
@@ -1062,10 +1081,7 @@ export function openShellHostEngine({
       const result = await docker(["exec", "--user", `${uid}:${gid}`, helperId, "/usr/bin/stat", "-c",
         "%F|%a|%u|%g", "--", item.guestPath], deadlineAt, false, 5000);
       const fields = result.trim().split("|");
-      if (fields.length !== 4 || fields[0] !== "directory" || !/^[0-7]{3,4}$/.test(fields[1]) ||
-        !/^[0-9]{1,10}$/.test(fields[2]) || !/^[0-9]{1,10}$/.test(fields[3]) ||
-        !item.imageFallback && (Number.parseInt(fields[1], 8) !== item.mode || Number(fields[2]) !== item.uid || Number(fields[3]) !== item.gid))
-        throw new Error("sandbox_operation_unsupported");
+      if (!policyProofAncestorMetadataMatches(item, fields)) throw new Error("sandbox_operation_unsupported");
     }
   }
   async function buildPolicyProofNamespaceSnapshot(scratchRoot, namespaceRoot, taskRoot, taskSnapshot, ancestors, deadlineAt) {
@@ -1095,7 +1111,8 @@ export function openShellHostEngine({
       totalEntries += info.entries;
       if (totalBytes > POLICY_PROOF_MAX_MOUNT_BYTES || totalEntries > POLICY_PROOF_MAX_ENTRIES)
         throw new Error("sandbox_operation_unsupported");
-      snapshots.push({ ...target, snapshotPath: local, snapshotBytes: info.bytes, snapshotManifestHash: info.manifestHash });
+      snapshots.push({ ...target, snapshotPath: local, bytes: info.bytes, entries: info.entries,
+        snapshotBytes: info.bytes, snapshotManifestHash: info.manifestHash });
     }
     return { snapshots, bytes: totalBytes };
   }
@@ -1106,6 +1123,7 @@ export function openShellHostEngine({
       const frozen = await inspectPolicySnapshot(expected.snapshotPath, expected.destination, deadlineAt);
       if (frozen.manifestHash !== expected.snapshotManifestHash || frozen.bytes !== expected.snapshotBytes)
         throw new Error("sandbox_scope_changed");
+      await ensurePolicyProofScratchReadbackCapacity(scratchRoot, expected);
       await mkdir(parent, { mode: 0o700 });
       await copyPolicyProofSnapshot(containerId, expected.destination, parent, deadlineAt);
       const local = path.join(parent, path.posix.basename(expected.destination));
@@ -1125,6 +1143,7 @@ export function openShellHostEngine({
     let totalBytes = 0, totalEntries = 0;
     for (let index = 0; index < snapshots.length; index++) {
       const expected = snapshots[index], parent = path.join(scratchRoot, `verify-helper-mount-${suffix}-${index}`);
+      await ensurePolicyProofScratchReadbackCapacity(scratchRoot, expected);
       await mkdir(parent, { mode: 0o700 });
       await copyPolicyProofSnapshot(helperId, expected.destination, parent, deadlineAt);
       const local = path.join(parent, path.posix.basename(expected.destination));
@@ -1134,9 +1153,15 @@ export function openShellHostEngine({
       totalEntries += observed.entries;
       if (observed.manifestHash !== expected.snapshotManifestHash || observed.bytes !== expected.snapshotBytes)
         throw new Error("sandbox_scope_changed");
-      if (totalBytes > POLICY_PROOF_MAX_MOUNT_BYTES || totalEntries > POLICY_PROOF_MAX_ENTRIES)
+      if (totalBytes > POLICY_PROOF_MAX_SCRATCH_BYTES || totalEntries > POLICY_PROOF_MAX_ENTRIES)
         throw new Error("sandbox_scope_changed");
     }
+  }
+  async function ensurePolicyProofScratchReadbackCapacity(scratchRoot, snapshot) {
+    const fsInfo = await statfs(scratchRoot);
+    const required = snapshot.bytes + snapshot.entries * 4096 + 1024 * 1024;
+    if (!Number.isSafeInteger(required) || fsInfo.bavail * fsInfo.bsize < required)
+      throw new Error("sandbox_operation_unsupported");
   }
   async function inspectPolicySnapshot(root, guestRoot, deadlineAt) {
     const rootInfo = await lstat(root);
@@ -1367,7 +1392,7 @@ export function openShellHostEngine({
       info.HostConfig?.MemorySwap !== 805306368 || info.HostConfig?.CpuPeriod !== 100000 ||
       info.HostConfig?.CpuQuota !== 25000 || info.HostConfig?.PublishAllPorts !== false ||
       info.HostConfig?.RestartPolicy?.Name !== "no" || info.HostConfig?.LogConfig?.Type !== "none" ||
-      !sameDocument(info.HostConfig?.Tmpfs, tmpfs) ||
+      !sameDocument(info.HostConfig?.Tmpfs ?? {}, tmpfs) ||
       !Array.isArray(info.HostConfig?.CapDrop) || !info.HostConfig.CapDrop.includes("ALL") ||
       JSON.stringify(info.HostConfig?.SecurityOpt) !== JSON.stringify(["no-new-privileges:true"]) ||
       info.HostConfig?.UsernsMode && info.HostConfig.UsernsMode !== "")
@@ -1563,8 +1588,44 @@ export function openShellHostEngine({
       bootstrapAfter.mtimeMs !== bootstrapBefore.mtimeMs || !bootstrapAfter.isFile()) throw new Error("sandbox_scope_changed");
     const bootstrapSnapshotInfo = await inspectPolicySnapshot(stagedBootstrapPath, bootstrapPath, deadlineAt);
     const bootstrapSnapshot = { destination: bootstrapPath, snapshotPath: stagedBootstrapPath,
+      bytes: bootstrapSnapshotInfo.bytes, entries: bootstrapSnapshotInfo.entries,
       snapshotBytes: bootstrapSnapshotInfo.bytes, snapshotManifestHash: bootstrapSnapshotInfo.manifestHash };
-    const readonlySnapshots = [...mountedSnapshots.snapshots, bootstrapSnapshot];
+    const taskMountRoot = namespaceSnapshot.mountRoot;
+    const taskMountSnapshotInfo = namespaceSnapshot.info ?? taskSnapshotInfo;
+    const taskMountSnapshot = { destination: taskMountRoot, snapshotPath: namespaceSnapshot.root,
+      bytes: taskMountSnapshotInfo.bytes, entries: taskMountSnapshotInfo.entries,
+      snapshotBytes: taskMountSnapshotInfo.bytes, snapshotManifestHash: taskMountSnapshotInfo.manifestHash };
+    const runtimeSnapshot = { destination: "/.openshell/runtime", snapshotPath: openshellSnapshot,
+      bytes: runtimeSnapshotInfo.bytes, entries: runtimeSnapshotInfo.entries,
+      snapshotBytes: runtimeSnapshotInfo.bytes, snapshotManifestHash: runtimeSnapshotInfo.manifestHash };
+    const candidateText = JSON.stringify(canonical(proof.candidateDocument)), boundaryText = JSON.stringify(canonical(proof.boundaryDocument));
+    if (Buffer.byteLength(candidateText) > 1024 * 1024 || Buffer.byteLength(boundaryText) > 1024 * 1024)
+      throw new Error("sandbox_operation_unsupported");
+    const proofInputRoot = path.join(scratchRoot, "proof-inputs");
+    await mkdir(proofInputRoot, { mode: 0o700 });
+    await writeFile(path.join(proofInputRoot, "candidate.json"), candidateText, { flag: "wx", mode: 0o444 });
+    await chmod(path.join(proofInputRoot, "candidate.json"), 0o444);
+    await writeFile(path.join(proofInputRoot, "boundary.json"), boundaryText, { flag: "wx", mode: 0o444 });
+    await chmod(path.join(proofInputRoot, "boundary.json"), 0o444);
+    const stagedProver = path.join(proofInputRoot, "prover");
+    await writeFile(stagedProver, await readFile(prover.executable), { flag: "wx", mode: 0o555 });
+    await chmod(stagedProver, 0o555);
+    const stagedProverInfo = await lstat(stagedProver);
+    if (!stagedProverInfo.isFile() || stagedProverInfo.isSymbolicLink() || stagedProverInfo.uid !== (process.getuid?.() ?? 0) ||
+      (stagedProverInfo.mode & 0o777) !== 0o555 || stagedProverInfo.size < 1 || stagedProverInfo.size > 100 * 1024 * 1024 ||
+      hash(await readFile(stagedProver)) !== prover.expectedSha256)
+      throw new Error("sandbox_scope_changed");
+    await chmod(proofInputRoot, 0o755);
+    const proofInputInfo = await inspectPolicySnapshot(proofInputRoot, helperRoot, deadlineAt);
+    const proofInputSnapshot = { destination: helperRoot, snapshotPath: proofInputRoot,
+      bytes: proofInputInfo.bytes, entries: proofInputInfo.entries,
+      snapshotBytes: proofInputInfo.bytes, snapshotManifestHash: proofInputInfo.manifestHash };
+    const readonlySnapshots = [...mountedSnapshots.snapshots, taskMountSnapshot, runtimeSnapshot,
+      bootstrapSnapshot, proofInputSnapshot];
+    const allReadonlySnapshotBytes = readonlySnapshots.reduce((total, snapshot) => total + snapshot.bytes, 0);
+    const allReadonlySnapshotEntries = readonlySnapshots.reduce((total, snapshot) => total + snapshot.entries, 0);
+    if (allReadonlySnapshotBytes > POLICY_PROOF_MAX_SCRATCH_BYTES || allReadonlySnapshotEntries > POLICY_PROOF_MAX_ENTRIES)
+      throw new Error("sandbox_operation_unsupported");
     await verifyDockerDaemonSnapshotIdentity(offline, readonlySnapshots);
     const helperMounts = readonlySnapshots.map(mount => ({ type: "bind", source: mount.snapshotPath,
       destination: mount.destination, propagation: "rprivate", rw: false }));
@@ -1581,23 +1642,9 @@ export function openShellHostEngine({
       runtimeSnapshotBytes: runtimeSnapshotInfo.bytes, runtimeSnapshotManifestHash: runtimeSnapshotInfo.manifestHash });
     await atomicJson(journalFile, journal);
 
-    const candidatePath = path.join(scratchRoot, "candidate.json"), boundaryPath = path.join(scratchRoot, "boundary.json");
-    const candidateText = JSON.stringify(canonical(proof.candidateDocument)), boundaryText = JSON.stringify(canonical(proof.boundaryDocument));
-    if (Buffer.byteLength(candidateText) > 1024 * 1024 || Buffer.byteLength(boundaryText) > 1024 * 1024)
-      throw new Error("sandbox_operation_unsupported");
-    await writeFile(candidatePath, candidateText, { flag: "wx", mode: 0o644 });
-    await writeFile(boundaryPath, boundaryText, { flag: "wx", mode: 0o644 });
-
     const expiresAt = Math.min(Date.parse(deadlineAt), Date.now() + 120_000);
     const uid = proof.candidateDocument.process.run_as_user, gid = proof.candidateDocument.process.run_as_group;
-    const taskMountRootInfo = namespaceSnapshot.info?.root ?? taskSnapshotInfo.root;
-    const taskMountRoot = namespaceSnapshot.mountRoot;
-    const taskRootOptions = `rw,nosuid,nodev,size=256m,uid=${taskMountRootInfo.uid},gid=${taskMountRootInfo.gid},mode=${taskMountRootInfo.mode.toString(8)}`;
-    const runtimeOptions = `rw,nosuid,nodev,size=128m,uid=${runtimeSnapshotInfo.root.uid},gid=${runtimeSnapshotInfo.root.gid},mode=${runtimeSnapshotInfo.root.mode.toString(8)}`;
-    const tmpfs = [`${taskMountRoot}:${taskRootOptions}`,
-      `/.openshell/runtime:${runtimeOptions}`,
-      `${helperRoot}:rw,nosuid,nodev,size=128m,uid=${uid},gid=${gid},mode=0755`];
-    const tmpfsConfig = Object.fromEntries(tmpfs.map(value => { const split = value.indexOf(":"); return [value.slice(0, split), value.slice(split + 1)]; }));
+    const tmpfsConfig = {};
     const imageRows = await docker(["image", "inspect", workload.Image], deadlineAt);
     if (!Array.isArray(imageRows) || imageRows.length !== 1 || imageRows[0]?.Id !== workload.Image ||
       !(imageRows[0]?.Config?.Env === undefined || Array.isArray(imageRows[0].Config.Env))) throw new Error("sandbox_scope_changed");
@@ -1623,7 +1670,7 @@ export function openShellHostEngine({
       "--network", "none", "--read-only", "--pids-limit", "16", "--memory", "805306368", "--memory-swap", "805306368",
       "--cpu-period", "100000", "--cpu-quota", "25000", "--log-driver", "none", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
       "--user", `${uid}:${gid}`, ...clearedProxyEnv.flatMap(key => ["--env", `${key}=`]),
-      ...tmpfs.flatMap(value => ["--tmpfs", value]), ...proofSnapshotMountArgs,
+      ...proofSnapshotMountArgs,
       "--entrypoint", bootstrapPath,
       `sha256:${workload.Image.slice("sha256:".length)}`, ...idleCommand], deadlineAt, false)).trim();
     if (!/^[a-f0-9]{64}$/.test(helperId)) throw new Error("sandbox_observation_unavailable");
@@ -1639,42 +1686,6 @@ export function openShellHostEngine({
     await verifyDockerDaemonSnapshotIdentity(offline, readonlySnapshots);
     await verifyPolicyProofHelperMountSnapshots(helperId, readonlySnapshots, scratchRoot, deadlineAt, "bootstrap");
     await verifyPolicyProofBaseAncestorMetadata(helperId, uid, gid, namespaceAncestors.outer, deadlineAt);
-    await docker(["cp", "-a", `${namespaceSnapshot.root}/.`, `${helperId}:${taskMountRoot}`], deadlineAt, false, 15_000);
-    await docker(["cp", "-a", `${openshellSnapshot}/.`, `${helperId}:/.openshell/runtime`], deadlineAt, false, 15_000);
-    const verifySnapshot = async (sourcePath, guestPath, expectedHash, label) => {
-      const verifyParent = path.join(scratchRoot, `verify-${label}`);
-      await mkdir(verifyParent, { mode: 0o700 });
-      await copyPolicyProofSnapshot(helperId, guestPath, verifyParent, deadlineAt);
-      const localRoot = path.join(verifyParent, path.posix.basename(guestPath));
-      const observedSnapshot = await inspectPolicySnapshot(localRoot, guestPath, deadlineAt);
-      if (observedSnapshot.manifestHash !== expectedHash) throw new Error("sandbox_scope_changed");
-      await rm(verifyParent, { recursive: true, force: false });
-      return sourcePath ? observedSnapshot : null;
-    };
-    await verifySnapshot(openshellSnapshot, "/.openshell/runtime", runtimeSnapshotInfo.manifestHash, "runtime");
-    await rm(openshellSnapshot, { recursive: true, force: false });
-    await rm(openshellSnapshotDir, { recursive: true, force: false });
-    await verifySnapshot(null, creation.workdirPath, taskSnapshotInfo.manifestHash, "task");
-    await verifySnapshot(null, taskMountRoot, namespaceSnapshot.info?.manifestHash ?? taskSnapshotInfo.manifestHash, "namespace");
-    if (namespaceSnapshot.root === taskSnapshot) await rm(taskSnapshotDir, { recursive: true, force: false });
-    else await rm(namespaceSnapshot.root, { recursive: true, force: false });
-    await docker(["cp", candidatePath, `${helperId}:${helperRoot}/candidate.json`], deadlineAt, false, 10_000);
-    await docker(["cp", boundaryPath, `${helperId}:${helperRoot}/boundary.json`], deadlineAt, false, 10_000);
-    const stagedProver = path.join(scratchRoot, "prover");
-    await writeFile(stagedProver, await readFile(prover.executable), { flag: "wx", mode: 0o555 });
-    await docker(["cp", stagedProver, `${helperId}:${helperRoot}/prover`], deadlineAt, false, 10_000);
-    const verifyHelperFile = async (remotePath, expectedHash, label, maxBytes) => {
-      const local = path.join(scratchRoot, `verify-${label}`);
-      await copyPolicyProofSnapshot(helperId, remotePath, local, deadlineAt);
-      const info = await lstat(local);
-      if (!info.isFile() || info.isSymbolicLink() || info.size < 1 || info.size > maxBytes ||
-        hash(await readFile(local)) !== expectedHash || label === "prover" && !(info.mode & 0o111))
-        throw new Error("sandbox_scope_changed");
-      await unlink(local);
-    };
-    await verifyHelperFile(`${helperRoot}/candidate.json`, proof.candidateDocumentHash, "candidate", 1024 * 1024);
-    await verifyHelperFile(`${helperRoot}/boundary.json`, proof.boundaryDocumentHash, "boundary", 1024 * 1024);
-    await verifyHelperFile(`${helperRoot}/prover`, prover.expectedSha256, "prover", 100 * 1024 * 1024);
     const helperAfter = await docker(["inspect", helperId], deadlineAt);
     if (!Array.isArray(helperAfter) || helperAfter[0]?.State?.Running !== true || helperAfter[0].Image !== workload.Image)
       throw new Error("sandbox_observation_unavailable");
@@ -1701,12 +1712,6 @@ export function openShellHostEngine({
     await verifyPolicyProofHelperMountSnapshots(helperId, readonlySnapshots, scratchRoot, deadlineAt, "after");
     await verifyPolicyProofMountSnapshots(workload.Id, mountedSnapshots.snapshots, scratchRoot, deadlineAt, "after");
     await verifyDockerDaemonSnapshotIdentity(offline, readonlySnapshots);
-    await verifyHelperFile(`${helperRoot}/candidate.json`, proof.candidateDocumentHash, "candidate-after", 1024 * 1024);
-    await verifyHelperFile(`${helperRoot}/boundary.json`, proof.boundaryDocumentHash, "boundary-after", 1024 * 1024);
-    await verifyHelperFile(`${helperRoot}/prover`, prover.expectedSha256, "prover-after", 100 * 1024 * 1024);
-    await verifySnapshot(null, creation.workdirPath, taskSnapshotInfo.manifestHash, "task-after");
-    await verifySnapshot(null, taskMountRoot, namespaceSnapshot.info?.manifestHash ?? taskSnapshotInfo.manifestHash, "namespace-after");
-    await verifySnapshot(null, "/.openshell/runtime", runtimeSnapshotInfo.manifestHash, "runtime-after");
     const afterDetail = await observed(scope, deadlineAt, { sandboxId: proof.sandboxId, containerId: proof.containerId });
     const afterWorkload = await container(scope, afterDetail, request.imageDigest, deadlineAt);
     const afterPolicy = await policy(scope, deadlineAt);

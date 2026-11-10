@@ -434,6 +434,15 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(interactionWakes).toHaveLength(1);
       expect(interactionWakes[0]).toMatchObject({ requestedByActorType: "user", requestedByActorId: f.userId,
         payload: expect.objectContaining({ issueId: entry.task.id, interactionId: pendingInteraction.id }) });
+      const [resolvedInteraction] = await db.select({ kind: issueThreadInteractions.kind,
+        status: issueThreadInteractions.status, result: issueThreadInteractions.result,
+        resolvedByUserId: issueThreadInteractions.resolvedByUserId }).from(issueThreadInteractions).where(and(
+        eq(issueThreadInteractions.companyId, f.home), eq(issueThreadInteractions.issueId, entry.task.id),
+        eq(issueThreadInteractions.id, pendingInteraction.id)));
+      expect(resolvedInteraction).toMatchObject({ resolvedByUserId: f.userId });
+      expect(resolvedInteraction?.status).toBe(pendingInteraction.kind === "ask_user_questions" ? "cancelled" : "rejected");
+      if (pendingInteraction.kind === "ask_user_questions") expect((resolvedInteraction?.result as { cancelled?: boolean } | null)?.cancelled).toBe(true);
+      else expect((resolvedInteraction?.result as { outcome?: string } | null)?.outcome).toBe("rejected");
       await heartbeat.drainActiveRunExecutions();
       const [interactionWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, interactionWakes[0]!.id));
       expect(interactionWake?.status).toBe("completed");
