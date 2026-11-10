@@ -1344,7 +1344,7 @@
     },
     {
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "613d7a004361e49cda6ccee71156280ab88ff7feff4a982529e3f272ac8d4bb1"
+      "sha256": "03b5097ac02adc90d9a1216a1e4ab106e4af17141bc239ebf6b1f521681786cc"
     },
     {
       "path": "server/src/services/experience/company-responsibility-attention.ts",
@@ -1392,7 +1392,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "4a1e1cd0163d3e87c3f1ca8e877b51eadafbd2a51f4d0cffae141f0f1b5c93f4"
+      "sha256": "4be7260030b6e4ac0e8d597fdfd0b5b1ffaea0791c62f717f2f8df577ea257b4"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",
@@ -1412,7 +1412,7 @@
     },
     {
       "path": "server/src/services/saas/platform.ts",
-      "sha256": "32f2d6d0d883d012d9091c9b0f710fb00bdf1843dadb86d237ded90bc83d0e79"
+      "sha256": "2f6a636dc7d08f29cc08bee8011d86821fd5876cd8b812641aaf0c944480bc18"
     },
     {
       "path": "ui/src/api/companies.ts",

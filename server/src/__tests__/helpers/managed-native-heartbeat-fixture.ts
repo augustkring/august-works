@@ -16,7 +16,7 @@ import express, { type Express as ExpressApp, type Request as ExpressRequest } f
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
   heartbeatRunEvents, heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
-  orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
+  orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, principalPermissionGrants, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
 import { aiConnectionService } from "../../services/ai-connections.js";
@@ -27,6 +27,7 @@ import { discoverNativeCapabilities } from "../../services/native-provider-confo
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
 import { enableV5ForTest, seedV5Presences } from "./v5-fixtures.js";
+import { grantsForHumanRole } from "../../services/company-member-roles.js";
 import { seedNativePasskeyActor } from "./native-authentication-fixtures.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { heartbeatService, nativeExecutionFailureLogFields } from "../../services/heartbeat.js";
@@ -117,6 +118,22 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   ordinaryWorkerProject?: () => ManagedNativeProjectWorkspaceScope;
   /** Explicit two-presence opt-in for real Executor→Reviewer issue journeys. */
   managedTwoAgentSignoff?: true;
+  /** Execute the registered OpenCode conformance owner before any ordinary Run is created. */
+  managedOpenCodeConformance?: true;
+  runOpenCodeConformance?: (context: {
+    db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyIds: { primary: string; peer: string };
+    agentIds: { primary: string; peer: string }; profiles: ReadonlyMap<string, WorkerModelProfile>;
+    gateway: ReturnType<typeof workerModelGateway>;
+    sourceSha: string;
+    environmentRuntime: import("../../services/environment-runtime.js").EnvironmentRuntimeService;
+    prepareSandboxRun(actor: AuthorizationActor, input: {
+      companyId: string; runId: string; taskId: string; planId: string; groupId: string; manifestId: string;
+      manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
+    }): Promise<unknown>;
+    providerKeyObservations: () => Array<{ runId: string; keyMatchesConfiguredAgent: boolean }>;
+    runtimeFacts: () => Record<string, unknown> | null;
+    origin: string;
+  }) => Promise<T>;
   /** Existing Native session test seam for API-policy components that must not dispatch a provider request. */
   controlledNativeSessionBackendFactory?: (execution: NativeExecutionInput) => NativeSessionBackend;
   /** Private fixture observer before the real Native runtime selection; no Run state is mutated. */
@@ -154,6 +171,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     throw new Error("two_agent_signoff_requires_serial_host_admission");
   if (input.managedTwoAgentSignoff && input.configureHeartbeat)
     throw new Error("two_agent_signoff_requires_owned_host_admission");
+  if (input.managedOpenCodeConformance && (input.schedulerMode !== "serial" || input.managedTwoAgentSignoff ||
+      !input.runOpenCodeConformance || input.configureHeartbeat))
+    throw new Error("opencode_conformance_requires_owned_two_presence_serial_host");
   if (input.observeModelOriginDenials && input.schedulerMode !== "serial")
     throw new Error("scheduler_origin_denials_require_serial_fixture");
   const registrationsByAgent = new Map<string, ManagedSandboxProviderRegistration>();
@@ -170,6 +190,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         await import("./managed-native-conversation-sandbox-host.js");
       if (input.schedulerMode === "serial") return configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
         preparedRegistration: registrationsByAgent.get(context.agentId),
+        ...(input.managedOpenCodeConformance ? { nativeOpenCodeConformance: true as const } : {}),
         observeAssignedToolGateway: (owner, kind) => assignedGatewayObserver?.observe(owner, kind),
         controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory,
         ...(input.ordinaryWorkerProject ? { ordinaryWorkerProject: input.ordinaryWorkerProject() } : {}),
@@ -221,19 +242,37 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     Buffer.from("\n"), await readFile(caCertPath)]), { mode: 0o600 });
   const f = await seedV5Presences(db);
   const userId = f.userId, companyId = f.home, agentId = f.presence.id;
+  const conformancePeerAgentId = input.managedOpenCodeConformance ? f.guestPresence.id : null;
+  const companyByAgent = new Map([[agentId, f.home], ...(conformancePeerAgentId ? [[conformancePeerAgentId, f.guest] as const] : [])]);
   const budgetMonthlyCents = input.budgetMonthlyCents ?? 2000;
   if (!Number.isSafeInteger(budgetMonthlyCents) || budgetMonthlyCents < 1)
     throw new Error("conversation_fixture_budget_must_be_positive_integer");
-  await db.update(companies).set({ budgetMonthlyCents }).where(eq(companies.id, companyId));
-  const human = await seedNativePasskeyActor(db, userId, [companyId]);
+  await db.update(companies).set({ budgetMonthlyCents }).where(inArray(companies.id,
+    input.managedOpenCodeConformance ? [companyId, f.guest] : [companyId]));
+  const human = await seedNativePasskeyActor(db, userId,
+    input.managedOpenCodeConformance ? [companyId, f.guest] : [companyId]);
+  let sandboxQualificationOperator: AuthorizationActor | undefined;
+  if (input.managedOpenCodeConformance) {
+    const operatorUserId = `user-${randomUUID()}`;
+    const now = new Date().toISOString();
+    await db.execute(sql`insert into "user" (id,name,email,email_verified,created_at,updated_at)
+      values (${operatorUserId},'Sandbox qualification operator',${`${operatorUserId}@test.invalid`},true,${now},${now})`);
+    const operatorCompanies = [companyId, f.guest];
+    await db.insert(companyMemberships).values(operatorCompanies.map(company => ({ companyId: company,
+      principalType: "user", principalId: operatorUserId, status: "active", membershipRole: "owner" })));
+    await db.insert(principalPermissionGrants).values(operatorCompanies.flatMap(companyId =>
+      grantsForHumanRole("owner").map(grant => ({ companyId, principalType: "user", principalId: operatorUserId, ...grant }))));
+    sandboxQualificationOperator = await seedNativePasskeyActor(db, operatorUserId, operatorCompanies);
+  }
   const sessionId = human.sessionId;
   const model = "fixture-managed-conversation-v1";
   const baseAdapterConfig = { provider: "opencode", model: `anthropic/${model}`, lifecycleMode: "per_turn" };
   const createdReviewer = input.managedTwoAgentSignoff
     ? await agentIdentityService(db).create(human, { name: "Managed signoff reviewer", homeCompanyId: companyId })
     : null;
-  const reviewerAgentId = createdReviewer?.presence.id ?? null;
-  const managedAgentIds = reviewerAgentId ? { executor: agentId, reviewer: reviewerAgentId } : null;
+  const reviewerAgentId = createdReviewer?.presence.id ?? conformancePeerAgentId;
+  const managedAgentIds = input.managedTwoAgentSignoff && reviewerAgentId
+    ? { executor: agentId, reviewer: reviewerAgentId } : null;
   const agentIds = [agentId, ...(reviewerAgentId ? [reviewerAgentId] : [])];
   const providerService = agentProviderBindingService(db);
   const profilesByAgent = new Map<string, WorkerModelProfile>();
@@ -241,45 +280,57 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   const apiKeysByAgent = new Map<string, string>();
   const preparedAgents: Array<{ agentId: string; adapterConfig: Record<string, unknown> }> = [];
   for (const configuredAgentId of agentIds) {
+    const configuredCompanyId = companyByAgent.get(configuredAgentId) ?? companyId;
     await db.update(agents).set({ budgetMonthlyCents, adapterType: "paperclip_runner", adapterConfig: baseAdapterConfig,
-      runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" }).where(eq(agents.id, configuredAgentId));
-    await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId, agentId: configuredAgentId });
+      runtimeConfig: { timeoutSec: input.timeoutSec ?? 180 }, status: "idle" }).where(and(
+      eq(agents.companyId, configuredCompanyId), eq(agents.id, configuredAgentId)));
+    await input.prepareNativeRuntimeContext?.({ db, actor: human, companyId: configuredCompanyId, agentId: configuredAgentId });
     const [configuredAgent] = await db.select({ adapterConfig: agents.adapterConfig })
-      .from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, configuredAgentId))).limit(1);
+      .from(agents).where(and(eq(agents.companyId, configuredCompanyId), eq(agents.id, configuredAgentId))).limit(1);
     if (!configuredAgent || !configuredAgent.adapterConfig || typeof configuredAgent.adapterConfig !== "object" ||
       Array.isArray(configuredAgent.adapterConfig))
       throw new Error("conversation_fixture_adapter_configuration_missing");
     const adapterConfig = configuredAgent.adapterConfig as Record<string, unknown>;
-    const providerBinding = await providerService.create(human, companyId, configuredAgentId, {
+    const providerBinding = await providerService.create(human, configuredCompanyId, configuredAgentId, {
       providerType: "paperclip_native", providerAgentRef: configuredAgentId,
       isolationMode: "isolated_per_presence", providerEndpointRef: null,
     });
-    await providerService.attach(human, companyId, configuredAgentId,
+    await providerService.attach(human, configuredCompanyId, configuredAgentId,
       { providerBindingId: providerBinding.id, providerProfileRef: configuredAgentId });
-    const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId,
+    const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId: configuredCompanyId,
       adapterType: "paperclip_runner", config: adapterConfig }));
-    await providerService.recordDiscovery(companyId, configuredAgentId, snapshot,
+    if (input.managedOpenCodeConformance)
+      await providerService.recordCapabilityAdvertisement(configuredCompanyId, configuredAgentId, snapshot);
+    else await providerService.recordDiscovery(configuredCompanyId, configuredAgentId, snapshot,
       Object.fromEntries(providerConformanceRequirements(snapshot, providerBinding.isolationMode).map(check => [check, true])));
-    if (input.managedTwoAgentSignoff) {
+    if (input.managedTwoAgentSignoff || input.managedOpenCodeConformance) {
       const { registerManagedSandboxProvider } = await import("./managed-native-conversation-sandbox-host.js");
       registrationsByAgent.set(configuredAgentId, await registerManagedSandboxProvider({ db, actor: human,
-        companyId, agentId: configuredAgentId, providerBindingId: providerBinding.id }));
+        ...(sandboxQualificationOperator ? { sandboxQualificationOperator } : {}),
+        companyId: configuredCompanyId, agentId: configuredAgentId, providerBindingId: providerBinding.id,
+        ...(input.managedOpenCodeConformance ? { nativeOpenCodeConformance: true as const } : {}) }));
     }
     providerBindingsByAgent.set(configuredAgentId, providerBinding.id);
     preparedAgents.push({ agentId: configuredAgentId, adapterConfig });
   }
   // Both canonical registrations exist before any Worker profile or gateway is sealed.
   for (const { agentId: configuredAgentId, adapterConfig } of preparedAgents) {
-    const provider = await providerService.assertRuntime(companyId, configuredAgentId);
+    const configuredCompanyId = companyByAgent.get(configuredAgentId) ?? companyId;
+    const provider = input.managedOpenCodeConformance
+      ? await providerService.getForPresence(human, configuredCompanyId, configuredAgentId)
+      : await providerService.assertRuntime(configuredCompanyId, configuredAgentId);
+    if (!provider) throw new Error("conversation_fixture_provider_profile_missing");
     const apiKey = `conversation-fixture-${randomUUID()}`;
     apiKeysByAgent.set(configuredAgentId, apiKey);
-    const issued = await aiConnectionService(db).save(companyId, userId, { provider: "anthropic", method: "api_key",
+    const issued = await aiConnectionService(db).save(configuredCompanyId, userId, { provider: "anthropic", method: "api_key",
       ownership: "shared", name: "Conversation fixture provider", apiKey: "fixture", allAgents: false,
       agentIds: [configuredAgentId] }, apiKey);
     const profile: WorkerModelProfile = workerModelProfileSchema.parse({
-      id: randomUUID(), companyId, workerAgentId: configuredAgentId, providerBindingId: provider.provider.id,
-      providerSnapshotHash: provider.provider.capabilitySnapshotHash, providerProfileRef: provider.runtime.providerProfileRef,
-      qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig }),
+      id: randomUUID(), companyId: configuredCompanyId, workerAgentId: configuredAgentId, providerBindingId: provider.provider.id,
+      providerSnapshotHash: provider.provider.capabilitySnapshotHash!, providerProfileRef: provider.runtime.providerProfileRef!,
+      qualifiedConfigurationHash: input.managedOpenCodeConformance
+        ? hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig })
+        : provider.runtime.qualifiedConfigurationHash!,
       binding: { provider: "anthropic", method: "api_key", mode: "shared", ...issued },
       transport: "server-anthropic-messages-v1", contract: "anthropic-messages-tools-2023-06-01",
       maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 1024,
@@ -336,14 +387,57 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const scopedRunId = verifiedModelRun.getStore();
       const runId = input.schedulerMode === "serial" ? scopedRunId : activeRunId;
       const scoped = runId ? executionsByRun.get(runId) : undefined;
-      const execution = input.schedulerMode === "serial" ? scoped?.execution : activeExecution;
-      const issueId = input.schedulerMode === "serial" ? scoped?.issueId : activeIssueId;
-      const runAgentId = input.schedulerMode === "serial" ? scoped?.agentId : agentId;
-      if (!runId || !runAgentId || (input.schedulerMode === "serial" && !scoped))
+      let execution = input.schedulerMode === "serial" ? scoped?.execution : activeExecution;
+      let issueId = input.schedulerMode === "serial" ? scoped?.issueId : activeIssueId;
+      let runAgentId = input.schedulerMode === "serial" ? scoped?.agentId : agentId;
+      if (input.managedOpenCodeConformance && runId) {
+        const [run] = await db.select({ agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
+          runnerProfileJson: heartbeatRuns.runnerProfileJson, status: heartbeatRuns.status })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).limit(1);
+        const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object"
+          ? run.runnerProfileJson as Record<string, unknown> : {};
+        if (!run || run.status !== "running" || !companyByAgent.has(run.agentId))
+          throw new Error("conformance_fixture_model_run_not_current");
+        const persistedExecution = profile.nativeExecutionInput;
+        if (!persistedExecution || typeof persistedExecution !== "object")
+          throw new Error("conformance_fixture_native_execution_input_missing");
+        execution = persistedExecution as NativeExecutionInput;
+        issueId = run.nativeIssueId;
+        runAgentId = run.agentId;
+      }
+      if (!runId || !runAgentId || (input.schedulerMode === "serial" && !scoped && !input.managedOpenCodeConformance))
         throw new Error("scheduler_fixture_verified_model_run_missing");
       const expectedApiKey = apiKeysByAgent.get(runAgentId);
       if (!expectedApiKey) throw new Error("scheduler_fixture_run_agent_profile_missing");
       providerCalls.push({ body, keyMatches: headers.get("x-api-key") === expectedApiKey, runId });
+      if (input.managedOpenCodeConformance) {
+        const messages = Array.isArray(body.messages) ? body.messages as Array<Record<string, unknown>> : [];
+        const contentText = (value: unknown) => typeof value === "string" ? value : Array.isArray(value)
+          ? value.map(part => part && typeof part === "object" && "text" in part &&
+              typeof (part as { text?: unknown }).text === "string" ? (part as { text: string }).text : "").join("") : "";
+        const lastText = contentText(messages.at(-1)?.content);
+        let probe: { kind?: unknown; instruction?: unknown } | null = null;
+        try { probe = JSON.parse(lastText) as { kind?: unknown; instruction?: unknown }; } catch { /* The canonical source gateway will reject malformed input. */ }
+        if (probe?.kind === "cancel") {
+          const signal = init.signal;
+          if (!(signal instanceof AbortSignal)) throw new Error("conformance_fixture_cancel_signal_missing");
+          await new Promise<never>((_resolve, reject) => {
+            const aborted = () => reject(new DOMException("Controlled provider request cancelled", "AbortError"));
+            if (signal.aborted) aborted(); else signal.addEventListener("abort", aborted, { once: true });
+          });
+        }
+        const markerIn = (text: string) => text.match(/AW_PROBE_[A-Fa-f0-9]{32}/)?.[0] ?? null;
+        const output = probe?.kind === "peer_unseen" ? "NONE" :
+          probe?.kind === "start" || probe?.kind === "peer_write" ? markerIn(String(probe.instruction)) :
+          probe?.kind === "resume" || probe?.kind === "isolation_read"
+            ? messages.slice(0, -1).map(row => markerIn(contentText(row.content))).filter(Boolean).at(-1) ?? "NONE"
+            : "";
+        if (output === null) throw new Error("conformance_fixture_marker_missing");
+        return new Response(JSON.stringify({ id: `msg_conformance_${providerCalls.length}`, type: "message", role: "assistant",
+          model: body.model, stop_reason: "end_turn", content: [{ type: "text", text: output }],
+          usage: { input_tokens: 50, output_tokens: Math.max(1, output.length) } }),
+          { status: 200, headers: { "content-type": "application/json" } });
+      }
       const contract = execution?.completionContract.contract;
       if (!execution || !contract) {
         providerStubFailure ??= { stage: "execution_contract", code: "completion_contract_missing" };
@@ -741,6 +835,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     stopManagedSandboxRunLease?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["stopSandboxRunLease"];
     modelRequestAuthenticated?: (body: unknown, signal: AbortSignal, authorization: string | undefined) =>
       ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
+    configuredSandboxOperatorUserIds?: () => string[];
+    prepareNativeOpenCodeConformanceRun?: (actor: AuthorizationActor, input: {
+      companyId: string; runId: string; taskId: string; planId: string; groupId: string; manifestId: string;
+      manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
+    }) => Promise<unknown>;
   };
   const hostsByAgent = new Map<string, ConfiguredHost>();
   const closedAgentHostIds = new Set<string>();
@@ -750,11 +849,13 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       throw new Error("scheduler_fixture_two_agent_host_reuse_not_supported");
     if (existing) return existing;
     if (!agentIds.includes(configuredAgentId)) throw new Error("scheduler_fixture_native_run_agent_unmapped");
-    if (input.managedTwoAgentSignoff && !registrationsByAgent.has(configuredAgentId))
+    if ((input.managedTwoAgentSignoff || input.managedOpenCodeConformance) && !registrationsByAgent.has(configuredAgentId))
       throw new Error("scheduler_fixture_agent_registration_missing");
-    const hostRoot = input.managedTwoAgentSignoff ? join(runHome, `agent-${configuredAgentId}`) : runHome;
-    if (input.managedTwoAgentSignoff) { await mkdir(hostRoot, { mode: 0o700 }); await chmod(hostRoot, 0o700); }
-    const host = await input.configureHeartbeat?.({ db, actor: human, companyId, agentId: configuredAgentId,
+    const hostRoot = input.managedTwoAgentSignoff || input.managedOpenCodeConformance
+      ? join(runHome, `agent-${configuredAgentId}`) : runHome;
+    if (input.managedTwoAgentSignoff || input.managedOpenCodeConformance) { await mkdir(hostRoot, { mode: 0o700 }); await chmod(hostRoot, 0o700); }
+    const configuredCompanyId = companyByAgent.get(configuredAgentId) ?? companyId;
+    const host = await input.configureHeartbeat?.({ db, actor: human, companyId: configuredCompanyId, agentId: configuredAgentId,
       providerBindingId: providerBindingsByAgent.get(configuredAgentId)!, gateway,
       profile: profilesByAgent.get(configuredAgentId)!, runHome: hostRoot, opencodeBinary: input.opencodeBinary,
       brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest,
@@ -764,26 +865,32 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     hostsByAgent.set(configuredAgentId, schedulerHost);
     return schedulerHost;
   };
-  if (!input.managedTwoAgentSignoff) await configureHostForAgent(agentId);
+  if (!input.managedTwoAgentSignoff && !input.managedOpenCodeConformance) await configureHostForAgent(agentId);
   const hostForAuthenticatedAgent = (authorization: string | undefined) => {
     const token = /^Bearer ([^\s]+)$/.exec(authorization ?? "")?.[1];
-    const claims = token ? verifyRuntimeToolsToken(token, "worker_model") : null;
-    const agentHost = claims?.scope === "worker_model" && claims.company_id === companyId
+    const scope = input.managedOpenCodeConformance ? "provider_conformance" : "worker_model";
+    const claims = token ? verifyRuntimeToolsToken(token, scope) : null;
+    const agentHost = claims?.scope === scope && (input.managedOpenCodeConformance
+      ? claims.provider_conformance?.profileId !== undefined
+      : claims.company_id === companyId)
       ? hostsByAgent.get(claims.sub) : undefined;
     if (!agentHost) throw new Error("scheduler_fixture_authenticated_model_agent_unmapped");
     return agentHost;
   };
   const hostForRun = async (runId: string) => {
-    const [run] = await db.select({ agentId: heartbeatRuns.agentId }).from(heartbeatRuns)
-      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
-    const host = run ? hostsByAgent.get(run.agentId) : undefined;
+    const [run] = await db.select({ agentId: heartbeatRuns.agentId, companyId: heartbeatRuns.companyId }).from(heartbeatRuns)
+      .where(and(input.managedOpenCodeConformance
+        ? inArray(heartbeatRuns.companyId, [companyId, f.guest]) : eq(heartbeatRuns.companyId, companyId),
+      eq(heartbeatRuns.id, runId))).limit(1);
+    const host = run ? hostsByAgent.get(run.agentId) ?? (input.managedOpenCodeConformance
+      ? await configureHostForAgent(run.agentId) : undefined) : undefined;
     if (!run || !host) throw new Error("scheduler_fixture_run_agent_unmapped");
     return { agentId: run.agentId, host };
   };
   let closeManagedAgentHostForRun: (runId: string) => Promise<void> = async () => {
     throw new Error("scheduler_fixture_two_agent_close_not_enabled");
   };
-  if (input.managedTwoAgentSignoff) {
+  if (input.managedTwoAgentSignoff || input.managedOpenCodeConformance) {
     const closedHostRunByAgent = new Map<string, string>();
     const admittedRunByAgent = new Map<string, string>();
     let lastManagedExecution: { runId: string; agentId: string } | null = null;
@@ -1062,6 +1169,33 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       agentApiTokens: { executor: executorKey.token, reviewer: reviewerKey.token } };
   }
   try {
+    if (input.managedOpenCodeConformance) {
+      const peerAgentId = conformancePeerAgentId;
+      const environmentRuntime = sandboxHeartbeat?.environmentRuntime;
+      if (!peerAgentId || !environmentRuntime || !input.runOpenCodeConformance)
+        throw new Error("opencode_conformance_fixture_host_or_peer_missing");
+      // Install and physically qualify each registered presence's immutable
+      // namespace boundary before the provider-conformance owner creates its
+      // first hidden Run. Exact Run policies are still compiled and admitted
+      // by the production Sandbox owner after that Run's manifest exists.
+      await configureHostForAgent(agentId);
+      await configureHostForAgent(peerAgentId);
+      return await input.runOpenCodeConformance({ db, actor: human,
+        companyIds: { primary: companyId, peer: f.guest }, agentIds: { primary: agentId, peer: peerAgentId },
+        profiles: profilesByAgent, gateway, sourceSha, environmentRuntime,
+        prepareSandboxRun: async (prepareActor, prepareInput) => {
+          const [run] = await db.select({ agentId: heartbeatRuns.agentId }).from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, prepareInput.companyId), eq(heartbeatRuns.id, prepareInput.runId))).limit(1);
+          const host = run?.agentId ? hostsByAgent.get(run.agentId) : undefined;
+          if (!host?.prepareNativeOpenCodeConformanceRun || !host.configuredSandboxOperatorUserIds ||
+              host.configuredSandboxOperatorUserIds().includes(prepareActor.userId ?? ""))
+            throw new Error("opencode_conformance_fixture_sandbox_prepare_owner_missing_or_operator");
+          return await host.prepareNativeOpenCodeConformanceRun(prepareActor, prepareInput);
+        },
+        providerKeyObservations: () => providerCalls.map(call => ({ runId: call.runId,
+          keyMatchesConfiguredAgent: call.keyMatches })),
+        runtimeFacts: () => sandboxHeartbeat?.facts?.() ?? null, origin });
+    }
     return await input.driveScheduler({ db, actor: human, companyId, agentId, managedAgentIds,
       closeManagedAgentHostForRun, humanApi, managedSignoff, gateway, heartbeat,
       facts: () => ({ providerCallCount: providerCalls.length, providerCredentialFacts: { requestCount: providerCalls.length, everyRequestMatchedConfiguredApiKey: providerCalls.every(call => call.keyMatches) }, issuerFacts: structuredClone(issuerFacts),

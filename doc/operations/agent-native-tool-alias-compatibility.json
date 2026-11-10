@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "4b3f3c3cd665895526f2cca5e80fdd0b760c5bfc484ce98082ae6fefcc265dcf"
+      "sha256": "eb96c592086a7a1098a924fc68169baa4897071b706c5637c734a024a5fbdcc9"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -378,7 +378,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "4a1e1cd0163d3e87c3f1ca8e877b51eadafbd2a51f4d0cffae141f0f1b5c93f4"
+      "sha256": "4be7260030b6e4ac0e8d597fdfd0b5b1ffaea0791c62f717f2f8df577ea257b4"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
@@ -390,7 +390,7 @@
     },
     {
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "b9cf660bc20fe3b1d6550c4b51d9826adf7bbc64deaaa5d05ce1e4e667969a60"
+      "sha256": "34cbe1d44258565e058ce5163c2ac02ea30cdf35f50e82afd17929e567d764fc"
     },
     {
       "path": "server/src/services/process-findings.ts",
@@ -410,7 +410,7 @@
     },
     {
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "3799afe93dac2c82d387e97dc4e86afbca62ff2e64a472eef5b4f551ee06a6f2"
+      "sha256": "fe95fac21d5cb75eb53491cccdea1277d08abc0e23d1bed6a7764abf5e8902f4"
     },
     {
       "path": "server/src/services/workflows/workflow-authoring-tools.ts",

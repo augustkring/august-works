@@ -17,6 +17,9 @@ import { notificationService } from "../notifications/notifications.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
+  agentExecutionManifests,
+  agentPresenceRuntimeBindings,
+  heartbeatRuns,
   platformSchedulerLeases,
   type Db,
 } from "@paperclipai/db";
@@ -48,9 +51,15 @@ import { saasRunLogStore } from "./run-logs.js";
 import { createS3StorageProvider } from "../../storage/s3-provider.js";
 import { runtimeControlService } from "../runtime/control.js";
 import { nativeSandboxHostTransport } from "../execution-sandbox/native-host-bridge.js";
+import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
+import { openShellBackend } from "../execution-sandbox/openshell-backend.js";
+import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { registerNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
 import { nativeDraftConformanceService, registerNativeDraftConformance } from "../native-draft-conformance.js";
+import { nativeOpenCodeConformanceService, registerNativeOpenCodeConformance } from "../native-opencode-conformance.js";
+import { environmentRuntimeService } from "../environment-runtime.js";
 import { runResponsibilityScanMaintenanceTick } from "../experience/private-0565/maintenance-runner.js";
 
 export function saasPlatform(
@@ -114,6 +123,7 @@ export function saasPlatform(
   const workerModels = config.workerModelProfiles?.length ? workerModelGateway(db, {
     profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
     protectedEvidenceOrigin: origins.primaryAppOrigin,
+    runtimeSuspectSeconds: config.runtime.suspectSeconds,
   }) : undefined;
   const runtime = runtimeControlService(
     db,
@@ -125,10 +135,59 @@ export function saasPlatform(
     suspectSeconds: config.runtime.suspectSeconds,
     operatorUserIds: config.operatorUserIds,
   });
+  const resolveSandboxBrokerBindings = async (companyId: string, policy: import("@paperclipai/shared").SandboxPolicyCompilation) => {
+    const compiled = policy.compiledPolicy;
+    if (compiled.credentials.mode !== "brokered") return { authorizedConnectionGrantHashes: {}, bindings: [] };
+    const manifestRef = policy.sourcePolicyRefs.find(ref => ref.startsWith("manifest:"));
+    const match = manifestRef ? /^manifest:([0-9a-f-]{36}):([a-f0-9]{64})$/i.exec(manifestRef) : null;
+    if (!match) throw new Error("sandbox_broker_manifest_source_unavailable");
+    const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.id, match[1]!), eq(agentExecutionManifests.hash, match[2]!),
+    )).limit(1);
+    const [run] = manifest ? await db.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, manifest.runId), eq(heartbeatRuns.agentId, manifest.agentId), eq(heartbeatRuns.status, "running"),
+    )).limit(1) : [];
+    const [presence] = manifest ? await db.select().from(agentPresenceRuntimeBindings).where(and(
+      eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, manifest.agentId), eq(agentPresenceRuntimeBindings.status, "active"),
+    )).limit(1) : [];
+    if (!manifest || !run?.responsibleUserId || !presence) throw new Error("sandbox_broker_run_source_unavailable");
+    return await getAssignedMcpGateway(db).resolveSandboxCredentialBrokerPolicyBindings({
+      companyId, agentId: manifest.agentId, runId: run.id, responsibleUserId: run.responsibleUserId,
+      presenceId: presence.id, bindings: compiled.credentials.bindings,
+    });
+  };
+  const executionSandboxOptions: NonNullable<Parameters<typeof executionSandboxService>[1]> = {
+    operatorUserIds: config.operatorUserIds,
+    credentialBrokerOrigin: origins.primaryAppOrigin,
+    backendFor: (binding, actor, conformance) =>
+      binding.backend === "openshell" && config.runtime.openshellProver ? openShellBackend({
+        identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId,
+          cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
+        boundary: binding.boundaryPolicy, bridge: sandboxHosts.bridge(actor, conformance), evidenceKind: "protected_host_report",
+        prover: config.runtime.openshellProver, credentialBrokerOrigin: origins.primaryAppOrigin,
+        credentialBrokerDatabase: db, resolveCredentialBrokerBindings: policy => resolveSandboxBrokerBindings(binding.companyId, policy),
+      }) : undefined,
+    nativeOperation: (companyId: string, cellId: string, userId: string, action: "stop" | "delete", idempotencyKey: string) =>
+      runtime.request(companyId, cellId, userId, { action, idempotencyKey }),
+    assertRuntimeStartAdmission: (tx: Db, input: { actor: AuthorizationActor; companyId: string; cellId: string; userId: string }) =>
+      runtime.assertSandboxStartAdmission(tx, input),
+    recordRuntimeWorkloadState: (tx: Db, input: Parameters<typeof runtime.recordSandboxWorkloadState>[1]) => runtime.recordSandboxWorkloadState(tx, input),
+    runtimeSuspectSeconds: config.runtime.suspectSeconds,
+  };
+  const executionSandbox = executionSandboxService(db, executionSandboxOptions);
   registerNativeDraftGateway(db, workerModels);
   registerNativeDraftConformance(db, config.workerModelProfiles?.length ? nativeDraftConformanceService(db, {
     profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
     protectedEvidenceOrigin: origins.primaryAppOrigin,
+  }) : undefined);
+  registerNativeOpenCodeConformance(db, config.workerModelProfiles?.length ? nativeOpenCodeConformanceService(db, {
+    profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
+    protectedEvidenceOrigin: origins.primaryAppOrigin,
+    modelBrokerOrigin: origins.primaryAppOrigin,
+    environmentRuntime: environmentRuntimeService(db, { executeSandboxTask: runtime.executeSandboxTask,
+      stopSandboxRunLease: runtime.stopSandboxRunLeaseForCleanup }),
+    prepareSandboxRun: (actor, input) => executionSandbox.prepareNativeOpenCodeConformanceRun(actor, input),
+    runnerInstanceId: randomUUID(), runtimeSuspectSeconds: config.runtime.suspectSeconds,
   }) : undefined);
   const backupRetention = config.backups
     ? runtimeBackupRetention(db, runtimeBackupRetentionObjects(config))
@@ -483,6 +542,7 @@ export function saasPlatform(
   }
   return {
     sandboxHosts,
+    executionSandboxOptions,
     workerModels,
     backupSchedule,
     config,

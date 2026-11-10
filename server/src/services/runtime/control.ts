@@ -440,6 +440,7 @@ export function exactNativeWorkspacePrepareCommand(input: {
   request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
   taskRoot: string;
   execution: ReturnType<typeof parseNativeExecutionInput>;
+  expectedProviderLeaseId?: string;
 }): boolean {
   if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
     input.request.cwd !== input.taskRoot) return false;
@@ -453,6 +454,23 @@ export function exactNativeWorkspacePrepareCommand(input: {
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
   const stamp = path.posix.join(runtimeRoot, "workspace-sync-v1.json");
   if (emptyInput && script === `test -f ${quote(stamp)} && cat ${quote(stamp)}`) return true;
+  const stampWritePrefix = `umask 077; mkdir -p ${quote(runtimeRoot)} && printf %s `;
+  const stampWriteSuffix = ` | base64 -d > ${quote(`${stamp}.tmp`)} && mv ${quote(`${stamp}.tmp`)} ${quote(stamp)}`;
+  if (emptyInput && script.startsWith(stampWritePrefix) && script.endsWith(stampWriteSuffix)) {
+    const encodedToken = script.slice(stampWritePrefix.length, -stampWriteSuffix.length);
+    const encoded = encodedToken.startsWith("'") && encodedToken.endsWith("'") ? encodedToken.slice(1, -1) : "";
+    if (/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) && Buffer.from(encoded, "base64").toString("base64") === encoded) {
+      try {
+        const body = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as Record<string, unknown>;
+        if (body.schema === "paperclip.native-workspace-stamp/v1" &&
+            body.workspaceId === input.execution.binding.executionWorkspaceId && body.remoteCwd === input.taskRoot &&
+            body.finalizedRunId === input.execution.binding.runId && typeof body.providerLeaseId === "string" &&
+            /^[A-Za-z0-9._:-]{1,256}$/.test(body.providerLeaseId) &&
+            (input.expectedProviderLeaseId === undefined || body.providerLeaseId === input.expectedProviderLeaseId) &&
+            typeof body.hostSha256 === "string" && /^[a-f0-9]{64}$/.test(body.hostSha256)) return true;
+      } catch { /* malformed remote stamp is not a trusted workspace operation */ }
+    }
+  }
   const validChunk = stdinBase64.length > 0 && stdinBase64.length <= 6 * 1024 * 1024 &&
     /^[A-Za-z0-9+/]+={0,2}$/.test(stdinBase64) && Buffer.from(stdinBase64, "base64").toString("base64") === stdinBase64 &&
     (() => {
@@ -541,6 +559,7 @@ function sandboxExecutionCwdAllowed(cwd: string, filesystem: { readPaths?: unkno
 
 type CurrentSandboxTaskSource = NonNullable<Awaited<ReturnType<ReturnType<typeof executionSandboxService>["assertTaskExecutionContext"]>>>;
 const WORKER_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_runtime_context_prepare", "native_provider_data_erasure_probe"]);
+const CONFORMANCE_NATIVE_PREPARATION_PURPOSES = new Set(["provider_artifact", "native_harness_state", "native_workspace_prepare", "native_session_start", "native_provider_data_erasure_probe"]);
 
 async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandboxTaskSource,
   purpose: string | undefined): Promise<string | null> {
@@ -594,6 +613,57 @@ async function currentWorkerNativePreparationRoot(tx: Db, source: CurrentSandbox
   await assertNativeTaskSourceOwnerCurrent(tx, { companyId: run.companyId,
     actor: { type: "board", source: "session", userId: run.responsibleUserId }, source: taskSource.data });
   await assertNativeWorkspaceMetadataSourcesCurrent(tx, run.companyId, [workspace.data]);
+  return root;
+}
+
+async function currentConformanceNativeWorkspaceRoot(source: CurrentSandboxTaskSource, purpose: string | undefined): Promise<string | null> {
+  if (!purpose || !CONFORMANCE_NATIVE_PREPARATION_PURPOSES.has(purpose) || !source.providerConformanceBootstrap) return null;
+  const { run, manifest } = source, task = source.source.task;
+  const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+    ? run.runnerProfileJson as Record<string, unknown> : {};
+  const proof = profile.nativeOpenCodeConformanceWorkspace && typeof profile.nativeOpenCodeConformanceWorkspace === "object" &&
+    !Array.isArray(profile.nativeOpenCodeConformanceWorkspace) ? profile.nativeOpenCodeConformanceWorkspace as Record<string, unknown> : {};
+  let execution: ReturnType<typeof parseNativeExecutionInput>;
+  try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); }
+  catch { throw conflict("Conformance workspace preparation requires its immutable Native input"); }
+  const groupId = source.qualificationGroupId, plan = source.conformancePlan;
+  const root = path.resolve(execution.workspace.cwd), leaseRoot = source.lease.metadata?.remoteCwd;
+  const taskRoot = typeof proof.taskRoot === "string" ? path.resolve(proof.taskRoot) : "";
+  const sourceAuthority = profile.nativeOpenCodeSourceAuthority && typeof profile.nativeOpenCodeSourceAuthority === "object" &&
+    !Array.isArray(profile.nativeOpenCodeSourceAuthority) ? profile.nativeOpenCodeSourceAuthority as Record<string, unknown> : {};
+  const filesystem = source.policy.compilation.compiledPolicy.filesystem;
+  const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+  const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+  if (!groupId || !plan || plan.status !== "paused" || plan.issueId !== task.id || plan.createdBy !== run.responsibleUserId ||
+      run.status !== "running" || run.triggerDetail !== "provider_conformance" || run.runtimeMode !== "native" ||
+      !run.responsibleUserId || task.hiddenAt === null || task.harnessKind !== "provider_conformance" || task.status !== "in_progress" ||
+      task.responsibleUserId !== run.responsibleUserId || task.executionRunId !== run.id ||
+      task.assigneeAgentId !== run.agentId || task.conversationAgentId !== null || task.conversationUserId !== null ||
+      task.projectId !== null || task.parentId !== null || manifest.runId !== run.id || manifest.agentId !== run.agentId ||
+      manifest.manifest.responsibleUserId !== run.responsibleUserId || manifest.manifest.capabilities.length !== 0 ||
+      plan.actionClass !== "internal_draft" || plan.mode !== "single_worker" || plan.executionPrincipal?.type !== "user" ||
+      plan.executionPrincipal.userId !== run.responsibleUserId || plan.riskClass !== "C0" || plan.budgets.maxToolActions !== 0 ||
+      plan.budgets.maxRetries !== 0 || plan.toolActionsUsed !== 0 || source.attempt ||
+      execution.binding.companyId !== run.companyId || execution.binding.runId !== run.id || execution.binding.agentId !== run.agentId ||
+      execution.binding.issueId !== task.id || execution.binding.executionWorkspaceId !== proof.workspaceId ||
+      execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+      proof.schema !== "paperclip.native-opencode-conformance-workspace/v1" || proof.groupId !== groupId ||
+      proof.companyId !== run.companyId || proof.agentId !== run.agentId || proof.taskId !== task.id || proof.taskRoot !== taskRoot ||
+      proof.localCwd !== root || proof.remoteCwd !== root || root !== taskRoot ||
+      typeof proof.workspaceId !== "string" || typeof proof.creationReceipt !== "string" || !/^[a-f0-9]{64}$/.test(proof.creationReceipt) ||
+      typeof proof.leaseId !== "string" || proof.leaseId !== source.lease.id ||
+      typeof proof.providerLeaseId !== "string" || proof.providerLeaseId !== source.lease.providerLeaseId ||
+      proof.authorityHash !== source.authorityHash || typeof leaseRoot !== "string" || path.resolve(leaseRoot) !== root ||
+      !readRoots.some(value => typeof value === "string" && path.resolve(value) === root) ||
+      !writeRoots.some(value => typeof value === "string" && path.resolve(value) === root) ||
+      (purpose !== "native_workspace_prepare" && (sourceAuthority.version !== 1 ||
+        sourceAuthority.executionInputHash !== nativeSha256(profile.nativeExecutionInput) ||
+        !Array.isArray(sourceAuthority.toolSchemas) || sourceAuthority.toolSchemas.length !== 0)) ||
+      (purpose === "provider_artifact" && (!sourceAuthority.artifactAuthority || typeof sourceAuthority.artifactAuthority !== "object")) ||
+      (purpose !== "native_workspace_prepare" && (typeof proof.descriptorSha256 !== "string" || !/^[a-f0-9]{64}$/.test(proof.descriptorSha256) ||
+        typeof proof.baselineSha256 !== "string" || !/^[a-f0-9]{64}$/.test(proof.baselineSha256) ||
+        proof.workspaceRepositoryMode !== "server_verified_none")))
+    throw conflict("The current hidden conformance Run, group workspace receipt, lease, or exact filesystem policy changed");
   return root;
 }
 
@@ -3693,8 +3763,75 @@ export function runtimeControlService(
         request.modelBrokerCredential !== undefined;
       let nativeSessionStartValid = false;
       let nativeHarnessStateValid = false;
-      const workerPreparationRoot = await currentWorkerNativePreparationRoot(tx, source, nativePreparationPurpose);
-      if (workerPreparationRoot !== null) {
+      const workerPreparationRoot = source.providerConformanceBootstrap ? null :
+        await currentWorkerNativePreparationRoot(tx, source, nativePreparationPurpose);
+      const conformanceWorkspaceRoot = await currentConformanceNativeWorkspaceRoot(source, nativePreparationPurpose);
+      if (conformanceWorkspaceRoot !== null) {
+        const profile = source.run.runnerProfileJson as Record<string, unknown>;
+        const execution = parseNativeExecutionInput(profile.nativeExecutionInput);
+        const sourceAuthority = profile.nativeOpenCodeSourceAuthority && typeof profile.nativeOpenCodeSourceAuthority === "object" &&
+          !Array.isArray(profile.nativeOpenCodeSourceAuthority) ? profile.nativeOpenCodeSourceAuthority as Record<string, unknown> : {};
+        const forbiddenEnvironmentKeys = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN",
+          "GITHUB_ENTERPRISE_TOKEN", "PAPERCLIP_GITHUB_BROKER_TOKEN", "PAPERCLIP_GITHUB_BROKER_URL", "PAPERCLIP_SANDBOX_BROKER_TOKEN",
+          "PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN", "PAPERCLIP_SANDBOX_BROKER_SESSION_ID"];
+        const managedModelEnvironmentKeys = Object.keys(request.env ?? {}).filter(key => key.startsWith("PAPERCLIP_MANAGED_MODEL_"));
+        const allowedManagedModelEnvironmentKeys = new Set(["PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN",
+          "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND", "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS"]);
+        const noManagedModelEnvironment = managedModelEnvironmentKeys.length === 0;
+        const onlyExactManagedModelEnvironment = managedModelEnvironmentKeys.every(key => allowedManagedModelEnvironmentKeys.has(key));
+        const noWorkloadCredential = credentials.mode === "none" && credentials.bindings.length === 0 &&
+          request.brokerCredential === undefined && !Object.keys(request.env ?? {}).some(key => forbiddenEnvironmentKeys.includes(key));
+        const exactWorkspace = nativeWorkspacePrepare && request.modelBrokerCredential === undefined &&
+          request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
+          exactNativeWorkspacePrepareCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
+            expectedProviderLeaseId: source.lease.providerLeaseId ?? undefined });
+        const exactArtifact = providerArtifactPreparation && request.modelBrokerCredential === undefined &&
+          request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
+          (exactNativeProviderArtifactChunkCommand({ request, taskRoot: conformanceWorkspaceRoot }) ||
+            exactNativeManagedArtifactCommand({ request, taskRoot: conformanceWorkspaceRoot,
+              authority: sourceAuthority.artifactAuthority }));
+        const sessionId = execution.session.normalizedSessionId ?? `session-${source.run.id}`;
+        const sessionDigest = sha256(sessionId);
+        const exactErasureProbe = nativeRuntimeAssetErasureProbe && request.modelBrokerCredential === undefined &&
+          request.modelBrokerSession === undefined && credentials.mode === "none" && credentials.bindings.length === 0 &&
+          request.brokerCredential === undefined && exactNativeRuntimeAssetErasureProbeCommand({ request,
+            taskRoot: conformanceWorkspaceRoot, runId: source.run.id, sessionDigest });
+        const exactHarness = nativeHarnessState && (request.modelBrokerSession === undefined || request.modelBrokerSession.phase === "stop") &&
+          noWorkloadCredential && noManagedModelEnvironment && request.modelBrokerCredential === undefined &&
+          exactNativeHarnessStateCommand({ request, taskRoot: conformanceWorkspaceRoot, execution, runId: source.run.id });
+        let exactRemoteStartBinding = false;
+        if (nativeSessionStart) {
+          const locator = await readRemoteRuntimeAssetLocator(tx, source.run);
+          const saved = expected.remoteNativeSessionStartBinding && typeof expected.remoteNativeSessionStartBinding === "object" &&
+            !Array.isArray(expected.remoteNativeSessionStartBinding) ? expected.remoteNativeSessionStartBinding as Record<string, unknown> : null;
+          if (locator && locator.environmentLeaseId === source.lease.id && locator.environmentId === source.lease.environmentId &&
+              locator.provider === source.lease.provider && locator.providerLeaseId === source.lease.providerLeaseId &&
+              locator.runnerInstanceId === source.run.runnerInstanceId) {
+            const currentBinding = {
+              schema: "paperclip.remote-native-session-start-binding.v1",
+              locatorDigest: remoteRuntimeAssetLocatorDigest(locator), runnerInstanceId: locator.runnerInstanceId,
+              environmentLeaseId: locator.environmentLeaseId, provider: locator.provider, providerLeaseId: locator.providerLeaseId,
+              normalizedSessionIdDigest: locator.normalizedSessionIdDigest, hostId: source.host.id,
+              hostEpoch: source.host.credentialVersion, cellId: source.cell.id, cellGeneration: source.cell.generation.toString(),
+              bindingId: source.sandboxBinding.id, manifestId: source.manifest.id, manifestHash: source.manifest.hash,
+              policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
+            };
+            exactRemoteStartBinding = !!saved && nativeSha256(saved) === nativeSha256(currentBinding);
+          }
+        }
+        const exactSessionStart = nativeSessionStart && noWorkloadCredential && request.modelBrokerSession?.phase === "start" &&
+          onlyExactManagedModelEnvironment &&
+          request.modelBrokerCredential !== undefined && request.env.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === managedModelBrokerOrigin &&
+          Number.isSafeInteger(request.modelBrokerCredential.inputTokensUpperBound) &&
+          Number.isSafeInteger(request.modelBrokerCredential.maxOutputTokens) &&
+          request.env.PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND === String(request.modelBrokerCredential.inputTokensUpperBound) &&
+          request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === String(request.modelBrokerCredential.maxOutputTokens) &&
+          exactRemoteStartBinding && exactNativeSessionLaunchCommand({ request, taskRoot: conformanceWorkspaceRoot, execution });
+        if (!exactWorkspace && !exactArtifact && !exactErasureProbe && !exactHarness && !exactSessionStart)
+          throw forbidden("Conformance preparation requires the exact current group workspace, credential scope, and Native command");
+        if (exactSessionStart) nativeSessionStartValid = true;
+        if (exactHarness) nativeHarnessStateValid = true;
+      } else if (workerPreparationRoot !== null) {
         const profile = source.run.runnerProfileJson as Record<string, unknown>;
         const execution = parseNativeExecutionInput(profile.nativeExecutionInput);
         const noCredentialEnvironment = !Object.keys(request.env ?? {}).some(key => ["ANTHROPIC_API_KEY", "OPENAI_API_KEY",
@@ -3781,8 +3918,8 @@ export function runtimeControlService(
           !exactNativeProviderArtifactChunkCommand({ request, taskRoot: expectedTaskRoot }))
           throw forbidden("Provider artifact relay chunk is outside its exact private Task target");
       }
-      const workerNativeSessionStart = nativeSessionStart && source.source.task.conversationAgentId === null &&
-        source.source.task.conversationUserId === null;
+      const workerNativeSessionStart = nativeSessionStart && !source.providerConformanceBootstrap &&
+        source.source.task.conversationAgentId === null && source.source.task.conversationUserId === null;
       const workerModelSessionRefresh = !nativePreparationPurpose && request.modelBrokerSession?.phase === "refresh" &&
         source.source.task.conversationAgentId === null && source.source.task.conversationUserId === null;
       if (workerModelSessionRefresh) {
@@ -3828,7 +3965,8 @@ export function runtimeControlService(
           request.modelBrokerSession?.phase !== "start" || !request.modelBrokerCredential ||
           !exactNativeSessionLaunchCommand({ request, taskRoot, execution }))
           throw forbidden("Native worker session start is outside the exact current run, attempt, manifest and launch command");
-      } else if (!workerPreparationRoot && (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe)) {
+      } else if (!workerPreparationRoot && !conformanceWorkspaceRoot &&
+        (nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe)) {
         const task = source.source.task;
         const taskSnapshot = nativePayloadSourceSnapshotSchema.safeParse(task.payloadSourceSnapshot);
         const [taskOwnerVersion] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` })
@@ -4039,6 +4177,8 @@ export function runtimeControlService(
       const modelClaims = modelCredential ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "worker_model") : null;
       const conversationModelClaims = modelCredential
         ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "conversation_model") : null;
+      const conformanceModelClaims = modelCredential
+        ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "provider_conformance") : null;
       const modelBinding = modelClaims?.worker_model;
       const conversationBinding = conversationModelClaims?.conversation_model;
       const [modelAttempt] = modelBinding ? await tx.select().from(orchestrationWorkerAttempts).where(and(
@@ -4097,6 +4237,35 @@ export function runtimeControlService(
           !!modelAttempt && !!modelPlan && modelPlan.issueId === source.run.nativeIssueId;
         let conversationCredentialValid = false;
         let conversationCredentialChecks: Record<string, boolean> | null = null;
+        const conformanceContext = source.run.contextSnapshot && typeof source.run.contextSnapshot === "object" &&
+          !Array.isArray(source.run.contextSnapshot) ? source.run.contextSnapshot as Record<string, unknown> : {};
+        const conformanceDispatch = conformanceContext.nativeOpenCodeConformanceDispatch &&
+          typeof conformanceContext.nativeOpenCodeConformanceDispatch === "object" &&
+          !Array.isArray(conformanceContext.nativeOpenCodeConformanceDispatch)
+          ? conformanceContext.nativeOpenCodeConformanceDispatch as Record<string, unknown> : {};
+        const conformanceClaim = conformanceModelClaims?.provider_conformance;
+        const conformanceCredentialValid = Boolean(source.providerConformanceBootstrap && nativeSessionStartValid &&
+          request.modelBrokerSession?.phase === "start" && modelCredential && conformanceModelClaims?.scope === "provider_conformance" &&
+          !modelClaims && !conversationModelClaims && conformanceClaim && source.qualificationGroupId && source.conformancePlan &&
+          conformanceContext.providerConformanceGroupId === source.qualificationGroupId &&
+          conformanceContext.providerConformancePlanId === source.conformancePlan.id &&
+          conformanceContext.nativeOpenCodeConformanceProbeId === conformanceClaim.probeId &&
+          conformanceContext.nativeOpenCodeConformanceProfileId === conformanceClaim.profileId &&
+          conformanceContext.nativeOpenCodeConformanceDispatch !== undefined &&
+          conformanceClaim.qualificationGroupId === source.qualificationGroupId &&
+          conformanceClaim.probeRunId === source.run.id && conformanceClaim.planId === source.conformancePlan.id &&
+          conformanceClaim.profileId === source.capability.modelBrokerProviderProfile?.id &&
+          conformanceClaim.probeId === conformanceDispatch.probeId &&
+          conformanceClaim.dispatchNonce === conformanceDispatch.dispatchNonce &&
+          conformanceClaim.authorityHash === conformanceDispatch.authorityHash &&
+          conformanceDispatch.qualificationGroupId === source.qualificationGroupId &&
+          conformanceDispatch.planId === source.conformancePlan.id &&
+          conformanceDispatch.profileId === source.capability.modelBrokerProviderProfile?.id &&
+          conformanceModelClaims.company_id === claims.company_id && conformanceModelClaims.sub === source.run.agentId &&
+          conformanceModelClaims.run_id === source.run.id &&
+          conformanceModelClaims.responsible_user_id === source.run.responsibleUserId &&
+          conformanceModelClaims.exp * 1000 >= Date.now() &&
+          Date.parse(modelCredential.expiresAt) <= conformanceModelClaims.exp * 1000 && inputAndExpiryValid);
         if (conversationModelClaims?.conversation_model && conversationBinding && modelCredential &&
           source.capability.modelBrokerProviderProfile && exactProfileAndEnvironment && inputAndExpiryValid) {
           const task = source.source.task;
@@ -4147,13 +4316,13 @@ export function runtimeControlService(
           }
         }
         if (!modelCredential || !source.capability.modelBrokerProviderProfile || !exactProfileAndEnvironment ||
-          !inputAndExpiryValid || (!workerCredentialValid && !conversationCredentialValid)) {
+          !inputAndExpiryValid || (!workerCredentialValid && !conversationCredentialValid && !conformanceCredentialValid)) {
           const failedChecks = [
             ...(!modelCredential ? ["credential_absent"] : []),
             ...(!source.capability.modelBrokerProviderProfile ? ["provider_profile_absent"] : []),
             ...(!exactProfileAndEnvironment ? ["profile_or_origin_mismatch"] : []),
             ...(!inputAndExpiryValid ? ["bounds_or_expiry_invalid"] : []),
-            ...(!workerCredentialValid && !conversationCredentialValid
+            ...(!workerCredentialValid && !conversationCredentialValid && !conformanceCredentialValid
               ? (conversationCredentialChecks
                   ? Object.entries(conversationCredentialChecks).filter(([, valid]) => !valid).map(([name]) => name)
                   : ["conversation_claim_or_binding_missing"])
@@ -4305,22 +4474,23 @@ export function runtimeControlService(
     const runProfile = initialSource.run.runnerProfileJson && typeof initialSource.run.runnerProfileJson === "object" &&
       !Array.isArray(initialSource.run.runnerProfileJson) ? initialSource.run.runnerProfileJson as Record<string, unknown> : {};
     try { conversationExecution = parseNativeExecutionInput(runProfile.nativeExecutionInput); } catch { /* monitor ownership fails closed */ }
-    const workerPreparationRoot = !hasConversationIdentity && requestedNativePreparationPurpose &&
+    const workerPreparationRoot = !hasConversationIdentity && !initialSource.providerConformanceBootstrap && requestedNativePreparationPurpose &&
       WORKER_NATIVE_PREPARATION_PURPOSES.has(requestedNativePreparationPurpose)
       ? await db.transaction(tx => currentWorkerNativePreparationRoot(tx as unknown as Db, initialSource, requestedNativePreparationPurpose)) : null;
+    const conformanceWorkspaceRoot = await currentConformanceNativeWorkspaceRoot(initialSource, requestedNativePreparationPurpose);
     // Workspace/context staging has a separate exact immutable Worker owner.
     // Other shared helpers retain their existing conversation or typed Worker
     // credential paths; this lane never grants arbitrary artifact execution.
-    if (requestedNativePreparationPurpose === "native_harness_state" && !hasConversationIdentity && !workerPreparationRoot)
+    if (requestedNativePreparationPurpose === "native_harness_state" && !hasConversationIdentity && !workerPreparationRoot && !conformanceWorkspaceRoot)
       throw conflict("Native harness state requires an authenticated conversation Task");
-    if (requestedNativePreparationPurpose === "native_workspace_prepare" && !hasConversationIdentity && !workerPreparationRoot)
+    if (requestedNativePreparationPurpose === "native_workspace_prepare" && !hasConversationIdentity && !workerPreparationRoot && !conformanceWorkspaceRoot)
       throw conflict("Native workspace preparation requires an authenticated conversation Task");
     if (requestedNativePreparationPurpose === "native_runtime_context_prepare" && !hasConversationIdentity && !workerPreparationRoot)
       throw conflict("Native runtime-context preparation requires an authenticated conversation Task");
-    if (requestedNativePreparationPurpose === "native_provider_data_erasure_probe" && !hasConversationIdentity && !workerPreparationRoot)
+    if (requestedNativePreparationPurpose === "native_provider_data_erasure_probe" && !hasConversationIdentity && !workerPreparationRoot && !conformanceWorkspaceRoot)
       throw conflict("Native remote erasure storage probe requires an authenticated conversation Task");
     const nativePreparationPurpose = requestedNativePreparationPurpose &&
-      (hasConversationIdentity || workerPreparationRoot !== null || requestedNativePreparationPurpose === "native_session_start")
+      (hasConversationIdentity || workerPreparationRoot !== null || conformanceWorkspaceRoot !== null || requestedNativePreparationPurpose === "native_session_start")
       ? requestedNativePreparationPurpose : undefined;
     const workerModelSessionRefresh = modelBrokerSessionPhase === "refresh" && !hasConversationIdentity &&
       requestedNativePreparationPurpose === undefined;
@@ -4476,12 +4646,17 @@ export function runtimeControlService(
       const filesystem = initialSource.policy.compilation.compiledPolicy.filesystem;
       const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
       const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
-      if (runnerProfile?.provider !== "opencode" || initialSource.run.status !== "running" ||
+      if ((initialSource.providerConformanceBootstrap && (!conformanceWorkspaceRoot ||
+          path.resolve(conformanceWorkspaceRoot) !== path.resolve(taskRoot ?? ""))) ||
+        runnerProfile?.provider !== "opencode" || initialSource.run.status !== "running" ||
         initialSource.run.runtimeMode !== "native" || !initialSource.run.agentId || !initialSource.run.responsibleUserId ||
-        !initialSource.run.nativeSessionId || !initialSource.run.runnerInstanceId || !initialSource.attempt ||
-        initialSource.attempt.runId !== initialSource.run.id || initialSource.attempt.status !== "running" ||
+        !initialSource.run.nativeSessionId || !initialSource.run.runnerInstanceId ||
+        (!initialSource.providerConformanceBootstrap && !initialSource.attempt) ||
+        (initialSource.attempt && (initialSource.attempt.runId !== initialSource.run.id || initialSource.attempt.status !== "running")) ||
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
         initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId ||
+        (initialSource.providerConformanceBootstrap && initialSource.manifest.manifest.capabilities.length !== 0) ||
+        (initialSource.providerConformanceBootstrap && (credentials.mode !== "none" || credentials.bindings.length !== 0)) ||
         !execution || execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
         execution.session.normalizedSessionId !== initialSource.run.nativeSessionId || execution.binding.companyId !== input.companyId ||
         execution.binding.runId !== initialSource.run.id || execution.binding.agentId !== initialSource.run.agentId ||
@@ -4493,7 +4668,8 @@ export function runtimeControlService(
           "PAPERCLIP_SANDBOX_BROKER_SESSION_ID"].includes(key)) ||
         !exactNativeSessionLaunchCommand({ request: { argv, cwd, stdinBase64: stdinBytes.toString("base64") }, taskRoot, execution }))
         throw conflict("Native worker model-session start is outside its current signed launch and source scope");
-    } else if (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe) {
+    } else if (!initialSource.providerConformanceBootstrap &&
+      (providerArtifactPreparation || nativeSessionStart || nativeHarnessState || nativeWorkspacePrepare || nativeRuntimeContextPrepare || nativeRuntimeAssetErasureProbe)) {
       const task = initialSource.source.task;
       const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
@@ -4529,12 +4705,48 @@ export function runtimeControlService(
         throw conflict("Current Native conversation Human, generation, Run and manifest are required");
       const mintInput = { companyId: input.companyId, agentId: initialSource.run.agentId!,
         runId: initialSource.run.id, responsibleUserId: initialSource.run.responsibleUserId! };
+      const conformanceProbeId = initialSource.providerConformanceBootstrap
+        ? initialSource.run.contextSnapshot?.nativeOpenCodeConformanceProbeId : null;
       // A conversation token is only a capability to reach the local broker.
       // The gateway still requires the persisted initial Native input receipt,
       // current source ACLs, and the current Human before it reserves or sends.
-      const minted = hasConversationIdentity && !initialSource.attempt
-        ? await options.workerModels.issueForConversationRun(mintInput)
-        : await options.workerModels.issueForRun(mintInput);
+      let minted: { token: string; expiresAt: string; inputTokensUpperBound: number; maxOutputTokens: number };
+      if (initialSource.providerConformanceBootstrap) {
+        if (typeof conformanceProbeId !== "string")
+          throw conflict("The server-created OpenCode probe id is missing");
+        if (modelBrokerSessionPhase !== "start")
+          throw conflict("A conformance RuntimeTools capability is limited to one initial provider turn per hidden Run");
+        const issued = await options.workerModels.issueForNativeOpenCodeConformanceRun({ ...mintInput,
+          qualificationGroupId: initialSource.qualificationGroupId!, planId: initialSource.conformancePlan!.id,
+          probeId: conformanceProbeId! });
+        minted = issued;
+        const tuple = { qualificationGroupId: issued.qualificationGroupId, planId: initialSource.conformancePlan!.id,
+          profileId: issued.profileId, probeId: issued.probeId, dispatchNonce: issued.dispatchNonce,
+          authorityHash: issued.authorityHash };
+        const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (tuple.qualificationGroupId !== initialSource.qualificationGroupId || tuple.planId !== initialSource.conformancePlan!.id ||
+            !uuid.test(tuple.profileId) || !uuid.test(tuple.probeId) || !uuid.test(tuple.dispatchNonce) ||
+            !/^[a-f0-9]{64}$/.test(tuple.authorityHash))
+          throw conflict("The conformance issuer returned an invalid server-owned dispatch tuple");
+        await db.transaction(async transaction => {
+          const tx = transaction as unknown as Db;
+          const [current] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+            eq(heartbeatRuns.id, initialSource.run.id), eq(heartbeatRuns.agentId, initialSource.run.agentId!))).for("update").limit(1);
+          const context = current?.contextSnapshot && typeof current.contextSnapshot === "object" && !Array.isArray(current.contextSnapshot)
+            ? current.contextSnapshot as Record<string, unknown> : null;
+          if (!current || !context || current.status !== "running" || current.responsibleUserId !== initialSource.run.responsibleUserId ||
+              current.triggerDetail !== "provider_conformance" || context.providerConformanceGroupId !== tuple.qualificationGroupId ||
+              context.providerConformancePlanId !== tuple.planId || context.nativeOpenCodeConformanceProbeId !== tuple.probeId ||
+              context.nativeOpenCodeConformanceProfileId !== tuple.profileId || context.nativeOpenCodeConformanceDispatch !== undefined)
+            throw conflict("The current probe Run cannot accept a second or changed conformance dispatch tuple");
+          await tx.update(heartbeatRuns).set({ contextSnapshot: { ...context, nativeOpenCodeConformanceDispatch: tuple }, updatedAt: new Date() })
+            .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, current.id), eq(heartbeatRuns.status, "running")));
+        });
+      } else {
+        minted = hasConversationIdentity && !initialSource.attempt
+          ? await options.workerModels.issueForConversationRun(mintInput)
+          : await options.workerModels.issueForRun(mintInput);
+      }
       const credentialCeiling = modelBrokerSession ? Date.parse(modelBrokerSession.sessionDeadlineAt) : deadlineAt.getTime();
       const expiresAt = new Date(Math.min(Date.parse(minted.expiresAt), credentialCeiling, initialSource.lease.expiresAt!.getTime()));
       if (expiresAt <= now) throw conflict("Managed model broker capability expired before sandbox dispatch");

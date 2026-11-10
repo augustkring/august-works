@@ -8,7 +8,7 @@ import { assertCompanyAccess } from "./authz.js";
 import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
 
 export function executionSandboxRoutes(db: Db, options: {
-  operatorUserIds?: string[];
+  operatorUserIds?: readonly string[];
   credentialBrokerOrigin?: NonNullable<Parameters<typeof executionSandboxService>[1]>["credentialBrokerOrigin"];
   backendFor?: NonNullable<Parameters<typeof executionSandboxService>[1]>["backendFor"];
   nativeOperation?: NonNullable<Parameters<typeof executionSandboxService>[1]>["nativeOperation"];

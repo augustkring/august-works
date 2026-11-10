@@ -5,6 +5,8 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createDb, agents, issues, heartbeatRuns, orchestrationModelReservations, orchestrationWorkerAttempts,
   issueDocuments, documents, environmentLeases } from "@paperclipai/db";
+import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
+import { assertNativePayloadSourceSetCurrent } from "../services/native-direct-input.js";
 import { verifyNativeCleanupRuntimeState } from "../services/execution-sandbox/run-lease-cleanup.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { issueService } from "../services/issues.js";
@@ -23,7 +25,7 @@ beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), "heartbeat-managed-serial-"));
   vi.stubEnv("PAPERCLIP_HOME", home);
   database = await startEmbeddedPostgresTestDatabase("heartbeat-managed-serial-", { preserveDataOnFailure: () => !completed });
-  db = createDb(database.connectionString);
+  db = createDb(database.connectionString, { maxConnections: 3 });
 }, 60000);
 afterAll(async () => {
   await database?.cleanup();
@@ -100,6 +102,24 @@ it("keeps two real serial Plan/Run lifecycles on one Task isolated after actual 
         const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake!.id));
         expect(run, JSON.stringify({ code: run?.errorCode })).toMatchObject({ status: "succeeded", runtimeMode: "native",
           nativeIssueId: task.id, responsibleUserId: actor.userId, nativeProcessCleanupPending: false });
+        const receipt = nativeRunInputSourceReceiptSchema.parse(
+          (run!.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt);
+        const sourceActor = { type: "agent" as const, source: "none" as const,
+          companyId, agentId, runId: run!.id, onBehalfOfUserId: actor.userId! };
+        const completeDispatches = receipt.dispatches.filter(prefix =>
+          prefix.inputs.some(source => source.kind === "worker_model_dispatch"));
+        expect(completeDispatches.length).toBeGreaterThanOrEqual(2);
+        for (const prefix of completeDispatches) {
+          await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id,
+            runId: run!.id, actor: sourceActor, policy: prefix.policy, inputs: prefix.inputs }))
+            .resolves.toBeUndefined();
+        }
+        const lastPrefix = completeDispatches.at(-1)!;
+        const forgedInputs = lastPrefix.inputs.map(source => source.kind === "worker_model_dispatch"
+          ? { ...source, responseHash: "0".repeat(64) } : source);
+        await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: task.id,
+          runId: run!.id, actor: sourceActor, policy: lastPrefix.policy, inputs: forgedInputs }))
+          .rejects.toThrow("The Native source prefix is not in its original receipt");
         const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.runId, wake!.id));
         expect(attempts).toHaveLength(1); expect(attempts[0]).toMatchObject({ planId: plan.id, agentId, attempt: 1 });
         expect(attempts[0]!.executionManifestId).toBeTruthy();

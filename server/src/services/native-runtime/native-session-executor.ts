@@ -3,7 +3,8 @@ import { nativeStageCommentApiCallSchema, nativeStageCommentApiEligible, nativeS
 import { configuredNativeProviderPackInstallRoot, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT } from "./native-artifact-preparation.js";
 import { REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_PINS, REMOTE_PROVIDER_PACK_PROFILE_DIGESTS, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "./native-artifact-preparation.js";
 import { NATIVE_PROVIDER_PACK_DISCOVERY_SCRIPT, NATIVE_RUNNER_ARTIFACT_CHECKSUM_SCRIPT, nativeProviderPackLinkCommand, nativeProviderPackVerificationArgs } from "./native-artifact-preparation.js";
-import { readNativeWorkspaceSyncReference, type NativeWorkspaceSyncReference } from "./native-workspace-sync.js";
+import { readNativeWorkspaceSyncReference, assertNativeWorkspaceSyncServerVerifiedNone, assertNativeOpenCodeConformanceWorkspaceRootReceipt, type NativeWorkspaceSyncReference } from "./native-workspace-sync.js";
+import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
 import {
   isSupportedRemoteCodexVersion,
   parseCodexCliVersion,
@@ -139,7 +140,9 @@ import {
   sql,
 } from "drizzle-orm";
 import {
+  agents,
   agentWakeupRequests,
+  agentExecutionManifests,
   documentRevisions,
   documents,
   environmentLeases,
@@ -179,6 +182,7 @@ import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity
   type NativeInputToolResultSource, type NativeProjectToolResultSource,
   type NativeManagedProjectCreateCapture } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
+import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM } from "../orchestration/native-opencode-conformance-source.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
@@ -10277,6 +10281,105 @@ export async function claimNativeExecutionCoordinator(input: {
   return { attempt, leaseOwner, controller };
 }
 
+/** Terminalize only a synthetic conformance Run whose coordinator claim never succeeded. */
+export async function failUnclaimedNativeOpenCodeConformanceRun(input: {
+  db: Db; companyId: string; issueId: string; runId: string; agentId: string;
+  qualificationGroupId: string; planId: string; profileId: string; probeId: string;
+  restoreAgentStatus: typeof agents.$inferSelect.status;
+  bootstrapFailure?: boolean;
+}): Promise<boolean> {
+  return input.db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    const [row] = await tx.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+      eq(nativeRunFinalizations.runId, input.runId))).for("update").limit(1);
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId))).for("update").limit(1);
+    const snapshot = run?.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+      ? run.contextSnapshot as Record<string, unknown> : {};
+    if (!row || !run || row.phase !== "observed" || row.attempt !== 0 || row.leaseOwner !== null || row.leaseExpiresAt !== null ||
+        row.resultId !== null || row.assessmentId !== null || row.decisionId !== null ||
+        run.status !== "running" || run.runtimeMode !== "native" || run.triggerDetail !== "provider_conformance" ||
+        run.nativePhase !== "observed" || isNativeRunnerOwnershipHeld(run) ||
+        snapshot.providerConformanceGroupId !== input.qualificationGroupId ||
+        snapshot.providerConformancePlanId !== input.planId ||
+        snapshot.nativeOpenCodeConformanceProfileId !== input.profileId ||
+        snapshot.nativeOpenCodeConformanceProbeId !== input.probeId)
+      return false;
+    const now = new Date();
+    const [updated] = await tx.update(heartbeatRuns).set({ status: "failed", finishedAt: now, exitCode: null,
+      errorCode: input.bootstrapFailure ? "provider_conformance_bootstrap_failed" : "provider_conformance_coordinator_claim_failed",
+      error: input.bootstrapFailure ? "The managed OpenCode probe could not initialize its current remote run or lease."
+        : "The Native conformance coordinator could not claim this probe Run.",
+      resultJson: { nativeOpenCodeConformanceProbe: true, observedState: "failed", coordinatorClaimed: false }, updatedAt: now })
+      .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.runtimeMode, "native"),
+        eq(heartbeatRuns.triggerDetail, "provider_conformance"))).returning({ id: heartbeatRuns.id });
+    if (!updated) return false;
+    const [agent] = await tx.select({ status: agents.status }).from(agents).where(and(
+      eq(agents.companyId, input.companyId), eq(agents.id, input.agentId))).for("update").limit(1);
+    if (agent?.status === "running") {
+      const activeRun = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId),
+        inArray(heartbeatRuns.status, ["queued", "running"]))).limit(1);
+      if (!activeRun.length) await tx.update(agents).set({ status: input.restoreAgentStatus, updatedAt: now }).where(and(
+        eq(agents.companyId, input.companyId), eq(agents.id, input.agentId), eq(agents.status, "running")));
+    }
+    return true;
+  });
+}
+
+/** Release only the coordinator lease held by this actual Native probe owner.
+ * This preserves the initial `observed` phase and its null result/assessment/
+ * decision links; it is not a success or qualification transition. */
+export async function releaseNativeOpenCodeConformanceCoordinator(input: {
+  db: Db; companyId: string; issueId: string; runId: string; attempt: number;
+  leaseOwner: string; controller: NativeControllerIdentity;
+  terminal: { status: "succeeded" | "cancelled" | "failed"; errorCode: string | null; error: string | null; resultJson: Record<string, unknown> };
+}) {
+  await input.db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db;
+    const [row] = await tx.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+      eq(nativeRunFinalizations.runId, input.runId),
+    )).for("update").limit(1);
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+      eq(heartbeatRuns.nativeIssueId, input.issueId),
+    )).for("update").limit(1);
+    if (!row || !run) throw new Error("native_conformance_coordinator_release_binding_changed");
+    // Permit retry after a transport error committed the atomic terminal fence.
+    if (row.phase === "observed" && row.resultId === null && row.assessmentId === null && row.decisionId === null &&
+        row.leaseOwner === null && run.status === input.terminal.status && run.finishedAt)
+      return;
+    if (row.phase !== "observed" || row.resultId !== null || row.assessmentId !== null || row.decisionId !== null ||
+        row.leaseOwner !== input.leaseOwner || row.attempt !== input.attempt || row.controllerBootId !== input.controller.bootId ||
+        row.controllerPid !== input.controller.pid || row.controllerProcessStartedAt?.getTime() !== input.controller.processStartedAt.getTime() ||
+        run.status !== "running" || run.runtimeMode !== "native" || run.triggerDetail !== "provider_conformance")
+      throw new Error("native_conformance_coordinator_release_binding_changed");
+    const now = new Date();
+    const [terminalRun] = await tx.update(heartbeatRuns).set({ status: input.terminal.status, finishedAt: now,
+      exitCode: input.terminal.status === "succeeded" ? 0 : null, errorCode: input.terminal.errorCode,
+      error: input.terminal.error, resultJson: input.terminal.resultJson, updatedAt: now })
+      .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+        eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.runtimeMode, "native"),
+        eq(heartbeatRuns.triggerDetail, "provider_conformance"))).returning({ id: heartbeatRuns.id });
+    if (!terminalRun) throw new Error("native_conformance_run_terminal_cas_lost");
+    const [released] = await tx.update(nativeRunFinalizations).set({ leaseOwner: null, leaseExpiresAt: null,
+      controlDeadlineAt: null, recoveryState: null, recoveryRequestId: null, updatedAt: now }).where(and(
+      eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+      eq(nativeRunFinalizations.runId, input.runId), eq(nativeRunFinalizations.leaseOwner, input.leaseOwner),
+      eq(nativeRunFinalizations.attempt, input.attempt), eq(nativeRunFinalizations.controllerBootId, input.controller.bootId),
+      eq(nativeRunFinalizations.controllerPid, input.controller.pid),
+      eq(nativeRunFinalizations.controllerProcessStartedAt, input.controller.processStartedAt),
+      isNull(nativeRunFinalizations.resultId), isNull(nativeRunFinalizations.assessmentId), isNull(nativeRunFinalizations.decisionId),
+    )).returning({ runId: nativeRunFinalizations.runId });
+    if (!released) throw new Error("native_conformance_coordinator_release_cas_lost");
+  });
+}
+
 async function executePaperclipNativeSessionWithinScope(
   input: Parameters<typeof executePaperclipNativeSession>[0],
   stagedAttachmentSources?: readonly NativeRunnerAttachmentSourceCapture[],
@@ -12987,6 +13090,8 @@ export function createRemoteRunnerProcessLauncher(input: {
   managedModelSession?: boolean;
   /** Exact read-only Runner state owner; never user or model supplied. */
   nativeHarnessState?: boolean;
+  /** Conformance runs skip periodic broker-session refresh after their one dispatch. */
+  providerConformanceProbe?: boolean;
   remoteBinary: string;
   processIdentityPath: string;
   stateDirectory: string;
@@ -13194,7 +13299,7 @@ export function createRemoteRunnerProcessLauncher(input: {
             bypassSession: true,
             timeoutMs: 10_000,
             ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
-            ...(input.managedModelSession ? { modelBrokerSessionPhase: "refresh" as const } : {}),
+            ...(input.managedModelSession && !input.providerConformanceProbe ? { modelBrokerSessionPhase: "refresh" as const } : {}),
           });
         } catch (error) {
           if (!input.nativeHarnessState || !(error instanceof Error) ||
@@ -13376,12 +13481,114 @@ export function remoteCheckpointIncompleteFailure(
   );
 }
 
+async function assertNativeOpenCodeConformanceBackendAuthority(input: {
+  db: Db; execution: NativeExecutionInput; runnerExecutionTarget?: AdapterExecutionTarget | null;
+  durableEnvironmentLeaseId?: string; runnerEnvironment?: NodeJS.ProcessEnv; runnerInstanceId: string;
+}) {
+  const execution = input.execution, target = input.runnerExecutionTarget;
+  if (execution.provider.kind !== "opencode" || execution.session.driverKind !== "opencode_server" ||
+      "runtimeContext" in execution || target?.kind !== "remote" || target.transport !== "sandbox" ||
+      !target.runner || !target.leaseId || target.leaseId !== input.durableEnvironmentLeaseId ||
+      execution.workspace.cwd !== target.remoteCwd || execution.workspace.repoUrl !== null ||
+      execution.workspace.repoRef !== null || execution.workspace.branchName !== null ||
+      !input.runnerEnvironment?.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim())
+    throw new Error("native_opencode_conformance_backend_target_invalid");
+  const leaseId = target.leaseId;
+  await input.db.transaction(async rawTx => {
+    const tx = rawTx as unknown as Db, binding = execution.binding;
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, binding.companyId), eq(heartbeatRuns.id, binding.runId),
+      eq(heartbeatRuns.agentId, binding.agentId), eq(heartbeatRuns.status, "running"),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.scopeKind, "issue"),
+    )).for("share");
+    const [task] = run?.nativeIssueId ? await tx.select().from(issues).where(and(
+      eq(issues.companyId, binding.companyId), eq(issues.id, run.nativeIssueId),
+    )).for("share") : [];
+    const context = run?.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+      ? run.contextSnapshot as Record<string, unknown> : null;
+    const qualificationGroupId = context?.providerConformanceGroupId;
+    const probeId = context?.nativeOpenCodeConformanceProbeId;
+    const profileId = context?.nativeOpenCodeConformanceProfileId;
+    const [plan] = context && typeof context.providerConformancePlanId === "string" ? await tx.select().from(orchestrationPlans).where(and(
+      eq(orchestrationPlans.companyId, binding.companyId), eq(orchestrationPlans.id, context.providerConformancePlanId),
+      eq(orchestrationPlans.issueId, binding.issueId), eq(orchestrationPlans.status, "paused"),
+    )).for("share") : [];
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, binding.companyId), eq(agentExecutionManifests.runId, binding.runId),
+      eq(agentExecutionManifests.agentId, binding.agentId),
+    )).for("share");
+    const leaseRows = await tx.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, binding.companyId), eq(environmentLeases.id, leaseId),
+      eq(environmentLeases.heartbeatRunId, binding.runId), eq(environmentLeases.status, "active"),
+    )).for("share");
+    const attempts = await tx.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+      eq(orchestrationWorkerAttempts.companyId, binding.companyId), eq(orchestrationWorkerAttempts.runId, binding.runId),
+    )).limit(1);
+    const runnerProfile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+      ? run.runnerProfileJson as Record<string, unknown> : null;
+    const workspaceProof = runnerProfile?.nativeOpenCodeConformanceWorkspace && typeof runnerProfile.nativeOpenCodeConformanceWorkspace === "object" &&
+      !Array.isArray(runnerProfile.nativeOpenCodeConformanceWorkspace) ? runnerProfile.nativeOpenCodeConformanceWorkspace as Record<string, unknown> : null;
+    const workspaceReference = readNativeWorkspaceSyncReference(runnerProfile?.nativeWorkspaceSync);
+    if (!run || !task || !context || !plan || !manifest || leaseRows.length !== 1 ||
+        !leaseRows[0]?.expiresAt || leaseRows[0].expiresAt <= new Date() || !target.providerKey || leaseRows[0].provider !== target.providerKey ||
+        target.environmentId !== leaseRows[0].environmentId || task.hiddenAt === null || task.harnessKind !== "provider_conformance" ||
+        task.status !== "in_progress" || task.assigneeAgentId !== binding.agentId || task.executionRunId !== binding.runId ||
+        task.responsibleUserId !== run.responsibleUserId || task.conversationAgentId !== null || task.conversationUserId !== null ||
+        task.conversationState !== null || task.projectId !== null || task.parentId !== null ||
+        run.triggerDetail !== "provider_conformance" || run.nativeIssueId !== binding.issueId ||
+        !run.responsibleUserId || run.nativeSessionId !== execution.session.normalizedSessionId ||
+        run.runnerInstanceId !== input.runnerInstanceId || execution.task.title !== task.title || execution.task.description !== task.description ||
+        typeof qualificationGroupId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(qualificationGroupId) ||
+        context.providerConformancePlanId !== plan.id || context.containsCompanyContext !== false || context.platformToolsGranted !== false ||
+        typeof probeId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(probeId) ||
+        typeof profileId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(profileId) ||
+        plan.createdBy !== run.responsibleUserId ||
+        plan.executionPrincipal?.type !== "user" || plan.executionPrincipal.userId !== run.responsibleUserId ||
+        plan.mode !== "single_worker" || plan.actionClass !== "internal_draft" || plan.riskClass !== "C0" ||
+        plan.budgets.maxToolActions !== 0 || plan.budgets.maxRetries !== 0 || plan.toolActionsUsed !== 0 ||
+        manifest.manifest.capabilities.length !== 0 || attempts.length !== 0 || !runnerProfile || !workspaceProof || !workspaceReference ||
+        nativeSha256(runnerProfile.nativeExecutionInput) !== nativeSha256(execution) ||
+        workspaceProof.schema !== "paperclip.native-opencode-conformance-workspace/v1" || workspaceProof.groupId !== qualificationGroupId ||
+        workspaceProof.companyId !== binding.companyId || workspaceProof.agentId !== binding.agentId ||
+        workspaceProof.workspaceId !== execution.binding.executionWorkspaceId || workspaceProof.localCwd !== execution.workspace.cwd ||
+        workspaceProof.remoteCwd !== execution.workspace.cwd || workspaceProof.leaseId !== leaseRows[0]?.id ||
+        workspaceProof.providerLeaseId !== (target.sandboxLeaseAcquisition?.providerLeaseId ?? leaseRows[0]?.providerLeaseId) || workspaceProof.workspaceRepositoryMode !== "server_verified_none" ||
+        workspaceProof.descriptorSha256 !== workspaceReference.descriptorSha256 || workspaceProof.baselineSha256 !== workspaceReference.baselineSha256 ||
+        workspaceReference.workspaceRepositoryMode !== "server_verified_none" || workspaceReference.state !== "prepared" ||
+        workspaceReference.workspaceId !== execution.binding.executionWorkspaceId || workspaceReference.leaseId !== leaseRows[0]?.id ||
+        workspaceReference.providerLeaseId !== (target.sandboxLeaseAcquisition?.providerLeaseId ?? leaseRows[0]?.providerLeaseId) || workspaceReference.remoteCwd !== execution.workspace.cwd ||
+        typeof workspaceProof.creationReceipt !== "string" || !/^[a-f0-9]{64}$/.test(workspaceProof.creationReceipt) ||
+        typeof workspaceProof.authorityHash !== "string" || !/^[a-f0-9]{64}$/.test(workspaceProof.authorityHash) ||
+        !await assertNativeOpenCodeConformanceWorkspaceRootReceipt({ groupId: String(qualificationGroupId), companyId: binding.companyId,
+          agentId: binding.agentId, taskId: binding.issueId, taskRoot: String(workspaceProof.taskRoot),
+          workspaceId: execution.binding.executionWorkspaceId, cwd: execution.workspace.cwd,
+          creationReceipt: String(workspaceProof.creationReceipt) }) ||
+        !await assertNativeWorkspaceSyncServerVerifiedNone({ runId: binding.runId, reference: workspaceReference,
+          companyId: binding.companyId, workspaceId: execution.binding.executionWorkspaceId, leaseId: leaseRows[0]?.id ?? "",
+          providerLeaseId: target.sandboxLeaseAcquisition?.providerLeaseId ?? leaseRows[0]?.providerLeaseId ?? "",
+          localCwd: execution.workspace.cwd, remoteCwd: execution.workspace.cwd,
+          requireEmptyBaseline: workspaceProof.createdEmpty === true }))
+      throw new Error("native_opencode_conformance_backend_source_changed");
+    const currentAuthority = await executionSandboxService(tx).assertTaskExecutionContext(tx, {
+      companyId: binding.companyId, runId: binding.runId, leaseId: leaseRows[0]!.id,
+    });
+    if (!currentAuthority || workspaceProof!.authorityHash !== currentAuthority.authorityHash ||
+        !await assertNativeOpenCodeConformanceWorkspaceRootReceipt({ groupId: String(qualificationGroupId), companyId: binding.companyId,
+          agentId: binding.agentId, taskId: binding.issueId, taskRoot: String(workspaceProof.taskRoot),
+          workspaceId: execution.binding.executionWorkspaceId, cwd: execution.workspace.cwd,
+          creationReceipt: String(workspaceProof!.creationReceipt) }))
+      throw new Error("native_opencode_conformance_workspace_authority_changed");
+  });
+}
+
 /** Production runnerd backend seam, exported so provider wiring can be regression tested. */
 export async function createRunnerdBackend(input: {
   db: Db;
   execution: NativeExecutionInput;
   /** Trusted Heartbeat-owned route-created conversation owner context. */
   conversationMode?: boolean;
+  /** Internal mode accepted only for the canonical hidden conformance Run and its server-created probe selector. */
+  providerConformanceProbe?: true;
   nativeBootstrapExecutionInputHash?: string;
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   runnerInstanceId: string;
@@ -13440,6 +13647,7 @@ export async function createRunnerdBackend(input: {
     },
   ) => Promise<unknown>;
 }): Promise<NativeSessionBackend & { bindManagedSession(session: NativeSession): NativeSession }> {
+  if (input.providerConformanceProbe) await assertNativeOpenCodeConformanceBackendAuthority(input);
   const sessionScopeId = nativeSessionScopeKey(input.execution);
   const scopeOwner = executingRunnerdSessionScopes.get(sessionScopeId);
   if (scopeOwner && scopeOwner !== input.execution.binding.runId) {
@@ -13483,6 +13691,21 @@ export async function createRunnerdBackend(input: {
   } finally {
     initializingSessionToolAuthorities.delete(sessionScopeId);
   }
+}
+
+/** Production-only Native OpenCode conformance backend. The inner owner re-reads
+ * the exact hidden Run before fixed-source/no-tool mode is set. RuntimeControl
+ * seals the separate dispatch tuple before the Sandbox starts OpenCode. */
+export async function createNativeOpenCodeConformanceProbeBackend(
+  input: Omit<Parameters<typeof createRunnerdBackend>[0], "providerConformanceProbe">,
+) {
+  const target = input.runnerExecutionTarget;
+  if (target?.kind !== "remote" || target.transport !== "sandbox" || !target.leaseId ||
+      target.leaseId !== input.durableEnvironmentLeaseId)
+    throw new Error("native_opencode_conformance_backend_requires_exact_remote_lease");
+  const backend = await createRunnerdBackend({ ...input, providerConformanceProbe: true });
+  return Object.freeze({ backend, execution: input.execution, runnerInstanceId: input.runnerInstanceId,
+    runnerExecutionTarget: target, leaseId: target.leaseId });
 }
 
 /** Order this backend's one-shot commands through their original receipts. */
@@ -13541,7 +13764,7 @@ async function createRunnerdBackendWithinSessionClaim(
   const remoteSessionRoot = remoteRuntimeRoot
     ? posix.join(remoteRuntimeRoot, "sessions", remoteSessionDigest)
     : null;
-  const nativeOwnedHarnessState = (input.conversationMode === true || input.prepareManagedWorkspace !== undefined) &&
+  const nativeOwnedHarnessState = (input.conversationMode === true || input.prepareManagedWorkspace !== undefined || input.providerConformanceProbe === true) &&
     remoteTarget?.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
     input.execution.session.driverKind === "opencode_server";
   const remoteCommandRunner = remoteTarget
@@ -13708,7 +13931,7 @@ async function createRunnerdBackendWithinSessionClaim(
     ReturnType<SessionToolAuthorityEpoch["definitions"]>
   >;
   try {
-    dynamicTools = await authorityEpoch.definitions();
+    dynamicTools = input.providerConformanceProbe ? [] : await authorityEpoch.definitions();
   } catch (error) {
     authorityEpoch.revoke();
     throw error;
@@ -13760,7 +13983,10 @@ async function createRunnerdBackendWithinSessionClaim(
       Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()));
   let managedOpenCodeTools: Readonly<Record<string, unknown>>[] | null = null;
   let managedOpenCodeDynamicTools: Readonly<Record<string, unknown>>[] | null = null;
-  if (managedOpenCode) {
+  if (managedOpenCode && input.providerConformanceProbe) {
+    managedOpenCodeTools = [];
+    managedOpenCodeDynamicTools = [];
+  } else if (managedOpenCode) {
     const stageCommentCatalog = input.conversationMode !== true && input.bootstrapSourceClosure?.sourceSet &&
       await nativeStageCommentApiEligible(input.db,{...input.execution.binding,
         preparedSourceSet:input.bootstrapSourceClosure.sourceSet});
@@ -13854,7 +14080,8 @@ async function createRunnerdBackendWithinSessionClaim(
     const remoteInstructionRootForAuthority = remoteSessionRoot && sourceContextForAuthority
       ? posix.join(remoteSessionRoot, "filesystem", "context", "instructions")
       : null;
-    const systemInstructions = nativeSystemInstructions(input.execution);
+    const systemInstructions = input.providerConformanceProbe
+      ? NATIVE_OPENCODE_CONFORMANCE_SYSTEM : nativeSystemInstructions(input.execution);
     // Runnerd replaces the local source bundle root with this exact staged
     // root before the provider sees system instructions. Bind that resulting
     // text so the broker verifies the actual remote prompt without relaxing
@@ -13871,7 +14098,7 @@ async function createRunnerdBackendWithinSessionClaim(
     if (input.prepareManagedWorkspace && (input.conversationMode === true || remoteTarget?.transport !== "sandbox" ||
       workspaceSources.length !== 1)) throw new Error("native_workspace_preparation_source_missing");
     const workspaceMetadataSource = workspaceSources[0] ?? null;
-    const artifactAuthority = input.prepareManagedWorkspace ? {
+    const artifactAuthority = (input.prepareManagedWorkspace || input.providerConformanceProbe) ? {
       runnerSha256: createHash("sha256").update(readFileSync(controllerRunnerBinary)).digest("hex"),
       installedPackRoot: configuredNativeProviderPackInstallRoot(),
       providerPackManifest: expectedProviderPackManifest,
@@ -14189,7 +14416,7 @@ async function createRunnerdBackendWithinSessionClaim(
       packRoot,
       expectedProviderPackManifest.payload.artifacts.nodeCommand.path,
     );
-    if (input.prepareManagedWorkspace) {
+    if (input.prepareManagedWorkspace || input.providerConformanceProbe) {
       const checksum = await remoteCommandRunner.execute({ command: "/bin/sh",
         args: ["-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, "paperclip-managed-artifact-checksum", providerNodeCommand],
         cwd: remoteTarget.remoteCwd, bypassSession: true, timeoutMs: 10_000, nativePreparationPurpose: "provider_artifact" });
@@ -14236,15 +14463,15 @@ async function createRunnerdBackendWithinSessionClaim(
 
   const discoverPreinstalledProviderPack = async () => {
     if (!remoteTarget || !remoteCommandRunner) return null;
-    const installedPack = input.prepareManagedWorkspace ? await input.db.select({ profile: heartbeatRuns.runnerProfileJson })
+    const installedPack = (input.prepareManagedWorkspace || input.providerConformanceProbe) ? await input.db.select({ profile: heartbeatRuns.runnerProfileJson })
       .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.execution.binding.companyId),
         eq(heartbeatRuns.id, input.execution.binding.runId))).limit(1).then(rows =>
           record(record(record(rows[0]?.profile).nativeOpenCodeSourceAuthority).artifactAuthority).installedPackRoot) : null;
-    if (input.prepareManagedWorkspace && typeof installedPack !== "string")
+    if ((input.prepareManagedWorkspace || input.providerConformanceProbe) && typeof installedPack !== "string")
       throw new Error("native_worker_provider_pack_authority_missing");
     const result = await remoteCommandRunner.execute({
       command: "sh",
-      args: input.prepareManagedWorkspace
+      args: input.prepareManagedWorkspace || input.providerConformanceProbe
         ? ["-c", NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, "paperclip-managed-provider-pack", installedPack as string]
         : ["-c", NATIVE_PROVIDER_PACK_DISCOVERY_SCRIPT],
       cwd: remoteTarget.remoteCwd,
@@ -14335,8 +14562,8 @@ async function createRunnerdBackendWithinSessionClaim(
         .digest("hex");
       try {
         const probe = await remoteCommandRunner.execute({
-          command: input.prepareManagedWorkspace ? "/bin/sh" : "sh",
-          args: input.prepareManagedWorkspace
+          command: input.prepareManagedWorkspace || input.providerConformanceProbe ? "/bin/sh" : "sh",
+          args: input.prepareManagedWorkspace || input.providerConformanceProbe
             ? ["-c", NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, "paperclip-managed-artifact-checksum", executable]
             : ["-c", NATIVE_RUNNER_ARTIFACT_CHECKSUM_SCRIPT, "paperclip-runner-artifact", executable],
           cwd: remoteTarget.remoteCwd,
@@ -14364,7 +14591,7 @@ async function createRunnerdBackendWithinSessionClaim(
       );
     }
     const explicitRemoteBinary = input.runnerRemoteBinaryPath?.trim() || null;
-    if (!input.prepareManagedWorkspace && !runnerArtifactPrepared && mayUsePreinstalledRunnerArtifact(explicitRemoteBinary)) {
+    if (!input.prepareManagedWorkspace && !input.providerConformanceProbe && !runnerArtifactPrepared && mayUsePreinstalledRunnerArtifact(explicitRemoteBinary)) {
       const preinstalledRunner = await measureNativeRunnerSpan(
         input.trace,
         "runner.artifact.discover",
@@ -14401,7 +14628,7 @@ async function createRunnerdBackendWithinSessionClaim(
       // vendors the runner under vendor/paperclip-runner/bin, so the package
       // development fallback cannot locate it in a deployed server.
       const sourceBinary = controllerRunnerBinary;
-      if (input.prepareManagedWorkspace) {
+      if (input.prepareManagedWorkspace || input.providerConformanceProbe) {
         const [current] = await input.db.select({ profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
           .where(and(eq(heartbeatRuns.companyId, input.execution.binding.companyId), eq(heartbeatRuns.id, input.execution.binding.runId)));
         const authority = record(record(current?.profile).nativeOpenCodeSourceAuthority);
@@ -14460,7 +14687,7 @@ async function createRunnerdBackendWithinSessionClaim(
         forceRelayChunking: nativeOwnedHarnessState,
       });
     }
-    if (input.prepareManagedWorkspace && !await matchesControllerRunnerArtifact(remoteBinary))
+    if ((input.prepareManagedWorkspace || input.providerConformanceProbe) && !await matchesControllerRunnerArtifact(remoteBinary))
       throw new Error("native_worker_runner_artifact_changed");
     await measureNativeRunnerSpan(input.trace, "runner.artifact.verify", () =>
       verifyRemoteRunner(requiredMode),
@@ -14624,6 +14851,11 @@ async function createRunnerdBackendWithinSessionClaim(
           return preinstalledProviderPack !== null;
         },
         stageAndVerify: async () => {
+          if (input.providerConformanceProbe) {
+            throw new Error(
+              "native_opencode_conformance_requires_preinstalled_manifest_matched_provider_pack",
+            );
+          }
           if (!remoteCommandRunner.syncIn) {
             throw new Error(
               "runner_remote_provider_artifact_incompatible: this remote transport cannot stage a provider pack; preinstall the exact manifest-matched pack",
@@ -15514,7 +15746,8 @@ async function createRunnerdBackendWithinSessionClaim(
       ? createRemoteRunnerProcessLauncher({
           target: remoteTarget,
           runner: remoteCommandRunner,
-          nativeHarnessState: input.conversationMode === true && nativeOwnedHarnessState,
+          nativeHarnessState: (input.conversationMode === true || input.providerConformanceProbe === true) && nativeOwnedHarnessState,
+          providerConformanceProbe: input.providerConformanceProbe === true,
           nativeSessionStart: remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
             input.execution.session.driverKind === "opencode_server",
           managedModelSession: remoteTarget.transport === "sandbox" && input.execution.provider.kind === "opencode" &&
@@ -15654,12 +15887,13 @@ async function createRunnerdBackendWithinSessionClaim(
       retainedTransition?.runnerInstanceId ?? input.runnerInstanceId,
     environment: effectiveRunnerEnvironment,
     opencodeEnvironment: effectiveRunnerEnvironment,
-    opencodeAssignedMcp: sandboxOpenCodeMcp,
+    opencodeAssignedMcp: input.providerConformanceProbe ? null : sandboxOpenCodeMcp,
     workingDirectoryAuthority: remoteTarget
       ? "remote_runner"
       : "local_filesystem",
     onSpawn: input.onSpawn,
     dynamicTools: managedOpenCodeDynamicTools ?? dynamicTools,
+    opencodeSystemInstructions: input.providerConformanceProbe ? NATIVE_OPENCODE_CONFORMANCE_SYSTEM : undefined,
     completionFeedback: async (result) => {
       const current = sessionToolAuthorityEpochs.get(sessionScopeId);
       if (!current) throw new Error("native_session_tool_authority_unavailable");

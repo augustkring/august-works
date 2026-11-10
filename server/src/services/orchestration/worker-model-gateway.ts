@@ -86,6 +86,7 @@ import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 import { authoringTestRuntime } from "../agents/authoring-test-runtime.js";
 import { agentRuntimeCandidateService } from "../agents/authoring-runtime-candidates.js";
 import { agentRuntimeCandidateConformanceService } from "../agents/authoring-runtime-candidate-conformance.js";
+import { callNativeOpenCodeConformanceMessages, issueNativeOpenCodeConformanceRun } from "./native-opencode-conformance-admission.js";
 import { validatePrpEvent, validatePrpStructuredRunResult } from "../../vendor/paperclip-runner/index.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
@@ -253,6 +254,7 @@ type Options = {
   profiles: readonly WorkerModelProfile[];
   sourceSha: string;
   protectedEvidenceOrigin: string;
+  runtimeSuspectSeconds?: number;
   fetch?: typeof guardedRemoteHttpFetch;
 };
 
@@ -2039,6 +2041,13 @@ export function workerModelGateway(db: Db, options: Options) {
       return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound,
         maxOutputTokens: state.profile.maxOutputTokens };
     },
+    /** RuntimeControl-only issuer for a one-dispatch managed OpenCode probe. */
+    issueForNativeOpenCodeConformanceRun(input: {
+      companyId: string; agentId: string; runId: string; responsibleUserId: string;
+      qualificationGroupId: string; planId: string; profileId?: string; probeId: string;
+    }) {
+      return issueNativeOpenCodeConformanceRun({ db, options, ...input });
+    },
     async call(
       claims: RuntimeToolsTokenClaims,
       raw: WorkerModelCall,
@@ -2322,6 +2331,8 @@ export function workerModelGateway(db: Db, options: Options) {
       internal?: { onWireDispatch?: (receipt: WorkerModelDispatchWireReceipt) => void },
     ) {
       callerSignal?.throwIfAborted();
+      if (claims.scope === "provider_conformance")
+        return callNativeOpenCodeConformanceMessages({ db, options, claims, raw, callerSignal });
       const bound = claims.scope === "worker_model" && claims.worker_model ? claims as BoundClaims : null;
       const conversation = claims.scope === "conversation_model" && claims.conversation_model ? claims as ConversationClaims : null;
       if (!bound && !conversation) throw forbidden("Bound managed model capability required");

@@ -5,7 +5,7 @@ import {
   FakeCodexTransport,
   WORKSPACE,
 } from "../drivers/codex/codex-app-server-driver.test-support.js";
-import { createNativeSessionBackend } from "../index.js";
+import { createNativeSessionBackend, nativeSystemInstructions } from "../index.js";
 import { createCodexNativeSessionBackend } from "./codex-native-backend.js";
 
 function execution(
@@ -414,6 +414,25 @@ describe("native backend factory", () => {
         dynamicTools: true,
       },
     });
+  });
+
+  it.each([
+    ["opencode", true], ["opencode", false], ["codex", true],
+  ] as const)("preserves the trusted %s system frame through runnerd (override: %s)", async (provider, override) => {
+    const input = provider === "opencode" ? opencodeExecution() : execution();
+    const transport = new FakeCodexTransport();
+    const system = "Fixed synthetic conformance system frame.";
+    const backend = createNativeSessionBackend(input, {
+      codexTransportFactory: () => transport,
+      environment: { ...process.env, PAPERCLIP_WORKSPACE_CWD: WORKSPACE },
+      ...(override ? { opencodeSystemInstructions: system } : {}),
+    });
+    const session = await backend.openSession({ identity: { runId: "run", sessionId: "session",
+      companyId: "company", issueId: "issue", agentId: "agent" }, workingDirectory: WORKSPACE });
+    try {
+      expect(transport.calls.find(call => call.method === "thread/start")?.params.baseInstructions)
+        .toBe(provider === "opencode" && override ? system : nativeSystemInstructions(input));
+    } finally { await session.close({ reason: "test complete" }); }
   });
 
   it("constructs the OpenCode backend without starting its process", async () => {

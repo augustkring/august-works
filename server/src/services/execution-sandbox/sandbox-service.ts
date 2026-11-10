@@ -1,6 +1,8 @@
 import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState } from "./run-lease-cleanup.js";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import type { SandboxQualificationCredentialClaim } from "../../agent-auth-jwt.js";
+import { assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, runtimeOperations, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture, type SandboxPolicy, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
@@ -10,19 +12,25 @@ import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import { agentRunWritesRevoked, assertAgentRunPolicyAllowed, assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { capabilityResolverService } from "../capability-resolver.js";
+import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { compileSandboxPolicy } from "./policy-compiler.js";
 import { runSandboxQualification, sandboxQualificationCredentialFixtureValid } from "./qualification.js";
 import { existingCellContainerBackend } from "./compatibility-backend.js";
-import { sandboxProbeCases, type ExecutionSandboxBackend, type SandboxIdentity } from "./backend.js";
+import { sandboxProbeCases, SANDBOX_QUALIFICATION_BINDING_STATES, type ExecutionSandboxBackend, type SandboxAdmissionCleanup, type SandboxIdentity } from "./backend.js";
 import { fenceSandboxAdmissionOutcome, releaseSandboxAdmissionClaim } from "./sandbox-guardian.js";
 import { createToolGatewayService, type SandboxCredentialBrokerBinding } from "../tool-gateway.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { assertNativeOpenCodeConformanceWorkspaceRootReceipt } from "../native-runtime/native-workspace-sync.js";
+import type { NativeOpenCodeConformanceHostAuthority } from "./native-host-bridge.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
+type PreparedSandbox = import("./backend.js").PreparedSandbox;
+type NativeConformanceBootstrap = Omit<NativeOpenCodeConformanceHostAuthority, "policySnapshotId" | "policyHash">;
 
 function sandboxCredentialsSupported(credentials: SandboxPolicy["credentials"] | undefined, capability: SandboxCapabilitySnapshot | null) {
   if (credentials?.mode === "none") return credentials.bindings.length === 0;
@@ -67,7 +75,7 @@ export function executionSandboxService(db: Db, options: {
   operatorUserIds?: readonly string[];
   credentialBrokerOrigin?: string | null;
   runtimeSuspectSeconds?: number;
-  backendFor?: (binding: Binding, actor: AuthorizationActor) => ExecutionSandboxBackend | undefined;
+  backendFor?: (binding: Binding, actor: AuthorizationActor, conformance?: NativeOpenCodeConformanceHostAuthority) => ExecutionSandboxBackend | undefined;
   nativeOperation?: (companyId: string, cellId: string, userId: string, action: "stop" | "delete", idempotencyKey: string) => Promise<{ id: string }>;
   assertRuntimeStartAdmission?: (tx: Db, input: { actor: AuthorizationActor; companyId: string; cellId: string; userId: string }) => Promise<unknown>;
   recordRuntimeWorkloadState?: (tx: Db, input: { action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string; hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string; executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string; nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string } }) => Promise<unknown>;
@@ -86,8 +94,8 @@ export function executionSandboxService(db: Db, options: {
     const [row] = await (lock ? query.for("update") : query); if (!row) throw notFound("Sandbox binding not found"); return row;
   }
   function identity(row: Binding): SandboxIdentity { return { companyId: row.companyId, bindingId: row.id, cellId: row.runtimeCellId, cellGeneration: row.cellGeneration, sandboxRef: row.sandboxRef ?? (row.backend === "openshell" ? `aw-v7-${row.id}` : `cell:${row.runtimeCellId}:${row.cellGeneration}`) }; }
-  function backend(row: Binding, actor: AuthorizationActor) {
-    const selected = options.backendFor?.(row, actor);
+  function backend(row: Binding, actor: AuthorizationActor, conformance?: NativeOpenCodeConformanceHostAuthority) {
+    const selected = options.backendFor?.(row, actor, conformance);
     if (selected) { if (selected.backend !== row.backend) throw conflict("Registered backend does not match the immutable binding"); return selected; }
     if (row.backend !== "existing_cell_container") return null;
     return existingCellContainerBackend({
@@ -113,8 +121,33 @@ export function executionSandboxService(db: Db, options: {
     // assertAgentRunWriteAllowed gate.
     await assertAgentRunPolicyAllowed(tx, companyId, { agentId: record.agentId, runId: run.id });
     const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, run.nativeIssueId))).for("share");
-    if (!task || task.hiddenAt || task.assigneeAgentId !== record.agentId) throw conflict("Execution Task changed its current owner");
+    const context = run.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+      ? run.contextSnapshot as Record<string, unknown> : {};
+    const qualificationGroupId = typeof context.providerConformanceGroupId === "string" ? context.providerConformanceGroupId : null;
+    const conformancePlanId = typeof context.providerConformancePlanId === "string" ? context.providerConformancePlanId : null;
+    const [conformancePlan] = qualificationGroupId && conformancePlanId ? await tx.select().from(orchestrationPlans).where(and(
+      eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, conformancePlanId), eq(orchestrationPlans.issueId, run.nativeIssueId),
+    )).for("share") : [];
+    const hasWorkerAttempts = qualificationGroupId ? await tx.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts)
+      .where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, run.id))).limit(1) : [];
+    const providerConformanceBootstrap = Boolean(task?.hiddenAt && task.harnessKind === "provider_conformance" && task.status === "in_progress" &&
+      task.assigneeAgentId === record.agentId && task.executionRunId === run.id && run.runtimeMode === "native" && run.scopeKind === "issue" &&
+      run.triggerDetail === "provider_conformance" && qualificationGroupId && conformancePlan &&
+      conformancePlan.status === "paused" && conformancePlan.mode === "single_worker" && conformancePlan.actionClass === "internal_draft" &&
+      conformancePlan.riskClass === "C0" && conformancePlan.createdBy === run.responsibleUserId && conformancePlan.startedAt &&
+      conformancePlan.executionPrincipal?.type === "user" && conformancePlan.executionPrincipal.userId === run.responsibleUserId &&
+      conformancePlan.budgets.maxToolActions === 0 && conformancePlan.budgets.maxRetries === 0 &&
+      conformancePlan.toolActionsUsed === 0 && record.manifest.capabilities.length === 0 &&
+      run.contextSnapshot?.providerConformanceGroupId === qualificationGroupId && run.contextSnapshot?.providerConformancePlanId === conformancePlan.id &&
+      !run.contextSnapshot?.runtimeCandidateConformanceRequestId && hasWorkerAttempts.length === 0 &&
+      task.conversationAgentId === null && task.conversationUserId === null);
+    if (!task || (task.hiddenAt && !providerConformanceBootstrap) || task.assigneeAgentId !== record.agentId)
+      throw conflict("Execution Task changed its current owner");
     await assertV7Authorization(tx, actor, companyId, "issue:read", { type: "issue", companyId, issueId: task.id, projectId: task.projectId });
+    if (providerConformanceBootstrap) {
+      const initiatingHuman: AuthorizationActor = { type: "board", source: "session", userId: run.responsibleUserId! };
+      await assertV7Authorization(tx, initiatingHuman, companyId, "issue:read", { type: "issue", companyId, issueId: task.id, projectId: task.projectId });
+    }
     const worker: AuthorizationActor = { type: "agent", companyId, agentId: record.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
     await assertV7Authorization(tx, worker, companyId, "issue:read", { type: "issue", companyId, issueId: task.id, projectId: task.projectId });
     const memberships = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, run.responsibleUserId)));
@@ -123,13 +156,63 @@ export function executionSandboxService(db: Db, options: {
     const [runtime] = await tx.select().from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, record.agentId)));
     const [provider] = runtime ? await tx.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, runtime.providerBindingId)) : [];
     const pin = record.manifest.providers.find(p => p.companyId === companyId && p.agentId === record.agentId);
-    if (!runtime || runtime.status !== "active" || !provider || provider.status !== "active" || !pin || provider.id !== pin.providerBindingId || provider.capabilitySnapshotHash !== pin.snapshotHash || runtime.providerProfileRef !== pin.profileRef) throw conflict("Execution provider qualification changed");
-    await agentProviderBindingService(tx).assertRuntime(companyId, record.agentId);
+    const currentProfile = agent?.adapterType === "paperclip_runner" ? resolvePaperclipRunnerProviderProfile(agent.adapterConfig) : null;
+    if (!runtime || (providerConformanceBootstrap ? runtime.status === "revoked" : runtime.status !== "active") ||
+      !provider || runtime.companyId !== companyId || (providerConformanceBootstrap ? ["revoked", "retired"].includes(provider.status) : provider.status !== "active") || !pin ||
+      provider.id !== pin.providerBindingId || provider.capabilitySnapshotHash !== pin.snapshotHash || runtime.providerProfileRef !== pin.profileRef ||
+      (providerConformanceBootstrap && currentProfile?.provider !== "opencode"))
+      throw conflict("Execution provider qualification changed");
+    if (!providerConformanceBootstrap) await agentProviderBindingService(tx).assertRuntime(companyId, record.agentId);
     const currentCapabilities = await capabilityResolverService(tx).search(worker, companyId, "");
     // Projection never grants broker credentials from an inventory pin. Direct
     // credential bindings stay closed until the native broker is qualified.
-    return { record, task, run, agent, runtime, currentCapabilities, authorityHash: nativeSha256(JSON.parse(JSON.stringify({ manifest: record.hash, memberships, grants, agentPermissions: agent?.permissions, runtimeId: runtime.id, providerId: provider.id, providerSnapshot: provider.capabilitySnapshotHash, profile: runtime.providerProfileRef, currentCapabilities, configurationHash: runtime.qualifiedConfigurationHash, conformanceHash: runtime.conformanceSnapshotHash }))) };
+    return { record, task, run, agent, runtime, currentCapabilities, providerConformanceBootstrap,
+      conformancePlan: providerConformanceBootstrap ? conformancePlan : null, qualificationGroupId: providerConformanceBootstrap ? qualificationGroupId : null,
+      conformanceConfigurationHash: providerConformanceBootstrap && agent
+        ? hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }) : null,
+      authorityHash: nativeSha256(JSON.parse(JSON.stringify({ manifest: record.hash, memberships, grants, agentPermissions: agent?.permissions, runtimeId: runtime.id, providerId: provider.id, providerSnapshot: provider.capabilitySnapshotHash, profile: runtime.providerProfileRef, currentCapabilities, configurationHash: runtime.qualifiedConfigurationHash, conformanceHash: runtime.conformanceSnapshotHash, ...(providerConformanceBootstrap ? { qualificationGroupId, planId: conformancePlan!.id, conformanceConfigurationHash: agent ? hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }) : null } : {}) }))) };
   }
+  async function assertNativeConformanceBootstrap(tx: Db, actor: AuthorizationActor, companyId: string,
+    input: NativeConformanceBootstrap) {
+    await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+    await assertV7Authorization(tx, actor, companyId, "runtime:manage");
+    const source = await authority(tx, companyId, input.manifestId, actor);
+    const { run, task, record } = source;
+    const context = run.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+      ? run.contextSnapshot as Record<string, unknown> : {};
+    const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+      ? run.runnerProfileJson as Record<string, unknown> : {};
+    const proof = profile.nativeOpenCodeConformanceWorkspace && typeof profile.nativeOpenCodeConformanceWorkspace === "object" &&
+      !Array.isArray(profile.nativeOpenCodeConformanceWorkspace) ? profile.nativeOpenCodeConformanceWorkspace as Record<string, unknown> : {};
+    const nativeInput = profile.nativeExecutionInput && typeof profile.nativeExecutionInput === "object" && !Array.isArray(profile.nativeExecutionInput)
+      ? profile.nativeExecutionInput as Record<string, unknown> : {};
+    const nativeBinding = nativeInput.binding && typeof nativeInput.binding === "object" && !Array.isArray(nativeInput.binding)
+      ? nativeInput.binding as Record<string, unknown> : {};
+    const nativeWorkspace = nativeInput.workspace && typeof nativeInput.workspace === "object" && !Array.isArray(nativeInput.workspace)
+      ? nativeInput.workspace as Record<string, unknown> : {};
+    const [lease] = await tx.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, companyId), eq(environmentLeases.id, input.leaseId),
+      eq(environmentLeases.heartbeatRunId, input.runId), eq(environmentLeases.status, "active"),
+    )).for("share");
+    if (!source.providerConformanceBootstrap || run.id !== input.runId || run.responsibleUserId !== v7HumanActorId(actor) ||
+        task.id !== input.taskId || task.hiddenAt === null || task.harnessKind !== "provider_conformance" ||
+        source.qualificationGroupId !== input.groupId || source.conformancePlan?.id !== input.planId ||
+        record.id !== input.manifestId || record.hash !== input.manifestHash || !lease?.expiresAt || lease.expiresAt <= new Date() ||
+        proof.groupId !== input.groupId || proof.taskRoot !== input.workspaceRoot || proof.localCwd !== input.workspaceRoot ||
+        proof.remoteCwd !== input.workspaceRoot || proof.leaseId !== input.leaseId || proof.creationReceipt !== input.creationReceipt ||
+        proof.workspaceId !== nativeBinding.executionWorkspaceId || nativeBinding.companyId !== companyId ||
+        nativeBinding.runId !== input.runId || nativeBinding.agentId !== run.agentId || nativeBinding.issueId !== task.id ||
+        nativeWorkspace.cwd !== input.workspaceRoot || lease.metadata?.remoteCwd !== input.workspaceRoot ||
+        proof.providerLeaseId !== lease.providerLeaseId ||
+        proof.authorityHash !== null || proof.workspaceRepositoryMode !== undefined || proof.descriptorSha256 !== undefined ||
+        !await assertNativeOpenCodeConformanceWorkspaceRootReceipt({ groupId: input.groupId, companyId, agentId: run.agentId!,
+          taskId: task.id, taskRoot: input.workspaceRoot, workspaceId: String(proof.workspaceId), cwd: input.workspaceRoot,
+          creationReceipt: input.creationReceipt }))
+      throw forbidden("The current Human-owned hidden OpenCode Run and private workspace receipt are required");
+    return { source, lease };
+  }
+  const mutationAccess = (tx: Db, actor: AuthorizationActor, companyId: string, bootstrap?: NativeConformanceBootstrap) =>
+    bootstrap ? assertNativeConformanceBootstrap(tx, actor, companyId, bootstrap) : access(tx, actor, companyId, true);
   async function assertTaskExecutionContext(tx: Db, input: { companyId: string; runId: string; leaseId: string; now?: Date }) {
     const now = input.now ?? new Date();
     // Source authority checks below must share the same privacy-before-row
@@ -152,10 +235,11 @@ export function executionSandboxService(db: Db, options: {
       eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.runId, run.id), eq(agentExecutionManifests.agentId, run.agentId),
     )).for("share");
     if (!manifest) throw conflict("Current execution manifest is required");
-    await assertAgentRunWriteAllowed(tx, input.companyId, { agentId: run.agentId, runId: run.id });
     const worker: AuthorizationActor = { type: "agent", companyId: input.companyId, agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
     const source = await authority(tx, input.companyId, manifest.id, worker);
-    if (source.record.hash !== manifest.hash || source.task.hiddenAt || source.task.assigneeAgentId !== run.agentId || source.task.executionRunId !== run.id)
+    await assertAgentRunWriteAllowed(tx, input.companyId, { agentId: run.agentId, runId: run.id });
+    if (source.record.hash !== manifest.hash || (source.task.hiddenAt && !source.providerConformanceBootstrap) || source.task.assigneeAgentId !== run.agentId ||
+      source.task.executionRunId !== run.id)
       throw conflict("Task or manifest binding changed before sandbox execution");
     const cellRef = /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i.exec(source.runtime.providerProfileRef);
     if (!cellRef) return null;
@@ -220,7 +304,67 @@ export function executionSandboxService(db: Db, options: {
     }
     const deadlineAt = new Date(Math.min(policy.expiresAt.getTime(), lease.expiresAt.getTime(), run.executionControlDeadlineAt?.getTime() ?? Number.POSITIVE_INFINITY, run.startedAt.getTime() + policy.compilation.compiledPolicy.resources.wallClockSeconds * 1000, planDeadline));
     if (deadlineAt <= now) throw conflict("Original Task or policy execution deadline expired");
-    return { lease, run, manifest, source, sandboxBinding, capability, policy, cell: cellRow, host, attempt, deadlineAt };
+    if (source.providerConformanceBootstrap && attempt) throw conflict("Conformance bootstrap cannot inherit a worker attempt");
+    let conformanceWorkspaceAuthority: Record<string, unknown> | null = null;
+    if (source.providerConformanceBootstrap) {
+      const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, unknown> : {};
+      const proof = profile.nativeOpenCodeConformanceWorkspace && typeof profile.nativeOpenCodeConformanceWorkspace === "object" &&
+        !Array.isArray(profile.nativeOpenCodeConformanceWorkspace) ? profile.nativeOpenCodeConformanceWorkspace as Record<string, unknown> : {};
+      const nativeInput = profile.nativeExecutionInput && typeof profile.nativeExecutionInput === "object" && !Array.isArray(profile.nativeExecutionInput)
+        ? profile.nativeExecutionInput as Record<string, unknown> : {};
+      const binding = nativeInput.binding && typeof nativeInput.binding === "object" && !Array.isArray(nativeInput.binding)
+        ? nativeInput.binding as Record<string, unknown> : {};
+      const workspace = nativeInput.workspace && typeof nativeInput.workspace === "object" && !Array.isArray(nativeInput.workspace)
+        ? nativeInput.workspace as Record<string, unknown> : {};
+      const root = typeof workspace.cwd === "string" ? workspace.cwd : "";
+      const remoteCwd = lease.metadata?.remoteCwd;
+      const taskRoot = typeof proof.taskRoot === "string" ? path.resolve(proof.taskRoot) : "";
+      const filesystem = policy.compilation.compiledPolicy.filesystem;
+      const readRoots = Array.isArray(filesystem?.readPaths) ? filesystem.readPaths : [];
+      const writeRoots = Array.isArray(filesystem?.writePaths) ? filesystem.writePaths : [];
+      if (proof.schema !== "paperclip.native-opencode-conformance-workspace/v1" ||
+          proof.groupId !== source.qualificationGroupId || proof.companyId !== run.companyId || proof.agentId !== run.agentId ||
+          proof.workspaceId !== binding.executionWorkspaceId || proof.taskId !== run.nativeIssueId || proof.taskRoot !== taskRoot ||
+          proof.localCwd !== root || proof.remoteCwd !== root || root !== taskRoot ||
+          proof.leaseId !== lease.id || proof.providerLeaseId !== lease.providerLeaseId ||
+          typeof proof.creationReceipt !== "string" || !/^[a-f0-9]{64}$/.test(proof.creationReceipt) ||
+          typeof proof.createdEmpty !== "boolean" || !path.isAbsolute(root) || path.resolve(root) !== root ||
+          typeof remoteCwd !== "string" || path.resolve(remoteCwd) !== root ||
+          !readRoots.some(value => typeof value === "string" && path.resolve(value) === root) ||
+          !writeRoots.some(value => typeof value === "string" && path.resolve(value) === root) ||
+          proof.workspaceRepositoryMode !== undefined && proof.workspaceRepositoryMode !== "server_verified_none" ||
+          proof.descriptorSha256 !== undefined && (typeof proof.descriptorSha256 !== "string" || !/^[a-f0-9]{64}$/.test(proof.descriptorSha256)) ||
+          proof.baselineSha256 !== undefined && (typeof proof.baselineSha256 !== "string" || !/^[a-f0-9]{64}$/.test(proof.baselineSha256)))
+        throw conflict("Current conformance private workspace root or lease binding changed");
+      conformanceWorkspaceAuthority = { groupId: proof.groupId, companyId: proof.companyId, agentId: proof.agentId,
+        taskId: proof.taskId, taskRoot: proof.taskRoot, workspaceId: proof.workspaceId,
+        localCwd: proof.localCwd, remoteCwd: proof.remoteCwd, creationReceipt: proof.creationReceipt, createdEmpty: proof.createdEmpty, leaseId: proof.leaseId,
+        providerLeaseId: proof.providerLeaseId, descriptorSha256: proof.descriptorSha256 ?? null,
+        baselineSha256: proof.baselineSha256 ?? null, workspaceRepositoryMode: proof.workspaceRepositoryMode ?? null };
+    }
+    const authorityHash = source.providerConformanceBootstrap ? nativeSha256(JSON.parse(JSON.stringify({
+      source: source.authorityHash, conformanceWorkspace: conformanceWorkspaceAuthority,
+      lease: { id: lease.id, expiresAt: lease.expiresAt },
+      host: { id: host.id, credentialVersion: host.credentialVersion },
+      cell: { id: cellRow.id, generation: cellRow.generation.toString(), image: cellRow.activeImageDigest ?? cellRow.desiredImageDigest },
+      sandbox: { id: sandboxBinding.id, version: sandboxBinding.version, capabilitySnapshotHash: sandboxBinding.capabilitySnapshotHash },
+      qualification: { id: qualification.id, reportHash: qualification.reportHash },
+      policy: { id: policy.id, policyHash: policy.policyHash, expiresAt: policy.expiresAt }, deadlineAt,
+    }))) : source.authorityHash;
+    if (source.providerConformanceBootstrap) {
+      const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, unknown> : {};
+      const proof = profile.nativeOpenCodeConformanceWorkspace && typeof profile.nativeOpenCodeConformanceWorkspace === "object" &&
+        !Array.isArray(profile.nativeOpenCodeConformanceWorkspace) ? profile.nativeOpenCodeConformanceWorkspace as Record<string, unknown> : {};
+      if (proof.authorityHash !== null && proof.authorityHash !== authorityHash)
+        throw conflict("Conformance workspace authority hash is stale");
+    }
+    return { lease, run, manifest, source, sandboxBinding, capability, policy, cell: cellRow, host, attempt, deadlineAt,
+      providerConformanceBootstrap: source.providerConformanceBootstrap,
+      qualificationGroupId: source.qualificationGroupId,
+      conformanceConfigurationHash: source.conformanceConfigurationHash,
+      conformancePlan: source.conformancePlan, authorityHash };
   }
   async function admissionContext(
     tx: Db,
@@ -231,16 +375,13 @@ export function executionSandboxService(db: Db, options: {
     expectedVersion?: number,
     claimKey?: string,
     replayPhase?: "completed",
+    bootstrap?: NativeConformanceBootstrap,
   ) {
-    await assertConfiguredOperatorAuthentication(
-      tx,
-      actor,
-      options.operatorUserIds ?? [],
-      { requireRecent: true },
-    );
+    if (!bootstrap) await assertConfiguredOperatorAuthentication(
+      tx, actor, options.operatorUserIds ?? [], { requireRecent: true });
     await assertV7Enabled(tx, "sandbox_abstraction_v7");
     await assertV7Enabled(tx, "openshell_v7");
-    await access(tx, actor, companyId, true);
+    await mutationAccess(tx, actor, companyId, bootstrap);
     const row = await binding(tx, actor, companyId, id, true);
     if (expectedVersion !== undefined && row.version !== expectedVersion)
       throw conflict("Sandbox changed; refresh before admission");
@@ -375,7 +516,7 @@ export function executionSandboxService(db: Db, options: {
       )
         throw conflict("Original worker attempt or wall-clock budget is no longer current");
     }
-    const selected = backend(row, actor);
+    const selected = backend(row, actor, bootstrap ? { ...bootstrap, policySnapshotId: snapshot.id, policyHash: snapshot.policyHash } : undefined);
     if (!selected || selected.evidenceKind !== "protected_host_report")
       throw conflict("A protected physical OpenShell backend is required");
     let claimEvent: typeof activityLog.$inferSelect | null = null;
@@ -489,7 +630,7 @@ export function executionSandboxService(db: Db, options: {
           return { binding: updated!, receipt: undefined };
     });
   }
-  return {
+  const service = {
     async recordNativeCleanupStop(input: { companyId: string; runId: string; leaseId: string }, physicalReceipt: unknown) {
       const owner = await readRunLeaseCleanup(db, input);
       const physical = await verifyRunLeaseCleanupReceipt(db, input, physicalReceipt);
@@ -552,7 +693,8 @@ export function executionSandboxService(db: Db, options: {
       const initial = await binding(db, actor, companyId, id), selected = backend(initial, actor);
       if (!selected) throw conflict("The requested backend is not installed; the binding remains unqualified");
       const current = await cell(db, companyId, initial.runtimeCellId);
-      if (initial.version !== expectedVersion || current.generation.toString() !== initial.cellGeneration || current.status !== "STOPPED") throw conflict("Qualification requires the current stopped cell, without disrupting a running workload");
+      if (initial.version !== expectedVersion || current.generation.toString() !== initial.cellGeneration || current.status !== "STOPPED" ||
+          !SANDBOX_QUALIFICATION_BINDING_STATES.includes(initial.status)) throw conflict("Qualification requires the current stopped cell, without disrupting a running workload");
       if (selected.backend === "openshell") {
         // STOPPED cells retain their existing V6 host-capacity reservation
         // until deletion. Reuse and verify that owner before creating the
@@ -660,10 +802,13 @@ export function executionSandboxService(db: Db, options: {
       }
       return result.binding;
     },
-    compile: async (actor: AuthorizationActor, companyId: string, id: string, raw: SandboxCompileInput) => {
-      const input = sandboxCompileSchema.parse(raw); await assertV7Enabled(db, "sandbox_abstraction_v7"); await access(db, actor, companyId, true);
+    compile: async (actor: AuthorizationActor, companyId: string, id: string, raw: SandboxCompileInput,
+      bootstrap?: NativeConformanceBootstrap) => {
+      const input = sandboxCompileSchema.parse(raw); await assertV7Enabled(db, "sandbox_abstraction_v7"); await mutationAccess(db, actor, companyId, bootstrap);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        const row = await binding(tx, actor, companyId, id, true); await access(tx, actor, companyId, true); const current = await cell(tx, companyId, row.runtimeCellId);
+        const row = await binding(tx, actor, companyId, id, true); await mutationAccess(tx, actor, companyId, bootstrap); const current = await cell(tx, companyId, row.runtimeCellId);
+        if (bootstrap && (bootstrap.runId !== (await assertNativeConformanceBootstrap(tx, actor, companyId, bootstrap)).source.run.id ||
+            input.executionManifestId !== bootstrap.manifestId)) throw forbidden("Conformance policy compilation lost its exact Run manifest");
         if (row.version !== input.expectedVersion || current.generation.toString() !== row.cellGeneration) throw conflict("Runtime binding changed; refresh before compiling");
         const source = await authority(tx, companyId, input.executionManifestId, actor);
         if (source.record.manifest.executionScope.delegatedScopes.some(scope => scope.companyId !== companyId)) throw conflict("Delegated execution needs a qualified compound sandbox envelope");
@@ -800,6 +945,7 @@ export function executionSandboxService(db: Db, options: {
       companyId: string,
       id: string,
       input: SandboxAdmissionInput,
+      bootstrap?: NativeConformanceBootstrap,
     ) => {
       const claimKey = `v7-sandbox-admission:${id}:${(await binding(db, actor, companyId, id)).cellGeneration}:${input.expectedVersion}:${input.policySnapshotId}`;
       const initial = await withV7ActivityTransaction(db, async (tx, publications) => {
@@ -857,6 +1003,8 @@ export function executionSandboxService(db: Db, options: {
             input.policySnapshotId,
             undefined,
             claimKey,
+            undefined,
+            bootstrap,
           );
           if (resumed.row.version !== claimVersion || resumed.row.status !== "admitting")
             throw conflict("Sandbox admission claim changed before replay");
@@ -911,6 +1059,7 @@ export function executionSandboxService(db: Db, options: {
               undefined,
               claimKey,
               "completed",
+              bootstrap,
             );
             return {
               ...completed,
@@ -929,6 +1078,9 @@ export function executionSandboxService(db: Db, options: {
           id,
           input.policySnapshotId,
           input.expectedVersion,
+          undefined,
+          undefined,
+          bootstrap,
         );
         if (!options.assertRuntimeStartAdmission) throw conflict("Original runtime start admission owner is unavailable");
         await options.assertRuntimeStartAdmission(tx, { actor, companyId, cellId: ready.row.runtimeCellId, userId: v7HumanActorId(actor) });
@@ -981,6 +1133,7 @@ export function executionSandboxService(db: Db, options: {
           duplicate: true, inProgress: true };
       const scope = identity(initial.row);
       const selected = initial.selected;
+      let nativeAdmissionPreparedTarget: PreparedSandbox | null = null;
       const policyHash = nativeSha256(initial.snapshot.compilation);
       const applyKey = `v7-sandbox-policy:${id}:${scope.cellGeneration}:${initial.claimVersion}:${policyHash}`;
       const startKey = `v7-sandbox-start:${id}:${scope.cellGeneration}:${initial.claimVersion}:${initial.snapshot.id}`;
@@ -997,6 +1150,7 @@ export function executionSandboxService(db: Db, options: {
             undefined,
             claimKey,
             "completed",
+            bootstrap,
           ),
         );
         const observation = await selected.inspectWorkload(scope);
@@ -1021,11 +1175,22 @@ export function executionSandboxService(db: Db, options: {
         return finishedDuplicate(initial.successEvent);
       const stopAndConfirm = async () => {
         try {
+          const preparedTarget = nativeAdmissionPreparedTarget;
+          if (bootstrap && (!preparedTarget?.hostEpoch || !preparedTarget.imageDigest || !preparedTarget.sandboxId || !preparedTarget.containerId))
+            return false;
+          const nativeAdmissionCleanup: SandboxAdmissionCleanup | undefined = bootstrap ? {
+            requesterUserId: v7HumanActorId(actor), claimKey, claimVersion: initial.claimVersion,
+            policySnapshotId: initial.snapshot.id, policyHash, manifestId: initial.source.record.id,
+            manifestHash: initial.source.record.hash, hostEpoch: preparedTarget!.hostEpoch!,
+            imageDigest: preparedTarget!.imageDigest, sandboxId: preparedTarget!.sandboxId!, containerId: preparedTarget!.containerId!,
+          } : undefined;
           await selected.stopWorkload({
             ...scope,
             idempotencyKey: `v7-sandbox-admission-contain:${id}:${scope.cellGeneration}:${initial.claimVersion}:${initial.snapshot.id}`,
+            ...(nativeAdmissionCleanup ? { nativeAdmissionCleanup } : {}),
           });
-          const stopped = await selected.inspectWorkload(scope);
+          const stopped = await selected.inspectWorkload({ ...scope,
+            ...(nativeAdmissionCleanup ? { nativeAdmissionCleanup } : {}) });
           return (
             stopped.state === "stopped" &&
             stopped.generation === scope.cellGeneration &&
@@ -1057,6 +1222,7 @@ export function executionSandboxService(db: Db, options: {
           expiresAt: initial.snapshot.expiresAt.toISOString(),
           policy: initial.snapshot.compilation,
         } : undefined);
+        if (bootstrap && provisioningAttempted) nativeAdmissionPreparedTarget = prepared;
         if (prepared.requiresRecreate)
           throw conflict("The stopped sandbox no longer matches its immutable creation policy; recover its workspace before recreating it", { code: "sandbox_recreate_requires_recovery" });
         if (
@@ -1140,6 +1306,8 @@ export function executionSandboxService(db: Db, options: {
             initial.snapshot.id,
             undefined,
             claimKey,
+            undefined,
+            bootstrap,
           ),
         );
         effectAttempted = true;
@@ -1177,6 +1345,8 @@ export function executionSandboxService(db: Db, options: {
             initial.snapshot.id,
             undefined,
             claimKey,
+            undefined,
+            bootstrap,
           );
           if (current.row.version < initial.claimVersion)
             throw conflict("Sandbox admission version moved backwards");
@@ -1342,5 +1512,68 @@ export function executionSandboxService(db: Db, options: {
         throw error;
       }
     },
+    prepareNativeOpenCodeConformanceRun: async (actor: AuthorizationActor, input: {
+      companyId: string; runId: string; taskId: string; planId: string; groupId: string; manifestId: string;
+      manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
+    }) => {
+      const bootstrap: NativeConformanceBootstrap = { ...input };
+      const initial = await db.transaction(async tx => {
+        const { source, lease } = await assertNativeConformanceBootstrap(tx, actor, input.companyId, bootstrap);
+        const cellRef = /^aw:cell:([0-9a-f-]{36}):generation:([1-9][0-9]{0,18})$/i.exec(source.runtime.providerProfileRef);
+        if (!cellRef) throw conflict("The current OpenCode Presence has no managed runtime cell");
+        const [runtimeCell] = await tx.select().from(runtimeCells).where(and(
+          eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, cellRef[1]!), eq(runtimeCells.generation, BigInt(cellRef[2]!)),
+          eq(runtimeCells.status, "STOPPED"), isNull(runtimeCells.deletedAt), isNull(runtimeCells.suspendedReason),
+        )).for("share");
+        const [host] = runtimeCell?.runtimeHostId ? await tx.select().from(runtimeHosts).where(and(
+          eq(runtimeHosts.id, runtimeCell.runtimeHostId), inArray(runtimeHosts.status, ["READY", "DRAINING"]),
+          isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.retiredAt),
+          gt(runtimeHosts.lastHeartbeatAt, new Date(Date.now() - (options.runtimeSuspectSeconds ?? 90) * 1000)),
+        )).for("share") : [];
+        const rows = runtimeCell ? await tx.select().from(runtimeSandboxBindings).where(and(
+          eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.runtimeCellId, runtimeCell.id),
+          eq(runtimeSandboxBindings.cellGeneration, cellRef[2]!),
+        )).for("share") : [];
+        if (!runtimeCell || !host || rows.length !== 1 || rows[0]!.backend !== "openshell" ||
+            !["ready", "stopped"].includes(rows[0]!.status) || !rows[0]!.capabilitySnapshot || !rows[0]!.qualificationRunId)
+          throw conflict("An existing operator-qualified OpenShell boundary on the current stopped cell is required");
+        const [qualification] = await tx.select().from(sandboxQualificationRuns).where(and(
+          eq(sandboxQualificationRuns.companyId, input.companyId), eq(sandboxQualificationRuns.bindingId, rows[0]!.id),
+          eq(sandboxQualificationRuns.id, rows[0]!.qualificationRunId), eq(sandboxQualificationRuns.status, "passed"),
+        )).for("share");
+        const capability = sandboxCapabilitySnapshotSchema.safeParse(rows[0]!.capabilitySnapshot);
+        if (!qualification || qualification.evidenceKind !== "protected_host_report" || !capability.success ||
+            capability.data.evidenceKind !== "protected_host_report" || capability.data.backend !== "openshell" ||
+            capability.data.expiresAt <= new Date().toISOString() || capability.data.sandboxImageDigest !== (runtimeCell.activeImageDigest ?? runtimeCell.desiredImageDigest) ||
+            qualification.reportHash !== capability.data.qualificationHash || rows[0]!.capabilitySnapshotHash !== nativeSha256(capability.data))
+          throw conflict("Current protected-host qualification for the retained boundary is required");
+        return { source, lease, cell: runtimeCell, binding: rows[0]!, capability: capability.data };
+      });
+      const boundary = initial.binding.boundaryPolicy;
+      const candidate: SandboxPolicy = {
+        ...structuredClone(boundary), broadAutonomy: false, riskClass: "C0",
+        filesystem: { readPaths: [...new Set([input.workspaceRoot,
+          ...(initial.capability.modelBrokerProviderProfile?.binaries ?? [])])].sort(),
+          writePaths: [input.workspaceRoot], deniedPaths: [...boundary.filesystem.deniedPaths] },
+        process: { ...boundary.process, allowedBinaries: [], allowedSyscalls: [] },
+        network: { defaultDeny: true, destinations: [], denyPrivateAndMetadata: true },
+        credentials: { mode: "none", bindings: [] },
+        resources: { ...boundary.resources,
+          wallClockSeconds: Math.min(boundary.resources.wallClockSeconds, initial.source.conformancePlan!.budgets.maxWallClockSeconds) },
+      };
+      const compiled = await service.compile(actor, input.companyId, initial.binding.id, {
+        expectedVersion: initial.binding.version, executionManifestId: input.manifestId, candidatePolicy: candidate,
+      }, bootstrap);
+      if (compiled.status !== "qualified") throw conflict("The exact zero-tool conformance policy did not pass the current boundary prover");
+      const [currentBinding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.id, initial.binding.id),
+      )).limit(1);
+      if (!currentBinding) throw conflict("The operator-qualified Sandbox binding disappeared during conformance policy compilation");
+      const admitted = await service.admit(actor, input.companyId, currentBinding.id,
+        { expectedVersion: currentBinding.version, policySnapshotId: compiled.id }, bootstrap);
+      if (admitted.binding.status !== "running") throw conflict("The exact conformance Sandbox did not receive a current physical Host admission");
+      return { bindingId: admitted.binding.id, policySnapshotId: compiled.id, operationId: admitted.operationId };
+    },
   };
+  return service;
 }

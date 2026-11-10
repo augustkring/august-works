@@ -5,10 +5,18 @@ import {
   runtimeHosts,
   runtimeHostCommands,
   runtimeSandboxBindings,
+  activityLog,
+  agents,
+  agentPresenceRuntimeBindings,
+  agentProviderBindings,
   agentExecutionManifests,
   runtimePolicySnapshots,
+  environmentLeases,
   memoryJobs,
   heartbeatRuns,
+  issues,
+  orchestrationPlans,
+  orchestrationWorkerAttempts,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -33,6 +41,15 @@ import { equalDigest, randomToken, sha256, seal, open as unseal } from "../saas/
 import { runtimeHostAuth } from "../runtime/host-auth.js";
 import { hostVersionMeetsMinimum } from "../runtime/catalog.js";
 import { verifySandboxQualificationCredentialJwt } from "../../agent-auth-jwt.js";
+import { assertNativeOpenCodeConformanceWorkspaceRootReceipt } from "../native-runtime/native-workspace-sync.js";
+import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
+
+/** Server-minted exact-run authority for the private Native conformance
+ * admission lane. It is never accepted from an HTTP request or Host reply. */
+export type NativeOpenCodeConformanceHostAuthority = Readonly<{
+  runId: string; taskId: string; planId: string; groupId: string; manifestId: string; manifestHash: string;
+  leaseId: string; workspaceRoot: string; creationReceipt: string; policySnapshotId: string; policyHash: string;
+}>;
 import {
   assertRemoteRuntimeAssetErasureReady,
   assertRemoteRuntimeAssetErasureClaimCurrent,
@@ -42,7 +59,7 @@ import {
   runtimeAssetJobKey,
   type RemoteRuntimeAssetLocator,
 } from "../native-runtime/runtime-asset-retention.js";
-import { nativeRuntimeCleanupProbeCases } from "./backend.js";
+import { nativeRuntimeCleanupProbeCases, SANDBOX_QUALIFICATION_BINDING_STATES, type SandboxAdmissionCleanup } from "./backend.js";
 import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState, type RunLeaseCleanup } from "./run-lease-cleanup.js";
 import { fenceSandboxAdmissionOutcome } from "./sandbox-guardian.js";
 const RUN_LEASE_CLEANUP = "__runLeaseCleanup";
@@ -273,7 +290,7 @@ export function nativeSandboxHostTransport(
       const setup = request.provisioning;
       const validPurposeState = setup.purpose === "admission"
         ? binding.status === "admitting"
-        : ["requested", "ready", "failed"].includes(binding.status);
+        : SANDBOX_QUALIFICATION_BINDING_STATES.includes(binding.status);
       if (
         cell.status !== "STOPPED" ||
         binding.version !== setup.bindingVersion ||
@@ -333,7 +350,7 @@ export function nativeSandboxHostTransport(
         fixture.scope.generation !== request.scope.cellGeneration || fixture.scope.sandboxRef !== request.scope.sandboxRef ||
         fixture.hostEpoch !== request.hostEpoch || fixture.bindingVersion !== binding.version ||
         Date.parse(fixture.expiresAt) <= now.getTime() || cell.status !== "STOPPED" ||
-        !["requested", "ready", "failed"].includes(binding.status))
+        !SANDBOX_QUALIFICATION_BINDING_STATES.includes(binding.status))
         throw conflict("Qualification credential token is expired or outside its current host probe claim", {
           code: "sandbox_scope_changed",
         });
@@ -404,6 +421,81 @@ export function nativeSandboxHostTransport(
       !nativeRuntimeErasurePolicyIsolated(policy.compilation.compiledPolicy))
       throw conflict("Native cleanup attestation lost its original isolated manifest or policy binding");
   }
+  async function assertNativeConformanceAdmissionCleanup(tx: Db, actor: AuthorizationActor, scope: SandboxIdentity,
+    conformance: NativeOpenCodeConformanceHostAuthority, cleanup: SandboxAdmissionCleanup, action: SandboxHostRequest["action"],
+    idempotencyKey: string, expectedTarget?: SandboxHostRequest["expectedTarget"]) {
+    if (!["stop", "inspect"].includes(action) || cleanup.requesterUserId !== v7HumanActorId(actor) ||
+        cleanup.policySnapshotId !== conformance.policySnapshotId || cleanup.policyHash !== conformance.policyHash ||
+        cleanup.manifestId !== conformance.manifestId || cleanup.manifestHash !== conformance.manifestHash ||
+        expectedTarget?.sandboxId !== cleanup.sandboxId || expectedTarget.containerId !== cleanup.containerId ||
+        (action === "stop" && idempotencyKey !== `v7-sandbox-admission-contain:${scope.bindingId}:${scope.cellGeneration}:${cleanup.claimVersion}:${cleanup.policySnapshotId}`))
+      throw forbidden("Exact original Sandbox admission cleanup authority is required");
+    const [claim] = await tx.select().from(activityLog).where(and(
+      eq(activityLog.companyId, scope.companyId), eq(activityLog.entityType, "runtime_sandbox"),
+      eq(activityLog.entityId, scope.bindingId), eq(activityLog.action, "sandbox.admission_claimed"),
+      sql`${activityLog.details}->>'claimKey' = ${cleanup.claimKey}`,
+    )).limit(1);
+    const details = claim?.details && typeof claim.details === "object" && !Array.isArray(claim.details)
+      ? claim.details as Record<string, unknown> : {};
+    const [binding] = await tx.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, scope.companyId), eq(runtimeSandboxBindings.id, scope.bindingId),
+      eq(runtimeSandboxBindings.runtimeCellId, scope.cellId), eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration),
+      eq(runtimeSandboxBindings.version, cleanup.claimVersion), eq(runtimeSandboxBindings.status, "admitting"),
+    )).limit(1);
+    const [cell] = await tx.select().from(runtimeCells).where(and(
+      eq(runtimeCells.companyId, scope.companyId), eq(runtimeCells.id, scope.cellId),
+      eq(runtimeCells.generation, BigInt(scope.cellGeneration)), isNull(runtimeCells.deletedAt), isNull(runtimeCells.suspendedReason),
+    )).limit(1);
+    const [host] = cell?.runtimeHostId ? await tx.select().from(runtimeHosts).where(and(
+      eq(runtimeHosts.id, cell.runtimeHostId), eq(runtimeHosts.credentialVersion, cleanup.hostEpoch),
+      isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.retiredAt),
+      inArray(runtimeHosts.status, ["READY", "DRAINING"]),
+    )).limit(1) : [];
+    const admissionCommands = host ? await tx.select().from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.companyId, scope.companyId), eq(runtimeHostCommands.runtimeHostId, host.id),
+      eq(runtimeHostCommands.runtimeCellId, scope.cellId), eq(runtimeHostCommands.cellGeneration, BigInt(scope.cellGeneration)),
+      eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'purpose' = 'admission'`,
+      sql`${runtimeHostCommands.payload}->'provisioning'->>'operationKey' = ${cleanup.claimKey}`,
+    )) : [];
+    const preparedTargets = admissionCommands.flatMap(command => {
+      try {
+        const request = parseStoredSandboxHostRequest(command.payload, false);
+        const reply = sandboxHostReplySchema.parse(command.safeResult);
+        if (request.action !== "prepare" || request.scope.companyId !== scope.companyId ||
+          request.scope.bindingId !== scope.bindingId || request.scope.cellId !== scope.cellId ||
+          request.scope.cellGeneration !== scope.cellGeneration || request.hostEpoch !== cleanup.hostEpoch ||
+          request.imageDigest !== cleanup.imageDigest || !request.provisioning ||
+          request.provisioning.operationKey !== cleanup.claimKey || request.provisioning.bindingVersion !== cleanup.claimVersion ||
+          reply.action !== "prepare" ||
+          reply.hostEpoch !== cleanup.hostEpoch || reply.imageDigest !== cleanup.imageDigest || reply.requiresRecreate ||
+          reply.bindingVersion !== cleanup.claimVersion || reply.sandboxId !== cleanup.sandboxId ||
+          reply.containerId !== cleanup.containerId) return [];
+        return [{ commandId: command.id }];
+      } catch {
+        return [];
+      }
+    });
+    const [snapshot] = await tx.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, scope.companyId), eq(runtimePolicySnapshots.id, cleanup.policySnapshotId),
+      eq(runtimePolicySnapshots.bindingId, scope.bindingId), eq(runtimePolicySnapshots.executionManifestId, cleanup.manifestId),
+      eq(runtimePolicySnapshots.status, "qualified"),
+    )).limit(1);
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, scope.companyId), eq(agentExecutionManifests.id, cleanup.manifestId),
+      eq(agentExecutionManifests.runId, conformance.runId), eq(agentExecutionManifests.hash, cleanup.manifestHash),
+    )).limit(1);
+    if (!claim || claim.actorType !== "user" || claim.actorId !== cleanup.requesterUserId ||
+        details.claimVersion !== cleanup.claimVersion || details.generation !== scope.cellGeneration ||
+        details.policySnapshotId !== cleanup.policySnapshotId || details.policyHash !== cleanup.policyHash ||
+        details.executionManifestId !== cleanup.manifestId || details.executionManifestHash !== cleanup.manifestHash ||
+        !binding || binding.backend !== "openshell" || binding.capabilitySnapshotHash === null ||
+        !cell?.runtimeHostId || cell.generation.toString() !== scope.cellGeneration ||
+        (cell.activeImageDigest ?? cell.desiredImageDigest) !== cleanup.imageDigest || !host || !snapshot || !manifest ||
+        cleanup.claimVersion < 1 || !Number.isSafeInteger(cleanup.claimVersion) || preparedTargets.length !== 1)
+      throw forbidden("The original exact Sandbox admission claim is no longer the current Host workload");
+  }
+
   async function invoke(
     actor: AuthorizationActor,
     scope: SandboxIdentity,
@@ -413,6 +505,8 @@ export function nativeSandboxHostTransport(
     start?: SandboxHostRequest["start"],
     idempotencyKey: string = randomUUID(),
     provisioning?: SandboxProvisioningInput,
+    conformance?: NativeOpenCodeConformanceHostAuthority,
+    safetyCleanup?: SandboxAdmissionCleanup,
   ) {
     scope = {
       companyId: scope.companyId,
@@ -423,9 +517,118 @@ export function nativeSandboxHostTransport(
     };
     const userId = v7HumanActorId(actor),
       now = new Date();
-    // Fail closed before revealing host/capability state to an unconfigured
-    // or weakly authenticated operator.
-    await assertOperator(actor, action, undefined, scope.companyId, scope.bindingId);
+    const authorize = async (tx?: Db, cleanup?: SandboxAdmissionCleanup) => {
+      if (!conformance) return assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
+      const reader = tx ?? db;
+      if (cleanup) return assertNativeConformanceAdmissionCleanup(reader, actor, scope, conformance, cleanup, action, idempotencyKey,
+        safetyCleanup ? { sandboxId: safetyCleanup.sandboxId, containerId: safetyCleanup.containerId } : undefined);
+      if (safetyCleanup) throw forbidden("Admission cleanup authority is restricted to its exact stop and inspect commands");
+      await assertHumanAuthentication(reader, actor, { requireRecent: true, phishingResistant: false });
+      await assertV7Authorization(reader, actor, scope.companyId, "runtime:manage");
+      const [run] = await reader.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, scope.companyId), eq(heartbeatRuns.id, conformance.runId),
+        eq(heartbeatRuns.status, "running"), eq(heartbeatRuns.responsibleUserId, v7HumanActorId(actor)),
+      )).limit(1);
+      const context = run?.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+        ? run.contextSnapshot as Record<string, unknown> : {};
+      const [task] = await reader.select().from(issues).where(and(
+        eq(issues.companyId, scope.companyId), eq(issues.id, conformance.taskId), eq(issues.executionRunId, conformance.runId),
+      )).limit(1);
+      const [plan] = await reader.select().from(orchestrationPlans).where(and(
+        eq(orchestrationPlans.companyId, scope.companyId), eq(orchestrationPlans.id, conformance.planId), eq(orchestrationPlans.issueId, conformance.taskId),
+      )).limit(1);
+      const [manifest] = await reader.select().from(agentExecutionManifests).where(and(
+        eq(agentExecutionManifests.companyId, scope.companyId), eq(agentExecutionManifests.id, conformance.manifestId),
+        eq(agentExecutionManifests.runId, conformance.runId), eq(agentExecutionManifests.hash, conformance.manifestHash),
+      )).limit(1);
+      const [lease] = await reader.select().from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, scope.companyId), eq(environmentLeases.id, conformance.leaseId),
+        eq(environmentLeases.heartbeatRunId, conformance.runId), eq(environmentLeases.status, "active"),
+      )).limit(1);
+      const [agent] = run?.agentId ? await reader.select().from(agents).where(and(
+        eq(agents.companyId, scope.companyId), eq(agents.id, run.agentId),
+      )).limit(1) : [];
+      const [presence] = run?.agentId ? await reader.select().from(agentPresenceRuntimeBindings).where(and(
+        eq(agentPresenceRuntimeBindings.companyId, scope.companyId), eq(agentPresenceRuntimeBindings.agentId, run.agentId),
+      )).limit(1) : [];
+      const [provider] = presence ? await reader.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, presence.providerBindingId)).limit(1) : [];
+      const providerPin = manifest?.manifest.providers.find(pin => pin.companyId === scope.companyId && pin.agentId === run?.agentId);
+      const currentProviderProfile = agent?.adapterType === "paperclip_runner"
+        ? resolvePaperclipRunnerProviderProfile(agent.adapterConfig) : null;
+      if (task) {
+        await assertV7Authorization(reader, actor, scope.companyId, "issue:read",
+          { type: "issue", companyId: scope.companyId, issueId: task.id, projectId: task.projectId });
+        if (run?.agentId) await assertV7Authorization(reader,
+          { type: "agent", companyId: scope.companyId, agentId: run.agentId, runId: run.id,
+            onBehalfOfUserId: run.responsibleUserId }, scope.companyId, "issue:read",
+          { type: "issue", companyId: scope.companyId, issueId: task.id, projectId: task.projectId });
+      }
+      const [binding] = await reader.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, scope.companyId), eq(runtimeSandboxBindings.id, scope.bindingId),
+        eq(runtimeSandboxBindings.runtimeCellId, scope.cellId), eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration),
+        inArray(runtimeSandboxBindings.status, ["ready", "stopped", "admitting", "running"]),
+      )).limit(1);
+      const [policy] = await reader.select().from(runtimePolicySnapshots).where(and(
+        eq(runtimePolicySnapshots.companyId, scope.companyId), eq(runtimePolicySnapshots.id, conformance.policySnapshotId),
+        eq(runtimePolicySnapshots.bindingId, scope.bindingId), eq(runtimePolicySnapshots.executionManifestId, conformance.manifestId),
+        eq(runtimePolicySnapshots.status, "qualified"),
+      )).limit(1);
+      const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+        ? run.runnerProfileJson as Record<string, unknown> : {};
+      const workspace = profile.nativeOpenCodeConformanceWorkspace && typeof profile.nativeOpenCodeConformanceWorkspace === "object" &&
+        !Array.isArray(profile.nativeOpenCodeConformanceWorkspace) ? profile.nativeOpenCodeConformanceWorkspace as Record<string, unknown> : {};
+      const [attempt] = await reader.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+        eq(orchestrationWorkerAttempts.companyId, scope.companyId), eq(orchestrationWorkerAttempts.runId, conformance.runId),
+      )).limit(1);
+      const compiled = policy?.compilation.compiledPolicy;
+      const destinations = compiled?.network.destinations ?? [];
+      const capability = binding?.capabilitySnapshot ? sandboxCapabilitySnapshotSchema.safeParse(binding.capabilitySnapshot) : null;
+      const modelOrigin = capability?.success ? capability.data.modelBrokerProviderProfile?.origin : undefined;
+      let modelUrl: URL | null = null;
+      try { modelUrl = modelOrigin ? new URL(modelOrigin) : null; } catch { modelUrl = null; }
+      const expectedReadPaths = [...new Set([conformance.workspaceRoot,
+        ...(capability?.success ? capability.data.modelBrokerProviderProfile?.binaries ?? [] : [])])].sort();
+      const expectedAuthorityRef = policy?.compilation.sourcePolicyRefs.find(ref => ref.startsWith("authority:"));
+      const expectedManifestRef = policy?.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:"));
+      if (!run || run.triggerDetail !== "provider_conformance" || run.nativeIssueId !== conformance.taskId ||
+          context.providerConformanceGroupId !== conformance.groupId || context.providerConformancePlanId !== conformance.planId ||
+          context.containsCompanyContext !== false || context.platformToolsGranted !== false ||
+          !task || task.hiddenAt === null || task.harnessKind !== "provider_conformance" || task.responsibleUserId !== run.responsibleUserId ||
+          task.assigneeAgentId !== run.agentId || task.conversationAgentId !== null || task.conversationUserId !== null ||
+          plan?.status !== "paused" || plan.mode !== "single_worker" || plan.actionClass !== "internal_draft" || plan.riskClass !== "C0" ||
+          plan.createdBy !== run.responsibleUserId || plan.executionPrincipal?.type !== "user" || plan.executionPrincipal.userId !== run.responsibleUserId ||
+          plan.budgets.maxToolActions !== 0 || plan.budgets.maxRetries !== 0 || plan.toolActionsUsed !== 0 || attempt ||
+          !manifest || manifest.manifest.capabilities.length !== 0 || !lease?.expiresAt || lease.expiresAt <= new Date() ||
+          !agent || agent.adapterType !== "paperclip_runner" || currentProviderProfile?.provider !== "opencode" ||
+          !presence || presence.companyId !== scope.companyId || presence.status === "revoked" ||
+          !provider || ["revoked", "retired"].includes(provider.status) || !providerPin ||
+          provider.id !== providerPin.providerBindingId || provider.capabilitySnapshotHash !== providerPin.snapshotHash ||
+          presence.providerProfileRef !== providerPin.profileRef ||
+          !binding || binding.backend !== "openshell" || !binding.capabilitySnapshot || !binding.capabilitySnapshotHash ||
+          !policy || policy.policyHash !== conformance.policyHash || policy.authorityHash !== expectedAuthorityRef?.slice("authority:".length) ||
+          expectedManifestRef !== `manifest:${manifest.id}:${manifest.hash}` || policy.expiresAt <= new Date() ||
+          !compiled || compiled.credentials.mode !== "none" || compiled.credentials.bindings.length !== 0 ||
+          nativeSha256(compiled.filesystem.readPaths) !== nativeSha256(expectedReadPaths) ||
+          compiled.filesystem.writePaths.length !== 1 || compiled.filesystem.writePaths[0] !== conformance.workspaceRoot ||
+          destinations.length !== 1 || destinations[0]?.methods.length !== 1 || destinations[0]?.methods[0] !== "POST" ||
+          destinations[0]?.pathPrefixes.length !== 1 || destinations[0]?.pathPrefixes[0] !== "/runtime-tools/model/v1/messages" ||
+          !modelUrl || modelUrl.protocol !== "https:" || destinations[0]?.hostname !== modelUrl.hostname ||
+          destinations[0]?.port !== Number(modelUrl.port || 443) ||
+          policy?.compilation.modelBrokerEndpoint?.hostname !== modelUrl.hostname ||
+          policy?.compilation.modelBrokerEndpoint?.port !== Number(modelUrl.port || 443) ||
+          !capability?.success || capability.data.expiresAt <= new Date().toISOString() ||
+          workspace.taskRoot !== conformance.workspaceRoot || workspace.creationReceipt !== conformance.creationReceipt ||
+          lease.metadata?.remoteCwd !== conformance.workspaceRoot ||
+          workspace.authorityHash !== null || !await assertNativeOpenCodeConformanceWorkspaceRootReceipt({
+            groupId: conformance.groupId, companyId: scope.companyId, agentId: run.agentId!, taskId: conformance.taskId,
+            taskRoot: conformance.workspaceRoot, workspaceId: String(workspace.workspaceId), cwd: conformance.workspaceRoot,
+            creationReceipt: conformance.creationReceipt,
+          }))
+        throw forbidden("Current exact Human-owned conformance Host admission authority is required");
+    };
+    // The private bootstrap lane keeps the current Human and runtime:manage
+    // gates while bounding Host control to this zero-tool Run and qualified policy.
+    await authorize(undefined, safetyCleanup);
     const originalExpiry =
       action === "apply" ? admission?.expiresAt : action === "start" ? start?.expiresAt : action === "prepare" ? provisioning?.expiresAt : undefined;
     if (
@@ -452,13 +655,7 @@ export function nativeSandboxHostTransport(
     const queued = await withV7ActivityTransaction(
       db,
       async (tx, publications) => {
-        await assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
-        await assertV7Authorization(
-          tx,
-          actor,
-          scope.companyId,
-          "runtime:manage",
-        );
+        await authorize(tx as unknown as Db, safetyCleanup);
         const [cell] = await tx
           .select()
           .from(runtimeCells)
@@ -484,6 +681,7 @@ export function nativeSandboxHostTransport(
           ...(probe ? { probe } : {}),
           ...(admission ? { admission } : {}),
           ...(start ? { start } : {}),
+          ...(safetyCleanup ? { expectedTarget: { sandboxId: safetyCleanup.sandboxId, containerId: safetyCleanup.containerId } } : {}),
           hostEpoch: host.credentialVersion,
           imageDigest: cell.activeImageDigest ?? cell.desiredImageDigest,
           requesterUserId: userId,
@@ -535,7 +733,7 @@ export function nativeSandboxHostTransport(
               nativeSha256(requestWithoutQualificationCredential(request)) || !credentialMatches)
               throw conflict("Sandbox operation key belongs to different immutable inputs");
           }
-          await assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
+          await authorize(tx as unknown as Db, safetyCleanup);
           return existing;
         }
         await current(tx, request, host.id, now, qualificationCredential?.commandId);
@@ -589,7 +787,7 @@ export function nativeSandboxHostTransport(
           },
           publications,
         );
-        await assertOperator(actor, action, tx, scope.companyId, scope.bindingId);
+        await authorize(tx as unknown as Db, safetyCleanup);
         return command;
       },
     );
@@ -601,7 +799,7 @@ export function nativeSandboxHostTransport(
       if (!record) throw conflict("Native sandbox receipt unavailable");
       if (record.status === "SUCCEEDED") {
         return db.transaction(async (tx) => {
-          await assertOperator(actor, action, tx as unknown as Db, scope.companyId, scope.bindingId);
+          await authorize(tx as unknown as Db, safetyCleanup);
           const storedRequest = parseStoredSandboxHostRequest(record.payload, false);
           await current(
             tx as unknown as Db,
@@ -615,7 +813,7 @@ export function nativeSandboxHostTransport(
           const reply = sandboxHostReplySchema.parse(record.safeResult);
           if (reply.action !== action)
             throw conflict("Native sandbox reply action changed");
-          await assertOperator(actor, action, tx as unknown as Db, scope.companyId, scope.bindingId);
+          await authorize(tx as unknown as Db, safetyCleanup);
           return { commandId: record.id, reply, request: storedRequest };
         });
       }
@@ -954,16 +1152,20 @@ export function nativeSandboxHostTransport(
     stopRunLeaseForCleanup,
     eraseStoppedNativeSession,
     refreshRemoteRuntimeCleanupAttestation,
-    bridge(actor: AuthorizationActor): OpenShellHostBridge {
+    bridge(actor: AuthorizationActor, conformance?: NativeOpenCodeConformanceHostAuthority): OpenShellHostBridge {
+      const call = (scope: SandboxIdentity, action: SandboxHostRequest["action"], probe?: SandboxHostRequest["probe"],
+        admission?: SandboxHostRequest["admission"], start?: SandboxHostRequest["start"], idempotencyKey?: string,
+        provisioning?: SandboxProvisioningInput, safetyCleanup?: SandboxAdmissionCleanup) => invoke(actor, scope, action, probe, admission, start,
+          idempotencyKey, provisioning, conformance, safetyCleanup);
       return {
         capabilities: async (scope) => {
-          const { reply } = await invoke(actor, scope, "capabilities");
+          const { reply } = await call(scope, "capabilities");
           if (reply.action !== "capabilities")
             throw conflict("Native sandbox reply action changed");
           return reply.capabilities;
         },
         prepare: async (scope, provisioning) => {
-          const { reply, request } = await invoke(actor, scope, "prepare", undefined, undefined, undefined,
+          const { reply, request } = await call(scope, "prepare", undefined, undefined, undefined,
             provisioning?.operationKey ?? randomUUID(), provisioning);
           if (reply.action !== "prepare")
             throw conflict("Native sandbox reply action changed");
@@ -992,21 +1194,21 @@ export function nativeSandboxHostTransport(
           };
         },
         inspect: async (scope) => {
-          const { reply } = await invoke(actor, scope, "inspect");
+          const { reply } = await call(scope, "inspect", undefined, undefined, undefined, undefined, undefined,
+            scope.nativeAdmissionCleanup);
           if (reply.action !== "inspect")
             throw conflict("Native sandbox reply action changed");
           const { action: _, ...observation } = reply;
           return observation;
         },
         effectivePolicy: async (scope) => {
-          const { reply } = await invoke(actor, scope, "effective_policy");
+          const { reply } = await call(scope, "effective_policy");
           if (reply.action !== "effective_policy")
             throw conflict("Native sandbox reply action changed");
           return reply.document;
         },
         apply: async (input) => {
-          const { reply } = await invoke(
-            actor,
+          const { reply } = await call(
             input,
             "apply",
             undefined,
@@ -1030,8 +1232,7 @@ export function nativeSandboxHostTransport(
           };
         },
         start: async (input) => {
-          const { reply, commandId } = await invoke(
-            actor,
+          const { reply, commandId } = await call(
             input,
             "start",
             undefined,
@@ -1048,17 +1249,17 @@ export function nativeSandboxHostTransport(
           return { operationId: commandId };
         },
         revokeProviders: async (scope) => {
-          await invoke(actor, scope, "revoke_providers");
+          await call(scope, "revoke_providers");
         },
         stop: async (scope) => ({
           operationId: (
-            await invoke(actor, scope, "stop", undefined, undefined, undefined, scope.idempotencyKey)
+            await call(scope, "stop", undefined, undefined, undefined, scope.idempotencyKey, undefined,
+              scope.nativeAdmissionCleanup)
           ).commandId,
         }),
         destroy: async (scope) => ({
           operationId: (
-            await invoke(
-              actor,
+            await call(
               scope,
               "destroy",
               undefined,
@@ -1071,7 +1272,7 @@ export function nativeSandboxHostTransport(
         probe: async (scope) => {
           const { qualificationCommandId, ...wireTest } = scope.test;
           const commandKey = qualificationCommandId ?? randomUUID();
-          const { reply } = await invoke(actor, scope, "probe", wireTest, undefined, undefined, commandKey);
+          const { reply } = await call(scope, "probe", wireTest, undefined, undefined, commandKey);
           if (reply.action !== "probe")
             throw conflict("Native sandbox reply action changed");
           if (reply.contractHash !== scope.test.contractHash)

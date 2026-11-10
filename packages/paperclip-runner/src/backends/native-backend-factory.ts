@@ -56,6 +56,7 @@ export function createNativeSessionBackend(
   if (options.codexTransportFactory) {
     return createRunnerdNativeSessionBackend(input, {
       completionFeedback: options.completionFeedback,
+      opencodeSystemInstructions: options.opencodeSystemInstructions,
       runnerInstanceId: options.runnerInstanceId,
       onSpawn: options.onSpawn,
       dynamicTools: options.dynamicTools,
@@ -73,6 +74,7 @@ export function createNativeSessionBackend(
     }
     return createOpenCodeNativeSessionBackend(input, {
       runtimeDirectory: options.opencodeRuntimeDirectory,
+      systemInstructions: options.opencodeSystemInstructions,
       environment: options.opencodeEnvironment,
       assignedMcp: options.opencodeAssignedMcp,
       command: options.opencodeCommand,

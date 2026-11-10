@@ -41,7 +41,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
     vi.stubEnv("PAPERCLIP_INSTANCE_ID", instanceId);
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `managed-opencode-project-wait-${randomUUID()}-${randomUUID()}`);
     database = await startEmbeddedPostgresTestDatabase("managed-opencode-project-wait-e2e-");
-    db = createDb(database.connectionString);
+    db = createDb(database.connectionString, { maxConnections: 3 });
     await instanceSettingsService(db).getExperimental();
     await enableV5ForTest(db);
     await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true,
@@ -60,6 +60,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
   }, 30_000);
 
   it("rejects a retained Task body withdrawn while the actual managed Project constructor waits", async () => {
+    const fixtureDeadlineAt = new Date(Date.now() + 240_000);
     const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
     const projectName = `Must roll back after source withdrawal ${suffix}`;
     const projectWorkspaceName = `Must not persist ${suffix}`;
@@ -69,7 +70,7 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
     const mutateTask = deferred<void>();
     let blocker: Promise<void> | null = null;
     const runPromise = runManagedNativeOpenCodeFixture({ db, connectionString: database.connectionString,
-      root, instanceId, steps: [
+      root, instanceId, fixtureDeadlineAt, steps: [
         { tool: "create_project", id: `managed-project-wait-${suffix}`, input: {
           name: projectName, workspace: { name: projectWorkspaceName }, idempotencyKey: randomUUID(),
         } },
@@ -144,7 +145,9 @@ describe.skipIf(!hasPinnedOpenCodeProfile())("managed OpenCode Project source wa
     // The runner rejects the next request after the failed Project tool has
     // paused the plan. The decisive evidence is the blocked original source
     // read, committed owner edit, and absence of every Project effect below.
-    expect(String((outcome.error as Error | null)?.message ?? outcome.error)).toContain("managed_opencode_runner_exit_1");
+    const failureMessage = String((outcome.error as Error | null)?.message ?? outcome.error);
+    expect(failureMessage).toContain("native_session_execution_failed");
+    expect(failureMessage).toContain("This orchestration attempt no longer has write authority");
     expect(taskId).toBeTruthy();
     const [changedTask] = await db.select({ title: issues.title }).from(issues).where(eq(issues.id, taskId!));
     expect(changedTask?.title).toContain(`Changed while managed Project waits ${suffix}`);

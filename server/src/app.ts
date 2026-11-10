@@ -18,7 +18,6 @@ import { agentAuthoringRoutes } from "./routes/agent-authoring.js";
 import { conversationAuthoringRoutes } from "./routes/conversation-authoring.js";
 import { aiGovernanceRoutes } from "./routes/ai-governance.js";
 import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
-import { openShellBackend } from "./services/execution-sandbox/openshell-backend.js";
 import { orchestrationRoutes } from "./routes/orchestration.js";
 import { workSignalRoutes } from "./routes/work-signals.js";
 import { expectedActorGuard } from "./middleware/expected-actor.js";
@@ -57,7 +56,6 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Db } from "@paperclipai/db";
-import { agentExecutionManifests, agentPresenceRuntimeBindings, heartbeatRuns } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
 import {
   derivePaperclipViteHmrPort,
@@ -795,45 +793,7 @@ export async function createApp(
   api.use(aiGovernanceRoutes(db));
   api.use(enterpriseRoutes(db, opts.saasPlatform ? { operatorUserIds: opts.saasPlatform.config.operatorUserIds, sourceSha: opts.saasPlatform.config.deployment.sourceSha, protectedEvidenceOrigin: opts.saasPlatform.config.objects.endpoint, appOrigin: opts.saasPlatform.origins.primaryAppOrigin } : undefined));
   api.use(agentPackageRoutes(db, { operatorUserIds: opts.saasPlatform?.config.operatorUserIds, protectedEvidenceOrigin: opts.saasPlatform?.config.objects.endpoint, sourceSha: opts.saasPlatform?.config.deployment.sourceSha }));
-  const resolveSandboxBrokerBindings = async (companyId: string, policy: import("@paperclipai/shared").SandboxPolicyCompilation) => {
-    const compiled = policy.compiledPolicy;
-    if (compiled.credentials.mode !== "brokered") return { authorizedConnectionGrantHashes: {}, bindings: [] };
-    const manifestRef = policy.sourcePolicyRefs.find(ref => ref.startsWith("manifest:"));
-    const match = manifestRef ? /^manifest:([0-9a-f-]{36}):([a-f0-9]{64})$/i.exec(manifestRef) : null;
-    if (!match) throw new Error("sandbox_broker_manifest_source_unavailable");
-    const [manifest] = await db.select().from(agentExecutionManifests).where(and(
-      eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.id, match[1]!), eq(agentExecutionManifests.hash, match[2]!),
-    )).limit(1);
-    const [run] = manifest ? await db.select().from(heartbeatRuns).where(and(
-      eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, manifest.runId), eq(heartbeatRuns.agentId, manifest.agentId), eq(heartbeatRuns.status, "running"),
-    )).limit(1) : [];
-    const [presence] = manifest ? await db.select().from(agentPresenceRuntimeBindings).where(and(
-      eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, manifest.agentId), eq(agentPresenceRuntimeBindings.status, "active"),
-    )).limit(1) : [];
-    if (!manifest || !run?.responsibleUserId || !presence) throw new Error("sandbox_broker_run_source_unavailable");
-    return await getAssignedMcpGateway(db).resolveSandboxCredentialBrokerPolicyBindings({
-      companyId, agentId: manifest.agentId, runId: run.id, responsibleUserId: run.responsibleUserId,
-      presenceId: presence.id, bindings: compiled.credentials.bindings,
-    });
-  };
-  api.use(executionSandboxRoutes(db, {
-    operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
-    credentialBrokerOrigin: opts.saasPlatform?.origins.primaryAppOrigin,
-    backendFor: opts.saasPlatform?.config.runtime.openshellProver ? (binding, actor) => binding.backend === "openshell" ? openShellBackend({
-      identity: { companyId: binding.companyId, bindingId: binding.id, cellId: binding.runtimeCellId, cellGeneration: binding.cellGeneration, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` },
-      boundary: binding.boundaryPolicy, bridge: opts.saasPlatform!.sandboxHosts.bridge(actor), evidenceKind: "protected_host_report", prover: opts.saasPlatform!.config.runtime.openshellProver!,
-      credentialBrokerOrigin: opts.saasPlatform!.origins.primaryAppOrigin,
-      credentialBrokerDatabase: db,
-      resolveCredentialBrokerBindings: (policy) => resolveSandboxBrokerBindings(binding.companyId, policy),
-    }) : undefined : undefined,
-    nativeOperation: opts.saasPlatform ? (companyId, cellId, userId, action, idempotencyKey) => opts.saasPlatform!.runtime.request(companyId, cellId, userId, { action, idempotencyKey }) : undefined,
-    assertRuntimeStartAdmission: opts.saasPlatform?.runtime.assertSandboxStartAdmission
-      ? (tx, input) => opts.saasPlatform!.runtime.assertSandboxStartAdmission(tx, input)
-      : undefined,
-    recordRuntimeWorkloadState: opts.saasPlatform?.runtime.recordSandboxWorkloadState
-      ? (tx, input) => opts.saasPlatform!.runtime.recordSandboxWorkloadState(tx, input)
-      : undefined,
-  }));
+  api.use(executionSandboxRoutes(db, opts.saasPlatform?.executionSandboxOptions));
   api.use(cognitiveMemoryRoutes(db));
   api.use(memoryRoutes(db));
   api.use(companySkillPolicyRoutes(db));

@@ -3,7 +3,8 @@ import { MANAGED_NATIVE_OPENCODE_IMAGE_PIN, assertManagedFixtureOpenCodeImage } 
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Socket } from "node:net";
 import { verifySandboxExecJwt } from "../../agent-auth-jwt.js";
-import { REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "../../services/native-runtime/native-artifact-preparation.js";
+import { NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT, REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "../../services/native-runtime/native-artifact-preparation.js";
+import { readRemoteProviderPackManifest } from "../../services/native-runtime/native-session-executor.js";
 import { attestNativeModelClient, type ModelChannel, type SignedModelOrigin } from "./managed-native-model-transport.js";
 import assert from "node:assert/strict";
 import request from "supertest";
@@ -18,7 +19,7 @@ import { PassThrough } from "node:stream";
 import { once } from "node:events";
 import { realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, posix } from "node:path";
+import { dirname, isAbsolute, join, posix } from "node:path";
 import express from "express";
 import { WebSocket } from "ws";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
@@ -26,7 +27,7 @@ import {
   agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
   chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, companies, createDb,
   agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
-  runtimeVersionCatalog, runtimeHostCommands, sandboxQualificationRuns,
+  runtimeVersionCatalog, runtimeHostCommands, runtimeSandboxBindings, sandboxQualificationRuns, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, type NativePayloadSourceInput, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../../services/authorization.js";
@@ -60,6 +61,8 @@ import { errorHandler } from "../../middleware/error-handler.js";
 import { projectOpenShellPolicy, projectOpenShellQualificationProbePolicy } from "../../services/execution-sandbox/openshell-policy.js";
 import { open as unseal } from "../../services/saas/crypto.js";
 import { nativeSha256 } from "../../services/native-runtime/canonical.js";
+import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
+import { parseEnvironmentDriverConfig } from "../../services/environment-config.js";
 import { compileSandboxPolicy } from "../../services/execution-sandbox/policy-compiler.js";
 import { readNativeRuntimeAssetText } from "../../services/native-runtime/runtime-context.js";
 import { nativeRuntimeAssetsRoot } from "../../services/native-runtime/runtime-asset-retention.js";
@@ -233,6 +236,8 @@ type ManagedSandboxHostInput = {
   /** Bind one real scheduler-created ordinary Run at the existing execution
    * callback. All persisted Task, Human, lease and source checks still run. */
   ordinaryWorker?: true;
+  /** Closed test-fixture admission for the registered six-probe Native OpenCode owner. */
+  nativeOpenCodeConformance?: true;
   /** Existing constructor-only controlled backend: this component performs no model dispatch. */
   controlledNativeSessionBackendFactory?: (execution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput) =>
     import("../../vendor/paperclip-runner/index.js").NativeSessionBackend;
@@ -259,6 +264,94 @@ async function assertFixtureOrdinaryWorker(input: ManagedSandboxHostInput, runId
       task.payloadSourceSnapshotInvalidated || !await canActorReadIssuePrivacy(db, actor, task))
       throw new Error("worker_software_host_task_binding_invalid");
     return run;
+}
+
+/** Admit only the registered owner's real hidden Run and current group workspace. */
+async function assertFixtureNativeOpenCodeConformance(input: ManagedSandboxHostInput, runId: string, leaseId: string) {
+  const { db, actor, companyId, agentId } = input;
+  const environmentConfig = parseEnvironmentDriverConfig(input.preparedRegistration!.environment);
+  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+    eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.id, runId))).limit(1);
+  const context = run?.contextSnapshot && typeof run.contextSnapshot === "object"
+    ? run.contextSnapshot as Record<string, unknown> : {};
+  const [task] = run?.nativeIssueId ? await db.select().from(issues).where(and(eq(issues.companyId, companyId),
+    eq(issues.id, run.nativeIssueId))).limit(1) : [];
+  const [plan] = typeof context.providerConformancePlanId === "string" && task
+    ? await db.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, companyId),
+      eq(orchestrationPlans.id, context.providerConformancePlanId), eq(orchestrationPlans.issueId, task.id))).limit(1) : [];
+  const [manifest] = await db.select().from(agentExecutionManifests).where(and(
+    eq(agentExecutionManifests.companyId, companyId), eq(agentExecutionManifests.runId, runId),
+    eq(agentExecutionManifests.agentId, agentId))).limit(1);
+  const profile = run?.runnerProfileJson && typeof run.runnerProfileJson === "object"
+    ? run.runnerProfileJson as Record<string, unknown> : {};
+  const execution = profile.nativeExecutionInput && typeof profile.nativeExecutionInput === "object"
+    ? profile.nativeExecutionInput as Record<string, any> : {};
+  const workspace = profile.nativeOpenCodeConformanceWorkspace && typeof profile.nativeOpenCodeConformanceWorkspace === "object"
+    ? profile.nativeOpenCodeConformanceWorkspace as Record<string, unknown> : {};
+  const dispatch = context.nativeOpenCodeConformanceDispatch && typeof context.nativeOpenCodeConformanceDispatch === "object"
+    ? context.nativeOpenCodeConformanceDispatch as Record<string, unknown> : null;
+  const [lease] = await db.select().from(environmentLeases).where(and(
+    eq(environmentLeases.companyId, companyId), eq(environmentLeases.id, leaseId),
+    eq(environmentLeases.heartbeatRunId, runId),
+    eq(environmentLeases.environmentId, input.preparedRegistration!.environment.id),
+    eq(environmentLeases.status, "active"))).limit(1);
+  const workers = plan ? await db.select({ id: orchestrationWorkers.id }).from(orchestrationWorkers)
+    .where(eq(orchestrationWorkers.planId, plan.id)) : [];
+  const attempts = plan ? await db.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts)
+    .where(eq(orchestrationWorkerAttempts.planId, plan.id)) : [];
+  const manifestValue = manifest?.manifest && typeof manifest.manifest === "object"
+    ? manifest.manifest as Record<string, unknown> : {};
+  const executionScope = manifestValue.executionScope && typeof manifestValue.executionScope === "object"
+    ? manifestValue.executionScope as Record<string, unknown> : {};
+  const noTools = Array.isArray(manifestValue.capabilities) && manifestValue.capabilities.length === 0 &&
+    Array.isArray(manifestValue.skills) && manifestValue.skills.length === 0 &&
+    Array.isArray(manifestValue.playbooks) && manifestValue.playbooks.length === 0 &&
+    executionScope.primaryCompanyId === companyId && executionScope.primaryAgentPresenceId === agentId &&
+    Array.isArray(executionScope.delegatedScopes) && executionScope.delegatedScopes.length === 0;
+  const currentAuthority = lease ? await executionSandboxService(db).assertTaskExecutionContext(db, {
+    companyId, runId, leaseId: lease.id,
+  }) : null;
+  let creationReceiptMatches = false;
+  try {
+    const instanceRoot = realpathSync(resolvePaperclipInstanceRoot());
+    const expectedRoot = join(instanceRoot, "chat-workspaces", companyId, agentId, task?.id ?? "");
+    const receiptKey = createHash("sha256")
+      .update(`${String(workspace.groupId)}\0${companyId}\0${agentId}\0${task?.id ?? ""}`).digest("hex");
+    const receipt = JSON.parse(readFileSync(join(instanceRoot, "chat-workspace-proofs", `${receiptKey}.json`), "utf8")) as Record<string, unknown>;
+    const rootStat = lstatSync(expectedRoot), rootReal = realpathSync(expectedRoot);
+    creationReceiptMatches = rootStat.isDirectory() && !rootStat.isSymbolicLink() && rootReal === expectedRoot &&
+      workspace.taskRoot === expectedRoot && workspace.localCwd === expectedRoot &&
+      receipt.schema === "paperclip.native-opencode-conformance-workspace/v1" &&
+      receipt.groupId === workspace.groupId && receipt.companyId === companyId && receipt.agentId === agentId &&
+      receipt.taskId === task?.id && receipt.taskRoot === expectedRoot && receipt.cwd === expectedRoot &&
+      receipt.workspaceId === workspace.workspaceId && receipt.dev === rootStat.dev && receipt.ino === rootStat.ino &&
+      nativeSha256(receipt) === workspace.creationReceipt;
+  } catch { creationReceiptMatches = false; }
+  if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.triggerDetail !== "provider_conformance" ||
+      run.responsibleUserId !== actor.userId || !run.nativeIssueId || !task || task.hiddenAt === null ||
+      task.harnessKind !== "provider_conformance" || task.assigneeAgentId !== agentId || task.status !== "in_progress" ||
+      task.executionRunId !== runId || task.conversationAgentId !== null || task.conversationUserId !== null ||
+      task.projectId !== null || task.parentId !== null || plan?.status !== "paused" || plan.actionClass !== "internal_draft" ||
+      plan.riskClass !== "C0" || plan.budgets.maxToolActions !== 0 || plan.budgets.maxRetries !== 0 ||
+      context.providerConformancePlanId !== plan?.id || typeof context.providerConformanceGroupId !== "string" ||
+      typeof context.nativeOpenCodeConformanceProbeId !== "string" ||
+      context.nativeOpenCodeConformanceProfileId !== input.profile.id || context.containsCompanyContext !== false ||
+      context.platformToolsGranted !== false || !manifest || !noTools || workers.length !== 0 || attempts.length !== 0 ||
+      execution.binding?.companyId !== companyId || execution.binding?.agentId !== agentId ||
+      execution.binding?.runId !== runId || execution.binding?.issueId !== task.id ||
+      execution.workspace?.cwd !== workspace.remoteCwd || typeof workspace.remoteCwd !== "string" ||
+      !isAbsolute(workspace.remoteCwd) || workspace.schema !== "paperclip.native-opencode-conformance-workspace/v1" ||
+      workspace.groupId !== context.providerConformanceGroupId || workspace.companyId !== companyId ||
+      workspace.agentId !== agentId || workspace.taskId !== task.id || workspace.leaseId !== leaseId ||
+      typeof workspace.createdEmpty !== "boolean" || !creationReceiptMatches || typeof workspace.creationReceipt !== "string" ||
+      typeof workspace.authorityHash !== "string" || !/^[a-f0-9]{64}$/.test(workspace.authorityHash) ||
+      !lease || lease.status !== "active" || environmentConfig.driver !== "sandbox" || lease.provider !== environmentConfig.config.provider ||
+      !lease.expiresAt || lease.expiresAt <= new Date() || !currentAuthority ||
+      currentAuthority.authorityHash !== workspace.authorityHash ||
+      (dispatch !== null && (dispatch.qualificationGroupId !== workspace.groupId || dispatch.planId !== plan?.id ||
+        dispatch.profileId !== input.profile.id || dispatch.probeId !== context.nativeOpenCodeConformanceProbeId)))
+    throw new Error("scheduler_software_host_conformance_run_not_current");
+  return { run, task, plan: plan!, manifest, lease, workspace, execution, dispatch };
 }
 
 async function preflightManagedSandboxInput(input: ManagedSandboxHostInput) {
@@ -313,9 +406,11 @@ export async function ensureManagedSandboxEnvironmentForAgent(
 }
 
 export async function registerManagedSandboxProvider(
-  input: Pick<ManagedSandboxHostInput, "db" | "actor" | "companyId" | "agentId" | "providerBindingId">,
+  input: Pick<ManagedSandboxHostInput, "db" | "actor" | "companyId" | "agentId" | "providerBindingId"> &
+    { nativeOpenCodeConformance?: true; sandboxQualificationOperator?: AuthorizationActor },
 ) {
   const { db, actor, companyId, agentId, providerBindingId } = input;
+  const nativeOpenCodeConformance = input.nativeOpenCodeConformance === true;
   const hostKeys = generateKeyPairSync("rsa", { modulusLength: 3072 });
   await instanceSettingsService(db).updateExperimental({
     sandbox_abstraction_v7: true, openshell_v7: true, runtime_host_agent_v6: true,
@@ -400,15 +495,20 @@ export async function registerManagedSandboxProvider(
     adapterType: agent.adapterType, config: agent.adapterConfig }));
   const providerSnapshotInput = Object.fromEntries(Object.entries(providerSnapshot).filter(([key]) => key !== "hash")) as Omit<typeof providerSnapshot, "hash">;
   await providerService.recordDiscovery(companyId, agentId, providerSnapshotInput,
-    Object.fromEntries(providerConformanceRequirements(providerSnapshot, "isolated_per_presence").map(check => [check, true])));
-  const qualifiedProvider = await providerService.assertRuntime(companyId, agentId);
+    Object.fromEntries(providerConformanceRequirements(providerSnapshot, "isolated_per_presence")
+      .map(check => [check, nativeOpenCodeConformance ? false : true])));
+  const qualifiedProvider = nativeOpenCodeConformance
+    ? await providerService.getForPresence(actor, companyId, agentId)
+    : await providerService.assertRuntime(companyId, agentId);
+  if (!qualifiedProvider) throw new Error("conversation_software_host_provider_binding_missing");
   const providerProfileRef = qualifiedProvider.runtime.providerProfileRef;
   if (!providerProfileRef) throw new Error("conversation_software_host_provider_profile_missing");
   const providerSnapshotHash = qualifiedProvider.provider.capabilitySnapshotHash;
   if (!providerSnapshotHash) throw new Error("conversation_software_host_provider_snapshot_missing");
   const environment = await ensureManagedSandboxEnvironmentForAgent(db, companyId, agentId);
 
-  const configurationHash = qualifiedProvider.runtime.qualifiedConfigurationHash;
+  const configurationHash = qualifiedProvider.runtime.qualifiedConfigurationHash ??
+    hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig });
   const conformanceHash = nativeSha256(qualifiedProvider.runtime.conformanceReport);
   const assertCurrent = async (currentInput: Pick<ManagedSandboxHostInput,
     "db" | "actor" | "companyId" | "agentId" | "providerBindingId">,
@@ -417,7 +517,9 @@ export async function registerManagedSandboxProvider(
         currentInput.providerBindingId !== providerBindingId || currentInput.actor.userId !== payerUserId ||
         currentInput.actor.sessionId !== actor.sessionId)
       throw new Error("conversation_software_host_registration_owner_changed");
-    const current = await providerService.assertRuntime(companyId, agentId);
+    const current = nativeOpenCodeConformance
+      ? await providerService.getForPresence(actor, companyId, agentId)
+      : await providerService.assertRuntime(companyId, agentId);
     const [currentAgent] = await db.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
     const [currentCell] = await db.select().from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, cell.id)));
     const [currentHost] = await db.select().from(runtimeHosts).where(eq(runtimeHosts.id, host.id));
@@ -426,9 +528,12 @@ export async function registerManagedSandboxProvider(
       eq(billingAccountCompanies.companyId, companyId), eq(billingAccountCompanies.status, "active"),
       eq(billingAccountCompanies.billingAccountId, account.id))).limit(1);
     const [currentAccount] = await db.select().from(billingAccounts).where(eq(billingAccounts.id, account.id)).limit(1);
-    if (current.provider.id !== providerBindingId || current.runtime.id !== qualifiedProvider.runtime.id ||
+    const currentConfigurationHash = current?.runtime.qualifiedConfigurationHash ??
+      (nativeOpenCodeConformance && currentAgent
+        ? hashContextPolicySnapshot({ adapterType: currentAgent.adapterType, adapterConfig: currentAgent.adapterConfig }) : null);
+    if (!current || current.provider.id !== providerBindingId || current.runtime.id !== qualifiedProvider.runtime.id ||
         current.runtime.providerProfileRef !== providerProfileRef || current.provider.capabilitySnapshotHash !== providerSnapshotHash ||
-        current.runtime.qualifiedConfigurationHash !== configurationHash || nativeSha256(current.runtime.conformanceReport) !== conformanceHash ||
+        currentConfigurationHash !== configurationHash || nativeSha256(current.runtime.conformanceReport) !== conformanceHash ||
         !currentAgent || currentAgent.defaultEnvironmentId !== environment.id ||
         !currentBilling || !currentAccount || currentAccount.payerUserId !== payerUserId ||
         currentAccount.status !== "active" || currentAccount.closedAt !== null ||
@@ -446,7 +551,11 @@ export async function registerManagedSandboxProvider(
       throw new Error("conversation_software_host_registration_changed");
   };
   // DB/provider preparation only: no Run, lease, image directory, process environment or gateway is installed.
+  if (nativeOpenCodeConformance && (!input.sandboxQualificationOperator?.userId ||
+      input.sandboxQualificationOperator.userId === actor.userId || input.sandboxQualificationOperator.type !== "board"))
+    throw new Error("conversation_software_host_distinct_qualification_operator_required");
   return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId,
+    ...(input.sandboxQualificationOperator ? { sandboxQualificationOperator: input.sandboxQualificationOperator } : {}),
     providerProfileRef, providerSnapshotHash, assertCurrent });
 }
 export type ManagedSandboxProviderRegistration = Awaited<ReturnType<typeof registerManagedSandboxProvider>>;
@@ -454,7 +563,7 @@ export type ManagedSandboxProviderRegistration = Awaited<ReturnType<typeof regis
 async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInput, fixtureImageNode: string) {
   const registration = input.preparedRegistration ?? await registerManagedSandboxProvider(input);
   const { hostKeys, host, cell, environment, conversationHostCapacity, payerUserId,
-    providerProfileRef, providerSnapshotHash } = registration;
+    sandboxQualificationOperator, providerProfileRef, providerSnapshotHash } = registration;
   // Existing single-Agent callers still install their canonical profile here.
   // Pre-registered two-Agent callers must already have sealed this exact tuple.
   if (!input.preparedRegistration) {
@@ -486,6 +595,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
     },
   });
   const makeConnection=async(kind:"canary"|"runtime",secretId:string)=>{
+    const connectionOwnerUserId = kind === "canary" ? sandboxQualificationOperator?.userId ?? payerUserId : payerUserId;
     const applicationKey=`conversation-${kind}-${randomUUID().replace(/-/g,"")}`;
     const [application]=await db.insert(toolApplications).values({companyId,applicationKey,name:`Conversation ${kind} fixture ${applicationKey}`,type:"mcp_http",status:"active"}).returning();
     assert.ok(application);
@@ -495,13 +605,13 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
       connectionPurpose:"tool",authKind:"api_key",ownership:"customer",connectionKind:"managed",
       transport:"mcp_remote",status:"active",enabled:true,config:{url},transportConfig:{url},
       credentialRefs:[{name:"credentials.authorization",secretId,version:"latest",placement:"header",key:"Authorization",prefix:"Bearer "}],
-      credentialSecretRefs},{actorType:"user",actorId:payerUserId});
+      credentialSecretRefs},{actorType:"user",actorId:connectionOwnerUserId});
     const upstream=kind === "canary" ? "read_canary" : "read_record";
     await db.insert(toolCatalogEntries).values({companyId,applicationId:application.id,connectionId:connection.id,entryKind:"tool",
       name:`${upstream}-${randomUUID()}`,toolName:upstream,title:`Read ${kind}`,description:"Read fixed software fixture",
       inputSchema:schemas[upstream],annotations:{readOnlyHint:true},riskLevel:"read",isReadOnly:true,isWrite:false,isDestructive:false,
       status:"active",versionHash:randomUUID(),quarantinedAt:null});
-    const health=await fixtureToolAccess.checkHealth(connection.id,{actorType:"user",actorId:payerUserId});
+    const health=await fixtureToolAccess.checkHealth(connection.id,{actorType:"user",actorId:connectionOwnerUserId});
     assert.equal(health.connection.healthStatus,"ok");
     const [grant]=await db.select().from(connectionGrants).where(and(eq(connectionGrants.companyId,companyId),
       eq(connectionGrants.connectionId,connection.id),eq(connectionGrants.status,"active"),eq(connectionGrants.isDefault,true))).limit(1);
@@ -516,11 +626,25 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
   await db.insert(toolProfileBindings).values({companyId,profileId:runtimeToolProfile.id,targetType:"agent",targetId:agentId});
   await db.insert(toolProfileEntries).values({companyId,profileId:runtimeToolProfile.id,selectorType:"tool_name",effect:"include",toolName:runtimeConnection.toolName});
   const [runtimePresence]=await db.select({id:agentPresenceRuntimeBindings.id}).from(agentPresenceRuntimeBindings).where(and(
-    eq(agentPresenceRuntimeBindings.companyId,companyId),eq(agentPresenceRuntimeBindings.agentId,agentId),eq(agentPresenceRuntimeBindings.status,"active"))).limit(1);
+    eq(agentPresenceRuntimeBindings.companyId,companyId),eq(agentPresenceRuntimeBindings.agentId,agentId),
+    input.nativeOpenCodeConformance
+      ? and(eq(agentPresenceRuntimeBindings.providerBindingId, input.profile.providerBindingId),
+        inArray(agentPresenceRuntimeBindings.status, ["degraded", "active"]))
+      : eq(agentPresenceRuntimeBindings.status,"active"))).limit(1);
   assert.ok(runtimePresence);
   const providerPackRoot = process.env.PAPERCLIP_RUNNER_REMOTE_PROVIDER_PACK_PATH?.trim();
   if (!providerPackRoot || !lstatSync(providerPackRoot).isDirectory())
     throw new Error("conversation_software_host_provider_pack_image_missing");
+  // Build the fixture image only from the same manifest and file verifier used
+  // by the real Native runner. A directory with a plausible binary is not an
+  // image prerequisite; the complete pack, pins, artifact hashes, and dist
+  // tree must match before it is made discoverable to remote preparation.
+  const providerPackManifest = readRemoteProviderPackManifest(providerPackRoot);
+  if (providerPackManifest.payload.target.platform !== process.platform ||
+      providerPackManifest.payload.target.architecture !== process.arch ||
+      providerPackManifest.payload.artifacts.opencodeExecutable.sha256 !==
+        `sha256:${MANAGED_NATIVE_OPENCODE_IMAGE_PIN.sha256}`)
+    throw new Error("conversation_software_host_provider_pack_image_pin_mismatch");
   const providerImageHome = mkdtempSync(join(tmpdir(), "paperclip-managed-provider-image-"));
   const preinstalledPack = join(providerImageHome, ".local", "share", "paperclip-runner", "provider-pack");
   mkdirSync(join(providerImageHome, ".local", "share", "paperclip-runner"), { recursive: true, mode: 0o700 });
@@ -537,7 +661,7 @@ async function installManagedSandboxInfrastructure(input: ManagedSandboxHostInpu
     assert.notEqual(canary.grant.id, runtimeConnection.grant.id);
     return { canary, canarySecretValue };
   };
-  return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode,
+  return Object.freeze({ hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode, sandboxQualificationOperator,
     runtimeConnection, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue,
     assertInstalledProfileCurrent: () => registration.assertCurrent(input, input.profile),
     restoreEnvironment: () => {
@@ -566,11 +690,12 @@ function reserveSerialHostAdmission<Host>(admissions: Map<string, SerialHostAdmi
 }
 
 function authenticateSerialModelRequest(authorization: string | undefined,
-  scope: { companyId: string; agentId: string; runId?: string; capabilityToken?: string }) {
+  scope: { companyId: string; agentId: string; runId?: string; capabilityToken?: string; providerConformance?: true }) {
   const match = typeof authorization === "string" ? /^Bearer\s+(\S+)$/i.exec(authorization) : null;
   const token = match?.[1];
-  const claims = token ? verifyRuntimeToolsToken(token, "worker_model") : null;
-  if (!token || !claims || !claims.worker_model || claims.company_id !== scope.companyId || claims.sub !== scope.agentId ||
+  const claims = token ? verifyRuntimeToolsToken(token, scope.providerConformance ? "provider_conformance" : "worker_model") : null;
+  if (!token || !claims || (scope.providerConformance ? !claims.provider_conformance : !claims.worker_model) ||
+      claims.company_id !== scope.companyId || claims.sub !== scope.agentId ||
       (scope.runId !== undefined && claims.run_id !== scope.runId) ||
       (scope.capabilityToken !== undefined && nativeSha256(token) !== nativeSha256(scope.capabilityToken)))
     throw Object.assign(new Error("scheduler_software_host_incoming_model_authority_invalid"), {
@@ -581,7 +706,7 @@ function authenticateSerialModelRequest(authorization: string | undefined,
 }
 
 function serialModelAdmission<Host>(authorization: string | undefined,
-  scope: { companyId: string; agentId: string }, admissions: ReadonlyMap<string, { closed: boolean; host?: Host }>) {
+  scope: { companyId: string; agentId: string; providerConformance?: true }, admissions: ReadonlyMap<string, { closed: boolean; host?: Host }>) {
   // Authentication precedes selecting a server-side provider/context. An
   // SDK placeholder, raw body Run, or sole live attachment grants nothing.
   const authenticated = authenticateSerialModelRequest(authorization, scope);
@@ -603,11 +728,21 @@ export async function configureManagedSerialSchedulerSandboxHost(
 ) {
   // A Project tuple is checked for each actual Run by configureManagedSandboxRun;
   // serial admission still binds exact Run/lease and retires the predecessor Host.
-  const fixtureImageNode = await preflightManagedSandboxInput({ ...input, ordinaryWorker: true });
+  if (input.nativeOpenCodeConformance && (!input.preparedRegistration || input.ordinaryWorkerProject))
+    throw new Error("conformance_software_host_requires_exact_registered_presence");
+  const fixtureImageNode = await preflightManagedSandboxInput(input.nativeOpenCodeConformance
+    ? input : { ...input, ordinaryWorker: true });
   const infrastructure = await installManagedSandboxInfrastructure(input, fixtureImageNode);
   type Host = Awaited<ReturnType<typeof configureManagedSandboxRun>>;
   type Admission = SerialHostAdmission<Host>;
   const hostAdmissionByRun = new Map<string, Admission>();
+  const preparedHostsByRun = new Map<string, Host>();
+  // The conformance cell's real signed Host and base boundary are qualified
+  // before the first hidden Run is minted. The first exact Run then adopts
+  // this prepared owner; later Runs receive fresh per-run Host closures.
+  let prequalifiedConformanceHost: Host | null = input.nativeOpenCodeConformance
+    ? await configureManagedSandboxRun({ ...input, root: join(input.root, "scheduler-hosts", "prequalified") }, infrastructure, true)
+    : null;
   let transition = Promise.resolve();
   let closing = false;
   const exactAdmission = async (runId: string, leaseId: string) => {
@@ -627,9 +762,14 @@ export async function configureManagedSerialSchedulerSandboxHost(
       const [lease] = await input.db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, input.companyId),
         eq(environmentLeases.id, leaseId), eq(environmentLeases.heartbeatRunId, runId),
         eq(environmentLeases.environmentId, infrastructure.environment.id))).limit(1);
-      if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.responsibleUserId !== input.actor.userId ||
-          !lease || lease.status !== "active" || !lease.expiresAt || lease.expiresAt <= new Date())
+      if (input.nativeOpenCodeConformance) {
+        await assertFixtureNativeOpenCodeConformance(input, runId, leaseId);
+        if (!lease || lease.status !== "active" || !lease.expiresAt || lease.expiresAt <= new Date())
+          throw new Error("scheduler_software_host_current_run_lease_required");
+      } else if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.responsibleUserId !== input.actor.userId ||
+          !lease || lease.status !== "active" || !lease.expiresAt || lease.expiresAt <= new Date()) {
         throw new Error("scheduler_software_host_current_run_lease_required");
+      }
       await infrastructure.assertInstalledProfileCurrent();
       for (const [previousRunId, previous] of priorAdmissions) {
         if (previousRunId === runId || previous.closed) continue;
@@ -640,8 +780,12 @@ export async function configureManagedSerialSchedulerSandboxHost(
         await prior.close();
         previous.closed = true;
       }
-      const host = await configureManagedSandboxRun({ ...input, ordinaryWorker: true, ordinaryWorkerRunId: runId,
+      const host = preparedHostsByRun.get(runId) ?? prequalifiedConformanceHost ?? await configureManagedSandboxRun({ ...input,
+        ...(input.nativeOpenCodeConformance ? { nativeOpenCodeConformance: true as const }
+          : { ordinaryWorker: true as const, ordinaryWorkerRunId: runId }),
         root: join(input.root, "scheduler-hosts", runId, leaseId) }, infrastructure, true);
+      prequalifiedConformanceHost = null;
+      preparedHostsByRun.delete(runId);
       hostAdmissionByRun.get(runId)!.host = host;
       return host;
     });
@@ -649,6 +793,25 @@ export async function configureManagedSerialSchedulerSandboxHost(
     // setup/qualification invisibly after partial effects on the same key.
     transition = entry.promise.then(() => undefined, () => undefined);
     return await entry.promise;
+  };
+  const prepareNativeOpenCodeConformanceRun = async (actor: AuthorizationActor, bootstrap: {
+    companyId: string; runId: string; taskId: string; planId: string; groupId: string; manifestId: string;
+    manifestHash: string; leaseId: string; workspaceRoot: string; creationReceipt: string;
+  }) => {
+    if (!input.nativeOpenCodeConformance || bootstrap.companyId !== input.companyId ||
+        input.preparedRegistration?.sandboxQualificationOperator?.userId === actor.userId)
+      throw new Error("conformance_software_host_prepare_owner_scope_changed");
+    let host = preparedHostsByRun.get(bootstrap.runId) ?? prequalifiedConformanceHost;
+    if (!host) host = await configureManagedSandboxRun({ ...input,
+      nativeOpenCodeConformance: true as const,
+      root: join(input.root, "scheduler-hosts", bootstrap.runId, bootstrap.leaseId) }, infrastructure, true);
+    const prepared = await host.prepareNativeOpenCodeConformanceRun(actor, bootstrap);
+    // Failed or mutated bootstrap attempts retain the same prequalified Host
+    // owner, so the fixture does not create setup effects before production
+    // admission rejects their scope.
+    if (prequalifiedConformanceHost === host) prequalifiedConformanceHost = null;
+    preparedHostsByRun.set(bootstrap.runId, host);
+    return prepared;
   };
   const currentAdmission = async (runId: string, leaseId: string) => {
     const entry = hostAdmissionByRun.get(runId);
@@ -679,6 +842,10 @@ export async function configureManagedSerialSchedulerSandboxHost(
       return await (await exactAdmission(command.runId, command.leaseId)).sandboxExec(command);
     }) satisfies Host["sandboxExec"],
     environmentRuntime,
+    prepareNativeOpenCodeConformanceRun,
+    configuredSandboxOperatorUserIds: () => [...new Set([
+      ...preparedHostsByRun.values(), ...(prequalifiedConformanceHost ? [prequalifiedConformanceHost] : []),
+    ].flatMap(host => host.configuredSandboxOperatorUserIds()))],
     beforeNativeExecution: (async args => {
       const leases = await input.db.select({ id: environmentLeases.id }).from(environmentLeases).where(and(
         eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.heartbeatRunId, args.runId),
@@ -690,7 +857,8 @@ export async function configureManagedSerialSchedulerSandboxHost(
       throw new Error("scheduler_software_host_incoming_model_authority_required");
     },
     modelRequestAuthenticated: async (body: unknown, signal: AbortSignal, authorization: string | undefined) => {
-      const { host } = serialModelAdmission(authorization, input, hostAdmissionByRun);
+      const { host } = serialModelAdmission(authorization, { ...input,
+        ...(input.nativeOpenCodeConformance ? { providerConformance: true as const } : {}) }, hostAdmissionByRun);
       return await host.modelRequestAuthenticated(body, signal, authorization);
     },
     attestModelProxyClient: async (client: Socket) => {
@@ -744,6 +912,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     return policy;
   };
   const brokerOrigin = new URL(input.brokerOrigin).origin;
+  const nativeConformanceMode = input.nativeOpenCodeConformance === true;
   const ordinaryWorkerMode = input.ordinaryWorker === true || input.ordinaryWorkerRunId !== undefined;
   let sealedExecutionInputHash: string | null = null;
   const assertOrdinaryWorker = async (runId: string) => {
@@ -859,8 +1028,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       purposeByRequestId.delete(request.requestId);
     }
   };
-  const { hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode,
+  const { hostKeys, host, cell, environment, conversationHostCapacity, payerUserId, fixtureImageNode, sandboxQualificationOperator,
     runtimeConnection, runtimePresence, createCanary, providerImageHome, fixtureToolAccess, runtimeSecretValue } = infrastructure;
+  const baseQualificationActor = nativeConformanceMode ? sandboxQualificationOperator : actor;
+  if (!baseQualificationActor?.userId) throw new Error("conversation_software_host_base_qualification_operator_missing");
   // Every closure receives a fresh setup-only canary, never a revoked prior grant.
   // Qualification-only canary and the stable runtime connection have separate
   // grants. Requalification creates a new canary without changing Agent tools.
@@ -873,7 +1044,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const qualificationToolResponses:Array<{caseId:string;status:number;reasonCode:string|null;marker:string|null;replayDenied?:boolean}>=[];
   const hostCapabilityObservations:Array<Record<string,unknown>>=[];
   const hostLifecycleObservations:Array<Record<string,unknown>>=[];
-  const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[payerUserId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:"conversation-software-canary",
+  const gatewayOptions:Parameters<typeof createToolGatewayService>[1]={operatorUserIds:[baseQualificationActor.userId],qualificationBrokerOrigin:brokerOrigin,toolActionSigningSecret:"conversation-software-canary",
     remoteHttpRequest:async(url,init)=>{
       if (url !== `${brokerOrigin}/mcp/qualification/credential-echo` && input.assignedToolGatewayHttpRequest)
         return input.assignedToolGatewayHttpRequest(url, init);
@@ -1011,7 +1182,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
 
   const identity: SandboxIdentity = { companyId, bindingId: randomUUID(), cellId: cell.id,
     cellGeneration: cell.generation.toString(), sandboxRef: `aw-v7-${cell.id}` };
-  const transport = nativeSandboxHostTransport(db, { operatorUserIds: [actor.userId!] });
+  const transport = nativeSandboxHostTransport(db, { operatorUserIds: [baseQualificationActor.userId] });
   const capabilities = (): SandboxCapabilitySnapshot => lastHostCapabilities ?? {
     filesystemPolicy: false, processPrivilegePolicy: false, syscallPolicy: false,
     networkDestinationPolicy: false, networkLayer7Policy: false, credentialBrokering: false,
@@ -1044,10 +1215,11 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       responsibleUserId: run.responsibleUserId, presenceId: presence.id,
       bindings: policy.compiledPolicy.credentials.bindings });
   };
-  const service = executionSandboxService(db, { operatorUserIds: [actor.userId!], credentialBrokerOrigin: brokerOrigin,
+  const sandboxOperatorUserIds = [baseQualificationActor.userId];
+  const service = executionSandboxService(db, { operatorUserIds: sandboxOperatorUserIds, credentialBrokerOrigin: brokerOrigin,
     assertRuntimeStartAdmission: (tx, start) => runtime.assertSandboxStartAdmission(tx, start),
     recordRuntimeWorkloadState: (tx, stateChange) => runtime.recordSandboxWorkloadState(tx, stateChange),
-    backendFor: (currentBinding, currentActor) => {
+    backendFor: (currentBinding, currentActor, conformance) => {
       const executable = process.env.AW_V7_OPENSHELL_PROVER ??
         "/workspace/v10-preparation/tools/openshell-prover-v0.1.2/openshell-prover";
       const executableSha256 = "3e80c0d041a7552d57cc338868bc825a6261e21b5f29a7d7527bcc7926d423f1";
@@ -1058,7 +1230,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           cellId: currentBinding.runtimeCellId, cellGeneration: currentBinding.cellGeneration,
           sandboxRef: currentBinding.sandboxRef ?? `aw-v7-${currentBinding.id}` },
         boundary: currentBinding.boundaryPolicy,
-        bridge: transport.bridge(currentActor), evidenceKind: "protected_host_report",
+        bridge: transport.bridge(currentActor, conformance), evidenceKind: "protected_host_report",
         prover: { executable, executableSha256 },
         credentialBrokerDatabase: db, credentialBrokerOrigin: brokerOrigin,
         resolveCredentialBrokerBindings: resolveCurrentCredentialBrokerBindings,
@@ -1788,6 +1960,19 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       if (!run || run.responsibleUserId !== actor.userId || !authority || authority.version !== 1 ||
           authority.executionInputHash !== sealedExecutionInputHash || nativeSha256(profile?.nativeExecutionInput) !== sealedExecutionInputHash)
         throw new Error("serial_model_original_artifact_owner_missing");
+      if (nativeConformanceMode) {
+        const context = run.contextSnapshot && typeof run.contextSnapshot === "object"
+          ? run.contextSnapshot as Record<string, any> : {};
+        const tuple = context.nativeOpenCodeConformanceDispatch;
+        if (!tuple || Object.keys(tuple).sort().join(",") !==
+            ["authorityHash", "dispatchNonce", "planId", "probeId", "profileId", "qualificationGroupId"].sort().join(",") ||
+            tuple.qualificationGroupId !== context.providerConformanceGroupId ||
+            tuple.planId !== context.providerConformancePlanId || tuple.profileId !== context.nativeOpenCodeConformanceProfileId ||
+            tuple.probeId !== context.nativeOpenCodeConformanceProbeId ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tuple.dispatchNonce ?? "") ||
+            !/^[a-f0-9]{64}$/.test(tuple.authorityHash ?? ""))
+          throw new Error("serial_model_conformance_dispatch_tuple_missing_at_launch");
+      }
       return structuredClone(immutableModelAuthority(authority));
     };
     const authority = await read(), artifactAuthority = authority.artifactAuthority as Record<string, any> | undefined;
@@ -2472,8 +2657,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     };
   };
   const createBindingForRun=async(credentialBinding: typeof runtimeBrokerBinding, exactTaskRoot: string)=>{
-    binding = await service.create(actor, companyId, { runtimeCellId: cell.id,
-    expectedCellGeneration: cell.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy: (() => {
+    const boundaryPolicy = (() => {
       const boundary = policyFixture(); boundary.riskClass = "C3"; boundary.requiredControls = [...conversationRequiredControls];
       // Each fixture has one server-derived maximum: the chat namespace or
       // the exact ordinary Worker's canonical Agent home. Per-run compilation
@@ -2482,7 +2666,25 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       boundary.filesystem.writePaths = [exactTaskRoot];
       boundary.process.allowedBinaries = []; boundary.process.allowedSyscalls = [];
       boundary.network.destinations = []; boundary.credentials={mode:"brokered",bindings:[credentialBinding]}; return boundary;
-    })() });
+    })();
+    const [retained] = await db.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.runtimeCellId, cell.id),
+      eq(runtimeSandboxBindings.cellGeneration, cell.generation.toString()))).limit(1);
+    // The broker grant hash includes the Run. Keep the original maximum
+    // unchanged; a later credentialless policy cannot exercise that old grant.
+    const currentCredentials = policyFixture().credentials;
+    const credentiallessReuse = currentCredentials.mode === "none" && currentCredentials.bindings.length === 0 && retained &&
+      nativeSha256({ ...retained.boundaryPolicy.credentials,
+        bindings: retained.boundaryPolicy.credentials.bindings.map(({ grantVersionHash: _hash, ...binding }) => binding) }) ===
+      nativeSha256({ ...boundaryPolicy.credentials,
+        bindings: boundaryPolicy.credentials.bindings.map(({ grantVersionHash: _hash, ...binding }) => binding) });
+    const comparableBoundary = credentiallessReuse
+      ? { ...boundaryPolicy, credentials: retained.boundaryPolicy.credentials } : boundaryPolicy;
+    if (retained && (retained.status !== "stopped" || retained.backend !== "openshell" || retained.profile !== "development" ||
+        retained.boundaryPolicyHash !== nativeSha256(comparableBoundary) || retained.createdByUserId !== actor.userId))
+      throw new Error("scheduler_retained_sandbox_binding_changed");
+    binding = retained ?? await service.create(actor, companyId, { runtimeCellId: cell.id,
+      expectedCellGeneration: cell.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy });
   const actualIdentity: SandboxIdentity = { ...identity, bindingId: binding.id, sandboxRef: binding.sandboxRef ?? `aw-v7-${binding.id}` };
   await db.update(runtimeCells).set({ providerBindingId }).where(eq(runtimeCells.id, cell.id));
   // Keep the original bridge identity pinned to the durable binding.
@@ -2822,10 +3024,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     return output.value;
   };
   let qualificationEvidence:Record<string,unknown>|null=null;
-  const qualifyHost=async()=>{
+  const qualifyHost=async(qualificationActor: AuthorizationActor = actor)=>{
   qualificationTargetProbeActive=true;
   let qualification: Awaited<ReturnType<typeof service.qualify>>;
-  try { qualification = await driveHost(service.qualify(actor, companyId, binding.id, 1)); }
+  try { qualification = await driveHost(service.qualify(qualificationActor, companyId, binding.id, binding.version)); }
   finally { qualificationTargetProbeActive=false; }
     const [report] = qualification.qualificationRunId ? await db.select({ status: sandboxQualificationRuns.status,
       suiteVersion: sandboxQualificationRuns.suiteVersion, evidenceKind: sandboxQualificationRuns.evidenceKind,
@@ -2852,6 +3054,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     if(qualification.status !== "ready")throw new Error(`conversation_software_host_qualification_failed:${report?.status ?? "missing"}:`+
       `${results.filter(result=>result.verdict !== "pass" || !result.observationHashPresent || !result.contractHashMatches || !result.targetHashMatches)
         .map(result=>result.caseId).join(",")}:${exceptions.join(",")}`);
+    binding = qualification;
     assert.equal(results.length,19);assert.equal(new Set(results.map(result=>result.caseId)).size,19);
     const failedProbeCaseIds=results.filter(result=>result.verdict !== "pass" || !result.observationHashPresent || !result.targetHashMatches)
       .map(result=>result.caseId);
@@ -2960,6 +3163,24 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       await heartbeatHost();
       const result = await runtime.executeSandboxTask(execInput);
       if (!result) return null;
+      if (nativeConformanceMode && execInput.nativePreparationPurpose === "native_session_start" &&
+          result.exitCode === 0 && !result.timedOut) {
+        const [startedRun] = await db.select({ contextSnapshot: heartbeatRuns.contextSnapshot })
+          .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+            eq(heartbeatRuns.id, execInput.runId), eq(heartbeatRuns.agentId, agentId))).limit(1);
+        const context = startedRun?.contextSnapshot && typeof startedRun.contextSnapshot === "object"
+          ? startedRun.contextSnapshot as Record<string, any> : {};
+        const tuple = context.nativeOpenCodeConformanceDispatch;
+        if (!tuple || Object.keys(tuple).sort().join(",") !==
+            ["authorityHash", "dispatchNonce", "planId", "probeId", "profileId", "qualificationGroupId"].sort().join(",") ||
+            tuple.qualificationGroupId !== context.providerConformanceGroupId ||
+            tuple.planId !== context.providerConformancePlanId || tuple.profileId !== context.nativeOpenCodeConformanceProfileId ||
+            tuple.probeId !== context.nativeOpenCodeConformanceProbeId ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tuple.dispatchNonce ?? "") ||
+            !/^[a-f0-9]{64}$/.test(tuple.authorityHash ?? ""))
+          throw new Error("conversation_fixture_native_session_start_dispatch_tuple_missing");
+        nativeConformanceStartTupleObservations.push({ runId: execInput.runId, tuple: structuredClone(tuple) });
+      }
       if ((runnerLaunch || result.exitCode === 126 || result.timedOut) &&
           sandboxExecutionFailures.length < 16 && (result.exitCode !== 0 || result.timedOut)) {
         sandboxExecutionFailures.push({
@@ -3313,9 +3534,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   const execFacts: Array<{ executable: string; cwdExact: boolean; modelCredentialPresent: boolean;
     managedModelBrokerOriginPresent: boolean; modelBrokerSessionPhase: string | null;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
-    nativePreparationPurpose: string | null; providerPackImageProbe: boolean;
+    nativePreparationPurpose: string | null; providerPackImageProbe: boolean; providerPackImageRootMatches: boolean;
     exitCode: number | null; timedOut: boolean; erasureFailureGuard: string | null; hostSessionErrorCode: string | null;
     hostSessionErrorDetails?: SafeHostExecErrorDetails }> = [];
+  const nativeConformanceStartTupleObservations: Array<{ runId: string; tuple: Record<string, string> }> = [];
   relayHost.on("message", raw => {
     let message: Record<string, any>;
     try { message = JSON.parse(raw.toString()) as Record<string, any>; } catch { return; }
@@ -3379,13 +3601,17 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const cwd = typeof request.cwd === "string" && request.cwd.startsWith("/") ? request.cwd : input.root;
     const assignedMcpEnvironmentAbsent = !requestEnv.PAPERCLIP_NATIVE_MCP_NAME &&
       !requestEnv.PAPERCLIP_NATIVE_MCP_URL && !requestEnv.PAPERCLIP_NATIVE_MCP_TOKEN;
-    const providerPackImageProbe = nativePreparationPurpose === "provider_artifact" && argv[0] === "sh" &&
-      typeof argv[2] === "string" && argv[2].includes("$HOME/.local/share/paperclip-runner/provider-pack");
+    const expectedProviderPackImageRoot = join(providerImageHome, ".local", "share", "paperclip-runner", "provider-pack");
+    const providerPackImageProbe = nativePreparationPurpose === "provider_artifact" && argv.length === 5 &&
+      (argv[0] === "sh" || argv[0] === "/bin/sh") && argv[1] === "-c" &&
+      argv[2] === NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT &&
+      argv[3] === "paperclip-managed-provider-pack";
+    const providerPackImageRootMatches = providerPackImageProbe && argv[4] === expectedProviderPackImageRoot;
     const fact = { executable: argv[0] ?? "", cwdExact: cwd === expectedTaskRoot, modelCredentialPresent,
       managedModelBrokerOriginPresent: requestEnv.PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN === brokerOrigin,
       modelBrokerSessionPhase: typeof request.modelBrokerSession?.phase === "string" ? request.modelBrokerSession.phase : null,
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
-      nativePreparationPurpose, providerPackImageProbe,
+      nativePreparationPurpose, providerPackImageProbe, providerPackImageRootMatches,
       exitCode: null as number | null, timedOut: false, erasureFailureGuard: null as string | null,
       hostSessionErrorCode: null as string | null, hostSessionErrorDetails: undefined as SafeHostExecErrorDetails | undefined };
     execFacts.push(fact);
@@ -3420,11 +3646,24 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       launchModelRunnerId === launchRunnerId &&
       launchSessionDigest === launchPath.split("/").at(-3) &&
       sessionPhase === "start" && cwd === expectedTaskRoot && expectedRunId !== null);
-    const identityRead = requestLabel === "paperclip-runner-process-identity" &&
+    const ordinaryWorkerIdentityRead = ordinaryWorkerMode && nativePreparationPurpose === null &&
+      requestLabel === "paperclip-runner-process-identity" && requestArgv.length === 5 &&
       requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
-      typeof requestArgv[4] === "string" && nativePreparationPurpose === "native_harness_state" && cwd === expectedTaskRoot;
+      requestArgv[2] === 'test -f "$1" && test ! -L "$1" && cat -- "$1"' &&
+      typeof nativeRunnerClosureWitness?.identityPath === "string" && requestArgv[4] === nativeRunnerClosureWitness.identityPath &&
+      cwd === expectedTaskRoot;
+    const identityRead = requestLabel === "paperclip-runner-process-identity" && requestArgv.length === 5 &&
+      requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
+      requestArgv[2] === 'test -f "$1" && test ! -L "$1" && cat -- "$1"' &&
+      typeof requestArgv[4] === "string" && cwd === expectedTaskRoot &&
+      (nativePreparationPurpose === "native_harness_state" || ordinaryWorkerIdentityRead);
+    const ordinaryWorkerMonitor = ordinaryWorkerMode && nativePreparationPurpose === null &&
+      (sessionPhase === "refresh" ? managedModelOriginMatches && Boolean(request.modelBrokerCredential) :
+        sessionPhase === "stop" ? exactSessionStop && !request.modelBrokerCredential && !request.brokerCredential && noCredentialEnvironment : false);
     const monitorOperation = requestLabel === "paperclip-runner-monitor" && requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
-      requestArgv[2] === REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT && typeof requestArgv[4] === "string";
+      requestArgv[2] === REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT && requestArgv.length === 8 &&
+      typeof requestArgv[4] === "string" && cwd === expectedTaskRoot &&
+      (nativePreparationPurpose === "native_harness_state" || ordinaryWorkerMonitor);
     const identityOutput: Buffer[] = [];
     let identityOutputBytes = 0;
     let streamStarted = false;
@@ -3513,7 +3752,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             request.modelBrokerSession?.leaseId === witness.leaseId &&
             request.modelBrokerSession?.sessionDeadlineAt === witness.sessionDeadlineAt &&
             request.modelBrokerSession?.expectedCapabilityHash === witness.expectedCapabilityHash &&
-            nativePreparationPurpose === "native_harness_state";
+            (nativePreparationPurpose === "native_harness_state" || ordinaryWorkerMonitor);
           if (argsMatch && request.modelBrokerSession?.phase === "refresh" && result.exitCode === 0 && !result.timedOut &&
               witness.identityMatched) {
             const [run] = expectedRunId === witness.runId
@@ -3630,7 +3869,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       throw new Error("conversation_software_host_native_run_binding_invalid");
     const runContext = run.contextSnapshot && typeof run.contextSnapshot === "object"
       ? run.contextSnapshot as Record<string, unknown> : {};
-    const issueId = typeof runContext.issueId === "string" ? runContext.issueId : null;
+    const issueId = nativeConformanceMode ? run.nativeIssueId
+      : typeof runContext.issueId === "string" ? runContext.issueId : null;
     if (!issueId || issueId !== run.nativeIssueId)
       throw new Error("conversation_software_host_issue_binding_invalid");
     if (expectedIssueId !== null && expectedIssueId !== issueId)
@@ -3642,10 +3882,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       "conversationSessionGeneration" in run.contextSnapshot &&
       typeof run.contextSnapshot.conversationSessionGeneration === "number"
         ? run.contextSnapshot.conversationSessionGeneration : null;
-    const scope = await findNativeChatWorkspaceScope(db, { adapterType: "paperclip_runner", environmentDriver: "sandbox",
-      companyId, agentId, issueId, runId, responsibleUserId: run?.responsibleUserId,
-      conversationSessionGeneration: conversationGeneration });
-    let taskRoot = scope && scope.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
+    const scope = nativeConformanceMode ? null : await findNativeChatWorkspaceScope(db, {
+      adapterType: "paperclip_runner", environmentDriver: "sandbox", companyId, agentId, issueId, runId,
+      responsibleUserId: run?.responsibleUserId, conversationSessionGeneration: conversationGeneration });
+    let taskRoot = nativeConformanceMode ? null : scope && scope.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
     if (ordinaryWorkerMode) {
       const workerRun = await assertOrdinaryWorker(runId);
       if (scope) throw new Error("worker_software_host_workspace_owner_changed");
@@ -3683,8 +3923,37 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         return root;
       });
     }
+    if (nativeConformanceMode) {
+      const conformance = await assertFixtureNativeOpenCodeConformance(input, runId, expectedLeaseId);
+      const expectedExecution = conformance.execution;
+      if (scope || expectedExecution.provider?.kind !== "opencode" ||
+          expectedExecution.workspace?.cwd !== conformance.workspace.remoteCwd ||
+          expectedExecution.binding?.executionWorkspaceId !== conformance.workspace.workspaceId ||
+          conformance.workspace.taskRoot !== conformance.workspace.localCwd)
+        throw new Error("conformance_software_host_workspace_binding_invalid");
+      taskRoot = expectedExecution.workspace.cwd;
+    }
     if (!taskRoot) throw new Error("conversation_software_host_private_task_root_missing");
     expectedTaskRoot = taskRoot;
+    if (nativeConformanceMode) {
+      preparationStage = "verify_prequalified_conformance_host";
+      const conformance = await assertFixtureNativeOpenCodeConformance(input, runId, expectedLeaseId);
+      const [currentBinding] = await db.select().from(runtimeSandboxBindings).where(and(
+        eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, binding.id),
+        eq(runtimeSandboxBindings.runtimeCellId, cell.id),
+        eq(runtimeSandboxBindings.cellGeneration, cell.generation.toString()))).limit(1);
+      if (!currentBinding || !["ready", "running"].includes(currentBinding.status) || currentBinding.backend !== "openshell" ||
+          currentBinding.createdByUserId !== baseQualificationActor.userId || currentBinding.boundaryPolicy.credentials.mode !== "brokered" ||
+          currentBinding.boundaryPolicy.credentials.bindings.length !== 0 ||
+          currentBinding.boundaryPolicy.filesystem.writePaths.length !== 1 ||
+          currentBinding.boundaryPolicy.filesystem.writePaths[0] !== workspaceBoundaryRoot ||
+          !currentBinding.boundaryPolicy.filesystem.readPaths.includes(workspaceBoundaryRoot) ||
+          conformance.execution.workspace?.cwd !== taskRoot || conformance.workspace.taskRoot !== conformance.workspace.localCwd)
+        throw new Error("conformance_software_host_prequalified_binding_changed");
+      binding = currentBinding;
+      preparationStage = "prepared_by_native_conformance_owner";
+      return;
+    }
     preparationStage="resolve_runtime_broker";
     const resolvedRuntimeBroker=await qualificationGateway.resolveSandboxCredentialBrokerPolicyBindings({companyId,agentId,runId,
       responsibleUserId:actor.userId!,presenceId:runtimePresence.id,bindings:[{...runtimeBrokerBinding,grantVersionHash:"0".repeat(64)}]});
@@ -3700,7 +3969,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     const candidate = structuredClone(boundary);
     candidate.network.destinations = [{ hostname: new URL(brokerOrigin).hostname,
       port: Number(new URL(brokerOrigin).port || 443), methods: ["POST"], pathPrefixes: ["/runtime-tools/model/v1/messages"] }];
-    const compiled = await service.compile(actor, companyId, binding.id, { expectedVersion: 2,
+    const compiled = await service.compile(actor, companyId, binding.id, { expectedVersion: binding.version,
       executionManifestId: manifest.id, candidatePolicy: candidate });
     if (compiled.status !== "qualified") {
       const proof = compiled.compilation as { proverResult?: unknown; failedBoundaries?: unknown; unsupportedFeatures?: unknown } | null;
@@ -3732,7 +4001,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       observedBeforeAdmission.imageDigest !== imageDigest || !observedBeforeAdmission.controlsHealthy)
       throw new Error(`conversation_software_host_pre_admission_observation_invalid_${JSON.stringify(preAdmissionObservation)}`);
     preparationStage="admit";
-    const admittedPromise = service.admit(actor, companyId, binding.id, { expectedVersion: 3, policySnapshotId: compiled.id });
+    const admittedPromise = service.admit(actor, companyId, binding.id, { expectedVersion: binding.version + 1, policySnapshotId: compiled.id });
     const admitted = await driveHost(admittedPromise);
     if (admitted.binding.status !== "running") throw new Error("conversation_software_host_workload_not_running");
     preparationStage="admitted_lease";
@@ -3888,8 +4157,13 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
         eq(environmentLeases.id, leaseId), eq(environmentLeases.heartbeatRunId, expectedRunId),
         eq(environmentLeases.environmentId, environment.id))).limit(1);
+      const leaseOutcomeMatches = nativeConformanceMode
+        ? lease?.status === (run?.status === "cancelled" && lease?.leasePolicy !== "reuse_by_environment" ? "expired" : "released") && !lease.failureReason
+        : lease?.leasePolicy === "reuse_by_environment"
+          ? lease.status === "released" && !lease.failureReason
+          : lease?.status === "expired" && lease.failureReason === "paperclip_runner_destroy_after_turn";
       if (!run || !["succeeded", "failed", "cancelled"].includes(run.status) || run.nativeProcessCleanupPending ||
-          !lease || lease.status !== "released" || lease.cleanupStatus !== "success" || !lease.releasedAt || lease.failureReason)
+          !lease || !leaseOutcomeMatches || lease.cleanupStatus !== "success" || !lease.releasedAt)
         throw new Error("scheduler_previous_run_not_settled");
       await verifyNativeCleanupRuntimeState(db, { companyId, runId: expectedRunId, leaseId }, lease.metadata?.remoteExecutionTermination);
       const witness = nativeRunnerClosureWitness;
@@ -3903,7 +4177,71 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         throw new Error("scheduler_previous_run_process_closure_unverified");
   };
 
+  if (nativeConformanceMode) {
+    // Establish one operator-owned physical boundary before the provider
+    // conformance Run exists. The hidden Run can only narrow this immutable
+    // namespace boundary; its internal Sandbox owner supplies the exact
+    // manifest, model-broker-only policy, and live-run admission later.
+    preparationStage = "prequalify_conformance_namespace";
+    const boundaryPolicy = policyFixture();
+    boundaryPolicy.riskClass = "C3";
+    boundaryPolicy.requiredControls = [...conversationRequiredControls];
+    boundaryPolicy.filesystem.readPaths = [...new Set([workspaceBoundaryRoot,
+      "/.openshell/runtime/openshell-sandbox", ...runtimeBrokerBinaryReadPaths])].sort();
+    boundaryPolicy.filesystem.writePaths = [workspaceBoundaryRoot];
+    boundaryPolicy.process.allowedBinaries = [];
+    boundaryPolicy.process.allowedSyscalls = [];
+    boundaryPolicy.network.destinations = [];
+    // Qualify the broker with its setup-only canary and an empty connection
+    // allowlist. The actual conformance policy narrows this to credentials:none.
+    boundaryPolicy.credentials = { mode: "brokered", bindings: [] };
+    const [retained] = await db.select().from(runtimeSandboxBindings).where(and(
+      eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.runtimeCellId, cell.id),
+      eq(runtimeSandboxBindings.cellGeneration, cell.generation.toString()))).limit(1);
+    if (retained) {
+      if (!["ready", "running", "stopped"].includes(retained.status) || retained.backend !== "openshell" ||
+          retained.createdByUserId !== baseQualificationActor.userId || retained.boundaryPolicyHash !== nativeSha256(boundaryPolicy) ||
+          retained.boundaryPolicy.credentials.mode !== "brokered" || retained.boundaryPolicy.credentials.bindings.length !== 0 ||
+          !retained.capabilitySnapshot || !retained.qualificationRunId)
+        throw new Error("conversation_software_host_conformance_namespace_changed");
+      binding = retained;
+      const [report] = await db.select({ status: sandboxQualificationRuns.status, suiteVersion: sandboxQualificationRuns.suiteVersion,
+        evidenceKind: sandboxQualificationRuns.evidenceKind, results: sandboxQualificationRuns.results,
+        exceptions: sandboxQualificationRuns.exceptions }).from(sandboxQualificationRuns).where(and(
+          eq(sandboxQualificationRuns.companyId, companyId), eq(sandboxQualificationRuns.bindingId, retained.id),
+          eq(sandboxQualificationRuns.id, retained.qualificationRunId))).limit(1);
+      if (!report || report.status !== "passed" || report.evidenceKind !== "protected_host_report")
+        throw new Error("conversation_software_host_conformance_qualification_changed");
+      qualificationEvidence = { bindingStatus: retained.status, reportStatus: report.status, suiteVersion: report.suiteVersion,
+        evidenceKind: report.evidenceKind, results: Array.isArray(report.results) ? report.results : [],
+        exceptions: Array.isArray(report.exceptions) ? report.exceptions : [], hostCapabilityObservations,
+        softwareProbeObservations, credentialProbeResponses: qualificationToolResponses.map(({caseId,status,reasonCode,replayDenied}) =>
+          ({caseId,status,reasonCode,replayDenied:replayDenied ?? null})), hostFailureCodes: [] };
+    } else {
+      binding = await service.create(baseQualificationActor, companyId, { runtimeCellId: cell.id,
+        expectedCellGeneration: cell.generation.toString(), backend: "openshell", profile: "development", boundaryPolicy });
+    }
+    identity.bindingId = binding.id;
+    identity.sandboxRef = binding.sandboxRef ?? `aw-v7-${binding.id}`;
+    await db.update(runtimeCells).set({ providerBindingId }).where(eq(runtimeCells.id, cell.id));
+    await initializeSessionHostEngine();
+    if (!retained) {
+      preparationStage = "qualify_conformance_namespace";
+      await qualifyHost(baseQualificationActor);
+    }
+    if (!["ready", "running", "stopped"].includes(binding.status) || binding.boundaryPolicy.credentials.mode !== "brokered" ||
+        binding.boundaryPolicy.credentials.bindings.length !== 0)
+      throw new Error("conversation_software_host_conformance_namespace_not_qualified");
+    // The fixture's setup Human qualifies the physical boundary above. The
+    // hidden conformance Run is executed as its ordinary Human owner, who is
+    // deliberately absent from this Sandbox service's configured-operator
+    // list. Only the exact private bootstrap method can admit that Run.
+    sandboxOperatorUserIds.splice(0, sandboxOperatorUserIds.length);
+  }
+
   return {
+    prepareNativeOpenCodeConformanceRun: service.prepareNativeOpenCodeConformanceRun,
+    configuredSandboxOperatorUserIds: () => [...sandboxOperatorUserIds],
     leaseExpiryForRun: (runStartedAt: Date, callerDeadlineAt: Date) => {
       const runStartedAtMs = runStartedAt instanceof Date ? runStartedAt.getTime() : Number.NaN;
       const callerDeadlineAtMs = callerDeadlineAt instanceof Date ? callerDeadlineAt.getTime() : Number.NaN;
@@ -3973,7 +4311,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     modelRequestAuthenticated: async (body: unknown, signal: AbortSignal, authorization: string | undefined) => {
       const provider = await verifiedModelProvider();
       const authenticated = authenticateSerialModelRequest(authorization, { companyId, agentId,
-        runId: provider.runId, capabilityToken: provider.token });
+        runId: provider.runId, capabilityToken: provider.token,
+        ...(nativeConformanceMode ? { providerConformance: true as const } : {}) });
       // Forward the incoming verified claims. The stored attachment is only
       // an equality/currentness check, never a replacement caller capability.
       const work = (): ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]> =>
@@ -4026,6 +4365,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       sandboxExecutionChecks,
       sandboxExecutionFailures,
       sandboxStageCounts,
+      nativeConformanceStartTupleObservations: [...nativeConformanceStartTupleObservations],
       execCount: execFacts.length, exactPrivateCwdCount: execFacts.filter(fact => fact.cwdExact).length,
       managedModelCredentialCount: execFacts.filter(fact => fact.modelCredentialPresent).length,
       execFacts,

@@ -1,4 +1,5 @@
 import { readSandboxBrokerAuthorityEnforcement } from "./runtime/control.js";
+import { SANDBOX_QUALIFICATION_BINDING_STATES } from "./execution-sandbox/backend.js";
 import { ToolModelEffectAdmissionError } from "./native-runtime/paid-transport-admission.js";
 import { currentResourcePolicy } from "./resource-governance.js";
 import { assertPackageExecution } from "./agent-packages/execution-gate.js";
@@ -10310,7 +10311,7 @@ export function createToolGatewayService(
         eq(runtimeHosts.status, "READY"), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.retiredAt),
       )).limit(1) : [];
       if (!binding || !cell || !host || binding.version !== input.bindingVersion ||
-        !["requested", "ready", "failed"].includes(binding.status) || binding.backend !== "openshell" ||
+        !SANDBOX_QUALIFICATION_BINDING_STATES.includes(binding.status) || binding.backend !== "openshell" ||
         (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== input.scope.sandboxRef ||
         input.target.companyId !== input.scope.companyId || input.target.bindingId !== input.scope.bindingId ||
         input.target.cellId !== input.scope.cellId || input.target.cellGeneration !== input.scope.cellGeneration ||
@@ -10435,7 +10436,7 @@ export function createToolGatewayService(
         eq(runtimeHostCommands.cellGeneration, BigInt(claim.scope.generation)), eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND),
         eq(runtimeHostCommands.status, "CLAIMED"), gt(runtimeHostCommands.deadlineAt, now),
       )).limit(1);
-      if (!cell || !binding || !host || !gateway || !hostCommand || !["requested", "ready", "failed"].includes(binding.status) ||
+      if (!cell || !binding || !host || !gateway || !hostCommand || !SANDBOX_QUALIFICATION_BINDING_STATES.includes(binding.status) ||
         (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== claim.scope.sandboxRef || Date.parse(claim.expiresAt) <= now.getTime())
         throw new ToolGatewayHttpError(409, "Qualification target is no longer current", "sandbox_qualification_target_changed");
       await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds ?? []);

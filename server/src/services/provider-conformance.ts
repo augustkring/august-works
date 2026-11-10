@@ -35,6 +35,13 @@ export function providerConformanceService(db: Db) {
         .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).limit(1);
       if (draftCandidate?.adapterType === "paperclip_runner" && draftCandidate.adapterConfig.provider === "aw_text_only")
         return installedNativeDraftConformance(db).test(actor, companyId, agentId, input);
+      // Managed Native OpenCode bootstrap has its own current-Human, Host, lease,
+      // model-profile, grant and tool-free evidence owner. Dispatch it before the
+      // generic legacy paid-transport gate; the gate itself stays unchanged.
+      if (draftCandidate?.adapterType === "paperclip_runner" && draftCandidate.adapterConfig.provider === "opencode") {
+        const { installedNativeOpenCodeConformance } = await import("./native-opencode-conformance.js");
+        return installedNativeOpenCodeConformance(db).test(actor, companyId, agentId, input);
+      }
       // This endpoint runs paid model probes. Non-paid discovery/configuration
       // and independently operated provider lifecycle APIs remain separate.
       try {

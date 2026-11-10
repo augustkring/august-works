@@ -16,6 +16,8 @@ import {
 } from "./runtime-context.js";
 
 export interface CodexNativeSessionBackendOptions {
+  /** Trusted system frame for a server-validated OpenCode conformance turn. */
+  opencodeSystemInstructions?: string;
   /** Effective provider environment, including the assigned workspace boundary. */
   environment?: NodeJS.ProcessEnv;
   /** Filesystem that authoritatively admits the workspace path. */
@@ -138,7 +140,9 @@ function createTransportBackedNativeSessionBackend(
         input.provider.kind === "codex"
           ? (input.provider.approvalPolicy ?? "never")
           : "never",
-      baseInstructions: nativeSystemInstructions(input),
+      baseInstructions: input.provider.kind === "opencode"
+        ? (options.opencodeSystemInstructions ?? nativeSystemInstructions(input))
+        : nativeSystemInstructions(input),
       includeSkillInstructions: isCodex && "runtimeContext" in input,
       skillInputs: isCodex
         ? nativeTaskSkillInputs(

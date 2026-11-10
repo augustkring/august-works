@@ -3403,12 +3403,17 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
     isDeepStrictEqual(prefix.policy, policy.data) &&
     !prefix.inputs.some(source => source.kind === "worker_model_dispatch" || source.kind === "conversation_model_dispatch") &&
     isDeepStrictEqual(prefix.inputs, inputs.data));
+  // A retained session carries complete acknowledged dispatch entries, including
+  // their model marker. Keep exact receipt membership here; the marker's wire
+  // intent and completed reservation are still checked below with every source.
+  const matchingCompleteDispatches = receipt.data.dispatches.filter(prefix =>
+    isDeepStrictEqual(prefix.policy, policy.data) && isDeepStrictEqual(prefix.inputs, inputs.data));
   const bootstrapMatches = isDeepStrictEqual(receipt.data.bootstrap.policy, policy.data) &&
     isDeepStrictEqual(receipt.data.bootstrap.inputs, inputs.data);
   const matchingAdditionalInputs = receipt.data.additionalInputs.filter(entry =>
     entry.responsibleUserId === run.responsibleUserId &&
     isDeepStrictEqual(entry.policy, policy.data) && isDeepStrictEqual(entry.inputs, inputs.data));
-  if (requireReceiptMembership && !matchingDispatches.length && !matchingMarkerlessDispatches.length && !bootstrapMatches && matchingAdditionalInputs.length !== 1)
+  if (requireReceiptMembership && !matchingDispatches.length && !matchingMarkerlessDispatches.length && !matchingCompleteDispatches.length && !bootstrapMatches && matchingAdditionalInputs.length !== 1)
     throw forbidden("The Native source prefix is not in its original receipt");
   const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
     ? profile.nativeToolResultSourceCaptures.filter(value => value && typeof value === "object" && !Array.isArray(value)) as Record<string, unknown>[] : [];

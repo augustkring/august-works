@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { SANDBOX_CONTROLS, type SandboxCapabilitySnapshot, type SandboxPolicyCompilation } from "@paperclipai/shared";
 
+export const SANDBOX_QUALIFICATION_BINDING_STATES: readonly string[] = ["requested", "ready", "stopped", "failed"];
+
 export interface SandboxIdentity { companyId: string; bindingId: string; cellId: string; cellGeneration: string; sandboxRef: string }
+export type SandboxAdmissionCleanup = Readonly<{ requesterUserId: string; claimKey: string; claimVersion: number;
+  policySnapshotId: string; policyHash: string; manifestId: string; manifestHash: string;
+  hostEpoch: number; imageDigest: string; sandboxId: string; containerId: string }>;
 export interface PreparedSandbox extends SandboxIdentity { backendVersion: string; imageDigest: string; hostEpoch?: number; sandboxId?: string; containerId?: string; provisioningHash?: string; bindingVersion?: number; policyHash?: string; probePolicyHash?: string; resourceLimits?: Pick<SandboxPolicyCompilation["compiledPolicy"]["resources"], "cpuMillis" | "memoryBytes" | "diskBytes" | "pidsLimit">; requiresRecreate?: boolean }
 export interface SandboxProvisioningIntent { purpose: "qualification" | "admission"; operationKey: string; bindingVersion: number; expiresAt: string; policy?: SandboxPolicyCompilation }
 export interface PolicyApplyResult { applied: boolean; requiresRecreate: boolean; observedPolicyHash: string | null; unsupportedFeatures: string[] }
@@ -22,8 +27,8 @@ export interface ExecutionSandboxBackend {
   prepareSandbox(input: SandboxIdentity, provisioning?: SandboxProvisioningIntent): Promise<PreparedSandbox>;
   applyPolicy(input: SandboxIdentity & { policy: SandboxPolicyCompilation; currentStaticFingerprint: string | null; expiresAt: string; idempotencyKey: string }): Promise<PolicyApplyResult>;
   startWorkload(input: SandboxIdentity & { policy: SandboxPolicyCompilation; expiresAt: string; idempotencyKey: string }): Promise<{ operationId: string }>;
-  inspectWorkload(input: SandboxIdentity): Promise<SandboxObservation>;
-  stopWorkload(input: SandboxIdentity & { idempotencyKey: string }): Promise<{ operationId: string }>;
+  inspectWorkload(input: SandboxIdentity & { nativeAdmissionCleanup?: SandboxAdmissionCleanup }): Promise<SandboxObservation>;
+  stopWorkload(input: SandboxIdentity & { idempotencyKey: string; nativeAdmissionCleanup?: SandboxAdmissionCleanup }): Promise<{ operationId: string }>;
   destroySandbox(input: SandboxIdentity & { idempotencyKey: string }): Promise<{ operationId: string }>;
   probeBoundary(input: SandboxIdentity & { test: SandboxProbeCase }): Promise<SandboxProbeResult>;
 }

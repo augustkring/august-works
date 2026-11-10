@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 const spies = vi.hoisted(() => ({ secrets: vi.fn(), execute: vi.fn(), nativeProbe: vi.fn(),
-  discover: vi.fn(), draft: vi.fn(async () => ({ existingReservedDraft: true })) }));
+  discover: vi.fn(), draft: vi.fn(async () => ({ existingReservedDraft: true })),
+  opencode: vi.fn(async () => ({ existingReservedOpenCode: true })) }));
 vi.mock("@paperclipai/db", () => ({ agents: { companyId: "company", id: "agent", adapterType: "type", adapterConfig: "config" },
   agentIdentities: {}, agentPresenceRuntimeBindings: {}, heartbeatRuns: {}, issues: {} }));
 vi.mock("@paperclipai/shared", () => ({ providerConformanceInputSchema: { parse: (value: unknown) => value } }));
@@ -19,6 +20,7 @@ vi.mock("./costs.js", () => ({ costService: vi.fn() }));
 vi.mock("./v5-mutations.js", () => ({ withV5ActivityTransaction: vi.fn() }));
 vi.mock("./activity-log.js", () => ({ logActivity: vi.fn() }));
 vi.mock("./native-draft-conformance.js", () => ({ installedNativeDraftConformance: () => ({ test: spies.draft }) }));
+vi.mock("./native-opencode-conformance.js", () => ({ installedNativeOpenCodeConformance: () => ({ test: spies.opencode }) }));
 import { providerConformanceService } from "./provider-conformance.js";
 function database(adapterType: string, provider?: string) {
   return { select: () => ({ from: () => ({ where: () => ({ limit: async () => [{ adapterType, adapterConfig: { provider } }] }) }) }) } as any;
@@ -35,6 +37,7 @@ describe("actual provider conformance entry admission", () => {
       expect(spies.execute).not.toHaveBeenCalled();
       expect(spies.nativeProbe).not.toHaveBeenCalled();
       expect(spies.draft).not.toHaveBeenCalled();
+      expect(spies.opencode).not.toHaveBeenCalled();
     });
   it("retains the existing installed reserved Native draft owner handoff", async () => {
     vi.clearAllMocks();
@@ -45,4 +48,17 @@ describe("actual provider conformance entry admission", () => {
     expect(spies.secrets).not.toHaveBeenCalled();
     expect(spies.execute).not.toHaveBeenCalled();
   });
+  it("delegates only the saved OpenCode route to its installed bounded conformance owner", async () => {
+    vi.clearAllMocks();
+    const actor = { type: "board" as const, userId: "user" };
+    const input = { acknowledgeProviderRuns: true as const, maximumCostCents: 1, isolationPeer: null };
+    await expect(providerConformanceService(database("paperclip_runner", "opencode")).test(
+      actor, "company", "agent", input)).resolves.toEqual({ existingReservedOpenCode: true });
+    expect(spies.opencode).toHaveBeenCalledExactlyOnceWith(actor, "company", "agent", input);
+    expect(spies.draft).not.toHaveBeenCalled();
+    expect(spies.nativeProbe).not.toHaveBeenCalled();
+    expect(spies.secrets).not.toHaveBeenCalled();
+    expect(spies.execute).not.toHaveBeenCalled();
+  });
+
 });

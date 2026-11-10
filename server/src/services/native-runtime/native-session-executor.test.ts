@@ -20,6 +20,7 @@ import { join } from "node:path";
 import {
   heartbeatRuns,
   heartbeatRunEvents,
+  agents,
   issues,
   nativeRunFinalizations,
   nativeRunResults,
@@ -328,6 +329,7 @@ import {
   syncRemoteRunnerDirectoryOut,
   verifyNativeHarnessBackup,
   shouldRestoreNativeHarnessBackupIntoSandbox,
+  failUnclaimedNativeOpenCodeConformanceRun,
 } from "./native-session-executor.js";
 
 beforeEach(() => {
@@ -4873,6 +4875,8 @@ type LeaseCoordinator = {
   leaseOwner: string | null;
   leaseExpiresAt: Date | null;
   resultId: string | null;
+  assessmentId: string | null;
+  decisionId: string | null;
 };
 
 function leaseDb(
@@ -4885,6 +4889,9 @@ function leaseDb(
   failAttachmentCaptureWrite = false,
   failModelInputCaptureWrite = false,
   failDocumentCaptureWrite = false,
+  runOverrides: Partial<{ triggerDetail: string | null; nativePhase: string | null;
+    errorCode: string | null; contextSnapshot: Record<string, unknown>; otherActiveRun: boolean;
+    agentStatus: typeof agents.$inferSelect.status }> = {},
 ): Db {
   const coordinator: LeaseCoordinator = {
     runId: boundExecution.binding.runId,
@@ -4895,8 +4902,11 @@ function leaseDb(
     leaseOwner: null,
     leaseExpiresAt: null,
     resultId: null,
+    assessmentId: null,
+    decisionId: null,
     ...coordinatorOverrides,
   };
+  let terminalizerUpdated = false;
   const update = (table: unknown) => ({
     set: (values: Record<string, unknown>) => {
       return {
@@ -4919,6 +4929,8 @@ function leaseDb(
             throw new Error("native_attachment_stage_capture_write_failed");
           }
           updates.push({ table, values });
+          if (table === heartbeatRuns && values.errorCode === "provider_conformance_coordinator_claim_failed")
+            terminalizerUpdated = true;
           if (
             table === heartbeatRuns &&
             values.runnerProfileJson &&
@@ -4944,19 +4956,23 @@ function leaseDb(
       const rows =
         table === nativeRunFinalizations
           ? [coordinator]
-          : table === heartbeatRuns
-            ? [
-                {
-                  id: boundExecution.binding.runId,
-                  agentId: boundExecution.binding.agentId,
-                  companyId: boundExecution.binding.companyId,
-                  nativeIssueId: boundExecution.binding.issueId,
-                  resultJson: runResultJson,
-                  runnerProfileJson,
-                  runtimeMode: "native",
-                  status: runStatus,
-                },
-              ]
+          : table === agents
+            ? [{ id: boundExecution.binding.agentId, companyId: boundExecution.binding.companyId,
+                status: runOverrides.agentStatus ?? "running" }]
+            : table === heartbeatRuns
+              ? terminalizerUpdated
+                ? runOverrides.otherActiveRun ? [{ id: "other-run", status: "queued" }] : []
+                : [{
+                    id: boundExecution.binding.runId,
+                    agentId: boundExecution.binding.agentId,
+                    companyId: boundExecution.binding.companyId,
+                    nativeIssueId: boundExecution.binding.issueId,
+                    resultJson: runResultJson,
+                    runnerProfileJson,
+                    runtimeMode: "native",
+                    status: runStatus,
+                    ...runOverrides,
+                  }]
             : table === heartbeatRunEvents
               ? updates.filter(row => row.table === heartbeatRunEvents).map(row => row.values)
             : table === issues
@@ -5754,6 +5770,60 @@ describe("native session cancellation", () => {
 });
 
 describe("native session execution lease fencing", () => {
+  it("terminalizes an unclaimed conformance Run only from its untouched initial owner state", async () => {
+    const runOverrides = { triggerDetail: "provider_conformance", nativePhase: "observed",
+      contextSnapshot: { providerConformanceGroupId: "group-1", providerConformancePlanId: "plan-1",
+        nativeOpenCodeConformanceProfileId: "profile-1", nativeOpenCodeConformanceProbeId: "probe-1" } };
+    const validUpdates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    await expect(failUnclaimedNativeOpenCodeConformanceRun({ db: leaseDb(execution, {}, {}, validUpdates,
+      {}, "running", false, false, false, runOverrides), companyId: execution.binding.companyId,
+      issueId: execution.binding.issueId, runId: execution.binding.runId, agentId: execution.binding.agentId,
+      qualificationGroupId: "group-1", planId: "plan-1", profileId: "profile-1", probeId: "probe-1",
+      restoreAgentStatus: "idle" })).resolves.toBe(true);
+    expect(validUpdates).toContainEqual({ table: heartbeatRuns, values: expect.objectContaining({
+      status: "failed", errorCode: "provider_conformance_coordinator_claim_failed",
+    }) });
+    expect(validUpdates).toContainEqual({ table: agents, values: expect.objectContaining({ status: "idle" }) });
+
+    const queuedUpdates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    await expect(failUnclaimedNativeOpenCodeConformanceRun({
+      db: leaseDb(execution, {}, {}, queuedUpdates, {}, "running", false, false, false,
+        { ...runOverrides, otherActiveRun: true }), companyId: execution.binding.companyId,
+      issueId: execution.binding.issueId, runId: execution.binding.runId, agentId: execution.binding.agentId,
+      qualificationGroupId: "group-1", planId: "plan-1", profileId: "profile-1", probeId: "probe-1",
+      restoreAgentStatus: "idle",
+    })).resolves.toBe(true);
+    expect(queuedUpdates.some(update => update.table === agents)).toBe(false);
+
+    const pausedUpdates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    await expect(failUnclaimedNativeOpenCodeConformanceRun({
+      db: leaseDb(execution, {}, {}, pausedUpdates, {}, "running", false, false, false,
+        { ...runOverrides, agentStatus: "paused" }), companyId: execution.binding.companyId,
+      issueId: execution.binding.issueId, runId: execution.binding.runId, agentId: execution.binding.agentId,
+      qualificationGroupId: "group-1", planId: "plan-1", profileId: "profile-1", probeId: "probe-1",
+      restoreAgentStatus: "idle",
+    })).resolves.toBe(true);
+    expect(pausedUpdates.some(update => update.table === agents)).toBe(false);
+
+    const unchangedStates = [
+      { coordinator: { leaseOwner: "another-owner", leaseExpiresAt: new Date(Date.now() + 60_000) }, run: runOverrides },
+      { coordinator: { decisionId: "decision-1" }, run: runOverrides },
+      { coordinator: {}, run: { ...runOverrides, nativePhase: "terminal_failure",
+        errorCode: "native_execution_ownership_unverified" } },
+    ];
+    for (const state of unchangedStates) {
+      const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+      await expect(failUnclaimedNativeOpenCodeConformanceRun({
+        db: leaseDb(execution, state.coordinator, {}, updates, {}, "running", false, false, false, state.run),
+        companyId: execution.binding.companyId, issueId: execution.binding.issueId,
+        runId: execution.binding.runId, agentId: execution.binding.agentId,
+        qualificationGroupId: "group-1", planId: "plan-1", profileId: "profile-1", probeId: "probe-1",
+        restoreAgentStatus: "idle",
+      })).resolves.toBe(false);
+      expect(updates).toEqual([]);
+    }
+  });
+
   it("renews only when the exact fenced owner remains current", async () => {
     const returning = vi
       .fn()

@@ -885,10 +885,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "bf0f76fcb7aa45971048eba0a5391c04f3477923a0f5620d9c30d63b42a25dbc",
+      "sourceSha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The application forwards its existing server-owned Heartbeat service to the Stop route. Help, support cases and direct human contact remain unchanged."
+      "rationale": "The application reuses its existing configured Sandbox service composition for exact internal conformance admission; Help, support and direct Human contact instructions remain unchanged."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -1197,10 +1197,10 @@
     {
       "source": "server/src/app.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "bf0f76fcb7aa45971048eba0a5391c04f3477923a0f5620d9c30d63b42a25dbc",
+      "sourceSha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Appen sender sin eksisterende serverstyrede Heartbeat-tjeneste videre til Stop-ruten. Det \u00e6ndrer ikke Hj\u00e6lp, supportsager eller direkte kontakt med et menneske."
+      "rationale": "The application reuses its existing configured Sandbox service composition for exact internal conformance admission; Help, support and direct Human contact instructions remain unchanged."
     },
     {
       "source": "server/src/routes/customer-support.ts",
@@ -2677,18 +2677,18 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "3799afe93dac2c82d387e97dc4e86afbca62ff2e64a472eef5b4f551ee06a6f2",
+      "sourceSha256": "fe95fac21d5cb75eb53491cccdea1277d08abc0e23d1bed6a7764abf5e8902f4",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "Reviewed same-process Memory approval credential continuity and signed, owner-validated replay. These internal Memory fixes do not change the app connection or reconnect instructions in this article; current action permissions and provider admission remain enforced."
+      "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "3799afe93dac2c82d387e97dc4e86afbca62ff2e64a472eef5b4f551ee06a6f2",
+      "sourceSha256": "fe95fac21d5cb75eb53491cccdea1277d08abc0e23d1bed6a7764abf5e8902f4",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "Reviewed same-process Memory approval credential continuity and signed, owner-validated replay. These internal Memory fixes do not change the app connection or reconnect instructions in this article; current action permissions and provider admission remain enforced."
+      "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",

@@ -3,7 +3,7 @@ import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
 import { qualificationProbeFixtureSchema, sandboxCapabilitySnapshotSchema, type SandboxCapabilitySnapshot, type SandboxPolicy, type SandboxPolicyCompilation, type SandboxQualificationProbeFixture } from "@paperclipai/shared";
 import { conflict, forbidden } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import type { ExecutionSandboxBackend, PreparedSandbox, SandboxIdentity, SandboxObservation, SandboxProbeCase, SandboxProbeResult, SandboxProvisioningIntent } from "./backend.js";
+import type { ExecutionSandboxBackend, PreparedSandbox, SandboxAdmissionCleanup, SandboxIdentity, SandboxObservation, SandboxProbeCase, SandboxProbeResult, SandboxProvisioningIntent } from "./backend.js";
 import { compileSandboxPolicy, type ResolvedSandboxBrokerBinding } from "./policy-compiler.js";
 import { projectOpenShellQualificationProbePolicy } from "./openshell-policy.js";
 import { projectOpenShellPolicy, type OpenShellPolicyDocument } from "./openshell-policy.js";
@@ -19,7 +19,7 @@ export interface OpenShellHostBridge {
     resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "diskBytes" | "pidsLimit">;
     probeFixtureHash?: string; qualificationProbeFixture?: SandboxQualificationProbeFixture;
   }): Promise<PreparedSandbox>;
-  inspect(scope: SandboxIdentity): Promise<SandboxObservation>;
+  inspect(scope: SandboxIdentity & { nativeAdmissionCleanup?: SandboxAdmissionCleanup }): Promise<SandboxObservation>;
   effectivePolicy(scope: SandboxIdentity): Promise<OpenShellPolicyDocument>;
   apply(scope: SandboxIdentity & { document: OpenShellPolicyDocument; policyHash: string; expiresAt: string; idempotencyKey: string;
     resourceLimits: Pick<SandboxPolicy["resources"], "cpuMillis" | "memoryBytes" | "diskBytes" | "pidsLimit">;
@@ -27,7 +27,7 @@ export interface OpenShellHostBridge {
   start(scope: SandboxIdentity & { expiresAt: string; policyHash: string; idempotencyKey: string }): Promise<{ operationId: string }>;
   /** Revocation and native Stop must be independently available. */
   revokeProviders(scope: SandboxIdentity): Promise<void>;
-  stop(scope: SandboxIdentity & { idempotencyKey: string }): Promise<{ operationId: string }>;
+  stop(scope: SandboxIdentity & { idempotencyKey: string; nativeAdmissionCleanup?: SandboxAdmissionCleanup }): Promise<{ operationId: string }>;
   destroy(scope: SandboxIdentity & { idempotencyKey: string }): Promise<{ operationId: string }>;
   probe(scope: SandboxIdentity & { test: SandboxProbeCase }): Promise<SandboxProbeResult>;
 }
@@ -83,8 +83,14 @@ export function openShellBackend(options: {
     if (snapshot.evidenceKind !== (options.evidenceKind ?? "local_fixture") || snapshot.backend !== "openshell" || snapshot.backendVersion !== "0.1.2" || new Date(snapshot.expiresAt) <= new Date() || new Date(snapshot.testedAt) > new Date()) return null;
     return composeOpenShellBrokerCapabilities(snapshot, options);
   }
-  async function observed(input: SandboxIdentity) {
-    scoped(input); const result = await bridge.inspect(identity), caps = await capabilities();
+  async function observed(input: SandboxIdentity & { nativeAdmissionCleanup?: SandboxAdmissionCleanup }) {
+    scoped(input); const result = await bridge.inspect({ ...identity,
+      ...(input.nativeAdmissionCleanup ? { nativeAdmissionCleanup: input.nativeAdmissionCleanup } : {}) });
+    // Revocation/source withdrawal cannot block inspection of the exact
+    // original admission during mandatory Stop containment. The retained
+    // prepare receipt pins its image; the Host command validates live
+    // epoch, generation and image before returning this observation.
+    const caps = input.nativeAdmissionCleanup ? null : await capabilities();
     const expectedImage = caps?.sandboxImageDigest ?? preparedEvidence?.imageDigest;
     if (!expectedImage || result.generation !== identity.cellGeneration || result.imageDigest !== expectedImage) throw conflict("OpenShell image, generation or qualification changed");
     return result;
@@ -244,8 +250,9 @@ export function openShellBackend(options: {
     stopWorkload: async input => {
       scoped(input); let revocationFailed = false;
       try { await bridge.revokeProviders(identity); } catch { revocationFailed = true; }
-      const result = await bridge.stop({ ...identity, idempotencyKey: input.idempotencyKey });
-      if (revocationFailed) throw conflict("Native Stop requested; provider revocation requires reconciliation", { code: "sandbox_revocation_pending", operationId: result.operationId });
+      const result = await bridge.stop({ ...identity, idempotencyKey: input.idempotencyKey,
+        ...(input.nativeAdmissionCleanup ? { nativeAdmissionCleanup: input.nativeAdmissionCleanup } : {}) });
+      if (revocationFailed && !input.nativeAdmissionCleanup) throw conflict("Native Stop requested; provider revocation requires reconciliation", { code: "sandbox_revocation_pending", operationId: result.operationId });
       return result;
     },
     destroySandbox: async input => {

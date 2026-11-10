@@ -21,13 +21,13 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 1953,
+    "sourceDeltaPathCount": 1966,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 13951,
+    "fullDiffPathCount": 13969,
     "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
   },
   "requirementsCrosswalk": [
@@ -16385,10 +16385,22 @@
           "sha256": "66b57013677c3adc154a9f911ef48464150ab6ae42af7f3cc08112cca848d527"
         },
         {
+          "path": "packages/paperclip-runner/src/backends/native-backend-factory.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "4149c9e1967fcae94d3dc1f481d72920888cb451ceba214690d9c774a5731092"
+        },
+        {
           "path": "packages/paperclip-runner/src/backends/native-backend-factory.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "5dcc86ec708f43c8a959cc3f0e5071c88312688d2164507faf89da85aed1f516"
+        },
+        {
+          "path": "packages/paperclip-runner/src/backends/opencode-native-backend.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "070b20996617cdaca4eb04be4d04e5bbdb95b32a8b0312ea0d2fc36b709c6edf"
         },
         {
           "path": "packages/paperclip-runner/src/catalog/semantic-action-catalog.test.ts",
@@ -16679,6 +16691,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/__tests__/native-opencode-conformance.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/__tests__/openshell-qualification-policy.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -16709,10 +16727,28 @@
           "sha256": "c3b4d3d0c68b40a150495d1579ff6f0c6b6c2f7906c56f668a8ae24650684208"
         },
         {
+          "path": "server/src/provider-conformance-runtime-tools-claim.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/routes/connection-intents.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "bec38052081888bf2a69576e0d9cbefa295dd0f4e653efe2e50a76fdd2dc30f8"
+        },
+        {
           "path": "server/src/routes/execution-sandbox.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "d822f4d015197b7c4288e11bbe77e8dba9c19510c93d4c7f3e0e49b157a16aac"
+        },
+        {
+          "path": "server/src/runtime-tools-token.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "abde01a32f1e95a91817068199b81d905df7439d6cbb09585136ad130daa4bac"
         },
         {
           "path": "server/src/runtime-tools-token.ts",
@@ -16847,6 +16883,18 @@
           "sha256": "fa34e7b788b34de7d1f4c05a451013b1d26e92b826cc2e932bb681d89269c887"
         },
         {
+          "path": "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/native-opencode-conformance.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/services/native-runtime-selection-lock.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -16968,6 +17016,12 @@
         },
         {
           "path": "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
           "sha256": null
@@ -17109,6 +17163,30 @@
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "e6ac75befb63c42355a91135abb692e572e4122ee0d8a368af303722225bb177"
+        },
+        {
+          "path": "server/src/services/orchestration/native-opencode-conformance-admission.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/orchestration/native-opencode-conformance-source.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
         },
         {
           "path": "server/src/services/plugin-agent-runtime-state.test.ts",
@@ -17279,7 +17357,9 @@
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
         "packages/paperclip-runner/src/backends/codex-native-backend.ts",
+        "packages/paperclip-runner/src/backends/native-backend-factory.test.ts",
         "packages/paperclip-runner/src/backends/native-backend-factory.ts",
+        "packages/paperclip-runner/src/backends/opencode-native-backend.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-catalog.test.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-types.ts",
@@ -17328,12 +17408,16 @@
         "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
         "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
         "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+        "server/src/__tests__/native-opencode-conformance.integration.test.ts",
         "server/src/__tests__/openshell-qualification-policy.test.ts",
         "server/src/__tests__/v6-commercial-runtime.integration.test.ts",
         "server/src/__tests__/v6-runtime-fleet.integration.test.ts",
         "server/src/__tests__/v6-runtime-relay.test.ts",
         "server/src/__tests__/v9-runtime-candidates.integration.test.ts",
+        "server/src/provider-conformance-runtime-tools-claim.ts",
+        "server/src/routes/connection-intents.test.ts",
         "server/src/routes/execution-sandbox.ts",
+        "server/src/runtime-tools-token.test.ts",
         "server/src/runtime-tools-token.ts",
         "server/src/services/agent-packages/execution-gate.ts",
         "server/src/services/environment-execution-target.ts",
@@ -17356,6 +17440,8 @@
         "server/src/services/issue-execution-policy.ts",
         "server/src/services/issue-execution-stage-wakeup.ts",
         "server/src/services/legacy-execution-recovery.ts",
+        "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
+        "server/src/services/native-opencode-conformance.ts",
         "server/src/services/native-runtime-selection-lock.ts",
         "server/src/services/native-runtime/accepted-plan-review-source.ts",
         "server/src/services/native-runtime/aw-text-draft-backend.ts",
@@ -17377,6 +17463,7 @@
         "server/src/services/native-runtime/native-finalization-reconciler.ts",
         "server/src/services/native-runtime/native-interaction-bridge.ts",
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
+        "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
         "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
         "server/src/services/native-runtime/native-run-finalizer.ts",
@@ -17400,6 +17487,10 @@
         "server/src/services/native-runtime/runtime-context.test.ts",
         "server/src/services/native-runtime/worker-conversation-root.ts",
         "server/src/services/orchestration/native-draft-runtime.ts",
+        "server/src/services/orchestration/native-opencode-conformance-admission.ts",
+        "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
+        "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
+        "server/src/services/orchestration/native-opencode-conformance-source.ts",
         "server/src/services/plugin-agent-runtime-state.test.ts",
         "server/src/services/provider-conformance-admission.test.ts",
         "server/src/services/provider-conformance.ts",
@@ -17450,7 +17541,9 @@
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
         "packages/paperclip-runner/src/backends/codex-native-backend.ts",
+        "packages/paperclip-runner/src/backends/native-backend-factory.test.ts",
         "packages/paperclip-runner/src/backends/native-backend-factory.ts",
+        "packages/paperclip-runner/src/backends/opencode-native-backend.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-catalog.test.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
         "packages/paperclip-runner/src/catalog/semantic-action-types.ts",
@@ -17499,12 +17592,16 @@
         "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
         "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
         "server/src/__tests__/managed-worker-sandbox-lifecycle.integration.test.ts",
+        "server/src/__tests__/native-opencode-conformance.integration.test.ts",
         "server/src/__tests__/openshell-qualification-policy.test.ts",
         "server/src/__tests__/v6-commercial-runtime.integration.test.ts",
         "server/src/__tests__/v6-runtime-fleet.integration.test.ts",
         "server/src/__tests__/v6-runtime-relay.test.ts",
         "server/src/__tests__/v9-runtime-candidates.integration.test.ts",
+        "server/src/provider-conformance-runtime-tools-claim.ts",
+        "server/src/routes/connection-intents.test.ts",
         "server/src/routes/execution-sandbox.ts",
+        "server/src/runtime-tools-token.test.ts",
         "server/src/runtime-tools-token.ts",
         "server/src/services/agent-packages/execution-gate.ts",
         "server/src/services/environment-execution-target.ts",
@@ -17527,6 +17624,8 @@
         "server/src/services/issue-execution-policy.ts",
         "server/src/services/issue-execution-stage-wakeup.ts",
         "server/src/services/legacy-execution-recovery.ts",
+        "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
+        "server/src/services/native-opencode-conformance.ts",
         "server/src/services/native-runtime-selection-lock.ts",
         "server/src/services/native-runtime/accepted-plan-review-source.ts",
         "server/src/services/native-runtime/aw-text-draft-backend.ts",
@@ -17548,6 +17647,7 @@
         "server/src/services/native-runtime/native-finalization-reconciler.ts",
         "server/src/services/native-runtime/native-interaction-bridge.ts",
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
+        "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
         "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
         "server/src/services/native-runtime/native-run-finalizer.ts",
@@ -17571,6 +17671,10 @@
         "server/src/services/native-runtime/runtime-context.test.ts",
         "server/src/services/native-runtime/worker-conversation-root.ts",
         "server/src/services/orchestration/native-draft-runtime.ts",
+        "server/src/services/orchestration/native-opencode-conformance-admission.ts",
+        "server/src/services/orchestration/native-opencode-conformance-cancel.test.ts",
+        "server/src/services/orchestration/native-opencode-conformance-source.test.ts",
+        "server/src/services/orchestration/native-opencode-conformance-source.ts",
         "server/src/services/plugin-agent-runtime-state.test.ts",
         "server/src/services/provider-conformance-admission.test.ts",
         "server/src/services/provider-conformance.ts",

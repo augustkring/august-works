@@ -14,7 +14,7 @@ export function createOpenCodeNativeSessionBackend(
   }
   return new HarnessDriverBackend(new OpenCodeServerDriver({
     ...options,
-    systemInstructions: nativeSystemInstructions(input),
+    systemInstructions: options.systemInstructions ?? nativeSystemInstructions(input),
     runtimeContext: "runtimeContext" in input ? input.runtimeContext : null,
     model: input.provider.model,
     permissionMode: input.provider.permissionMode ?? "allow",
