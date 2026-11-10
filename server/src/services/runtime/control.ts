@@ -1,6 +1,6 @@
 import { exactNativeManagedArtifactCommand } from "../native-runtime/native-artifact-preparation.js";
 import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
-import { captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
+import { captureNativeRemoteAttachmentReadbackOwner, captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
 import { NATIVE_GIT_CONTEXT_PROBE_SCRIPT } from "@paperclipai/adapter-utils/execution-target";
 import { buildWorkspaceTarExtractCommand, buildRemoveDeletedPathsCommand } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
 import { hostVersionMeetsMinimum } from "./catalog.js";
@@ -3850,11 +3850,19 @@ export function runtimeControlService(
           "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS"].includes(key));
         const attachmentOperation = nativeAttachmentStage || nativeAttachmentCleanup
           ? parseNativeRemoteAttachmentStageCommand(request, workerPreparationRoot) : null;
-        const attachmentOwner = attachmentOperation
-          ? await captureNativeRemoteAttachmentStageOwner(tx as unknown as Db, { companyId: source.run.companyId,
-              issueId: source.source.task.id, runId: source.run.id, agentId: source.run.agentId!,
-              taskRoot: workerPreparationRoot, leaseId: source.lease.id,
-              requirePersistedStageIntent: attachmentOperation.phase !== "cleanup", operation: attachmentOperation }) : null;
+        let attachmentOwner: Awaited<ReturnType<typeof captureNativeRemoteAttachmentStageOwner>> | null = null;
+        if (attachmentOperation?.phase === "readback") {
+          attachmentOwner = await captureNativeRemoteAttachmentReadbackOwner(tx as unknown as Db, {
+            companyId: source.run.companyId, issueId: source.source.task.id, runId: source.run.id,
+            agentId: source.run.agentId!, taskRoot: workerPreparationRoot, leaseId: source.lease.id,
+            operation: attachmentOperation,
+          });
+        } else if (attachmentOperation) {
+          attachmentOwner = await captureNativeRemoteAttachmentStageOwner(tx as unknown as Db, { companyId: source.run.companyId,
+            issueId: source.source.task.id, runId: source.run.id, agentId: source.run.agentId!,
+            taskRoot: workerPreparationRoot, leaseId: source.lease.id,
+            requirePersistedStageIntent: attachmentOperation.phase !== "cleanup", operation: attachmentOperation });
+        }
         const exactCommand = nativeAttachmentStage || nativeAttachmentCleanup
           ? !!attachmentOperation && !!attachmentOwner &&
             ((nativeAttachmentCleanup && attachmentOperation.phase === "cleanup") ||

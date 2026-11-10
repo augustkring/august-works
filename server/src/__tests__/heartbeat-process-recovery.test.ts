@@ -1587,18 +1587,15 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     }
   }
 
-  it("persists the normalized failure without permanently blocking the conversation", async () => {
-    mockAdapterExecute.mockResolvedValueOnce({
-      exitCode: 1,
-      signal: null,
-      timedOut: false,
-      errorMessage: null,
-      provider: "test",
-      model: "test-model",
-    });
-
-    const { companyId, agentId, runId, issueId } =
-      await seedQueuedIssueRunFixture();
+  // Native unknown-charge Stop, released blocker, and explicit Human
+  // continuation are covered by the installed AWText owner case
+  // "keeps an unknown NativeText charge blocked until a Human continues
+  // through the stopped-run owner" in heartbeat-dependency-draft-controller.integration.test.ts.
+  // That case does not assert an adapter-style normalized failure. This legacy
+  // fixture verifies only that opaque paid dispatch is rejected before its
+  // arbitrary callback can run or create an automatic retry.
+  it("routes opaque legacy paid dispatch to the managed runtime owner without retry", async () => {
+    const { companyId, runId } = await seedQueuedIssueRunFixture();
     const heartbeat = heartbeatService(db);
 
     await heartbeat.resumeQueuedRuns();
@@ -1606,21 +1603,17 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await heartbeat.waitForRunExecutionDrain(runId);
 
     const run = await heartbeat.getRun(runId);
-    const runtime = await db
-      .select({ lastError: agentRuntimeState.lastError })
-      .from(agentRuntimeState)
-      .where(eq(agentRuntimeState.agentId, agentId))
-      .then((rows) => rows[0] ?? null);
-    const recoveryRun = await db
+    const retryRun = await db
       .select()
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.retryOfRunId, runId))
       .then((rows) => rows[0] ?? null);
 
-    expect(run).toMatchObject({ status: "failed", error: "Adapter failed" });
-    expect(runtime?.lastError).toBe("Adapter failed");
-    expect(recoveryRun).toMatchObject({ retryOfRunId: runId, scheduledRetryAttempt: 1 });
-    expect(await getExecutionBlocker(db, companyId, issueId)).toBeNull();
+    expect(run).toMatchObject({ status: "failed", errorCode: "configuration_incomplete",
+      resultJson: { configurationIncomplete: { reason: "paid_transport_unqualified",
+        owner: "Managed model gateway owner" } } });
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
+    expect(retryRun).toBeNull();
     const missingCommentWakeups = await db
       .select({ id: agentWakeupRequests.id })
       .from(agentWakeupRequests)

@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { nativeSha256 } from "./canonical.js";
+import { readVerifiedRemoteWorkspaceFile } from "./remote-deliverable-file.js";
+import type { CommandManagedRuntimeRunner } from "@paperclipai/adapter-utils/command-managed-runtime";
+import type { RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 import {
   buildNativeRemoteAttachmentStageCommand,
   parseNativeRemoteAttachmentStageCommand,
@@ -36,6 +39,41 @@ function capturedProfile() {
 }
 
 describe("Native remote attachment staging owners", () => {
+  it("admits only the exact verifier readback command emitted for a staged source", async () => {
+    const bytes = Buffer.from("verified staged attachment");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const taskRoot = "/workspace/task";
+    const contentRef = `.paperclip-inbound/${runId}/${stageNonce}/payload`;
+    let captured: Parameters<CommandManagedRuntimeRunner["execute"]>[0] | undefined;
+    const runner: Pick<CommandManagedRuntimeRunner, "execute"> = { execute: async (command) => {
+      captured = command;
+      return { pid: null, startedAt: "2026-01-01T00:00:00Z", exitCode: 0, signal: null,
+        timedOut: false, stdout: bytes.toString("base64"), stderr: "" };
+    } };
+    await expect(readVerifiedRemoteWorkspaceFile({ runner, workspaceRoot: taskRoot,
+      contentRef, byteSize: bytes.length, sha256 })).resolves.toEqual(bytes);
+    const emitted = captured!;
+    if (!emitted?.cwd || !emitted.env) throw new Error("Native readback fixture did not emit its exact command");
+    const request: Pick<RuntimeSandboxExecRelayRequest, "cwd" | "argv" | "env" | "stdinBase64"> = {
+      cwd: emitted.cwd, argv: [emitted.command, ...(emitted.args ?? [])], env: emitted.env,
+      stdinBase64: Buffer.from(emitted.stdin ?? "").toString("base64") };
+    expect(parseNativeRemoteAttachmentStageCommand(request, taskRoot)).toMatchObject({
+      phase: "readback", runId, stageNonce, relativePath: contentRef, byteSize: bytes.length, sha256,
+    });
+
+    const payload = () => JSON.parse(request.argv[4]!) as Record<string, unknown>;
+    const withPayload = (value: unknown): typeof request => ({ ...request, argv: [...request.argv.slice(0, 4), JSON.stringify(value)] });
+    const badRequests = [
+      { ...request, argv: [...request.argv.slice(0, 3), "changed verifier", ...request.argv.slice(4)] },
+      { ...request, env: { ...request.env, NODE_OPTIONS: "--require attacker" } },
+      { ...request, cwd: `${taskRoot}/other` },
+      withPayload({ ...payload(), contentRef: `../${contentRef}` }),
+      withPayload({ ...payload(), extra: true }),
+      withPayload({ ...payload(), sha256: "z".repeat(64) }),
+      withPayload({ ...payload(), byteSize: 0 }),
+    ];
+    for (const bad of badRequests) expect(parseNativeRemoteAttachmentStageCommand(bad, taskRoot)).toBeNull();
+  });
   it("admits only the exact fixed upload command shape and nested base64 chunk", () => {
     const chunkBase64 = Buffer.from("small attachment bytes").toString("base64");
     const command = buildNativeRemoteAttachmentStageCommand({ taskRoot: "/workspace/task", operation: {
@@ -49,6 +87,8 @@ describe("Native remote attachment staging owners", () => {
     expect(parseNativeRemoteAttachmentStageCommand({ ...request, argv: [...request.argv.slice(0, 3), "arbitrary shell", ...request.argv.slice(4)] },
       "/workspace/task")).toBeNull();
     expect(parseNativeRemoteAttachmentStageCommand({ ...request, stdinBase64: Buffer.from("other bytes").toString("base64") },
+      "/workspace/task")).toBeNull();
+    expect(parseNativeRemoteAttachmentStageCommand({ ...request, env: { NODE_OPTIONS: "--require attacker" } },
       "/workspace/task")).toBeNull();
   });
 

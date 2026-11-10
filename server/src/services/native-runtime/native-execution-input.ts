@@ -244,6 +244,13 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   const hasAcceptedPlanReview = acceptedPlanReview !== undefined;
   if (hasAcceptedPlanReview && (hasGoverned || capture.delivery !== undefined || !acceptedPlanReview)) return null;
   const c = capture.envelope;
+  const reviewWithdrawalSourceRunIds = hasReviewWithdrawals ? [...new Set(withdrawals!.flatMap(value =>
+    value?.projection?.owner?.sourceKind === "native_interaction" && value.projection.owner.sourceRunStatus === "succeeded" &&
+      value.projection.owner.sourceRunId === value.projection.interactionSourceRunId
+      ? [value.projection.owner.sourceRunId] : []))] : [];
+  const reviewWithdrawalSummarySourceRunId = reviewWithdrawalSourceRunIds.length === 1 && withdrawals!.every(value =>
+    value?.projection?.owner?.sourceRunId === reviewWithdrawalSourceRunIds[0] &&
+    value?.projection?.owner?.sourceRunId === c?.trigger?.sourceRunId) ? reviewWithdrawalSourceRunIds[0] : null;
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (hasAdministrativeExpiries) {
     if (!Array.isArray(c?.interactionOutcomes) || c.interactionOutcomes.length > 64 ||
@@ -446,9 +453,11 @@ export function exactNativeTaskContinuation(input: { value: unknown; companyId: 
   if (capture.finalizedSummary) {
     const value = capture.finalizedSummary, receipt = nativeRunInputSourceReceiptSchema.safeParse(value.parentReceipt);
     const stageEntry=value.stageEntryRead;
+    const reviewWithdrawalSummary = reviewWithdrawalSummarySourceRunId !== null &&
+      value.sourceRunId === reviewWithdrawalSummarySourceRunId;
     const expectedKeys=stageEntry ? "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId,stageEntryRead" :
       "agentId,assessmentId,body,companyId,decisionDigest,decisionId,decisionSnapshotHash,finalizationVersion,issueId,parentReceipt,receiverRunId,resultCanonicalSha256,resultCreatedAt,resultId,sourceRunId";
-    if ((!hasGoverned && !(hasStageTrigger && stageEntry) && !hasSummaryAssignment) || capture.summary ||
+    if ((!hasGoverned && !(hasStageTrigger && stageEntry) && !hasSummaryAssignment && !reviewWithdrawalSummary) || capture.summary ||
       Object.keys(value).sort().join(",") !== expectedKeys ||
       value.companyId !== input.companyId || value.issueId !== input.issueId || value.agentId !== input.agentId ||
       value.receiverRunId !== input.runId || value.sourceRunId !== (hasStageTrigger ? stageTrigger!.executorRunId : c.trigger.sourceRunId) ||

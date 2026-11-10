@@ -35,29 +35,6 @@ import {
 import { heartbeatService } from "../services/heartbeat.ts";
 import { runningProcesses } from "../adapters/index.ts";
 
-const mockAdapterExecute = vi.hoisted(() =>
-  vi.fn(async () => ({
-    exitCode: 0,
-    signal: null,
-    timedOut: false,
-    errorMessage: null,
-    summary: "Dependency-aware heartbeat test run.",
-    provider: "test",
-    model: "test-model",
-  })),
-);
-
-vi.mock("../adapters/index.ts", async () => {
-  const actual = await vi.importActual<typeof import("../adapters/index.ts")>("../adapters/index.ts");
-  return {
-    ...actual,
-    getServerAdapter: vi.fn(() => ({
-      supportsLocalAgentJwt: false,
-      execute: mockAdapterExecute,
-    })),
-  };
-});
-
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 
@@ -135,16 +112,6 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       .from(heartbeatRuns)
       .then((runs) => runs.map((run) => run.id));
     await Promise.all(runIds.map((runId) => heartbeat.waitForRunExecutionDrain(runId)));
-    mockAdapterExecute.mockReset();
-    mockAdapterExecute.mockImplementation(async () => ({
-      exitCode: 0,
-      signal: null,
-      timedOut: false,
-      errorMessage: null,
-      summary: "Dependency-aware heartbeat test run.",
-      provider: "test",
-      model: "test-model",
-    }));
     runningProcesses.clear();
     await db.delete(environmentLeases);
     await db.delete(activityLog);
@@ -188,11 +155,12 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
     vi.unstubAllEnvs();
   });
 
-  // These three positive scheduling cases are covered by the real installed Native Text controller tests in
+  // Positive scheduling with actual successful execution is covered by the installed Native Text controller tests in
   // heartbeat-dependency-draft-controller.integration.test.ts: “coalesces two durable status-wake domain inputs into one real installed-controller Run”,
   // “keeps a second one-document Plan queued until the first scheduler Run releases capacity”, and
   // “cancels a genuinely queued Task after a Human adds its blocker, repairs its stale pointer, and completes ready work”.
-  // Those tests use a software-only provider transport; they make no external-provider execution claim.
+  // Those tests use a software-only provider transport; they make no external-provider execution claim. This file
+  // checks dependency queue control-plane state and deliberately does not fake successful model execution.
 
   it("coalesces the native intent when dispatch admission defers behind an active issue run", async () => {
     const companyId = randomUUID();
@@ -294,6 +262,7 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
     const blockerId = randomUUID();
     const blockedIssueId = randomUUID();
     const readyIssueId = randomUUID();
+    const activeRunId = randomUUID();
 
     await seedCompany({
       id: companyId,
@@ -346,6 +315,16 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
         responsibleUserId: "responsible-user",
       },
     ]);
+    // Occupy the sole scheduler slot so the following accepted wakes remain
+    // inspectable queue entries without claiming that a legacy callback ran.
+    await db.insert(heartbeatRuns).values({
+      id: activeRunId,
+      companyId,
+      agentId,
+      status: "running",
+      invocationSource: "on_demand",
+      contextSnapshot: { wakeReason: "manual_test_capacity_holder" },
+    });
     await db.insert(issueRelations).values({
       companyId,
       issueId: blockerId,
@@ -410,15 +389,6 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
     });
     expect(interactionWake).not.toBeNull();
 
-    await waitForCondition(async () => {
-      const run = await db
-        .select({ status: heartbeatRuns.status })
-        .from(heartbeatRuns)
-        .where(eq(heartbeatRuns.id, interactionWake!.id))
-        .then((rows) => rows[0] ?? null);
-      return run?.status === "succeeded";
-    });
-
     const interactionRun = await db
       .select({
         status: heartbeatRuns.status,
@@ -428,27 +398,10 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       .where(eq(heartbeatRuns.id, interactionWake!.id))
       .then((rows) => rows[0] ?? null);
 
-    expect(interactionRun?.status).toBe("succeeded");
+    expect(interactionRun?.status).toBe("queued");
     expect(interactionRun?.contextSnapshot).toMatchObject({
       dependencyBlockedInteraction: true,
       unresolvedBlockerIssueIds: [blockerId],
-    });
-
-    let finishReadyRun!: () => void;
-    const readyRunCanFinish = new Promise<void>((resolve) => {
-      finishReadyRun = resolve;
-    });
-    mockAdapterExecute.mockImplementationOnce(async () => {
-      await readyRunCanFinish;
-      return {
-        exitCode: 0,
-        signal: null,
-        timedOut: false,
-        errorMessage: null,
-        summary: "Ready dependency scheduling run complete.",
-        provider: "test",
-        model: "test-model",
-      };
     });
 
     const readyWake = await heartbeat.wakeup(agentId, {
@@ -459,32 +412,10 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       contextSnapshot: { issueId: readyIssueId, wakeReason: "issue_assigned" },
     });
     expect(readyWake).not.toBeNull();
-    await db.insert(issueComments).values({
-      companyId,
-      issueId: readyIssueId,
-      authorAgentId: agentId,
-      authorType: "agent",
-      createdByRunId: readyWake!.id,
-      body: "Ready dependency scheduling run complete.",
-    });
-    finishReadyRun();
-
-    await waitForCondition(async () => {
-      const run = await db
-        .select({ status: heartbeatRuns.status })
-        .from(heartbeatRuns)
-        .where(eq(heartbeatRuns.id, readyWake!.id))
-        .then((rows) => rows[0] ?? null);
-      return run?.status === "succeeded";
-    });
-
-    const readyRun = await db
-      .select()
-      .from(heartbeatRuns)
-      .where(eq(heartbeatRuns.id, readyWake!.id))
-      .then((rows) => rows[0] ?? null);
-
-    expect(readyRun?.status).toBe("succeeded");
+    const readyRun = await db.select({ status: heartbeatRuns.status,
+      contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, readyWake!.id)).then((rows) => rows[0] ?? null);
+    expect(readyRun).toMatchObject({ status: "queued", contextSnapshot: { issueId: readyIssueId } });
 
     await db
       .update(issues)
@@ -504,19 +435,11 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
     });
     expect(promotedWake).not.toBeNull();
 
-    await waitForCondition(async () => {
-      const run = await db
-        .select({ status: heartbeatRuns.status })
-        .from(heartbeatRuns)
-        .where(eq(heartbeatRuns.id, promotedWake!.id))
-        .then((rows) => rows[0] ?? null);
-      return run?.status === "succeeded";
-    });
-
     const promotedBlockedRun = await db
       .select({
         id: heartbeatRuns.id,
         status: heartbeatRuns.status,
+        contextSnapshot: heartbeatRuns.contextSnapshot,
       })
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, promotedWake!.id))
@@ -532,16 +455,13 @@ describeEmbeddedPostgres("heartbeat dependency-aware queued run selection", () =
       )
       .then((rows) => rows[0]?.count ?? 0);
 
-    expect(promotedBlockedRun?.status).toBe("succeeded");
+    expect(promotedBlockedRun).toMatchObject({ status: "queued", contextSnapshot: {
+      issueId: blockedIssueId, wakeReason: "issue_blockers_resolved", resolvedBlockerIssueId: blockerId,
+    } });
     expect(blockedWakeRequestCount).toBeGreaterThanOrEqual(2);
 
-    const noActiveRuns = await waitForCondition(async () => {
-      const rows = await db
-        .select({ status: heartbeatRuns.status })
-        .from(heartbeatRuns);
-      return rows.every((run) => run.status !== "queued" && run.status !== "running");
-    }, 10_000);
-    expect(noActiveRuns).toBe(true);
+    await db.update(heartbeatRuns).set({ status: "cancelled", finishedAt: new Date(), updatedAt: new Date() })
+      .where(inArray(heartbeatRuns.id, [activeRunId, interactionWake!.id, readyWake!.id, promotedWake!.id]));
   });
 
   it("defers issue_blockers_resolved as a follow-up when the same issue is already running", async () => {

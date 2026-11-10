@@ -198,7 +198,7 @@ import {
   type NativeRunnerAttachmentSourceCapture,
 } from "./native-runner-file-handoff.js";
 import { executeNativeRemoteAttachmentStage, readNativeAttachmentStageCleanupReceipts,
-  type NativeAttachmentStageIntent } from "./native-attachment-remote-stage.js";
+  NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, type NativeAttachmentStageIntent } from "./native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentStageOwner } from "./native-attachment-remote-stage-owner.js";
 import { nativeToolContractFingerprintForTarget } from "./native-session-resume.js";
 import { verifyRetainedMaintenanceNoLaunch } from "./native-maintenance-no-launch.js";
@@ -10122,7 +10122,10 @@ export async function executePaperclipNativeSession(input: {
               staged = await executeNativeRemoteAttachmentStage({ runner, taskRoot: target.remoteCwd,
                 runId: input.execution.binding.runId, attachmentId: stage.attachmentId, bytes: stage.bytes,
                 sha256: stage.sha256, stageNonce: stage.stageNonce });
-              await readVerifiedRemoteWorkspaceFile({ runner, workspaceRoot: target.remoteCwd,
+              const readbackRunner = { ...runner, execute: (command: Parameters<typeof runner.execute>[0]) => runner.execute({
+                ...command, nativePreparationPurpose: NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE,
+              }) };
+              await readVerifiedRemoteWorkspaceFile({ runner: readbackRunner, workspaceRoot: target.remoteCwd,
                 contentRef: staged.relativePath, byteSize: stage.bytes.length, sha256: stage.sha256 });
               await persistNativeRemoteAttachmentStageIntent({ ...intentInput, phase: "committed" });
               return staged;

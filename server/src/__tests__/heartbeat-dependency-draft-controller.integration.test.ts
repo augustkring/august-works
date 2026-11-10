@@ -362,7 +362,7 @@ describe("dependency scheduling through the installed Native text draft controll
     });
   }, 60_000);
 
-  it("continues once after a Human withdraws the last review interaction, then exposes the stalled decision", async () => {
+  it("continues once after a Human withdraws the last review interaction, then creates a fresh review path", async () => {
     const fixture = await seedInstalledDraft();
     const { f, model, human } = fixture;
     const outputs = [
@@ -470,12 +470,24 @@ describe("dependency scheduling through the installed Native text draft controll
       expect(settledEvents.every(event => (event.payload as { admissionEventSeq?: number }).admissionEventSeq === admittedByRun.get(event.runId))).toBe(true);
       expect(lifecycleEvents.some(event => event.eventType === "native.process_start_requested" ||
         event.eventType === "native.local_process_stopped")).toBe(false);
+      expect(interactionWake?.runId).toBeTruthy();
+      expect(interactionWake?.runId).not.toBe(initial.id);
+      const freshReviewInteractions = await db.select({ id: issueThreadInteractions.id, kind: issueThreadInteractions.kind,
+        status: issueThreadInteractions.status, sourceRunId: issueThreadInteractions.sourceRunId }).from(issueThreadInteractions).where(and(
+        eq(issueThreadInteractions.companyId, f.home), eq(issueThreadInteractions.issueId, entry.task.id),
+        eq(issueThreadInteractions.status, "pending")));
+      expect(freshReviewInteractions).toHaveLength(1);
+      const freshReviewInteraction = freshReviewInteractions[0]!;
+      expect(freshReviewInteraction).toMatchObject({ kind: "request_confirmation", status: "pending", sourceRunId: interactionWake!.runId });
+      expect(freshReviewInteraction.id).not.toBe(pendingInteraction.id);
       const attention = await issueService(db).listReviewAttention(f.home,
         [{ id: entry.task.id, companyId: f.home, status: "in_review" }]);
-      expect(attention.get(entry.task.id)).toMatchObject({ state: "stalled", paths: [] });
+      expect(attention.get(entry.task.id)?.state).toBe("covered");
+      expect(attention.get(entry.task.id)?.paths.filter(path => path.kind === "interaction").map(path => path.ref))
+        .toEqual([freshReviewInteraction.id]);
       const feed = await attentionService(db).list(f.home, { userId: f.userId });
-      expect(feed.items.find(item => item.subject.id === entry.task.id)).toMatchObject({ sourceKind: "review",
-        decisionVerbs: expect.arrayContaining([expect.objectContaining({ id: "choose_review_path", label: "Choose review path" })]) });
+      expect(feed.items.filter(item => item.subject.id === entry.task.id)
+        .flatMap(item => item.decisionVerbs.map(verb => verb.id))).not.toContain("choose_review_path");
     });
   }, 60_000);
 
@@ -636,6 +648,9 @@ describe("dependency scheduling through the installed Native text draft controll
         automaticRecovery: { actionOutcome: "unknown", replay: "blocked", runId: stopped.id,
           reservationId: observed.reservationId },
       } });
+      expect(await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.retryOfRunId, stopped.id))))
+        .toHaveLength(0);
       await issueRecoveryActionService(db).resolveActiveForIssue({ companyId: f.home,
         sourceIssueId: entry.task.id, actionId: hold!.id, status: "resolved", outcome: "blocked",
         resolutionNote: "The notice is resolved; the unknown model response remains a no-replay fence." });

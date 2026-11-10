@@ -4,6 +4,7 @@ import type { RuntimeSandboxExecRelayRequest } from "@paperclipai/shared";
 import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import { MAX_ATTACHMENT_BYTES } from "../../attachment-types.js";
 import { nativeSha256 } from "./canonical.js";
+import { parseNativeRemoteWorkspaceAttachmentReadback } from "./remote-deliverable-file.js";
 
 export const NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE = "native_attachment_stage" as const;
 export const NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE = "native_attachment_cleanup" as const;
@@ -227,6 +228,8 @@ export type NativeRemoteAttachmentStageOperation =
   | { phase: "append"; runId: string; stageNonce: string; attachmentId: string; offset: number; totalBytes: number; chunkBase64: string }
   | { phase: "commit"; runId: string; stageNonce: string; attachmentId: string; totalBytes: number; sha256: string }
   | { phase: "cleanup"; runId: string; stageNonce: string; attachmentId: string };
+export type NativeRemoteAttachmentStageRelayOperation = NativeRemoteAttachmentStageOperation |
+  { phase: "readback"; runId: string; stageNonce: string; relativePath: string; byteSize: number; sha256: string };
 
 export type NativeRemoteAttachmentStageRequest = Parameters<CommandManagedRuntimeRunner["execute"]>[0];
 function validUuid(value: unknown): value is string { return typeof value === "string" && UUID.test(value); }
@@ -270,8 +273,12 @@ export function buildNativeRemoteAttachmentStageCommand(input: {
     nativePreparationPurpose: purpose };
 }
 
-export function parseNativeRemoteAttachmentStageCommand(request: RuntimeSandboxExecRelayRequest,
-  expectedTaskRoot: string): NativeRemoteAttachmentStageOperation | null {
+export function parseNativeRemoteAttachmentStageCommand(request: Pick<RuntimeSandboxExecRelayRequest, "cwd" | "argv" | "env" | "stdinBase64">,
+  expectedTaskRoot: string): NativeRemoteAttachmentStageRelayOperation | null {
+  const readback = parseNativeRemoteWorkspaceAttachmentReadback(request, expectedTaskRoot);
+  if (readback) return { phase: "readback", ...readback };
+  if (request.env !== undefined && (!request.env || typeof request.env !== "object" || Array.isArray(request.env)) ||
+      Object.keys(request.env ?? {}).length !== 0) return null;
   if (request.cwd !== expectedTaskRoot || request.argv.length < 9 || request.argv[0] !== "node" ||
       request.argv[1] !== "--input-type=commonjs" || request.argv[2] !== "-e" || request.argv[3] !== STAGE_SCRIPT ||
       request.argv[4] !== "paperclip-native-attachment-stage-v1" || request.argv[5] !== expectedTaskRoot ||

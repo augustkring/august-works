@@ -1,0 +1,175 @@
+{
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/__tests__/heartbeat-issue-liveness-escalation.test.ts"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 464.27526402099465,
+  "sourceManifest": "heartbeat-liveness-control-plane-full-r237-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 31.330336903003627,
+  "stopReason": null,
+  "nodeHeapMiB": 768,
+  "ownedDescendantRssLimitBytes": 4294967296,
+  "observedPeakOwnedDescendantRssBytes": 4055330816,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 332936,
+      "parentPid": 330948,
+      "executable": "node",
+      "rssBytes": 790417408,
+      "nodeOptions": "--max-old-space-size=768"
+    },
+    {
+      "pid": 332960,
+      "parentPid": 332936,
+      "executable": "node",
+      "rssBytes": 782163968,
+      "nodeOptions": "--max-old-space-size=768"
+    },
+    {
+      "pid": 333036,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 414810112
+    },
+    {
+      "pid": 333034,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 412160000
+    },
+    {
+      "pid": 333029,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 402247680
+    },
+    {
+      "pid": 333031,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 401448960
+    },
+    {
+      "pid": 333032,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 387276800
+    },
+    {
+      "pid": 333035,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 146214912
+    },
+    {
+      "pid": 333033,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 120221696
+    },
+    {
+      "pid": 333030,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 117071872
+    },
+    {
+      "pid": 333010,
+      "parentPid": 332960,
+      "executable": "postgres",
+      "rssBytes": 24588288
+    },
+    {
+      "pid": 333011,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 12922880
+    },
+    {
+      "pid": 333017,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 8708096
+    },
+    {
+      "pid": 333018,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 7761920
+    },
+    {
+      "pid": 333019,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 7077888
+    },
+    {
+      "pid": 333015,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 5394432
+    },
+    {
+      "pid": 333014,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 5296128
+    },
+    {
+      "pid": 333012,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 5259264
+    },
+    {
+      "pid": 333013,
+      "parentPid": 333010,
+      "executable": "postgres",
+      "rssBytes": 4288512
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 28,
+  "observedPostgresRelatedPids": [
+    332974,
+    332982,
+    332984,
+    332997,
+    333007,
+    333010,
+    333011,
+    333012,
+    333013,
+    333014,
+    333015,
+    333017,
+    333018,
+    333019,
+    333022,
+    333029,
+    333030,
+    333031,
+    333032,
+    333033,
+    333034,
+    333035,
+    333036
+  ],
+  "uniqueTempRoot": "/var/tmp/mpg-726b5qhe",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 140,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "software fixture with actual embedded PostgreSQL; no external provider/SDK/host proof"
+}

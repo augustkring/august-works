@@ -896,9 +896,22 @@ export async function buildExecutionContinuation(input: {
     const pendingInteractions = wake && envelope.unresolvedInteractionIds.length
       ? await captureNativeGovernedPendingInteractions({ db, companyId, issueId, runId: receiver.id, agentId: input.agentId,
           interactionIds: envelope.unresolvedInteractionIds }) : [];
-    const finalizedSummary = (wake && stageContinuation?.summary) ?? (wake && assignmentFinalizedSummary) ?? (wake && input.summary === null && sourceRunId && envelope.completedWork !== null
+    const withdrawalSourceRunIds = new Set(humanReviewWithdrawals.flatMap(capture =>
+      capture.projection.owner.sourceKind === "native_interaction" && capture.projection.owner.sourceRunStatus === "succeeded" &&
+        capture.projection.owner.sourceRunId === capture.projection.interactionSourceRunId
+        ? [capture.projection.owner.sourceRunId] : []));
+    const withdrawalSourceRunId = withdrawalSourceRunIds.size === 1 && humanReviewWithdrawals.every(capture =>
+      withdrawalSourceRunIds.has(capture.projection.owner.sourceRunId) &&
+      capture.projection.owner.sourceRunId === envelope.trigger.sourceRunId) ? [...withdrawalSourceRunIds][0]! : null;
+    const withdrawalFinalizedSummary = wake && !stageContinuation?.summary && !assignmentFinalizedSummary &&
+      withdrawalSourceRunId && envelope.completedWork !== null && !input.summaryDocument?.source.payloadSourceSnapshot
       ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
-          receiverRunId: receiver.id, sourceRunId }) : null);
+          receiverRunId: receiver.id, sourceRunId: withdrawalSourceRunId, reader: outcomeReader }) : null;
+    if (withdrawalFinalizedSummary) envelope.completedWork = withdrawalFinalizedSummary.body;
+    const finalizedSummary = (wake && stageContinuation?.summary) ?? (wake && assignmentFinalizedSummary) ?? withdrawalFinalizedSummary ??
+      (wake && input.summary === null && sourceRunId && envelope.completedWork !== null
+        ? await captureNativeFinalizedContinuationSummary({ db, companyId, issueId, agentId: input.agentId,
+            receiverRunId: receiver.id, sourceRunId }) : null);
     const { captureNativeToolActionDelivery } = await import("./tool-action-delivery.js");
     const delivery = wake && governedInteractions.length ? await captureNativeToolActionDelivery({ db, companyId, issueId,
       agentId: input.agentId, runId: receiver.id, wakeupRequestId: wake.id }) : null;
@@ -913,7 +926,7 @@ export async function buildExecutionContinuation(input: {
     const interaction = nativeTaskWakeInteraction(wake?.payload);
     const manualQueueAdoption = wake && receiver ? await readNativeManualQueueAdoption(db, {
       run: receiver, issueId, currentWake: wake }) : null;
-    const summary = !assignmentFinalizedSummary && input.summaryDocument && effectiveSummary === input.summaryDocument.value.body
+    const summary = !assignmentFinalizedSummary && !withdrawalFinalizedSummary && input.summaryDocument && effectiveSummary === input.summaryDocument.value.body
       ? { source: input.summaryDocument.source, rawTrustHash: nativeSha256(input.summaryDocument.value.sourceTrust),
           rendition: await createRunSecretRedactionRegistry(db).redactForIssue(companyId, issueId, {
             key: input.summaryDocument.value.key, title: input.summaryDocument.value.title,

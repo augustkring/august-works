@@ -837,6 +837,15 @@ describe("native bootstrap rendered-source closure", () => {
     zeroOriginWithdrawal.commentSources[0] = { ...zeroOriginWithdrawal.commentSources[0]!,
       acceptedPresentationOwner: { commentSourceIdentity: acceptedCommentSource, acceptedSummaryOwner } };
     expect(check(zeroOriginWithdrawal, canonicalTaskObjective)).toBe(zeroOriginWithdrawal);
+    const acceptedFinalizedSummary: NonNullable<NativeTaskContinuationCapture["finalizedSummary"]> = {
+      ...acceptedSummaryOwner, receiverRunId: runId };
+    const withdrawalWithAcceptedSummary = structuredClone(withdrawal);
+    withdrawalWithAcceptedSummary.finalizedSummary = acceptedFinalizedSummary;
+    withdrawalWithAcceptedSummary.envelope.completedWork = acceptedFinalizedSummary.body;
+    expect(check(withdrawalWithAcceptedSummary)).toBe(withdrawalWithAcceptedSummary);
+    const unrelatedAcceptedSummary = structuredClone(withdrawalWithAcceptedSummary);
+    unrelatedAcceptedSummary.finalizedSummary!.sourceRunId = randomUUID();
+    expect(check(unrelatedAcceptedSummary)).toBeNull();
     const mismatchedPresentationProducer = structuredClone(zeroOriginWithdrawal);
     mismatchedPresentationProducer.envelope.messages[0]!.createdByRunId = randomUUID();
     const mismatchedMessage = mismatchedPresentationProducer.envelope.messages[0]!;

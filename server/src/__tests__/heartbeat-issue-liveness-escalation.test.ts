@@ -347,7 +347,7 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
     return { companyId, agentId, blockedIssueId, blockerIssueId, executionWorkspaceId };
   }
 
-  it("runs exactly one bounded review-path recovery before surfacing a stalled decision", async () => {
+  it("enqueues one bounded review-path recovery and preserves the stalled decision", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();
     const issueId = randomUUID();
@@ -416,8 +416,13 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
         eq(agentWakeupRequests.reason, "issue_review_path_lost"),
       ));
     expect(recoveryWakes).toHaveLength(1);
+    // This control-plane fixture has no qualified managed model transport. The
+    // recovery intent must be admitted exactly once, while the execution remains
+    // truthfully failed at transport admission. The installed AWText integration
+    // case covers successful review withdrawal and real recovery output.
     expect(recoveryWakes[0]).toMatchObject({
-      status: "completed",
+      status: "failed",
+      runId: expect.any(String),
       payload: expect.objectContaining({
         issueId,
         reviewPathConsumedRef: "superseded-confirmation",
@@ -425,6 +430,11 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
         maxReviewPathRecoveryAttempts: 1,
       }),
     });
+    const recoveryRunId = recoveryWakes[0]?.runId;
+    if (!recoveryRunId) throw new Error("review_path_recovery_run_missing");
+    const [recoveryRun] = await db.select({ status: heartbeatRuns.status, errorCode: heartbeatRuns.errorCode })
+      .from(heartbeatRuns).where(eq(heartbeatRuns.id, recoveryRunId));
+    expect(recoveryRun).toMatchObject({ status: "failed", errorCode: "configuration_incomplete" });
 
     const attention = await issueService(db)
       .listReviewAttention(companyId, [{ id: issueId, companyId, status: "in_review" }]);
@@ -566,7 +576,7 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
     return { ...fixture, action: action! };
   }
 
-  it.each(["active", "resolved"] as const)("keeps repeated wakes behind a %s execution hold run-free, then resumes once", async (status) => {
+  it.each(["active", "resolved"] as const)("keeps repeated wakes behind a %s execution hold run-free, then admits one recovery attempt", async (status) => {
     const { companyId, agentId, blockedIssueId, action } = await seedExecutionWait(status);
     const heartbeat = heartbeatService(db);
     // Different producers and wake keys must not create new attempts or notices.
@@ -601,8 +611,13 @@ describeEmbeddedPostgres("heartbeat resolved dependency wake reconciliation", ()
     expect((await heartbeat.reconcileResolvedDependencyWakes()).healed).toBe(1);
     expect((await heartbeat.reconcileResolvedDependencyWakes()).healed).toBe(0);
     await heartbeat.drainActiveRunExecutions();
-    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId))).toHaveLength(1);
-    expect(mockAdapterExecute).toHaveBeenCalledTimes(1);
+    const resumedRuns = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, companyId));
+    expect(resumedRuns).toHaveLength(1);
+    // The fixture's adapter hook is intentionally not a qualified transport.
+    // Assert one control-plane attempt and the admission failure, never a fake
+    // successful adapter call. The AWText integration suite covers real success.
+    expect(resumedRuns[0]).toMatchObject({ status: "failed", errorCode: "configuration_incomplete" });
+    expect(mockAdapterExecute).not.toHaveBeenCalled();
   });
 
   it("rechecks every gate after an execution hold clears", async () => {

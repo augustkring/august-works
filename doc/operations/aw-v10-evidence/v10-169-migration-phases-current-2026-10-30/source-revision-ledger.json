@@ -821,5 +821,219 @@
         "newSha256": "4e942e48908b03c621a525ab81dbd6ee27a4544095928b6fee4b7b809612bfe8"
       }
     ]
+  },
+  "nativeAcceptedSummaryAndAttachmentReadbackReview20261110": {
+    "sourceHead": "d8f26fed22d4768ac04fb32c08c8b0a39c68ae7d",
+    "worktreeDisposition": "13 exact source/test paths changed after sourceHead; hashes describe the current uncommitted overlay",
+    "changes": [
+      {
+        "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+        "oldSha256": "92886f6eda16b2a905674cc7a71a2e60994d443a2883177d64a910808efc5896",
+        "newSha256": "d4a8a2618a214cd6925da2c770d9cdf31e5e3e621fcbca70d772c2ad8a968773",
+        "sourceGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+        "oldSha256": "4c2455ad4d2e935b9b01a78637743ccdaeef2b4aa7f9d7d38e9d297d45de6680",
+        "newSha256": "7d238a8887de4a8bdfbe8656c91477546538e71668dd507ea6a1bd1949c7c90e",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts",
+        "oldSha256": "516f6b79cd81d59d3a489593c47f034e2aa92c65f20a0567d74e56c53fc4f30a",
+        "newSha256": "2d440f3f9df97ce74fd868e5cb608168ecfd42213c9d7c1bfb004952b76bad06",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
+        "oldSha256": "c3d236e605ceb7feed5a2b8230be8b8556fc3c3a199f7a5bf211b94af6c0f76a",
+        "newSha256": "a90529e45012737cd3b0c4a952e5a27a49aafa9d5ec8e721a94ff82634afb98c",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/execution-continuation.ts",
+        "oldSha256": "e9ea67423f072fde8acc77cce5b2fa4684f6aff1daa7247eeb0fef4eaff98f04",
+        "newSha256": "f3792e52a6d1b7e518d00f84bf54fca25ef4cf605f353e0791e1d3af7c2058dc",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts",
+        "oldSha256": "457ea5f7310eef69336e596f9654b960ccc19c8b714eebfeb6ae2c89a6e538a8",
+        "newSha256": "9c63563c5a2456a91f7a3319cfec6ecf93c7d095bf5d7f2a9ed317079754c1f5",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-attachment-remote-stage.test.ts",
+        "oldSha256": "bcdd58969ebd5d93c854f39df790c81b54cdae34f5f307fa8f83426bf5355507",
+        "newSha256": "102b0fd11df517c9c3558488119e1c33a6ea56808a5d18e91d9933aac9eeff36",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-attachment-remote-stage.ts",
+        "oldSha256": "45ecc6fcf1ab01f4444a626ff28f928f105dcff8aa3e905194ddedc94fdfaf56",
+        "newSha256": "1c677a7c0a798c56101455d46ad687af3963e65029bdf049e755697bad809ac0",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-execution-input.test.ts",
+        "oldSha256": "54f4c839418b60e573491373ee4b7e93779a80f128ef8f1c9135399983532dec",
+        "newSha256": "56d183c427aecb7375d3f91c7da29bed41b56a18cfd6756094c8f44a67d32d3e",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-execution-input.ts",
+        "oldSha256": "e6e90710d4b39d411e5f0a3aebcd474fb503dbae390491ccd9632a58235a394f",
+        "newSha256": "2024700cca39af654a717c0bd658e2eb66f87407bf2f6255c05e3923ad81a429",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "4e942e48908b03c621a525ab81dbd6ee27a4544095928b6fee4b7b809612bfe8",
+        "newSha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5",
+        "sourceGroups": [
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/remote-deliverable-file.ts",
+        "oldSha256": "dc91fee9c9de51020f3c144c7bac18cc7bf14b49ea21e89c069bd9968f74f454",
+        "newSha256": "05a6a7e95e9d11fdf09168375f5e686fc1fffa01d3df439ccb550e7fdc3231f6",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/runtime/control.ts",
+        "oldSha256": "92034f8f1032ffdd28dfebe299ab53882d5e40e630668c691baef278204617e2",
+        "newSha256": "cad66dfa516f84a88c89df5994c6bb05b661969a32f2fa462560e8dae96114d7",
+        "sourceGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      }
+    ],
+    "reason": "Current source delta: use the canonical accepted Native run summary when no document snapshot exists, without inventing a document snapshot; make remote attachment readback a typed exact operation with unique persisted intent and current source/run/agent/lease/workspace/input-hash ownership, then preserve byte-identity checks on the existing verified-file path; add strict parser-negative coverage and adjust queue/recovery control-plane assertions to report the observed unqualified-transport outcome truthfully. The controlled installed AWText integration case exercises a real Human withdrawal and successful bounded review recovery; it is separate from the legacy queue fixture. The remote-deliverable-file parser maps to the existing Native runtime/authority group and its source-base pin is from the graph sourceBase commit.",
+    "qualificationBoundary": "Source/hash inventory only. No test-pass receipt or capability qualification is recorded. Do not promote historical requirement statuses, owner assessments, source groups, or phase status. The current Native Project browser resource outcome remains inconclusive; no local API 500 is established. Fixed Node path absence is only an environment observation; SDK exit-126 attribution remains unresolved. Provider, production Host, external Human/customer, storage, operator, staffed-support, and completed-erasure qualification remain open unless Root records their exact owner receipts separately.",
+    "reviewedExistingGroupPins": {
+      "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "server/src/__tests__/heartbeat-dependency-scheduling.test.ts": [
+        "SCR-V10-HOTSPOT-02"
+      ],
+      "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-06"
+      ],
+      "server/src/__tests__/heartbeat-process-recovery.test.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07"
+      ],
+      "server/src/services/execution-continuation.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-attachment-remote-stage.test.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-attachment-remote-stage.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-execution-input.test.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-execution-input.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/native-runtime/native-session-executor.ts": [
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06"
+      ],
+      "server/src/services/native-runtime/remote-deliverable-file.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "server/src/services/runtime/control.ts": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ]
+    },
+    "helpReviewDisposition": {
+      "updatedExistingLinkedPairs": [],
+      "frontmatterLinkedPairsFound": [],
+      "noNewPairsAdded": true,
+      "unlinkedSourceRationales": [
+        {
+          "sourcePaths": [
+            "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+            "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
+            "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts",
+            "server/src/__tests__/heartbeat-process-recovery.test.ts",
+            "server/src/services/execution-continuation.ts",
+            "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts",
+            "server/src/services/native-runtime/native-attachment-remote-stage.test.ts",
+            "server/src/services/native-runtime/native-attachment-remote-stage.ts",
+            "server/src/services/native-runtime/native-execution-input.test.ts",
+            "server/src/services/native-runtime/native-execution-input.ts",
+            "server/src/services/native-runtime/native-session-executor.ts",
+            "server/src/services/native-runtime/remote-deliverable-file.ts",
+            "server/src/services/runtime/control.ts"
+          ],
+          "disposition": "The 13 changed source/test paths have no existing linked Help source/article review pair. Changes govern internal Native summary selection, typed attachment readback ownership and control-plane test observations. The real installed AWText fixture is a controlled test provider, not evidence of deployment provider qualification. No customer action, copy, or recovery instruction changes; no Help row or article link is invented."
+        }
+      ]
+    },
+    "compatibilityPinsUpdated": [
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "4e942e48908b03c621a525ab81dbd6ee27a4544095928b6fee4b7b809612bfe8",
+        "newSha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5"
+      }
+    ],
+    "phaseMatrixPinsUpdated": [
+      {
+        "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
+        "oldSha256": "92886f6eda16b2a905674cc7a71a2e60994d443a2883177d64a910808efc5896",
+        "newSha256": "d4a8a2618a214cd6925da2c770d9cdf31e5e3e621fcbca70d772c2ad8a968773"
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "4e942e48908b03c621a525ab81dbd6ee27a4544095928b6fee4b7b809612bfe8",
+        "newSha256": "ebb8d3baa809c205b30b60dfd8abedeebf5da8bd5895ef8fa3111f8f0271c6e5"
+      }
+    ],
+    "sourceGraphMappingAdded": {
+      "path": "server/src/services/native-runtime/remote-deliverable-file.ts",
+      "group": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+      "sourceBaseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+      "sourceBaseSha256": "dc91fee9c9de51020f3c144c7bac18cc7bf14b49ea21e89c069bd9968f74f454",
+      "sourceDeltaPathCount": 1985
+    }
   }
 }

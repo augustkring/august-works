@@ -20,7 +20,8 @@ import { forbidden } from "../../errors.js";
 import { assertNativePreDispatchTaskCommentAttachmentCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 import { nativeSha256 } from "./canonical.js";
-import { readNativeAttachmentStageCleanupReceipts, type NativeRemoteAttachmentStageOperation } from "./native-attachment-remote-stage.js";
+import { readNativeAttachmentStageCleanupReceipts, type NativeRemoteAttachmentStageOperation,
+  type NativeRemoteAttachmentStageRelayOperation } from "./native-attachment-remote-stage.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "./native-chat-workspace.js";
 
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -217,4 +218,46 @@ export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transacti
     attachmentSnapshot: snapshot.data as unknown as Record<string, unknown>,
     sourceHash: row.asset.sha256, byteSize: row.asset.byteSize, filename: reference.filename,
     contentType: row.asset.contentType, stageNonce: input.operation.stageNonce, executionInputHash };
+}
+
+/** Resolve a readback nonce only through its unique persisted staging intent,
+ * then re-run the ordinary current source/lease owner against its committed
+ * bytes. The verifier still proves the actual remote file and hash. */
+export async function captureNativeRemoteAttachmentReadbackOwner(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string; taskRoot: string; leaseId: string;
+  operation: Extract<NativeRemoteAttachmentStageRelayOperation, { phase: "readback" }>;
+}): Promise<Exclude<Awaited<ReturnType<typeof captureNativeRemoteAttachmentStageOwner>>, { cleanupOnly: true }> | null> {
+  if (!uuid(input.companyId) || !uuid(input.issueId) || !uuid(input.runId) || !uuid(input.agentId) ||
+      !uuid(input.leaseId) || input.operation.runId !== input.runId || !uuid(input.operation.stageNonce) ||
+      !Number.isSafeInteger(input.operation.byteSize) || input.operation.byteSize < 1 ||
+      !/^[a-f0-9]{64}$/.test(input.operation.sha256)) return null;
+  const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId),
+    eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+  )).for("share").limit(1);
+  if (!run) return null;
+  const profile = record(run.runnerProfileJson);
+  let receipts: ReturnType<typeof readNativeAttachmentStageCleanupReceipts>;
+  try { receipts = readNativeAttachmentStageCleanupReceipts(profile, input.runId, input.leaseId); }
+  catch { return null; }
+  const intents = Array.isArray(profile.nativeAttachmentStageIntents) ? profile.nativeAttachmentStageIntents.map(record) : [];
+  const matches = intents.filter(intent => intent.stageNonce === input.operation.stageNonce && intent.phase === "staging");
+  if (matches.length !== 1) return null;
+  const intent = matches[0]!;
+  if (intent.leaseId !== input.leaseId || intent.relativePath !== input.operation.relativePath ||
+      intent.sha256 !== input.operation.sha256 || intent.byteSize !== input.operation.byteSize ||
+      typeof intent.attachmentId !== "string" || !uuid(intent.attachmentId) ||
+      typeof intent.executionInputHash !== "string" || !/^[a-f0-9]{64}$/.test(intent.executionInputHash) ||
+      !receipts.some(receipt => receipt.stageNonce === input.operation.stageNonce &&
+        receipt.attachmentId === intent.attachmentId && receipt.sha256 === input.operation.sha256 &&
+        receipt.byteSize === input.operation.byteSize)) return null;
+  const owner = await captureNativeRemoteAttachmentStageOwner(db, { companyId: input.companyId, issueId: input.issueId,
+    runId: input.runId, agentId: input.agentId, taskRoot: input.taskRoot, leaseId: input.leaseId,
+    expectedExecutionInputHash: intent.executionInputHash,
+    requirePersistedStageIntent: true,
+    operation: { phase: "commit", runId: input.runId, stageNonce: input.operation.stageNonce,
+      attachmentId: intent.attachmentId, totalBytes: input.operation.byteSize, sha256: input.operation.sha256 } });
+  if ("cleanupOnly" in owner || owner.sourceHash.toLowerCase() !== input.operation.sha256 ||
+      owner.byteSize !== input.operation.byteSize || owner.executionInputHash !== intent.executionInputHash) return null;
+  return owner;
 }
