@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { createDb, heartbeatRuns, issues } from "@paperclipai/db";
+import { createDb, chatConversations, heartbeatRuns, issues } from "@paperclipai/db";
 import { getServerAdapter, runningProcesses } from "../adapters/index.js";
 import * as nativeExecutor from "../services/native-runtime/native-session-executor.js";
+import * as admissionRetry from "../services/chat-control-admission-retry.js";
 import { CHAT_CONTROL_RECOVERY_STOP_CODE, CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE } from "../services/chat-control-recovery-stop.js";
 import { withManagedChannelCloseSource } from "./helpers/managed-channel-close-source-fixture.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
@@ -17,12 +18,12 @@ let completed = 0;
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "managed-chat-dispatch-boundaries-"));
   vi.stubEnv("PAPERCLIP_HOME", root);
-  database = await startEmbeddedPostgresTestDatabase("managed-chat-dispatch-boundaries-", { preserveDataOnFailure: () => completed !== 3 });
+  database = await startEmbeddedPostgresTestDatabase("managed-chat-dispatch-boundaries-", { preserveDataOnFailure: () => completed !== 4 });
   db = createDb(database.connectionString, { maxConnections: 3 });
 }, 60_000);
 afterAll(async () => {
   await database?.cleanup(); vi.unstubAllEnvs();
-  if (root && completed === 3) { await makeFixtureTreeWritable(root); await rm(root, { recursive: true, force: true }); }
+  if (root && completed === 4) { await makeFixtureTreeWritable(root); await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
 // The spy calls the original executor unchanged: predecessor authority comes
@@ -67,6 +68,76 @@ it("honors close committed at the dispatch boundary without a provider call", as
     expect((await db.select().from(issues).where(eq(issues.id, source.issueId)))[0])
       .toMatchObject({ status: "in_progress", executionRunId: null });
   });
+  completed++;
+}, 900_000);
+
+it("rechecks close after a real dispatch admission lock retry without a provider call", async () => {
+  const lockDb = createDb(database.connectionString, { maxConnections: 1 });
+  const originalRetry = admissionRetry.retryChatControlAdmission;
+  const retrySpy = vi.spyOn(admissionRetry, "retryChatControlAdmission");
+  let observedNowaitContention = false;
+  retrySpy.mockImplementation(async attempt => originalRetry(async () => {
+    try { return await attempt(); }
+    catch (error) {
+      let current: unknown = error;
+      for (let depth = 0; depth < 4 && current; depth += 1) {
+        const value = current as { code?: unknown; cause?: unknown };
+        if (value.code === "55P03") { observedNowaitContention = true; break; }
+        current = value.cause;
+      }
+      throw error;
+    }
+  }));
+  let releaseIssueLock!: () => void;
+  let markIssueLocked!: () => void;
+  const release = new Promise<void>(resolve => { releaseIssueLock = resolve; });
+  const issueLocked = new Promise<void>(resolve => { markIssueLocked = resolve; });
+  let lockTransaction: Promise<unknown> | undefined;
+  try {
+    await withSource(async source => {
+      let checked = false;
+      source.setObserver(async ({ stage, runId }) => {
+        if (stage !== "dispatch" || runId === source.sourceRun.id || checked) return;
+        checked = true;
+        const child = await source.heartbeat.getRun(runId);
+        expect(child?.retryOfRunId).toBe(source.sourceRun.id);
+        lockTransaction = lockDb.transaction(async tx => {
+          await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, source.issueId)).for("update");
+          markIssueLocked();
+          await release;
+        });
+        await Promise.race([issueLocked, lockTransaction.then(() => {
+          throw new Error("dispatch issue-lock transaction ended before lock readiness");
+        })]);
+      });
+      try {
+        const run = await source.heartbeat.wakeup(source.agentId, automaticWake(source));
+        expect(run).not.toBeNull();
+        await vi.waitFor(() => expect(observedNowaitContention).toBe(true), { timeout: 20_000, interval: 25 });
+        // This signal comes only from the unchanged retry loop catching the
+        // actual PostgreSQL NOWAIT error while the independent pool holds issue.
+        await source.publishClose();
+        expect((await db.select({ state: chatConversations.state }).from(chatConversations).where(eq(chatConversations.issueId, source.issueId)))
+          .some(conversation => conversation.state === "completed")).toBe(true);
+        releaseIssueLock();
+        await lockTransaction;
+        await source.heartbeat.drainActiveRunExecutions();
+        expect(checked).toBe(true);
+        expect(await source.heartbeat.getRun(run!.id)).toMatchObject({ status: "cancelled", errorCode: CHAT_CONTROL_RECOVERY_STOP_CODE });
+        expect(source.providerCalls()).toBe(source.sourceProviderCalls);
+        expect((await db.select({ status: issues.status, executionRunId: issues.executionRunId }).from(issues)
+          .where(eq(issues.id, source.issueId)))[0]).toMatchObject({ status: "in_progress", executionRunId: null });
+      } finally {
+        releaseIssueLock();
+        await lockTransaction;
+      }
+    });
+  } finally {
+    releaseIssueLock();
+    await lockTransaction?.catch(() => undefined);
+    retrySpy.mockRestore();
+    await lockDb.$client.end();
+  }
   completed++;
 }, 900_000);
 

@@ -11,14 +11,14 @@
   },
   "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2072,
+    "sourceDeltaPathCount": 2075,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14802,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted."
+    "fullDiffPathCount": 14829,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
@@ -4203,16 +4203,16 @@
         "identity": "full master base supplied by current build task"
       },
       "sourceInventoryBoundary": {
-        "sourceDeltaPathCount": 2072,
+        "sourceDeltaPathCount": 2075,
         "deletedSourcePathCount": 41,
         "untrackedSourceCandidateCount": 0,
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 14802,
-        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted."
+        "fullDiffPathCount": 14829,
+        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted."
       },
-      "sourceAfterGeneration": "Root official R86 generation from frozen source/evidence: 2072 source deltas, 50 owner groups, 25 hotspots, 169 requirement rows, 577 journaled migrations. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted."
+      "sourceAfterGeneration": "R87 exact source membership and base comparison retained; generated graph is rebuilt by Root after the final evidence and metadata are staged."
     },
     {
       "id": "SCR-V10-HOTSPOT-01",
@@ -5185,6 +5185,18 @@
           "sha256": "c555088156083ad1c3cbca96e143adca4696a9fa3397a18f01e75e77d45806af"
         },
         {
+          "path": "server/src/services/run-liveness-evidence.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/run-liveness.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "a7f0f57faf05f06ab24fce036493a40685fc2a900da19281678b2fee950331d7"
+        },
+        {
           "path": "server/src/services/saas/platform.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -5311,6 +5323,8 @@
         "server/src/services/plugin-lifecycle-inbox.ts",
         "server/src/services/resource-lifecycle-events.ts",
         "server/src/services/routines.ts",
+        "server/src/services/run-liveness-evidence.ts",
+        "server/src/services/run-liveness.ts",
         "server/src/services/saas/platform.ts",
         "server/src/services/tool-access.ts",
         "server/src/services/tool-gateway.ts",
@@ -5422,6 +5436,8 @@
         "server/src/services/plugin-lifecycle-inbox.ts",
         "server/src/services/resource-lifecycle-events.ts",
         "server/src/services/routines.ts",
+        "server/src/services/run-liveness-evidence.ts",
+        "server/src/services/run-liveness.ts",
         "server/src/services/saas/platform.ts",
         "server/src/services/tool-access.ts",
         "server/src/services/tool-gateway.ts",
@@ -5615,7 +5631,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
-          "sha256": "6e5ff91f8a2ffff713ceb8430b8ab43413bcbe52647f9fb488835df85fbc58e0"
+          "sha256": "8debc5749740b21cba9fadb7bcc13b4b92e905bf40a103a66a45bc5710dd11fc"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-chat-workspace-root.integration.test.ts",
@@ -5643,7 +5659,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "b3103a2ba6b78bff12da801d7dd741a6b0aa8957e7fc4df59a2c05811c73cd32"
+          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
         },
         {
           "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
@@ -5839,7 +5855,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760"
+          "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0"
         },
         {
           "path": "server/src/services/issue-assignment-wakeup.ts",
@@ -5924,6 +5940,14 @@
         {
           "path": "server/src/services/routines.ts",
           "sha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c"
+        },
+        {
+          "path": "server/src/services/run-liveness-evidence.ts",
+          "sha256": "bf6ba8a9364ef5db15ddf3df56847f3357f7189edc88171b8cc7ded438e15f34"
+        },
+        {
+          "path": "server/src/services/run-liveness.ts",
+          "sha256": "509d293debfe6a6efb75562573e346e402ed434ff39e249688494e5142339fd6"
         },
         {
           "path": "server/src/services/saas/platform.ts",
@@ -6339,7 +6363,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760"
+          "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.ts",
@@ -7043,7 +7067,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
-          "sha256": "6e5ff91f8a2ffff713ceb8430b8ab43413bcbe52647f9fb488835df85fbc58e0"
+          "sha256": "8debc5749740b21cba9fadb7bcc13b4b92e905bf40a103a66a45bc5710dd11fc"
         },
         {
           "path": "server/src/__tests__/helpers/managed-channel-close-source-fixture.ts",
@@ -7590,7 +7614,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "b3103a2ba6b78bff12da801d7dd741a6b0aa8957e7fc4df59a2c05811c73cd32"
+          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -8976,7 +9000,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "b3103a2ba6b78bff12da801d7dd741a6b0aa8957e7fc4df59a2c05811c73cd32"
+          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
         },
         {
           "path": "server/src/__tests__/helpers/authoring-memory.ts",
@@ -9244,7 +9268,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760"
+          "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0"
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
@@ -10121,11 +10145,11 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
-          "sha256": "6e5ff91f8a2ffff713ceb8430b8ab43413bcbe52647f9fb488835df85fbc58e0"
+          "sha256": "8debc5749740b21cba9fadb7bcc13b4b92e905bf40a103a66a45bc5710dd11fc"
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "b3103a2ba6b78bff12da801d7dd741a6b0aa8957e7fc4df59a2c05811c73cd32"
+          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
@@ -10309,7 +10333,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760"
+          "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0"
         },
         {
           "path": "server/src/services/learning/learning-assets.ts",
@@ -10576,7 +10600,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760"
+          "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0"
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
@@ -11449,7 +11473,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760"
+          "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0"
         },
         {
           "path": "server/src/services/native-runtime/create-skill.integration.test.ts",
@@ -13856,7 +13880,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
-          "sha256": "f2c6c805b6de47ee249f2268ce4cb76fbc45d14431a9e27fb46366abeca662f2"
+          "sha256": "8c0b6d59d35144a4dda07dd3b0f5b2984c2bb337f927c1e740bc0dd3c7af1f88"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-serial-scheduler.integration.test.ts",
@@ -25221,6 +25245,12 @@
           "sha256": "c0ef4432fa7c2f1de2eae6fe61f234720f1cc55d7d66364bb1a70dea019d0fe7"
         },
         {
+          "path": "server/src/__tests__/activity-service.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "3983e0d28f41bc3672f60632f7c16ca016ca14a72102f4f08eb029b54b990102"
+        },
+        {
           "path": "server/src/__tests__/agent-persona-persistence.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -26273,6 +26303,7 @@
         "server/src/__tests__/access-routes-permissions-upgrade.test.ts",
         "server/src/__tests__/access-validators.test.ts",
         "server/src/__tests__/activity-routes.test.ts",
+        "server/src/__tests__/activity-service.test.ts",
         "server/src/__tests__/agent-persona-persistence.test.ts",
         "server/src/__tests__/agent-secrets-routes.test.ts",
         "server/src/__tests__/agents-service-clear-error.test.ts",
@@ -26462,6 +26493,7 @@
         "server/src/__tests__/access-routes-permissions-upgrade.test.ts",
         "server/src/__tests__/access-validators.test.ts",
         "server/src/__tests__/activity-routes.test.ts",
+        "server/src/__tests__/activity-service.test.ts",
         "server/src/__tests__/agent-persona-persistence.test.ts",
         "server/src/__tests__/agent-secrets-routes.test.ts",
         "server/src/__tests__/agents-service-clear-error.test.ts",
@@ -26774,6 +26806,10 @@
         {
           "path": "server/src/__tests__/activity-routes.test.ts",
           "sha256": "d52e797aaa2ffdec837faf1a094c5cef75eb9ac5c961df48e06730f0732b4768"
+        },
+        {
+          "path": "server/src/__tests__/activity-service.test.ts",
+          "sha256": "c3a2f89535ccaa937c358620eb256492eaf0d40d6a71a104964222c9a116ff16"
         },
         {
           "path": "server/src/__tests__/agent-persona-persistence.test.ts",
@@ -27141,7 +27177,7 @@
         },
         {
           "path": "server/src/services/activity.ts",
-          "sha256": "56ae9acc3aa65a099e991c1fa880514c2536bf4f6c6892fc99021693e4e4bb49"
+          "sha256": "bee4ee4fd6fda49a05e5c7d7968bea50cee097707a83014be2951f9bc7811018"
         },
         {
           "path": "server/src/services/adaptive-planning/outcome.ts",
@@ -47100,7 +47136,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
-      "sha256": "6e5ff91f8a2ffff713ceb8430b8ab43413bcbe52647f9fb488835df85fbc58e0",
+      "sha256": "8debc5749740b21cba9fadb7bcc13b4b92e905bf40a103a66a45bc5710dd11fc",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -47194,7 +47230,7 @@
       "id": "source:server/src/__tests__/heartbeat-process-recovery.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-      "sha256": "b3103a2ba6b78bff12da801d7dd741a6b0aa8957e7fc4df59a2c05811c73cd32",
+      "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",
@@ -47943,7 +47979,7 @@
       "id": "source:server/src/services/heartbeat.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/heartbeat.ts",
-      "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "sha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-03",
@@ -48250,6 +48286,36 @@
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "present_at_base",
         "sha256": "c555088156083ad1c3cbca96e143adca4696a9fa3397a18f01e75e77d45806af"
+      }
+    },
+    {
+      "id": "source:server/src/services/run-liveness-evidence.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/services/run-liveness-evidence.ts",
+      "sha256": "bf6ba8a9364ef5db15ddf3df56847f3357f7189edc88171b8cc7ded438e15f34",
+      "changeIds": [
+        "SCR-V10-HOTSPOT-02"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/services/run-liveness-evidence.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/services/run-liveness.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/services/run-liveness.ts",
+      "sha256": "509d293debfe6a6efb75562573e346e402ed434ff39e249688494e5142339fd6",
+      "changeIds": [
+        "SCR-V10-HOTSPOT-02"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/services/run-liveness.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "a7f0f57faf05f06ab24fce036493a40685fc2a900da19281678b2fee950331d7"
       }
     },
     {
@@ -52385,7 +52451,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
-      "sha256": "f2c6c805b6de47ee249f2268ce4cb76fbc45d14431a9e27fb46366abeca662f2",
+      "sha256": "8c0b6d59d35144a4dda07dd3b0f5b2984c2bb337f927c1e740bc0dd3c7af1f88",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -64614,6 +64680,21 @@
       }
     },
     {
+      "id": "source:server/src/__tests__/activity-service.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/activity-service.test.ts",
+      "sha256": "c3a2f89535ccaa937c358620eb256492eaf0d40d6a71a104964222c9a116ff16",
+      "changeIds": [
+        "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/activity-service.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "3983e0d28f41bc3672f60632f7c16ca016ca14a72102f4f08eb029b54b990102"
+      }
+    },
+    {
       "id": "source:server/src/__tests__/agent-persona-persistence.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/agent-persona-persistence.test.ts",
@@ -65982,7 +66063,7 @@
       "id": "source:server/src/services/activity.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/activity.ts",
-      "sha256": "56ae9acc3aa65a099e991c1fa880514c2536bf4f6c6892fc99021693e4e4bb49",
+      "sha256": "bee4ee4fd6fda49a05e5c7d7968bea50cee097707a83014be2951f9bc7811018",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -83015,6 +83096,16 @@
     },
     {
       "from": "SCR-V10-HOTSPOT-02",
+      "to": "source:server/src/services/run-liveness-evidence.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-HOTSPOT-02",
+      "to": "source:server/src/services/run-liveness.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-HOTSPOT-02",
       "to": "source:server/src/services/saas/platform.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
@@ -89491,6 +89582,11 @@
     {
       "from": "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER",
       "to": "source:server/src/__tests__/activity-routes.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER",
+      "to": "source:server/src/__tests__/activity-service.test.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {

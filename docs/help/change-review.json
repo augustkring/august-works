@@ -1565,7 +1565,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
@@ -1669,7 +1669,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
@@ -2053,7 +2053,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
       "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
@@ -2061,7 +2061,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
       "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
@@ -2757,7 +2757,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
-      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "updated",
       "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
@@ -2765,7 +2765,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "updated",
       "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."

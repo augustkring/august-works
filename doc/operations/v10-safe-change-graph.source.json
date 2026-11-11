@@ -21,14 +21,14 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2072,
+    "sourceDeltaPathCount": 2075,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14802,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted."
+    "fullDiffPathCount": 14829,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted."
   },
   "requirementsCrosswalk": [
     {
@@ -4724,6 +4724,18 @@
           "sha256": "c555088156083ad1c3cbca96e143adca4696a9fa3397a18f01e75e77d45806af"
         },
         {
+          "path": "server/src/services/run-liveness-evidence.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/services/run-liveness.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "a7f0f57faf05f06ab24fce036493a40685fc2a900da19281678b2fee950331d7"
+        },
+        {
           "path": "server/src/services/saas/platform.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -4850,6 +4862,8 @@
         "server/src/services/plugin-lifecycle-inbox.ts",
         "server/src/services/resource-lifecycle-events.ts",
         "server/src/services/routines.ts",
+        "server/src/services/run-liveness-evidence.ts",
+        "server/src/services/run-liveness.ts",
         "server/src/services/saas/platform.ts",
         "server/src/services/tool-access.ts",
         "server/src/services/tool-gateway.ts",
@@ -4961,6 +4975,8 @@
         "server/src/services/plugin-lifecycle-inbox.ts",
         "server/src/services/resource-lifecycle-events.ts",
         "server/src/services/routines.ts",
+        "server/src/services/run-liveness-evidence.ts",
+        "server/src/services/run-liveness.ts",
         "server/src/services/saas/platform.ts",
         "server/src/services/tool-access.ts",
         "server/src/services/tool-gateway.ts",
@@ -18769,6 +18785,12 @@
           "sha256": "c0ef4432fa7c2f1de2eae6fe61f234720f1cc55d7d66364bb1a70dea019d0fe7"
         },
         {
+          "path": "server/src/__tests__/activity-service.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "3983e0d28f41bc3672f60632f7c16ca016ca14a72102f4f08eb029b54b990102"
+        },
+        {
           "path": "server/src/__tests__/agent-persona-persistence.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -19821,6 +19843,7 @@
         "server/src/__tests__/access-routes-permissions-upgrade.test.ts",
         "server/src/__tests__/access-validators.test.ts",
         "server/src/__tests__/activity-routes.test.ts",
+        "server/src/__tests__/activity-service.test.ts",
         "server/src/__tests__/agent-persona-persistence.test.ts",
         "server/src/__tests__/agent-secrets-routes.test.ts",
         "server/src/__tests__/agents-service-clear-error.test.ts",
@@ -20010,6 +20033,7 @@
         "server/src/__tests__/access-routes-permissions-upgrade.test.ts",
         "server/src/__tests__/access-validators.test.ts",
         "server/src/__tests__/activity-routes.test.ts",
+        "server/src/__tests__/activity-service.test.ts",
         "server/src/__tests__/agent-persona-persistence.test.ts",
         "server/src/__tests__/agent-secrets-routes.test.ts",
         "server/src/__tests__/agents-service-clear-error.test.ts",
@@ -26101,7 +26125,7 @@
       "sourceReviewBoundary": "Candidate source inventory derived from branch diff and V10 register paths. It is not a behavior audit, test receipt, phase approval, or release claim."
     }
   ],
-  "sourceAfterGeneration": "Root official R86 generation from frozen source/evidence: 2072 source deltas, 50 owner groups, 25 hotspots, 169 requirement rows, 577 journaled migrations. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted.",
+  "sourceAfterGeneration": "R87 exact source membership and base comparison retained; generated graph is rebuilt by Root after the final evidence and metadata are staged.",
   "crosswalkLinkageBasis": "Only currentAssessment.sourceOwners, currentAssessment.scopedEvidence[*].paths, and explicit sourcePath fields are treated as requirement-to-source links. Nested generic path fields, review pins, and human reference strings are excluded. Links remain traceability only and do not close acceptance.",
   "currentSourceRecovery": {
     "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
@@ -386,3 +387,223 @@ it("answers a current Human dependency comment through capped read-only SDK admi
         requestedByActorType: "user", requestedByActorId: actor.userId!, reason: "issue_commented" })]);
     } });
 }, 600000);
+
+
+// PARTIAL Native counterpart: this drives fresh scheduler-created Tasks through
+// the actual managed OpenCode route to retain the plan-only/plan-progress
+// policy. The seeded stranded-run recovery tests remain in place as the owners
+// of failed-run reconciliation and issue_disposition_repair assertions.
+function managedLivenessTool(body: Record<string, unknown>, wanted: string): string {
+  const tools = body.tools as Array<{ name: string }>;
+  const found = tools.find(value => value.name === wanted || ["paperclip__", "paperclip_", "paperclip."]
+    .some(prefix => value.name === `${prefix}${wanted}`));
+  if (!found) throw new Error(`managed_liveness_tool_missing_${wanted}`);
+  return found.name;
+}
+
+function managedLivenessFinish(input: ManagedReplyInput,
+  disposition: "done" | "yielded", summary: string) {
+  const contract = input.execution.completionContract.contract;
+  const waiting = disposition === "yielded";
+  return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
+    id: `managed-liveness-finish-${input.runId}-${input.callIndex}`,
+    name: managedLivenessTool(input.body, "paperclip_finish"), input: {
+      schema: "paperclip.run_result.v1", reportedWorkDisposition: disposition, summary,
+      completionClaim: { contractRevision: contract.revision, objectiveSatisfied: !waiting,
+        criteria: contract.criteria.map(criterion => ({ criterionId: criterion.id,
+          status: waiting ? "unknown" as const : "satisfied" as const, evidenceRefs: [] })),
+        remainingWork: waiting ? [{ description: "Inspect the repository and implement the fix.", blocksCompletion: true }] : [] },
+      evidence: [], verification: [], attentionRequests: [], artifacts: [],
+    } }] };
+}
+
+it.each([false, true])("actual managed OpenCode plan-only output queues one bounded continuation with legacy review present: %s", async withLegacyReview => {
+  const deadlineAt = Date.now() + 600_000;
+  let targetIssueId = "";
+  let sourceRunId = "";
+  await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    schedulerMode: "serial",
+    providerReply: input => {
+      if (!sourceRunId) sourceRunId = input.runId;
+      if (input.runId === sourceRunId) {
+        if (input.callIndex === 1) return managedLivenessFinish(input, "yielded",
+          "I will inspect the repository next and implement the requested fix.");
+        if (input.callIndex === 2) return { stop_reason: "end_turn" as const,
+          content: [{ type: "text" as const, text: "I have recorded the next action for the continuation." }] };
+      }
+      if (input.callIndex === 1) return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
+        id: `managed-liveness-write-${input.runId}`, name: managedLivenessTool(input.body, "write_document"),
+        input: { idempotencyKey: `managed-liveness-result-${input.runId}`, key: "result",
+          title: "Bounded continuation result", body: "The actual managed continuation made concrete progress.",
+          baseRevisionId: null } }] };
+      if (input.callIndex === 2) return managedLivenessFinish(input, "done", "Completed the bounded repository fix.");
+      if (input.callIndex === 3) return { stop_reason: "end_turn" as const,
+        content: [{ type: "text" as const, text: "The bounded continuation is complete." }] };
+      throw new Error(`managed_liveness_unexpected_turn:${input.runId}:${input.callIndex}`);
+    },
+    driveScheduler: async context => {
+      const { actor, companyId, agentId, heartbeat } = context;
+      await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
+        heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, agentId));
+      const task = await issueService(db).create(companyId, { title: "Continue a concrete repository plan",
+        description: "Inspect the repository, then make a bounded result for Human review.", status: "todo",
+        responsibleUserId: actor.userId!, createdByUserId: actor.userId!, assigneeAgentId: agentId }, db, undefined,
+        { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+      targetIssueId = task.id;
+      let legacyReviewId: string | undefined;
+      if (withLegacyReview) {
+        legacyReviewId = randomUUID();
+        await db.insert(issues).values({ id: legacyReviewId, companyId,
+          title: "Historical productivity review", description: "Retain existing Human ownership.",
+          status: "todo", assigneeUserId: actor.userId!, parentId: task.id,
+          originKind: "issue_productivity_review", originId: task.id,
+          originFingerprint: `productivity-review:${task.id}` });
+        // Retain the legacy cancellation-noise condition while the work itself
+        // is performed by the actual managed Native run below.
+        await db.insert(heartbeatRuns).values(Array.from({ length: 10 }, (_, index) => ({
+          id: randomUUID(), companyId, agentId, invocationSource: "automation", triggerDetail: "system",
+          status: "cancelled", errorCode: "execution_reconciliation_required",
+          contextSnapshot: { issueId: task.id, taskId: task.id },
+          createdAt: new Date(Date.now() - (index + 1) * 60_000), finishedAt: new Date(),
+        })));
+      }
+      const legacyReviewBefore = legacyReviewId
+        ? await db.select().from(issues).where(eq(issues.id, legacyReviewId)) : [];
+      const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Make a bounded fix after recording the next action",
+          requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["Keep the Human review record unchanged"] },
+        budgets: { maxModelCostMinor: 10, maxToolActions: 4 }, workers: [{ key: "writer", issueId: task.id }] });
+      await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
+        action: "start", rationale: "Authorize the actual capped Native route" });
+      const initialWake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: actor.userId!,
+        payload: { issueId: task.id }, contextSnapshot: { issueId: task.id } });
+      expect(initialWake).not.toBeNull();
+      const remaining = deadlineAt - Date.now();
+      if (remaining <= 0) throw new Error("managed_liveness_terminal_deadline_exhausted");
+      await expect.poll(async () => {
+        const [run] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, initialWake!.id)));
+        return run && ["succeeded", "failed", "cancelled", "timed_out", "interrupted"].includes(run.status);
+      }, { timeout: remaining }).toBe(true);
+      const classificationRemaining = deadlineAt - Date.now();
+      if (classificationRemaining <= 0) throw new Error("managed_liveness_classification_deadline_exhausted");
+      let source: { id: string; companyId: string; nativeIssueId: string | null; status: string;
+        runtimeMode: string | null; livenessState: string | null } | undefined;
+      let continuationId: string | null = null;
+      await expect.poll(async () => {
+        const [current] = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+          nativeIssueId: heartbeatRuns.nativeIssueId, status: heartbeatRuns.status,
+          runtimeMode: heartbeatRuns.runtimeMode, livenessState: heartbeatRuns.livenessState })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, initialWake!.id));
+        if (!current || current.livenessState !== "plan_only") return false;
+        const wakes = await db.select().from(agentWakeupRequests).where(and(
+          eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+          eq(agentWakeupRequests.reason, "run_liveness_continuation")));
+        const matching = wakes.filter(wake => wake.payload?.retryOfRunId === current.id && wake.payload?.issueId === task.id);
+        if (wakes.length !== 1 || matching.length !== 1 || typeof matching[0]!.runId !== "string" || !matching[0]!.runId)
+          return false;
+        source = current;
+        continuationId = matching[0]!.runId;
+        return true;
+      }, { timeout: classificationRemaining }).toBe(true);
+      expect(source).toMatchObject({ companyId, id: sourceRunId, nativeIssueId: task.id,
+        status: "succeeded", runtimeMode: "native", livenessState: "plan_only" });
+      const canonicalStatusWakes = await db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+        eq(agentWakeupRequests.reason, "issue_status_changed")));
+      const incompleteFinalizationWakes = canonicalStatusWakes.filter(wake =>
+        (wake.payload as Record<string, unknown> | null)?.continuationIdempotencyKey === "native-completion-incomplete");
+      expect(incompleteFinalizationWakes).toEqual([expect.objectContaining({
+        status: "coalesced", runId: initialWake!.id,
+        payload: expect.objectContaining({ continuationIdempotencyKey: "native-completion-incomplete" }),
+      })]);
+      expect(continuationId).toBeTruthy();
+      const continuationRemaining = deadlineAt - Date.now();
+      if (continuationRemaining <= 0) throw new Error("managed_liveness_continuation_deadline_exhausted");
+      await expect.poll(async () => {
+        const [run] = await db.select({ status: heartbeatRuns.status, livenessState: heartbeatRuns.livenessState })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, continuationId!));
+        return run?.status === "succeeded" && run.livenessState === "advanced";
+      }, { timeout: continuationRemaining }).toBe(true);
+      const [continued] = await db.select({ id: heartbeatRuns.id, runtimeMode: heartbeatRuns.runtimeMode,
+        nativeIssueId: heartbeatRuns.nativeIssueId, livenessState: heartbeatRuns.livenessState })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, continuationId!));
+      expect(continued).toMatchObject({ runtimeMode: "native", nativeIssueId: task.id, livenessState: "advanced" });
+      const output = await db.select({ body: documents.latestBody }).from(issueDocuments).innerJoin(documents,
+        and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+      expect(output).toEqual([{ body: "The actual managed continuation made concrete progress." }]);
+      if (legacyReviewId)
+        expect(await db.select().from(issues).where(eq(issues.id, legacyReviewId))).toEqual(legacyReviewBefore);
+      const retainedTask = (await issueService(db).list(companyId)).find(row => row.id === targetIssueId);
+      expect(retainedTask).toBeDefined();
+      expect(retainedTask).not.toHaveProperty("productivityReview");
+      // All actual child work is terminal before draining delayed scheduler timers.
+      await heartbeat.drainActiveRunExecutions();
+    },
+  });
+}, 900_000);
+
+it("actual managed OpenCode plan document progress suppresses a liveness continuation", async () => {
+  const deadlineAt = Date.now() + 600_000;
+  await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    schedulerMode: "serial",
+    providerReply: input => {
+      if (input.callIndex === 1) return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
+        id: `managed-plan-progress-write-${input.runId}`, name: managedLivenessTool(input.body, "write_document"),
+        input: { idempotencyKey: `managed-plan-progress-${input.runId}`, key: "plan", title: "Plan",
+          body: "# Plan\n\n- Inspect the repository\n- Implement the fix", baseRevisionId: null } }] };
+      if (input.callIndex === 2) return managedLivenessFinish(input, "yielded",
+        "Plan saved. Next action: inspect the repository and implement the fix.");
+      if (input.callIndex === 3) return { stop_reason: "end_turn" as const,
+        content: [{ type: "text" as const, text: "The plan is saved for the Human." }] };
+      throw new Error(`managed_plan_progress_unexpected_turn:${input.runId}:${input.callIndex}`);
+    },
+    driveScheduler: async context => {
+      const { actor, companyId, agentId, heartbeat } = context;
+      await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
+        heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, agentId));
+      const task = await issueService(db).create(companyId, { title: "Save a bounded task plan",
+        description: "Save the implementation plan and retain it for Human review.", status: "todo",
+        responsibleUserId: actor.userId!, createdByUserId: actor.userId!, assigneeAgentId: agentId }, db, undefined,
+        { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+      const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Save an implementation plan for Human review",
+          requiredOutputs: [{ kind: "task_document", key: "plan" }], businessInvariants: ["Do not claim implementation is complete"] },
+        budgets: { maxModelCostMinor: 10, maxToolActions: 3 }, workers: [{ key: "planner", issueId: task.id }] });
+      await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
+        action: "start", rationale: "Authorize the actual capped Native plan update" });
+      const wake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system", reason: "issue_assigned",
+        requestedByActorType: "user", requestedByActorId: actor.userId!, payload: { issueId: task.id },
+        contextSnapshot: { issueId: task.id } });
+      expect(wake).not.toBeNull();
+      const remaining = deadlineAt - Date.now();
+      if (remaining <= 0) throw new Error("managed_plan_progress_deadline_exhausted");
+      await expect.poll(async () => {
+        const [run] = await db.select({ status: heartbeatRuns.status, livenessState: heartbeatRuns.livenessState })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, wake!.id));
+        return run?.status === "succeeded" && run.livenessState === "advanced";
+      }, { timeout: remaining }).toBe(true);
+      await heartbeat.drainActiveRunExecutions();
+      const [run] = await db.select({ status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
+        nativeIssueId: heartbeatRuns.nativeIssueId, livenessState: heartbeatRuns.livenessState })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, wake!.id));
+      expect(run).toMatchObject({ status: "succeeded", runtimeMode: "native", nativeIssueId: task.id,
+        livenessState: "advanced" });
+      const savedPlan = await db.select({ body: documents.latestBody, revisionId: documents.latestRevisionId,
+        revisionNumber: documents.latestRevisionNumber }).from(issueDocuments).innerJoin(documents,
+        and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "plan")));
+      expect(savedPlan).toHaveLength(1);
+      expect(savedPlan[0]).toMatchObject({ body: "# Plan\n\n- Inspect the repository\n- Implement the fix",
+        revisionId: expect.any(String), revisionNumber: 1 });
+      const livenessWakes = await db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+        eq(agentWakeupRequests.reason, "run_liveness_continuation")));
+      expect(livenessWakes).toEqual([]);
+    },
+  });
+}, 900_000);

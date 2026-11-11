@@ -401,8 +401,10 @@ import {
 } from "./chat-control-recovery-stop.js";
 import {
   classifyRunLiveness,
+  RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS,
   type RunLivenessClassificationInput,
 } from "./run-liveness.js";
+import { readRunLivenessToolActionStats } from "./run-liveness-evidence.js";
 import {
   ISSUE_NEW_INPUT_ACTIVITY_ACTIONS,
   ISSUE_PROGRESS_ACTIVITY_ACTIONS,
@@ -751,10 +753,6 @@ const MAX_RUN_EVENT_PAYLOAD_DEPTH = 6;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_DEFAULT = AGENT_DEFAULT_MAX_CONCURRENT_RUNS;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_MIN = 1;
 const HEARTBEAT_MAX_CONCURRENT_RUNS_MAX = 50;
-const LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS = [
-  "environment.lease_acquired",
-  "environment.lease_released",
-];
 const DEFERRED_WAKE_CONTEXT_KEY = "_paperclipWakeContext";
 const EXTERNAL_ATTACHMENT_OMISSIONS_KEY = "externalAttachmentOmissions";
 const PAPERCLIP_WAKE_PAYLOAD_KEY = "paperclipWake";
@@ -18583,22 +18581,13 @@ export function heartbeatService(
         and(
           eq(activityLog.companyId, run.companyId),
           eq(activityLog.runId, run.id),
-          notInArray(activityLog.action, LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS),
+          notInArray(activityLog.action, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS),
         ),
       );
 
-    const [eventStats] = await db
-      .select({
-        count: sql<number>`count(*) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))::int`,
-        latestAt: sql<Date | null>`max(${heartbeatRunEvents.createdAt}) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))`,
-      })
-      .from(heartbeatRunEvents)
-      .where(
-        and(
-          eq(heartbeatRunEvents.companyId, run.companyId),
-          eq(heartbeatRunEvents.runId, run.id),
-        ),
-      );
+    const toolActionStats = contextIssueId
+      ? await readRunLivenessToolActionStats(db, { companyId: run.companyId, issueId: contextIssueId, runId: run.id, agentId: run.agentId })
+      : { count: 0, latestAt: null };
 
     return {
       runStatus: run.status,
@@ -18618,14 +18607,14 @@ export function heartbeatService(
         workProductsCreated: countValue(workProductStats?.count),
         workspaceOperationsCreated: countValue(workspaceOperationStats?.count),
         activityEventsCreated: countValue(activityStats?.count),
-        toolOrActionEventsCreated: countValue(eventStats?.count),
+        toolOrActionEventsCreated: toolActionStats.count,
         latestEvidenceAt: latestDate(
           commentStats?.latestAt,
           documentStats?.latestAt,
           workProductStats?.latestAt,
           workspaceOperationStats?.latestAt,
           activityStats?.latestAt,
-          eventStats?.latestAt,
+          toolActionStats.latestAt,
         ),
       },
     };

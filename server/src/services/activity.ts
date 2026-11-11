@@ -1,5 +1,5 @@
 import { executionProjectionsForRuns } from "./execution-projection.js";
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
@@ -19,7 +19,8 @@ import {
 import { hasWorkspaceRestoreFailure, safeWorkspaceRestorePath, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY } from "@paperclipai/shared";
 import { logger } from "../middleware/logger.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
-import { classifyRunLiveness } from "./run-liveness.js";
+import { classifyRunLiveness, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS } from "./run-liveness.js";
+import { readRunLivenessToolActionStats } from "./run-liveness-evidence.js";
 import { activitySourceReadSqlCondition } from "./activity-privacy.js";
 import type { AuthorizationActor } from "./authorization.js";
 
@@ -163,6 +164,7 @@ export function activityService(db: Db) {
       .select({
         id: heartbeatRuns.id,
         companyId: heartbeatRuns.companyId,
+        agentId: heartbeatRuns.agentId,
         status: heartbeatRuns.status,
         contextSnapshot: heartbeatRuns.contextSnapshot,
         resultJson: heartbeatRuns.resultJson,
@@ -274,15 +276,10 @@ export function activityService(db: Db) {
           latestAt: sql<Date | null>`max(${activityLog.createdAt})`,
         })
         .from(activityLog)
-        .where(and(eq(activityLog.companyId, companyId), eq(activityLog.runId, run.id)));
+        .where(and(eq(activityLog.companyId, companyId), eq(activityLog.runId, run.id),
+          notInArray(activityLog.action, RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS)));
 
-      const [eventStats] = await db
-        .select({
-          count: sql<number>`count(*) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))::int`,
-          latestAt: sql<Date | null>`max(${heartbeatRunEvents.createdAt}) filter (where ${heartbeatRunEvents.eventType} not in ('lifecycle', 'adapter.invoke', 'error'))`,
-        })
-        .from(heartbeatRunEvents)
-        .where(and(eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.runId, run.id)));
+      const toolActionStats = await readRunLivenessToolActionStats(db, { companyId, issueId, runId: run.id, agentId: run.agentId });
 
       const classification = classifyRunLiveness({
         runStatus: run.status,
@@ -300,14 +297,14 @@ export function activityService(db: Db) {
           workProductsCreated: countValue(workProductStats?.count),
           workspaceOperationsCreated: countValue(workspaceOperationStats?.count),
           activityEventsCreated: countValue(activityStats?.count),
-          toolOrActionEventsCreated: countValue(eventStats?.count),
+          toolOrActionEventsCreated: toolActionStats.count,
           latestEvidenceAt: latestDate(
             commentStats?.latestAt,
             documentStats?.latestAt,
             workProductStats?.latestAt,
             workspaceOperationStats?.latestAt,
             activityStats?.latestAt,
-            eventStats?.latestAt,
+            toolActionStats.latestAt,
           ),
         },
       });

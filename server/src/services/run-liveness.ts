@@ -1,5 +1,37 @@
 import type { HeartbeatRunStatus, IssueStatus, RunLivenessState } from "@paperclipai/shared";
 
+// Activity rows that describe heartbeat/runtime recovery plumbing rather than
+// work performed for the issue. Kept shared by live classification and activity
+// backfill so both paths use the same durable-effect evidence.
+export const RUN_LIVENESS_BOOKKEEPING_ACTIVITY_ACTIONS: string[] = [
+  "environment.lease_acquired",
+  "environment.lease_released",
+  "environment_lease.cleanup_retried",
+  "issue.successful_run_handoff_required",
+  "issue.review_path_recovery_queued",
+  "issue.monitor_recovery_issue_created",
+  "issue.monitor_escalated_to_board",
+  "issue.monitor_recovery_wake_queued",
+  "issue.monitor_exhausted",
+  "issue.monitor_triggered",
+  "issue.monitor_skipped",
+  "execution_workspace.workspace_validation_quarantined",
+  "issue.tree_hold_run_interrupted",
+  "provider_trace.capture_requested",
+  "issue.thread_interaction_updated",
+  "tool_gateway.call_allowed",
+  "tool_gateway.call_denied",
+  "tool_gateway.call_failed",
+  "tool_gateway.call_deferred",
+  "tool_gateway.approval_requested",
+  "tool_gateway.session_rejected",
+  "tool_gateway.session_created",
+  "tool_gateway.session_revoked",
+  "tool_gateway.discovery",
+  "tool_gateway.runtime_mcp_delivery",
+  "tool_gateway.call_completed",
+];
+
 export type RunLivenessActionability =
   | "runnable"
   | "manager_review"

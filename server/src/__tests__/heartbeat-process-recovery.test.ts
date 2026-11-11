@@ -86,6 +86,7 @@ import {
   statusDecisions,
   toolApplications,
   toolConnections,
+  toolInvocations,
   workAssessments,
   workspaceOperations,
 } from "@paperclipai/db";
@@ -114,6 +115,7 @@ import {
   readChatControlRecoveryStop,
 } from "../services/chat-control-recovery-stop.js";
 import { prepareNativeHeartbeatRun } from "../services/native-runtime/prepare-native-run.js";
+import { readRunLivenessToolActionStats } from "../services/run-liveness-evidence.js";
 import { lockNativeRuntimeSelectionRows } from "../services/native-runtime-selection-lock.js";
 import {
   hasCommittedNativeBoardResponseWait,
@@ -15971,6 +15973,35 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       .where(eq(issues.id, issueId))
       .then((rows) => rows[0] ?? null);
     expect(issue?.status).toBe("blocked");
+  });
+
+  it("uses only exact run-owned dispatched tool receipts as liveness action evidence", async () => {
+    const { companyId, agentId, issueId, runId } = await seedStrandedIssueFixture({
+      status: "in_progress", runStatus: "failed",
+    });
+    const startedAt = new Date("2026-11-11T12:00:00.000Z");
+    const completedAt = new Date("2026-11-11T12:00:05.000Z");
+    await db.insert(toolInvocations).values([
+      { companyId, agentId, issueId, runId, toolName: "read_issue", status: "succeeded", startedAt, completedAt },
+      { companyId, agentId, issueId, runId, toolName: "provider_paperclip_finish", status: "succeeded", startedAt, completedAt },
+      { companyId, agentId, issueId, runId, toolName: "write_to_provider", status: "failed",
+        startedAt, completedAt, errorCode: "tool_execution_outcome_unknown" },
+      { companyId, agentId, issueId, runId, toolName: "still_dispatched", status: "executing", startedAt },
+      { companyId, agentId, issueId, runId, toolName: "denied_before_dispatch", status: "denied" },
+      { companyId, agentId, issueId, runId, toolName: "preflight_failure", status: "failed", errorCode: "policy_blocked" },
+      { companyId, agentId, issueId, runId, toolName: "paperclip_finish", status: "succeeded", startedAt, completedAt },
+      { companyId, agentId, issueId, runId, toolName: "paperclip_block", status: "succeeded", startedAt, completedAt },
+      { companyId, agentId, issueId, runId: null, toolName: "unowned_success", status: "succeeded", startedAt, completedAt },
+    ]);
+
+    await expect(readRunLivenessToolActionStats(db, { companyId, issueId, runId, agentId }))
+      .resolves.toEqual({ count: 4, latestAt: completedAt });
+    const other = await seedStrandedIssueFixture({ status: "in_progress", runStatus: "failed" });
+    for (const mismatch of [{ companyId: other.companyId }, { issueId: other.issueId },
+      { runId: other.runId }, { agentId: other.agentId }]) {
+      await expect(readRunLivenessToolActionStats(db, { companyId, issueId, runId, agentId, ...mismatch }))
+        .resolves.toEqual({ count: 0, latestAt: null });
+    }
   });
 
   it("does not reconcile user-assigned work through the agent stranded-work recovery path", async () => {
