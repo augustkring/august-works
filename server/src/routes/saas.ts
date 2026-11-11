@@ -6,6 +6,7 @@ import { activationService } from "../services/saas/activation.js";
 import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
+import { createHmac } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { and, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
@@ -40,18 +41,67 @@ import {
   updateOnboardingSchema,
   type PermissionKey,
   type V6FeatureKey,
+  accountDeletionReceiptAccessSchema,
+  accountDeletionRequestSchema,
 } from "@paperclipai/shared";
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from "../errors.js";
 import { accessService } from "../services/access.js";
 import { logActivity } from "../services/activity-log.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
 import { assertCompanyAccess } from "./authz.js";
-import { publicJson } from "../services/saas/crypto.js";
+import { open as openSealed, publicJson, seal, sha256 } from "../services/saas/crypto.js";
 import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
 import { supportCaseOperatorBodySchema, supportCaseOperatorReceiptSchema, supportCaseOperatorService } from "../services/saas/support-case-operator.js";
 import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
 import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
 import { projectSaasModelDependencyInventory } from "../services/experience/model-dependency-inventory.js";
+
+const ACCOUNT_DELETION_RECEIPT_COOKIE = "aw_account_deletion_receipt";
+const ACCOUNT_DELETION_RECEIPT_CONTEXT = "account-deletion-receipt:v1";
+const ACCOUNT_DELETION_RECEIPT_PATH = "/api/saas/account/deletion";
+const accountDeletionReceiptCookieSchema = z.object({ principalHash: z.string().regex(/^[a-f0-9]{64}$/),
+  requestKeyHash: z.string().regex(/^[a-f0-9]{64}$/), nonce: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  expiresAt: z.number().int().positive() }).strict();
+type AccountDeletionReceiptCookie = z.infer<typeof accountDeletionReceiptCookieSchema>;
+
+function accountDeletionReceiptCookie(req: Request, platform: SaasPlatform): AccountDeletionReceiptCookie | null {
+  const header = req.get("cookie");
+  if (!header) return null;
+  const matches = header.split(";").map(value => value.trim()).filter(value => value.startsWith(`${ACCOUNT_DELETION_RECEIPT_COOKIE}=`));
+  if (matches.length !== 1) return null;
+  let value: string;
+  try { value = decodeURIComponent(matches[0]!.slice(ACCOUNT_DELETION_RECEIPT_COOKIE.length + 1)); }
+  catch { return null; }
+  if (value.length > 4096) return null;
+  const separator = value.indexOf("~"), encodedKeyId = value.slice(0, separator);
+  if (separator < 1 || !/^[A-Za-z0-9_-]{1,214}$/.test(encodedKeyId)) return null;
+  const keyId = Buffer.from(encodedKeyId, "base64url").toString("utf8");
+  if (!keyId || Buffer.byteLength(keyId, "utf8") > 160 || Buffer.from(keyId, "utf8").toString("base64url") !== encodedKeyId) return null;
+  const keyHex = keyId === platform.config.outbox.keyId ? platform.config.outbox.encryptionKey :
+    Object.prototype.hasOwnProperty.call(platform.config.outbox.previousKeys, keyId) ? platform.config.outbox.previousKeys[keyId] : undefined;
+  if (!keyHex) return null;
+  try {
+    const parsed = accountDeletionReceiptCookieSchema.safeParse(openSealed(value.slice(separator + 1), keyHex, ACCOUNT_DELETION_RECEIPT_CONTEXT));
+    return parsed.success && parsed.data.expiresAt > Date.now() ? parsed.data : null;
+  } catch { return null; }
+}
+
+function deriveAccountDeletionReceiptNonce(keyHex: string, principalHash: string, requestKeyHash: string) {
+  return createHmac("sha256", Buffer.from(keyHex, "hex"))
+    .update(JSON.stringify({ purpose: "account-deletion-receipt-nonce:v1", principalHash, requestKeyHash }))
+    .digest("base64url");
+}
+
+function setAccountDeletionReceiptCookie(res: Response, req: Request, platform: SaasPlatform, value: AccountDeletionReceiptCookie) {
+  if (!platform.config.outbox.keyId || Buffer.byteLength(platform.config.outbox.keyId, "utf8") > 160)
+    throw new Error("Invalid outbox key identifier for account deletion receipt");
+  const encrypted = seal(value, platform.config.outbox.encryptionKey, ACCOUNT_DELETION_RECEIPT_CONTEXT);
+  const keyIdPrefix = Buffer.from(platform.config.outbox.keyId, "utf8").toString("base64url");
+  res.cookie(ACCOUNT_DELETION_RECEIPT_COOKIE, `${keyIdPrefix}~${encrypted}`, {
+    httpOnly: true, sameSite: "strict", secure: req.secure || platform.config.environment === "production",
+    path: ACCOUNT_DELETION_RECEIPT_PATH, maxAge: Math.max(0, value.expiresAt - Date.now()),
+  });
+}
 
 export function saasRoutes(db: Db, platform: SaasPlatform) {
   const router = Router();
@@ -570,13 +620,50 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         .limit(100),
     );
   });
-  router.post("/saas/account/deletion", async (req, res) => {
+  router.post("/saas/account/deletion/receipt-access", async (req, res) => {
+    res.set("Cache-Control", "no-store");
     const actor = await user(req);
     await gate("company_deletion_v6");
+    if (req.actor.type !== "board" || req.actor.source !== "session" || req.actor.userId !== actor.id || !req.actor.sessionId)
+      throw unauthorized("A current account session is required");
+    const [activeSession] = await db.select({ id: authSessions.id }).from(authSessions).where(and(
+      eq(authSessions.id, req.actor.sessionId), eq(authSessions.userId, actor.id), gt(authSessions.expiresAt, new Date()))).limit(1);
+    if (!activeSession) throw unauthorized("A current account session is required");
+    const { idempotencyKey } = accountDeletionReceiptAccessSchema.parse(req.body);
+    const requestKeyHash = sha256(idempotencyKey), principalHash = sha256(actor.id);
+    const existing = accountDeletionReceiptCookie(req, platform);
+    const reusable = existing?.principalHash === principalHash && existing.requestKeyHash === requestKeyHash;
+    const nonceCandidates = reusable ? [existing.nonce] : [platform.config.outbox.encryptionKey, ...Object.values(platform.config.outbox.previousKeys)]
+      .map(key => deriveAccountDeletionReceiptNonce(key, principalHash, requestKeyHash));
+    const access = await platform.accountDeletion.prepareReceiptAccess(actor.id, idempotencyKey, nonceCandidates);
+    if (!reusable) setAccountDeletionReceiptCookie(res, req, platform,
+      { principalHash, requestKeyHash, nonce: access.nonce, expiresAt: access.expiresAt });
+    res.json({ ready: true });
+  });
+  router.post("/saas/account/deletion/receipt", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    z.object({}).strict().parse(req.body);
+    const access = accountDeletionReceiptCookie(req, platform);
+    res.json(await platform.accountDeletion.readReceipt(access?.nonce ?? null, access?.principalHash ?? null,
+      req.ip || req.socket.remoteAddress || "unknown"));
+  });
+  router.post("/saas/account/deletion", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const actor = await user(req);
+    await gate("company_deletion_v6");
+    const input = accountDeletionRequestSchema.parse(req.body);
+    let receiptNonce: string | undefined;
+    if (input.receiptRequired === true) {
+      const { idempotencyKey } = accountDeletionReceiptAccessSchema.parse({ idempotencyKey: input.idempotencyKey });
+      const access = accountDeletionReceiptCookie(req, platform);
+      if (!access || access.principalHash !== sha256(actor.id) || access.requestKeyHash !== sha256(idempotencyKey))
+        throw conflict("Account deletion receipt access is missing or invalid");
+      receiptNonce = access.nonce;
+    }
     res
       .status(202)
       .set("Cache-Control", "no-store")
-      .json(await platform.accountDeletion.request(actor.id, req.body, new Date(), req.actor));
+      .json(await platform.accountDeletion.request(actor.id, input, new Date(), req.actor, receiptNonce));
   });
   router.post(
     "/saas/internal/support/:sessionId/runtime-cells/:cellId/operations",

@@ -23,11 +23,14 @@ import {
   forbidden,
   tooManyRequests,
   unauthorized,
+  notFound,
 } from "../../errors.js";
-import { sha256 } from "./crypto.js";
+import { equalDigest, sha256 } from "./crypto.js";
 import { accessService } from "../access.js";
 import { parseAccountDeletionSsoChallenge } from "../../auth/account-deletion-sso-proof.js";
 import { enqueueResponsibilityScan } from "../experience/private-0565/responsibility-scan-store.js";
+
+const ACCOUNT_DELETION_RECEIPT_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 export function accountDeletionService(
   db: Db,
@@ -45,8 +48,11 @@ export function accountDeletionService(
       catch { /* access revocation already committed; periodic scan remains due */ }
     }
   }
-  async function request(userId: string, raw: unknown, now = new Date(), actor?: AuthorizationActor) {
+  async function request(userId: string, raw: unknown, now = new Date(), actor?: AuthorizationActor, trustedReceiptNonce?: string) {
     const input = accountDeletionRequestSchema.parse(raw);
+    if (input.receiptRequired && !trustedReceiptNonce) throw conflict("Account deletion receipt access is required");
+    if (trustedReceiptNonce && !/^[A-Za-z0-9_-]{43}$/.test(trustedReceiptNonce))
+      throw unauthorized("Account deletion receipt access is invalid");
     if (actor?.type !== "board" || actor.source !== "session" || actor.userId !== userId || !actor.sessionId)
       throw unauthorized("A current account session is required");
     const key = "account-delete:" + sha256(userId),
@@ -81,6 +87,10 @@ export function accountDeletionService(
       if (existing) {
         if (existing.idempotencyKey !== sha256(input.idempotencyKey))
           throw conflict("Account deletion is already requested");
+        if (input.receiptRequired && !existing.receiptKeyHash)
+          throw conflict("This account deletion has no recoverable receipt");
+        if (existing.receiptKeyHash && (!trustedReceiptNonce || !equalDigest(existing.receiptKeyHash, sha256(trustedReceiptNonce))))
+          throw conflict("Account deletion receipt access does not match the original request");
         return { receipt: receipt(existing), responsibilityCompanyIds: [] as string[] };
       }
       let pendingSsoProof: {
@@ -292,6 +302,7 @@ export function accountDeletionService(
         .values({
           userId,
           idempotencyKey: sha256(input.idempotencyKey),
+          receiptKeyHash: trustedReceiptNonce ? sha256(trustedReceiptNonce) : null,
           createdAt: now,
           notBefore: now,
         })
@@ -341,6 +352,41 @@ export function accountDeletionService(
     });
     await enqueueAfterAccessRevocation(result.responsibilityCompanyIds);
     return result.receipt;
+  }
+  async function prepareReceiptAccess(userId: string, idempotencyKey: string, nonceCandidates: readonly string[], now = Date.now()) {
+    if (!nonceCandidates.length || nonceCandidates.some(candidate => !/^[A-Za-z0-9_-]{43}$/.test(candidate)))
+      throw unauthorized("Account deletion receipt access is invalid");
+    const [existing] = await db.select({ idempotencyKey: accountDeletionOperations.idempotencyKey,
+      receiptKeyHash: accountDeletionOperations.receiptKeyHash, createdAt: accountDeletionOperations.createdAt })
+      .from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, userId)).limit(1);
+    if (!existing) return { nonce: nonceCandidates[0]!, expiresAt: now + ACCOUNT_DELETION_RECEIPT_MAX_AGE_MS };
+    if (existing.idempotencyKey !== sha256(idempotencyKey)) throw conflict("Account deletion is already requested");
+    if (!existing.receiptKeyHash) throw conflict("This account deletion has no recoverable receipt");
+    const nonce = nonceCandidates.find(candidate => /^[A-Za-z0-9_-]{43}$/.test(candidate) &&
+      equalDigest(existing.receiptKeyHash!, sha256(candidate)));
+    if (!nonce) throw conflict("Account deletion receipt access does not match the original request");
+    const expiresAt = existing.createdAt.getTime() + ACCOUNT_DELETION_RECEIPT_MAX_AGE_MS;
+    if (expiresAt <= now) throw notFound("Account deletion receipt not found");
+    return { nonce, expiresAt };
+  }
+  async function readReceipt(trustedReceiptNonce: string | null, principalHash: string | null, requesterAddress: string) {
+    const key = "account-deletion-receipt:" + sha256(requesterAddress),
+      budgetNow = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`,
+      cutoff = sql`${budgetNow} - 60000`;
+    const [budget] = await db.insert(authRateLimits).values({ id: randomUUID(), key, count: 1, lastRequest: budgetNow })
+      .onConflictDoUpdate({ target: authRateLimits.key, set: {
+        count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,
+        lastRequest: sql`case when ${authRateLimits.lastRequest}<${cutoff} then ${budgetNow} else ${authRateLimits.lastRequest} end`,
+      } }).returning();
+    if (budget!.count > 120) throw tooManyRequests("Account deletion receipt lookup limit reached", { retryAfterSeconds: 60 });
+    if (!trustedReceiptNonce || !principalHash || !/^[A-Za-z0-9_-]{43}$/.test(trustedReceiptNonce) || !/^[a-f0-9]{64}$/.test(principalHash))
+      throw notFound("Account deletion receipt not found");
+    const [row] = await db.select({ id: accountDeletionOperations.id, status: accountDeletionOperations.status,
+      userId: accountDeletionOperations.userId, createdAt: accountDeletionOperations.createdAt, completedAt: accountDeletionOperations.completedAt })
+      .from(accountDeletionOperations).where(eq(accountDeletionOperations.receiptKeyHash, sha256(trustedReceiptNonce))).limit(1);
+    if (!row || !equalDigest(sha256(row.userId), principalHash) ||
+      Date.now() >= row.createdAt.getTime() + ACCOUNT_DELETION_RECEIPT_MAX_AGE_MS) throw notFound("Account deletion receipt not found");
+    return { scope: "personal_account" as const, id: row.id, status: row.status, createdAt: row.createdAt, completedAt: row.completedAt };
   }
   async function processOne(now = new Date()) {
     const operation = await db.transaction(async (tx) => {
@@ -456,7 +502,7 @@ export function accountDeletionService(
     }
     return true;
   }
-  return { request, processOne };
+  return { request, prepareReceiptAccess, readReceipt, processOne };
 }
 
 function receipt(row: typeof accountDeletionOperations.$inferSelect) {

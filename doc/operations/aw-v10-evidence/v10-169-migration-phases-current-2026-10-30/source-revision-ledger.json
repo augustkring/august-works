@@ -9292,5 +9292,254 @@
       "hostResolved": false,
       "providerLiveProof": false
     }
+  },
+  "personalAccountDeletionPrivateReceiptP2": {
+    "sourceHead": "4f110b840ad25ffccfd9c26d675fd438cc1f9d45",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "sourcePaths": [
+      {
+        "path": "docs/da/help/export-and-delete.md",
+        "sha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+        "bytes": 6698,
+        "mtimeNs": 1794431044627716739
+      },
+      {
+        "path": "docs/help/export-and-delete.md",
+        "sha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+        "bytes": 6208,
+        "mtimeNs": 1794431044627475857
+      },
+      {
+        "path": "packages/db/src/migrations/0579_puzzling_morlocks.sql",
+        "sha256": "155f299a1a4db9ada9d55c7cb7b5c2323dccdfa5a380b5d61318ae9c6877c06c",
+        "bytes": 496,
+        "mtimeNs": 1794430446629281493
+      },
+      {
+        "path": "packages/db/src/migrations/meta/0579_snapshot.json",
+        "sha256": "db482bca3a7c0467e2830384d281ac58dbc275065a5309a14b9319a4dccc4ec3",
+        "bytes": 2831003,
+        "mtimeNs": 1794430446629281493
+      },
+      {
+        "path": "packages/db/src/migrations/meta/_journal.json",
+        "sha256": "51588bf9b8ba53cddd7e77354574f4b45b4739f22bd58496de85d5dc016773c3",
+        "bytes": 87532,
+        "mtimeNs": 1794430446629281493
+      },
+      {
+        "path": "packages/db/src/schema/saas_lifecycle.ts",
+        "sha256": "ab90ff3a1f46188844d56ae02edfad9d2b6c991ae2f80a0c2db588cfe7f1e25b",
+        "bytes": 14313,
+        "mtimeNs": 1794430427747500810
+      },
+      {
+        "path": "packages/shared/src/saas-contracts.ts",
+        "sha256": "d9c0245c44bf6f8d9ae8ce8af83b7710018e92a79094e04e5bab356742d977c1",
+        "bytes": 8672,
+        "mtimeNs": 1794430427748227110
+      },
+      {
+        "path": "server/src/__tests__/openapi-routes.test.ts",
+        "sha256": "c70a1d25676e7fe2b9c682fdcfbdef89a3b30c561d77837137c9cf5d70d2173b",
+        "bytes": 82298,
+        "mtimeNs": 1794431096474875635
+      },
+      {
+        "path": "server/src/__tests__/v6-account-deletion.integration.test.ts",
+        "sha256": "2adc61c5ffa78fcdd4f1b039f483a0cb954fae0ae30e88b7dbc5e21fc22d70ee",
+        "bytes": 51907,
+        "mtimeNs": 1794431096474965610
+      },
+      {
+        "path": "server/src/routes/openapi.ts",
+        "sha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
+        "bytes": 452370,
+        "mtimeNs": 1794431144923922990
+      },
+      {
+        "path": "server/src/routes/saas.ts",
+        "sha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
+        "bytes": 53123,
+        "mtimeNs": 1794430427728386761
+      },
+      {
+        "path": "server/src/routes/v6-api-paths.ts",
+        "sha256": "6420cfd9634a12abaf157df8649480fa9fd3fca9653387be0c88f5622a26478d",
+        "bytes": 24284,
+        "mtimeNs": 1794431096471391263
+      },
+      {
+        "path": "server/src/services/company-search-help.generated.ts",
+        "sha256": "199b3d40e269eeb9101c81df7826b95313dd974f78da0f77ce64f1f797adf389",
+        "bytes": 120819,
+        "mtimeNs": 1794431044726590191
+      },
+      {
+        "path": "server/src/services/saas/account-deletion.ts",
+        "sha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
+        "bytes": 38798,
+        "mtimeNs": 1794430427728386761
+      },
+      {
+        "path": "ui/src/api/saas.ts",
+        "sha256": "f754a9775bc3d90f63660d1a4b72769871e8e9db1446c27d6daaa9f157255c1a",
+        "bytes": 20975,
+        "mtimeNs": 1794430427751944449
+      },
+      {
+        "path": "ui/src/components/PersonalAccountDeletionReceipt.test.tsx",
+        "sha256": "e2b339167d16b460d0fb61a6922564934d213cb6144cf23c9789e9e8a2d8b23d",
+        "bytes": 3820,
+        "mtimeNs": 1794430427748984957
+      },
+      {
+        "path": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
+        "sha256": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
+        "bytes": 3053,
+        "mtimeNs": 1794430427748709914
+      },
+      {
+        "path": "ui/src/i18n/experience/da.json",
+        "sha256": "12fb1f8eb59328386380ae34f8cd4a1000e814203075b30ce06a6728e9bbc415",
+        "bytes": 272083,
+        "mtimeNs": 1794430427751560693
+      },
+      {
+        "path": "ui/src/i18n/experience/en.json",
+        "sha256": "5abedef1c1b6a27304e5e5e9c79dd444a10fe5434abf20bb2dae9d18dd0e6ae5",
+        "bytes": 253964,
+        "mtimeNs": 1794430427750823116
+      },
+      {
+        "path": "ui/src/pages/Auth.tsx",
+        "sha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
+        "bytes": 19357,
+        "mtimeNs": 1794430427749285678
+      },
+      {
+        "path": "ui/src/pages/SaasAccount.test.tsx",
+        "sha256": "560229b0a0d49bd10d227b20b4652e0ee124da507be68cef77111cc111382e2f",
+        "bytes": 28427,
+        "mtimeNs": 1794430427749603225
+      },
+      {
+        "path": "ui/src/pages/SaasAccount.tsx",
+        "sha256": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1",
+        "bytes": 24624,
+        "mtimeNs": 1794430427749902705
+      }
+    ],
+    "ownerAdditions": {
+      "packages/db/src/migrations/0579_puzzling_morlocks.sql": "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS",
+      "packages/db/src/migrations/meta/0579_snapshot.json": "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS",
+      "ui/src/components/PersonalAccountDeletionReceipt.tsx": "SCR-V10-AUTH-IDENTITY",
+      "ui/src/components/PersonalAccountDeletionReceipt.test.tsx": "SCR-V10-AUTH-IDENTITY"
+    },
+    "phaseExistingPinChanges": {
+      "packages/db/src/migrations/meta/_journal.json": {
+        "oldSha256": "506df6cfe8b12162feb0646a35589233f8757ad0203cf37793ee025908e1db36",
+        "newSha256": "51588bf9b8ba53cddd7e77354574f4b45b4739f22bd58496de85d5dc016773c3"
+      },
+      "packages/db/src/schema/saas_lifecycle.ts": {
+        "oldSha256": "e465817bfe9e956cf1a09382fd0bc0163eb8ec4302e41a9096253ec1b3d9efee",
+        "newSha256": "ab90ff3a1f46188844d56ae02edfad9d2b6c991ae2f80a0c2db588cfe7f1e25b"
+      },
+      "server/src/__tests__/v6-account-deletion.integration.test.ts": {
+        "oldSha256": "f5196feb9f9a1877d9e195afc7fa199ef1ff9da47925bc8ccf1063e427f4fb13",
+        "newSha256": "2adc61c5ffa78fcdd4f1b039f483a0cb954fae0ae30e88b7dbc5e21fc22d70ee"
+      },
+      "server/src/services/saas/account-deletion.ts": {
+        "oldSha256": "8c7c4cf8f84785c2f3ff34b32184e4659f7715f4e0fb30994e48a411b8759d5b",
+        "newSha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046"
+      }
+    },
+    "newPhaseSqlPin": {
+      "path": "packages/db/src/migrations/0579_puzzling_morlocks.sql",
+      "sha256": "155f299a1a4db9ada9d55c7cb7b5c2323dccdfa5a380b5d61318ae9c6877c06c"
+    },
+    "inventory": {
+      "sourceDeltaPathCount": 2084,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "deletedSourcePathCount": 41,
+      "untrackedSourceCandidateCount": 0,
+      "fullDiffPathCount": 14882
+    },
+    "evidenceRoot": "doc/operations/aw-v10-evidence/personal-account-private-receipt-20261111",
+    "evidenceManifest": {
+      "README.md": "b710753cc4064d9fe2f0895c6eee4efe30d53da58bbb2ba58f7588dc795dbec3",
+      "final-source-pins.json": "850f84539a9de06fcca565c6f9ccc7aac1ce8a15ab1923bb956cbf2219026635",
+      "r587-build-receipt.json": "008040d0f71ccc51ec746bfc8ccca600116f726a3caf6eb45eb5ead08d8f1f94",
+      "r587-phase-0.log.gz": "692c33b4b991619930b0f5ce971e7746f420921c6690291c6af552f008f2cc7c",
+      "r587-phase-1.log.gz": "7e3bcf25e11f3ba5e9a1306ae2974e640e795b3f717d02e4ac5d10d7c88de451",
+      "r587-source-after.json": "18572bc9a9dba03d4e67ebf4107be91541d76414386c8ce3f1186de5352897a9",
+      "r587-source-before.json": "92a2a4ce39b31b46409bfd100a470c6191e69e569c894ff200537ef01289a257",
+      "r589-cleanup.json": "255797f1a85e15aaf5c60b0e5ae6915caa8f91d8664fc630fc6f28a63402f9f6",
+      "r589-receipt.json": "e0528398cd2b5cae2dc60d1937c2773e6faec8bb61a1606166e5d212dffc7bd8",
+      "r589-source-after.json": "49d503fb94d43a889ee5a0f3af0d765f0d08ff89b30d8f79150bd84c9e8012ff",
+      "r589-source-manifest.json": "48b6ab497839eab30ba8151ada29554bb8595b197f6e5013122658dc2986f8a7",
+      "r589.log.gz": "0ee526217a8e9ecd7abaa7d30f81fc706bae11264f8005454ad4e15a9eaca909",
+      "r590-build-receipt.json": "4b7c7df3b51c1e511bf4059bf1f447acb353f6b890193bd5aa6e2a36cbfb6e3a",
+      "r590-phase-0.log.gz": "a2ab0685cbf18a390e04d35669b33209c82c6185b5d6377561404b14d19d1eb4",
+      "r590-phase-1.log.gz": "c9f4909cec0c07bdff3ffc2d83eb817cde6656bb1ba4b30bcf763f52b39c75fe",
+      "r590-read-only-source-protection-restored.json": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071",
+      "r590-source-after.json": "b1883a09f6b279ed6b2dad3f37bc0c7363b9895da62f3b1e31532c6fffd912cb",
+      "r590-source-before.json": "3efb3eee217357029af92e0c8b05465a420ec0676f16a26cde38b5d9d25115e5"
+    },
+    "rootFinalFacts": {
+      "R587": {
+        "status": "PASS",
+        "testsPassed": 37,
+        "fileCount": 3,
+        "designTokenGate": "PASS"
+      },
+      "R588": {
+        "status": "FAILED",
+        "cause": "OpenAPI header expression syntax error before tests; corrected before R589"
+      },
+      "R589": {
+        "status": "PASS",
+        "testsPassed": 55,
+        "fileCount": 4,
+        "actualPostgres": true,
+        "pinsStable": true,
+        "cleanup": "normal_zero_owned_survivors"
+      },
+      "R590": {
+        "status": "PASS",
+        "steps": [
+          {
+            "command": [
+              "pnpm",
+              "-r",
+              "typecheck"
+            ],
+            "exit": 0,
+            "seconds": 360.00553420500364,
+            "peakGroupRssBytes": 6428459008,
+            "stopped": null
+          },
+          {
+            "command": [
+              "pnpm",
+              "build"
+            ],
+            "exit": 0,
+            "seconds": 252.2393329970073,
+            "peakGroupRssBytes": 6401441792,
+            "stopped": null
+          }
+        ],
+        "pinsAndMtimesStable": true,
+        "originalModesRestored": true
+      },
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "hostResolved": false,
+      "providerLiveProof": false
+    },
+    "qualificationScope": "Exact local software evidence only; no status promotion, host/provider/production/restore or complete V10 qualification."
   }
 }

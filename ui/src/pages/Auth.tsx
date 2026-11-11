@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "@/i18n";
 import { ExperienceLanguageSelect } from "../components/ExperienceLanguageSelect";
+import { PersonalAccountDeletionReceipt } from "../components/PersonalAccountDeletionReceipt";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useSearchParams } from "@/lib/router";
 import { authApi, parseTwoFactorSignInChallenge, type TwoFactorSignInChallenge } from "../api/auth";
@@ -190,7 +191,7 @@ export function AuthPage() {
               : saas.data?.emailVerification ? t("authFlow.verifyHelp") : t("authFlow.legacyCreateHelp")}
           </p>
           {verificationSent && <p role="status" className="saas-muted">{t("authFlow.verificationSent")}</p>}
-          {searchParams.get("accountDeletion") === "requested" && <p role="status" className="saas-muted">{t("authFlow.deletionRequested")}</p>}
+          <PersonalAccountDeletionReceipt requested={searchParams.get("accountDeletion") === "requested"} />
 
           <form
             className="mt-6 space-y-4"

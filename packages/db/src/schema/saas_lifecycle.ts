@@ -328,6 +328,7 @@ export const accountDeletionOperations = pgTable(
     userId: text("user_id").primaryKey(),
     id: uuid("id").notNull().defaultRandom(),
     idempotencyKey: text("idempotency_key").notNull(),
+    receiptKeyHash: text("receipt_key_hash"),
     status: text("status").notNull().default("requested"),
     errorCode: text("error_code"),
     notBefore: timestamp("not_before", { withTimezone: true })
@@ -340,6 +341,9 @@ export const accountDeletionOperations = pgTable(
   },
   (t) => [
     uniqueIndex("account_deletion_operations_id_uq").on(t.id),
+    uniqueIndex("account_deletion_operations_receipt_key_uq").on(t.receiptKeyHash),
+    check("account_deletion_operations_receipt_key_ck",
+      sql`${t.receiptKeyHash} is null or ${t.receiptKeyHash} ~ '^[a-f0-9]{64}$'`),
     index("account_deletion_operations_work_idx").on(t.status, t.notBefore),
     check(
       "account_deletion_operations_status_ck",

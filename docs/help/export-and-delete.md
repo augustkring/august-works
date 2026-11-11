@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-28
+last_verified_at: 2026-11-11
 review_trigger: Export scope, deletion, retention, or private Memory sharing and source access changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
+linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, ui/src/pages/Auth.tsx, ui/src/components/PersonalAccountDeletionReceipt.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
 ---
 
 Blentera has separate actions for exporting a company, deleting an organization, and deleting your personal account. Check which data and identity you mean before continuing.
@@ -33,6 +33,10 @@ Open **Company settings → Security** to review personal account deletion. Ente
 
 If an earlier request has an unknown result, use the recovery shown on the account page instead of starting a new request. For a privacy question, contact [privacy@blentera.com](mailto:privacy@blentera.com). Do not send your password, recovery code, or API key.
 
+
+After acceptance, the sign-in page can show the request status in the same browser for up to 90 days. Keep cookies enabled. The receipt shows the request ID and whether the personal account request is requested, processing, or completed. Choose **Download this receipt** to save a dated JSON copy. That copy records the displayed status at download time; it does not update itself.
+
+The receipt covers only the personal account request identified on the page. It does not confirm organization deletion, legal retention, or erasure of every item held by an external provider. A request URL alone does not prove acceptance. If the receipt is unavailable after cookies are cleared, the browser changes, or access expires, the page cannot confirm its current status. Contact human support with a saved receipt if you need help.
 
 ## Review a private Memory share (preview)
 

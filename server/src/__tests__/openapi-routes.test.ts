@@ -139,6 +139,28 @@ it("documents the operator model dependency projection as private noncacheable m
   expect(response.content?.["application/json"].schema?.properties).toHaveProperty("modelDependencies");
 });
 
+it("documents deletion receipt preparation as Human-session-only and status as a narrow cookie capability", () => {
+  const paths = buildOpenApiSpec().paths as Record<string, Record<string, any>>;
+  const prepare = paths["/api/saas/account/deletion/receipt-access"].post;
+  expect(prepare.security).toEqual([{ BoardSessionAuth: [] }]);
+  expect(prepare.security).not.toContainEqual({ AgentBearerAuth: [] });
+  expect(prepare["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true });
+  expect(prepare.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+  expect(prepare.responses[200].content["application/json"].schema.properties.ready.enum).toEqual([true]);
+  expect(prepare.responses[200].headers["Cache-Control"].schema.enum).toEqual(["no-store"]);
+
+  const receipt = paths["/api/saas/account/deletion/receipt"].post;
+  expect(receipt.security).toEqual([{ AccountDeletionReceiptCookieAuth: [] }]);
+  expect(receipt.security).not.toContainEqual({ BoardSessionAuth: [] });
+  expect(receipt.security).not.toContainEqual({ AgentBearerAuth: [] });
+  expect(receipt["x-paperclip-authorization"]).toEqual({ actor: "capability", scope: "one_personal_account_deletion_status", boardOrAgentAuthority: false });
+  expect(receipt.requestBody.required).toBe(true);
+  expect(receipt.requestBody.content["application/json"].schema).toMatchObject({ type: "object", additionalProperties: false });
+  expect(receipt.responses[200].content["application/json"].schema.properties.scope.enum).toEqual(["personal_account"]);
+  expect(receipt.responses[200].content["application/json"].schema.properties.status.enum).toEqual(["requested", "processing", "completed"]);
+  expect(receipt.responses[200].headers["Cache-Control"].schema.enum).toEqual(["no-store"]);
+});
+
 const ROUTE_LITERAL_PATTERN =
   /router\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/g;
 const ROUTER_METHOD_PATTERN = /router\.(get|post|put|patch|delete)\(/;

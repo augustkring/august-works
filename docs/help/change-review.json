@@ -229,10 +229,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
+      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
       "decision": "no_change",
-      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -253,10 +253,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "af5340674fbdb1747e3e3f64f3678614a0a1269fa2b6faaa4729953ca3b9c9f4",
+      "sourceSha256": "f754a9775bc3d90f63660d1a4b72769871e8e9db1446c27d6daaa9f157255c1a",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
       "decision": "no_change",
-      "rationale": "The API change adds passwordless account-deletion proof to its request contract; billing endpoints and the subscription/payment workflow in this guide are unchanged."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -269,10 +269,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
+      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
       "decision": "no_change",
-      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -293,10 +293,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "af5340674fbdb1747e3e3f64f3678614a0a1269fa2b6faaa4729953ca3b9c9f4",
+      "sourceSha256": "f754a9775bc3d90f63660d1a4b72769871e8e9db1446c27d6daaa9f157255c1a",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
       "decision": "no_change",
-      "rationale": "The API change adds passwordless account-deletion proof to its request contract; billing endpoints and the subscription/payment workflow in this guide are unchanged."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -373,10 +373,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
+      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
       "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
-      "rationale": "The OpenAPI change adds model-monitor operations and their authorization classification. It does not change the import/export operations or the article\u2019s direction to use the current API reference and verify authorization."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -509,10 +509,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
+      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
       "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "no_change",
-      "rationale": "OpenAPI-\u00e6ndringen tilf\u00f8jer modeloverv\u00e5gningshandlinger og deres autorisationsklassifikation. Den \u00e6ndrer ikke import-/eksporthandlingerne eller artiklens vejledning om at bruge den aktuelle API-reference og kontrollere autorisation."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -629,10 +629,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced",
-      "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
+      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
       "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
       "decision": "no_change",
-      "rationale": "The OpenAPI change adds model-monitor operations and their authorization classification. It does not change the import/export operations or the article\u2019s direction to use the current API reference and verify authorization."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "cli/src/index.ts",
@@ -653,170 +653,170 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced-da",
-      "sourceSha256": "733018da5bac3cf5decc57d050fa4d4a4076c363ad0e79c9016ab4d9ec7c60ea",
+      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
       "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
       "decision": "no_change",
-      "rationale": "OpenAPI-\u00e6ndringen tilf\u00f8jer modeloverv\u00e5gningshandlinger og deres autorisationsklassifikation. Den \u00e6ndrer ikke import-/eksporthandlingerne eller artiklens vejledning om at bruge den aktuelle API-reference og kontrollere autorisation."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Memory routes keep private record actions scoped to the current company and actor; the article describes only the available owner review and deletion controls."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Current Memory privacy checks continue to enforce source visibility and owner-controlled sharing and deletion. The article already explains that a share does not grant access to private source work and that Forget removes the selected Memory; no customer step changed."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "The current Memory service preserves the article\u2019s owner, scope, and deletion descriptions. The revised implementation does not add a customer-facing export or restore action."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "8c7c4cf8f84785c2f3ff34b32184e4659f7715f4e0fb30994e48a411b8759d5b",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Account deletion still follows the security confirmation and account-specific factor shown on the page. The current article already distinguishes company sign-in from any additional required factor and directs users to follow the displayed prompts."
+      "sourceSha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Company deletion remains staged while provider outcomes or managed erasure are unresolved. The article distinguishes an accepted request from verified completion."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "The export page labels support history as a separate customer-visible archive; the article accurately excludes internal notes and access grants."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "The Memory page exposes owner-controlled share review and Forget actions; the article matches their source-access and deletion effects."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+      "sourceSha256": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1",
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
       "decision": "updated",
-      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "26895e94931ae7e5a74bcb6c9ddc0ff8263255a5c407eaffbb6f29d73d17cf05",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Memory routes keep private record actions scoped to the current company and actor; the article describes only the available owner review and deletion controls."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "De aktuelle kontroller for Memory-privatliv h\u00e5ndh\u00e6ver fortsat synlighed af kilder samt ejerstyret deling og sletning. Artiklen forklarer allerede, at deling ikke giver adgang til privat kildearbejde, og at Slet permanent fjerner den valgte Memory; kundens handlinger er u\u00e6ndrede."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Den aktuelle Memory-tjeneste stemmer fortsat med artiklens beskrivelser af ejer, omfang og sletning. Den \u00e6ndrede implementering tilf\u00f8jer ikke en eksport- eller gendannelseshandling for kunden."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "8c7c4cf8f84785c2f3ff34b32184e4659f7715f4e0fb30994e48a411b8759d5b",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Sletning af en konto kr\u00e6ver fortsat den sikkerhedsbekr\u00e6ftelse og den kontospecifikke faktor, som siden viser. Artiklen skelner allerede mellem virksomhedslogin og en yderligere p\u00e5kr\u00e6vet faktor og henviser til de viste anvisninger."
+      "sourceSha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Sletning af virksomheden afventer fortsat uafklarede udbyderresultater eller administreret sletning. Artiklen skelner mellem en accepteret anmodning og bekr\u00e6ftet gennemf\u00f8relse."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "The export page labels support history as a separate customer-visible archive; the article accurately excludes internal notes and access grants."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "The Memory page exposes owner-controlled share review and Forget actions; the article matches their source-access and deletion effects."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "1bb42b6fe4f9ffe51ce8ffccba1659d318366d097934c5ce0086209aec99627e",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+      "sourceSha256": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1",
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
       "decision": "updated",
-      "rationale": "The page requires the current password when present and can also require company sign-in for passwordless or enterprise-bound phishing-resistant accounts; phishing-resistant accounts use the passkey confirmation path. The article directs readers to follow any displayed sign-in and factor prompts and says SSO does not replace a required factor."
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "26895e94931ae7e5a74bcb6c9ddc0ff8263255a5c407eaffbb6f29d73d17cf05",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -909,10 +909,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
+      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "5c9f0310541d6d7fcd1becf34f4a33253d695b1cdb8e6d60447757137d9f26fc",
+      "sourceSha256": "199b3d40e269eeb9101c81df7826b95313dd974f78da0f77ce64f1f797adf389",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "The generated Help search index now reflects the updated Task handoff article terms. The paired Help and Human Support article itself did not change, so its user guidance remains accurate."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1221,10 +1221,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "ea227910254e759231517fb9db43eee3382cdfcc213f800b3146eb90ca1a6c45",
+      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed the bounded operator-only Jev model inventory and its fail-closed overflow response. The billing/capacity and Help articles continue to describe their current customer actions."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "5c9f0310541d6d7fcd1becf34f4a33253d695b1cdb8e6d60447757137d9f26fc",
+      "sourceSha256": "199b3d40e269eeb9101c81df7826b95313dd974f78da0f77ce64f1f797adf389",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "The generated Help search index now reflects the updated Task handoff article terms. The paired Help and Human Support article itself did not change, so its user guidance remains accurate."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -2006,65 +2006,65 @@
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Memory maintenance jobs continue to respect the privacy and deletion markers described here. The article does not promise a timing or completion state beyond the recorded status and receipt."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "a806e5a2f86478815af58e095ff94370ce6f981d3b36651a4bef1b5736098068",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "Remote attachment staging cleanup follows the existing retained runtime asset retirement owner and its current Source authorization. The Human attachment, retention and deletion controls described in Help are unchanged."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "This source adds names for the separate installed in-process admission and settled-close lifecycle. OS-backed Native stop and managed runtime-file erasure retain their original PID/group and current storage-proof owners. The existing English and Danish instructions correctly keep file cleanup pending until stop and storage removal can be verified."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Memory-vedligeholdelsesjob respekterer fortsat de privatlivs- og sletningsmark\u00f8rer, der beskrives her. Artiklen lover ikke en bestemt tidsplan eller fuldf\u00f8relsestilstand ud over den registrerede status og kvittering."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "a806e5a2f86478815af58e095ff94370ce6f981d3b36651a4bef1b5736098068",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "Remote attachment staging cleanup follows the existing retained runtime asset retirement owner and its current Source authorization. The Human attachment, retention and deletion controls described in Help are unchanged."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "This source adds names for the separate installed in-process admission and settled-close lifecycle. OS-backed Native stop and managed runtime-file erasure retain their original PID/group and current storage-proof owners. The existing English and Danish instructions correctly keep file cleanup pending until stop and storage removal can be verified."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
-      "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
-      "decision": "no_change",
-      "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
-      "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
-      "decision": "no_change",
-      "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2789,18 +2789,50 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "488e65ca4d31eda48f5a8d721aafa38cbeeae42164f77853fd1e38f1cc563820",
+      "sourceSha256": "5abedef1c1b6a27304e5e5e9c79dd444a10fe5434abf20bb2dae9d18dd0e6ae5",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "updated",
-      "rationale": "The English UI labels expose the maximum model-cost limit and Backlog-to-To do queueing guidance; the paired article documents the Human review and activation steps."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "5b51f265b1320ff6acb44c5445d9b44094bc962efff3194d4cee2c5598b10489",
+      "sourceSha256": "12fb1f8eb59328386380ae34f8cd4a1000e814203075b30ce06a6728e9bbc415",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "updated",
-      "rationale": "De danske UI-tekster viser modelprisgr\u00e6nsen og vejledningen fra Backlog til Klar til start; den danske artikel beskriver de tilsvarende Human-gennemgangstrin."
+      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+    },
+    {
+      "source": "ui/src/pages/Auth.tsx",
+      "articleId": "export-and-delete",
+      "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
+    },
+    {
+      "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
+      "articleId": "export-and-delete",
+      "sourceSha256": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
+      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "decision": "updated",
+      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
+    },
+    {
+      "source": "ui/src/pages/Auth.tsx",
+      "articleId": "export-and-delete-da",
+      "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
+    },
+    {
+      "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
+      "articleId": "export-and-delete-da",
+      "sourceSha256": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
+      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "decision": "updated",
+      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
     }
   ]
 }

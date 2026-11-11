@@ -1,6 +1,6 @@
 import { notificationChannelPreferenceViewSchema, notificationChannelPreferenceReceiptSchema,
   notificationChannelUpdateSchema, type NotificationChannelCategory, type NotificationChannelUpdate } from "@paperclipai/shared";
-import { nativeSupportReviewSchema } from "@paperclipai/shared";
+import { nativeSupportReviewSchema, accountDeletionReceiptSchema } from "@paperclipai/shared";
 import type {
   RuntimeVersionCandidate,
   RuntimeVersionTransition,
@@ -516,6 +516,12 @@ export const saasApi = {
         "id" | "companyId" | "status" | "stage" | "createdAt" | "completedAt"
       >[]
     >(scoped("/saas/account/deletion-receipts", userId), { signal, cache: "no-store" }),
+  prepareAccountDeletionReceipt: (userId: string, idempotencyKey: string) =>
+    api.post<{ ready: true }>(scoped("/saas/account/deletion/receipt-access", userId), { idempotencyKey })
+      .then(row => { if (row?.ready !== true) throw new Error("Deletion receipt access is unavailable"); return row; }),
+  accountDeletionReceipt: (signal?: AbortSignal) =>
+    api.post<unknown>("/saas/account/deletion/receipt", {}, { signal })
+      .then(row => accountDeletionReceiptSchema.parse(row)),
   deleteAccount: (
     userId: string,
     input: {
@@ -524,6 +530,7 @@ export const saasApi = {
       reauthenticationProofId?: string;
       acknowledgeExport: true;
       idempotencyKey: string;
+      receiptRequired?: true;
     },
   ) =>
     api.post<{

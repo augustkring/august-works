@@ -1933,7 +1933,24 @@
     "passwordTooLong": "Use no more than 128 characters.",
     "passwordTooCommon": "Choose a different password; this one is too common.",
     "signInPasskey": "Sign in with a passkey",
-    "passkeyFailed": "Passkey sign-in could not be confirmed. Try again, or use another available sign-in method."
+    "passkeyFailed": "Passkey sign-in could not be confirmed. Try again, or use another available sign-in method.",
+    "receipt": {
+      "heading": "Personal account deletion receipt",
+      "loading": "Checking the deletion request…",
+      "scope": "This receipt covers only the personal account deletion request identified here. Company records and legally retained records are separate.",
+      "requestedAt": "Requested: {{date}}",
+      "completedAt": "Completed: {{date}}",
+      "download": "Download this receipt",
+      "downloadFailed": "The receipt could not be downloaded. Try again.",
+      "unavailable": "A private receipt is not available in this browser. This does not establish whether an earlier deletion request was accepted. Contact privacy@blentera.com if you need help.",
+      "failed": "The current status could not be checked. Try again.",
+      "status": {
+        "requested": "Deletion requested. Access has been revoked; personal cleanup is still pending.",
+        "processing": "Deletion is in progress. Personal cleanup or retention requirements remain unresolved.",
+        "completed": "Personal account deletion completed."
+      },
+      "requestId": "Request ID: {{id}}"
+    }
   },
   "memoryMaintenance": {
     "title": "Memory maintenance history",

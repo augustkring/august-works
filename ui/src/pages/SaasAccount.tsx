@@ -180,13 +180,15 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
         catch (error) { setRecoveryUnavailable(true); throw error; }
         deletionAttempt.current = { confirmation: "DELETE MY ACCOUNT", ...(deletePassword ? { password: deletePassword } : {}),
           ...(proof ? { reauthenticationProofId: proof } : {}),
-          acknowledgeExport: true, idempotencyKey: deleteKey.current };
+          acknowledgeExport: true, idempotencyKey: deleteKey.current, receiptRequired: true };
       }
       try { retainPendingAccountDeletion(principal, deletionAttempt.current.idempotencyKey); }
       catch (error) { setRecoveryUnavailable(true); throw error; }
       const epoch = scope.epoch;
       setDeletionUnconfirmed(false);
       const pending = deletionAttempt.current;
+      await saasApi.prepareAccountDeletionReceipt(principal, pending.idempotencyKey);
+      if (!scope.isCurrent(epoch, "deletion")) throw new Error("Current account access changed");
       await saasApi.deleteAccount(principal, pending);
       return { epoch, idempotencyKey: pending.idempotencyKey };
     }, retry: false,

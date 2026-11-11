@@ -1,0 +1,28 @@
+{
+  "headBaseline": "4f110b840ad25ffccfd9c26d675fd438cc1f9d45",
+  "qualification": "Local software evidence; no production/browser/Host/provider/restore/Human acceptance",
+  "sourcePaths": {
+    "docs/da/help/export-and-delete.md": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+    "docs/help/export-and-delete.md": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+    "packages/db/src/migrations/0579_puzzling_morlocks.sql": "155f299a1a4db9ada9d55c7cb7b5c2323dccdfa5a380b5d61318ae9c6877c06c",
+    "packages/db/src/migrations/meta/0579_snapshot.json": "db482bca3a7c0467e2830384d281ac58dbc275065a5309a14b9319a4dccc4ec3",
+    "packages/db/src/migrations/meta/_journal.json": "51588bf9b8ba53cddd7e77354574f4b45b4739f22bd58496de85d5dc016773c3",
+    "packages/db/src/schema/saas_lifecycle.ts": "ab90ff3a1f46188844d56ae02edfad9d2b6c991ae2f80a0c2db588cfe7f1e25b",
+    "packages/shared/src/saas-contracts.ts": "d9c0245c44bf6f8d9ae8ce8af83b7710018e92a79094e04e5bab356742d977c1",
+    "server/src/__tests__/openapi-routes.test.ts": "c70a1d25676e7fe2b9c682fdcfbdef89a3b30c561d77837137c9cf5d70d2173b",
+    "server/src/__tests__/v6-account-deletion.integration.test.ts": "2adc61c5ffa78fcdd4f1b039f483a0cb954fae0ae30e88b7dbc5e21fc22d70ee",
+    "server/src/routes/openapi.ts": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
+    "server/src/routes/saas.ts": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
+    "server/src/routes/v6-api-paths.ts": "6420cfd9634a12abaf157df8649480fa9fd3fca9653387be0c88f5622a26478d",
+    "server/src/services/company-search-help.generated.ts": "199b3d40e269eeb9101c81df7826b95313dd974f78da0f77ce64f1f797adf389",
+    "server/src/services/saas/account-deletion.ts": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
+    "ui/src/api/saas.ts": "f754a9775bc3d90f63660d1a4b72769871e8e9db1446c27d6daaa9f157255c1a",
+    "ui/src/components/PersonalAccountDeletionReceipt.test.tsx": "e2b339167d16b460d0fb61a6922564934d213cb6144cf23c9789e9e8a2d8b23d",
+    "ui/src/components/PersonalAccountDeletionReceipt.tsx": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
+    "ui/src/i18n/experience/da.json": "12fb1f8eb59328386380ae34f8cd4a1000e814203075b30ce06a6728e9bbc415",
+    "ui/src/i18n/experience/en.json": "5abedef1c1b6a27304e5e5e9c79dd444a10fe5434abf20bb2dae9d18dd0e6ae5",
+    "ui/src/pages/Auth.tsx": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
+    "ui/src/pages/SaasAccount.test.tsx": "560229b0a0d49bd10d227b20b4652e0ee124da507be68cef77111cc111382e2f",
+    "ui/src/pages/SaasAccount.tsx": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1"
+  }
+}

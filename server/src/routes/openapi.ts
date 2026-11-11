@@ -1419,6 +1419,7 @@ type OpenApiAuthLevel =
   | "instance_admin";
 
 const BOARD_SESSION_AUTH_SCHEME = "BoardSessionAuth";
+const ACCOUNT_DELETION_RECEIPT_COOKIE_AUTH_SCHEME = "AccountDeletionReceiptCookieAuth";
 const BOARD_API_KEY_AUTH_SCHEME = "BoardApiKeyAuth";
 const AGENT_BEARER_AUTH_SCHEME = "AgentBearerAuth";
 const AGENT_RUN_AUTH_SCHEME = "AgentRunAuth";
@@ -1744,6 +1745,7 @@ const HUMAN_SESSION_ONLY_MODEL_MIGRATION_MONITOR = new Set([
 ]);
 function requiresBoardSession(method: string, path: string): boolean {
   return path.startsWith("/api/companies/{companyId}/trust/") ||
+    ["POST /api/saas/account/deletion", "POST /api/saas/account/deletion/receipt-access"].includes(operationKey(method, path)) ||
     HUMAN_SESSION_ONLY_MODEL_MIGRATION_MONITOR.has(operationKey(method, path)) ||
     path === "/api/companies/{companyId}/responsibility-contacts" ||
     operationKey(method, path) === "GET /api/companies/{companyId}/members/{memberId}/responsibility-preflight" ||
@@ -1935,6 +1937,12 @@ function applyDocumentFixups(document: any): any {
     },
   };
   document.security = AUTHENTICATED_SECURITY;
+  document.components.securitySchemes[ACCOUNT_DELETION_RECEIPT_COOKIE_AUTH_SCHEME] = {
+    type: "apiKey",
+    in: "cookie",
+    name: "aw_account_deletion_receipt",
+    description: "Encrypted HttpOnly receipt capability, scoped only to its one personal account-deletion status. No board, company, or Agent authority; it expires no later than 90 days after the accepted deletion request.",
+  };
 
   for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
     for (const [method, operation] of Object.entries(
@@ -2001,6 +2009,15 @@ function applyDocumentFixups(document: any): any {
         applyOperationStatusOverride(operation, "200", "202");
       }
     }
+  }
+
+  const deletionReceiptPath = "/api/saas/account/deletion/receipt";
+  const deletionReceiptOperation = document.paths[deletionReceiptPath]?.post;
+  if (deletionReceiptOperation) {
+    deletionReceiptOperation.security = [securityRequirement(ACCOUNT_DELETION_RECEIPT_COOKIE_AUTH_SCHEME)];
+    deletionReceiptOperation["x-paperclip-authorization"] = {
+      actor: "capability", scope: "one_personal_account_deletion_status", boardOrAgentAuthority: false,
+    };
   }
 
   for (const contract of v7ApiPaths) {
@@ -12236,12 +12253,14 @@ for (const operation of v6ApiPaths) {
     method: operation.method,
     path: operation.path,
     ...(operation.auth === "provider" ? { surface: "PARTNER / PREVIEW" as const } : {}),
-    tags: [operation.auth === "native" ? "Native" : operation.auth === "session" ? "V6 SaaS" : "V6 machine ingress"],
+    tags: [operation.auth === "native" ? "Native" : operation.auth === "session" || operation.auth === "receipt" ? "V6 SaaS" : "V6 machine ingress"],
     summary: `${operation.method.toUpperCase()} ${operation.path}`,
     description: operation.auth === "native"
       ? "Requires the original Native actor, company and resource authority. Endpoint-specific privacy, account and rollout checks remain authoritative; a resource or receipt ID grants no access. These endpoints do not require a SaaS deployment profile."
       : operation.auth === "session"
       ? "SaaS profile only, behind applicable default-off V6 gates. Requires a current verified session and native company permissions before entitlement checks. Internal operator paths additionally require the named allowlist; privileged support-session actions require current owner consent."
+      : operation.auth === "receipt"
+      ? "SaaS profile only. Requires the encrypted HttpOnly receipt cookie for exactly one personal account-deletion operation; this capability grants no board session, company, or Agent authority. Missing, invalid, expired, or unknown receipts are not found."
       : operation.auth === "host"
         ? "SaaS profile and host-agent gate only. Enrollment uses a scoped one-use machine token; enrolled hosts use RSA-PSS timestamp/nonce/epoch request signatures over exact raw bytes. Cookies and host request query strings are rejected. Board authority grants no machine access."
         : "SaaS profile and provider gate only. Requires a verified Paddle or Mailgun signature over the provider payload. Board sessions grant no provider authority.",
@@ -12253,11 +12272,11 @@ for (const operation of v6ApiPaths) {
     responses: {
       [operation.successStatus]: {
         ...responses.ok(operation.result),
-        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
+        ...((operation.responseCacheControl || operation.privateResponse) ? { headers: { "Cache-Control": { schema: { type: "string", enum: [operation.responseCacheControl ?? "private, no-store"] } } } } : {}),
       },
       ...Object.fromEntries((operation.additionalSuccessStatuses ?? []).map(status => [status, {
         ...responses.ok(operation.result),
-        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
+        ...((operation.responseCacheControl || operation.privateResponse) ? { headers: { "Cache-Control": { schema: { type: "string", enum: [operation.responseCacheControl ?? "private, no-store"] } } } } : {}),
       }])),
       400: responses.badRequest,
       401: { description: "Current authenticated principal or valid machine proof required." },

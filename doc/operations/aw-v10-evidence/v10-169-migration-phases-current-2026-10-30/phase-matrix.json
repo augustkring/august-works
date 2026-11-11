@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 578,
-    "latestOfficialMigration": "0578_keen_celestials",
+    "last": 579,
+    "latestOfficialMigration": "0579_puzzling_morlocks",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -611,6 +611,29 @@
         "server/src/__tests__/chat-channels.integration.test.ts"
       ],
       "qualificationScope": "Source and selected actual PostgreSQL case inventory only. Does not qualify provider-side rename behavior, fleet compatibility, rollback, restore, production deployment, Human approval or overall V10 acceptance."
+    },
+    {
+      "id": "personal-account-deletion-private-receipt",
+      "migrations": [
+        579
+      ],
+      "purpose": "Retain a bounded personal account deletion status receipt on the original durable deletion operation after ordinary account sessions are revoked. The receipt is not proof of organization deletion or provider-wide erasure.",
+      "authority": "The original authenticated request prepares a sealed HttpOnly receipt bound to the requesting principal and idempotency key. Only its nonce hash is retained on the native account_deletion_operations row; the cookie-authorized lookup validates its principal, expiry and rate budget and returns only that operation status. No general account or organization access is restored.",
+      "durableState": [
+        "account_deletion_operations.receipt_key_hash nullable unique lowercase SHA256",
+        "original account deletion operation ID, status, created_at and completed_at"
+      ],
+      "compatibility": "The additive nullable column leaves historical operations with no receipt. Old clients can still create operations without receiptRequired; no historical receipt is backfilled. Replaying an operation with a receipt hash requires its original nonce even if receiptRequired is omitted. New receipt-required requests must present the exact prepared binding. Fleet mixed-writer, deployed cookie-key rotation/restore and downgrade are not qualified by this index.",
+      "recovery": "Repeat acceptance uses the same original operation and matching receipt binding. A pre-acceptance URL is not acceptance proof. Missing, foreign, malformed, expired or cleared cookie access fails closed; no new operation or account authority is inferred. Preserve accepted operations and receipt hashes during rollback/restore; arbitrary receipt recovery after cookie loss remains unavailable.",
+      "owners": [
+        "packages/db/src/migrations/0579_puzzling_morlocks.sql",
+        "packages/db/src/schema/saas_lifecycle.ts",
+        "server/src/services/saas/account-deletion.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/v6-account-deletion.integration.test.ts"
+      ],
+      "qualificationScope": "Source inventory and exact Root-supplied local PG/UI receipts only. Does not qualify arbitrary browser recovery, hosted/fleet compatibility, provider erasure, production rollout, rollback, restore, Human acceptance or complete V10 readiness."
     }
   ],
   "phaseCases": [
@@ -1131,7 +1154,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "506df6cfe8b12162feb0646a35589233f8757ad0203cf37793ee025908e1db36"
+      "sha256": "51588bf9b8ba53cddd7e77354574f4b45b4739f22bd58496de85d5dc016773c3"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1171,7 +1194,7 @@
     },
     {
       "path": "packages/db/src/schema/saas_lifecycle.ts",
-      "sha256": "e465817bfe9e956cf1a09382fd0bc0163eb8ec4302e41a9096253ec1b3d9efee"
+      "sha256": "ab90ff3a1f46188844d56ae02edfad9d2b6c991ae2f80a0c2db588cfe7f1e25b"
     },
     {
       "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
@@ -1315,7 +1338,7 @@
     },
     {
       "path": "server/src/__tests__/v6-account-deletion.integration.test.ts",
-      "sha256": "f5196feb9f9a1877d9e195afc7fa199ef1ff9da47925bc8ccf1063e427f4fb13"
+      "sha256": "2adc61c5ffa78fcdd4f1b039f483a0cb954fae0ae30e88b7dbc5e21fc22d70ee"
     },
     {
       "path": "server/src/__tests__/v7-derived-memory.integration.test.ts",
@@ -1483,7 +1506,7 @@
     },
     {
       "path": "server/src/services/saas/account-deletion.ts",
-      "sha256": "8c7c4cf8f84785c2f3ff34b32184e4659f7715f4e0fb30994e48a411b8759d5b"
+      "sha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046"
     },
     {
       "path": "server/src/services/saas/platform.ts",
@@ -1536,6 +1559,10 @@
     {
       "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
       "sha256": "539c9cf85362fcba9427e01c7bbe1e372dff0e43812661ac413f793485a98b2e"
+    },
+    {
+      "path": "packages/db/src/migrations/0579_puzzling_morlocks.sql",
+      "sha256": "155f299a1a4db9ada9d55c7cb7b5c2323dccdfa5a380b5d61318ae9c6877c06c"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1543,16 +1570,16 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 77,
+    "currentAffectedCount": 78,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0578_keen_celestials"
+    "currentAffectedLast": "0579_puzzling_morlocks"
   },
-  "sourcePinFinality": "Exact R86 source/SQL/owner/test pins frozen by Root after passing official generation, actual PostgreSQL regression and full workspace typecheck/build. Historical phase cases and qualification states remain unchanged.",
+  "sourcePinFinality": "Exact personal-account receipt source/SQL/owner/test pins frozen after official generation, actual PostgreSQL/HTTP and UI regressions and full workspace typecheck/build. Historical phase cases and qualification states remain unchanged.",
   "latestMigrationPublication": {
-    "migration": "0578_keen_celestials",
+    "migration": "0579_puzzling_morlocks",
     "sourceCommit": null,
-    "sourceState": "R86 exact source-hash publication candidate; official generated SQL, snapshot and journal, reviewed by Root before committing on the existing feature branch.",
-    "qualificationScope": "Source and local software receipts only; this does not establish fleet compatibility, physical Host, paid provider, production deployment, rollback, restore, Human acceptance or complete V10 readiness."
+    "sourceState": "Exact current source-hash publication candidate; official generated SQL, snapshot and journal with local software receipts.",
+    "qualificationScope": "Software source only; no fleet, deployed key rotation, rollout, rollback, restore, Host/provider or Human qualification."
   },
   "affectedMigrationReasons": {
     "0502": "Extends auth_security_events action contract with board_api_key_id, owner/user and company-null constraints, and expiry index; board-key audit rows use the existing user-auth event writer.",
@@ -1570,10 +1597,11 @@
     "0575": "Bounded, unique remote attachment-stage receipts must match currently delivered attachment inputs, their immutable source captures, and the exact Native dispatch intent. Invalid or mismatched receipts never qualify a remote stage.",
     "0576": "Adds durable Native review-model reservation identity and bounded reservation state for the plan review dispatch lane; does not change existing Support Assistant funding or provider qualification.",
     "0577": "Adds typed prelaunch setup-container occupancy settlement and receipt reconciliation. This is resource cleanup evidence only; it is distinct from Native process-stop projection and makes no claim of process termination, provider erasure, or storage removal.",
-    "0578": "Adds a company/endpoint/stable GitHub repository-scoped old-to-new coordinate receipt in the same transaction as repository rename and conversation/origin rebinding; no backfill or guessed aliases."
+    "0578": "Adds a company/endpoint/stable GitHub repository-scoped old-to-new coordinate receipt in the same transaction as repository rename and conversation/origin rebinding; no backfill or guessed aliases.",
+    "0579": "Adds an optional unique lowercase SHA256 receipt-key hash to the original personal account deletion operation. It supports only the exact accepted personal request status after session revocation; historical NULL rows gain no receipt, and the schema does not grant account or company authority."
   },
   "revisionDate": "2026-11-11",
-  "sourceHead": "9091d2c55f24d37d250ccf2ab9f64637eb3a3011",
+  "sourceHead": "4f110b840ad25ffccfd9c26d675fd438cc1f9d45",
   "previousCurrentRegister": {
     "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/historical-phase-matrix-2026-10-30.json",
     "sha256": "cd326df9b733887f54e4bc969e86955337981e06ea58728c47702372bbe71673",
@@ -1617,6 +1645,13 @@
       "sourceCommit": null,
       "sourceHead": "9091d2c55f24d37d250ccf2ab9f64637eb3a3011",
       "sourceState": "Official generated R86 source snapshot with exact pins and software receipts.",
+      "phaseBoundary": "Software source inventory only; no prior phase qualification or status is promoted."
+    },
+    {
+      "migration": "0579_puzzling_morlocks",
+      "sourceCommit": null,
+      "sourceHead": "4f110b840ad25ffccfd9c26d675fd438cc1f9d45",
+      "sourceState": "Official generated personal account receipt snapshot with exact source pins and local software receipts.",
       "phaseBoundary": "Software source inventory only; no prior phase qualification or status is promoted."
     }
   ],

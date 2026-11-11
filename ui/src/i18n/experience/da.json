@@ -1933,7 +1933,24 @@
     "passwordTooLong": "Brug højst 128 tegn.",
     "passwordTooCommon": "Vælg en anden adgangskode; denne er for almindelig.",
     "signInPasskey": "Log ind med en passkey",
-    "passkeyFailed": "Login med passkey kunne ikke bekræftes. Prøv igen, eller brug en anden tilgængelig loginmetode."
+    "passkeyFailed": "Login med passkey kunne ikke bekræftes. Prøv igen, eller brug en anden tilgængelig loginmetode.",
+    "receipt": {
+      "heading": "Kvittering for sletning af personlig konto",
+      "loading": "Kontrollerer sletteanmodningen…",
+      "scope": "Denne kvittering gælder kun den personlige kontosletning, der er angivet her. Virksomhedsdata og lovpligtig opbevaring er særskilte.",
+      "requestedAt": "Anmodet: {{date}}",
+      "completedAt": "Afsluttet: {{date}}",
+      "download": "Download denne kvittering",
+      "downloadFailed": "Kvitteringen kunne ikke downloades. Prøv igen.",
+      "unavailable": "En privat kvittering er ikke tilgængelig i denne browser. Det afgør ikke, om en tidligere sletteanmodning blev modtaget. Kontakt privacy@blentera.com, hvis du har brug for hjælp.",
+      "failed": "Den aktuelle status kunne ikke kontrolleres. Prøv igen.",
+      "status": {
+        "requested": "Sletning er anmodet. Adgangen er tilbagekaldt; personlig oprydning afventer.",
+        "processing": "Sletning er i gang. Personlig oprydning eller opbevaringskrav er endnu ikke afklaret.",
+        "completed": "Sletning af personlig konto er afsluttet."
+      },
+      "requestId": "Anmodnings-ID: {{id}}"
+    }
   },
   "memoryMaintenance": {
     "title": "Hukommelsens vedligeholdelseshistorik",

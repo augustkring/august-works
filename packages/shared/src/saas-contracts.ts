@@ -163,11 +163,25 @@ export const accountDeletionRequestSchema = z
     reauthenticationProofId: z.string().uuid().optional(),
     acknowledgeExport: z.literal(true),
     idempotencyKey: idempotencyKeySchema,
+    receiptRequired: z.literal(true).optional(),
   })
   .strict()
   .refine(input => Boolean(input.password) || Boolean(input.reauthenticationProofId), {
     message: "Provide a current password or verified sign-in confirmation",
   });
+
+export const accountDeletionReceiptAccessSchema = z.object({
+  idempotencyKey: idempotencyKeySchema,
+}).strict();
+
+export const accountDeletionReceiptSchema = z.object({
+  scope: z.literal("personal_account"),
+  id: z.string().uuid(),
+  status: z.enum(["requested", "processing", "completed"]),
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+}).strict();
+export type AccountDeletionReceipt = z.infer<typeof accountDeletionReceiptSchema>;
 
 export const runtimeModelProviderSchema = z
   .object({

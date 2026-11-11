@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-28
+last_verified_at: 2026-11-11
 review_trigger: Ændringer i eksport, sletning, opbevaring, privat Memory-deling eller kildeadgang
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
+linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, ui/src/pages/Auth.tsx, ui/src/components/PersonalAccountDeletionReceipt.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts, server/src/services/memory/memory-jobs.ts, server/src/services/native-runtime/runtime-asset-retention.ts, server/src/services/native-local-process-stop.ts, server/src/services/heartbeat.ts]
 ---
 
 Blentera har særskilte handlinger til at eksportere en virksomhed, slette en organisation og slette din personlige konto. Kontrollér, hvilke data og hvilken identitet du mener, før du fortsætter.
@@ -33,6 +33,10 @@ Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerheds
 
 Hvis en tidligere anmodning har et ukendt resultat, skal du bruge gendannelsen på kontosiden i stedet for at indsende en ny anmodning. Ved spørgsmål om privatliv kan du skrive til [privacy@blentera.com](mailto:privacy@blentera.com). Send ikke din adgangskode, gendannelseskode eller API-nøgle.
 
+
+Efter accept kan loginsiden vise anmodningens status i samme browser i op til 90 dage. Behold cookies slået til. Kvitteringen viser anmodningens ID, og om anmodningen om personlig kontosletning er modtaget, behandles eller er afsluttet. Vælg **Download denne kvittering** for at gemme en dateret JSON-kopi. Kopien viser status på tidspunktet for hentning og opdaterer ikke sig selv.
+
+Kvitteringen omfatter kun den anmodning om personlig kontosletning, der er identificeret på siden. Den bekræfter ikke organisationssletning, lovpligtig opbevaring eller sletning af alle data hos eksterne udbydere. Et link til siden beviser ikke i sig selv, at anmodningen er accepteret. Hvis kvitteringen er utilgængelig efter rydning af cookies, skift af browser eller udløb af adgang, kan siden ikke bekræfte dens aktuelle status. Kontakt menneskelig support med en gemt kvittering, hvis du har brug for hjælp.
 
 ## Gennemgå deling af privat Memory (preview)
 

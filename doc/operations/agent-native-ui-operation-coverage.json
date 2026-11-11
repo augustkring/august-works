@@ -186,13 +186,13 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) explicitly requires req.actor.type === board and a persisted auth user"
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 191,
-            "claim": "consent/withdraw handlers call company(req) before the canonical activation consent service"
+            "line": 254,
+            "claim": "The activation consent route requires company(req) before calling the canonical activation consent service."
           },
           {
             "path": "server/src/routes/tool-access.ts",
@@ -225,13 +225,13 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) explicitly requires req.actor.type === board and a persisted auth user"
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 191,
-          "claim": "consent/withdraw handlers call company(req) before the canonical activation consent service"
+          "line": 254,
+          "claim": "The activation consent route requires company(req) before calling the canonical activation consent service."
         },
         {
           "path": "server/src/routes/tool-access.ts",
@@ -279,13 +279,13 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) explicitly requires req.actor.type === board and a persisted auth user"
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 191,
-            "claim": "consent/withdraw handlers call company(req) before the canonical activation consent service"
+            "line": 266,
+            "claim": "The consent-withdraw route requires company(req) before calling the canonical activation consent service."
           },
           {
             "path": "server/src/routes/tool-access.ts",
@@ -318,13 +318,13 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) explicitly requires req.actor.type === board and a persisted auth user"
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 191,
-          "claim": "consent/withdraw handlers call company(req) before the canonical activation consent service"
+          "line": 266,
+          "claim": "The consent-withdraw route requires company(req) before calling the canonical activation consent service."
         },
         {
           "path": "server/src/routes/tool-access.ts",
@@ -11250,8 +11250,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/notifications/notifications.ts",
@@ -11263,8 +11263,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/notifications/notifications.ts",
@@ -11291,8 +11291,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/notifications/notifications.ts",
@@ -11304,8 +11304,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/notifications/notifications.ts",
@@ -13930,8 +13930,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/runtime/control.ts",
@@ -13943,8 +13943,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/runtime/control.ts",
@@ -13971,8 +13971,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/notifications/notifications.ts",
@@ -13984,8 +13984,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/notifications/notifications.ts",
@@ -14012,8 +14012,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/runtime/backup-schedule.ts",
@@ -14025,8 +14025,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/runtime/backup-schedule.ts",
@@ -14053,8 +14053,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/runtime/control.ts",
@@ -14066,8 +14066,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/runtime/control.ts",
@@ -15734,8 +15734,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/invitations.ts",
@@ -15747,8 +15747,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/invitations.ts",
@@ -20967,8 +20967,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/onboarding.ts",
@@ -20980,8 +20980,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/onboarding.ts",
@@ -21008,17 +21008,17 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) explicitly requires actor.type === board and a persisted auth user; activation handler calls company(req)."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 59,
+            "line": 110,
             "claim": "req.actor.type !== \"board\" ||"
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 93,
+            "line": 144,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
@@ -21032,17 +21032,17 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) explicitly requires actor.type === board and a persisted auth user; activation handler calls company(req)."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 59,
+          "line": 110,
           "claim": "req.actor.type !== \"board\" ||"
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 93,
+          "line": 144,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
@@ -26017,7 +26017,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "email, nextPath, searchParams.get(\"ssoProvider\")??undefined",
-      "line": 79,
+      "line": 80,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "NOT_APPLICABLE",
@@ -26090,7 +26090,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "{ email: email.trim(), password }",
-      "line": 83,
+      "line": 84,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "NOT_APPLICABLE",
@@ -26163,7 +26163,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "{\n        name: name.trim(),\n        email: email.trim(),\n        password,\n      }",
-      "line": 85,
+      "line": 86,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "NOT_APPLICABLE",
@@ -26234,7 +26234,7 @@
       "pathSignature": "",
       "routeSignatures": [],
       "argumentsSignature": "",
-      "line": 116,
+      "line": 117,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -26337,7 +26337,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "code, userId",
-      "line": 130,
+      "line": 131,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -26415,7 +26415,7 @@
         "post:`/api/auth${path}`"
       ],
       "argumentsSignature": "code, userId",
-      "line": 130,
+      "line": 131,
       "occurrence": 0,
       "owner": "server/src/routes/auth.ts",
       "classification": "HUMAN_ONLY",
@@ -51618,8 +51618,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/notifications/notifications.ts",
@@ -51631,8 +51631,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/notifications/notifications.ts",
@@ -51698,7 +51698,7 @@
         "sourceEvidence": [
           {
             "path": "ui/src/pages/SaasAccount.tsx",
-            "line": 134,
+            "line": 135,
             "claim": "Current Human account-deletion UI calls authApi.startAccountDeletionSso(principal, current.data.session.id)."
           },
           {
@@ -51791,7 +51791,7 @@
         "sourceEvidence": [
           {
             "path": "ui/src/pages/SaasAccount.tsx",
-            "line": 135,
+            "line": 136,
             "claim": "Current Human account-deletion UI calls authApi.signInAccountDeletionSso(challenge.providerId, challenge.callbackURL, principal, current.data.session.id)."
           },
           {
@@ -51894,7 +51894,7 @@
         "sourceEvidence": [
           {
             "path": "ui/src/pages/SaasAccount.tsx",
-            "line": 154,
+            "line": 155,
             "claim": "Current Human account-deletion UI calls authApi.completeAccountDeletionSsoFactor(principal, receipt.sessionId)."
           },
           {
@@ -51967,7 +51967,7 @@
         "post:scoped(\"/saas/account/deletion\", userId)"
       ],
       "argumentsSignature": "principal, pending",
-      "line": 190,
+      "line": 192,
       "occurrence": 0,
       "owner": "server/src/services/saas/account-deletion.ts",
       "classification": "HUMAN_ONLY",
@@ -51977,12 +51977,32 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/account-deletion.ts",
             "claim": "Canonical operation owner identified through route dispatch and the SaasPlatform component wiring."
+          },
+          {
+            "path": "server/src/routes/saas.ts",
+            "line": 659,
+            "claim": "When receiptRequired is set, the route binds the encrypted cookie to the current Human and exact idempotency key before account deletion dispatch."
+          },
+          {
+            "path": "server/src/services/saas/account-deletion.ts",
+            "line": 51,
+            "claim": "The service requires the trusted cookie nonce when receiptRequired is true and stores only its hash in the original operation transaction."
+          },
+          {
+            "path": "packages/shared/src/saas-contracts.ts",
+            "line": 166,
+            "claim": "The strict shared request schema allows only the optional literal receiptRequired flag alongside the explicit deletion confirmation fields."
+          },
+          {
+            "path": "ui/src/api/saas.ts",
+            "line": 533,
+            "claim": "The account-deletion API type includes the optional receiptRequired literal and sends it with the original request."
           }
         ]
       },
@@ -51990,12 +52010,32 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; the deletion route uses this Human session boundary."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/account-deletion.ts",
           "claim": "Canonical owner validates explicit account deletion confirmation and records the durable deletion operation under the authenticated user."
+        },
+        {
+          "path": "server/src/routes/saas.ts",
+          "line": 659,
+          "claim": "When receiptRequired is set, the route binds the encrypted cookie to the current Human and exact idempotency key before account deletion dispatch."
+        },
+        {
+          "path": "server/src/services/saas/account-deletion.ts",
+          "line": 51,
+          "claim": "The service requires the trusted cookie nonce when receiptRequired is true and stores only its hash in the original operation transaction."
+        },
+        {
+          "path": "packages/shared/src/saas-contracts.ts",
+          "line": 166,
+          "claim": "The strict shared request schema allows only the optional literal receiptRequired flag alongside the explicit deletion confirmation fields."
+        },
+        {
+          "path": "ui/src/api/saas.ts",
+          "line": 533,
+          "claim": "The account-deletion API type includes the optional receiptRequired literal and sends it with the original request."
         }
       ]
     },
@@ -52018,8 +52058,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/billing/billing.ts",
@@ -52031,8 +52071,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/billing/billing.ts",
@@ -52059,8 +52099,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/billing/billing.ts",
@@ -52072,8 +52112,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/billing/billing.ts",
@@ -52100,7 +52140,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 463,
+            "line": 514,
             "claim": "The company DELETE route resolves the request through the authenticated Human company membership helper before dispatch."
           },
           {
@@ -52153,8 +52193,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 121,
-            "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+            "line": 172,
+            "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
             "path": "server/src/services/runtime/fleet.ts",
@@ -52166,8 +52206,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 121,
-          "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+          "line": 172,
+          "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -52194,8 +52234,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "The operation runs inside the /saas/internal/support route family, whose router requires a signed-in board Human; source does not establish the configured operator guard for this support-session route."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/runtime/control.ts",
@@ -52207,8 +52247,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "The operation runs inside the /saas/internal/support route family, whose router requires a signed-in board Human; source does not establish the configured operator guard for this support-session route."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/runtime/control.ts",
@@ -52235,8 +52275,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 121,
-            "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+            "line": 172,
+            "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
             "path": "server/src/services/runtime/fleet.ts",
@@ -52252,8 +52292,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 121,
-          "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+          "line": 172,
+          "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -52284,8 +52324,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 121,
-            "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+            "line": 172,
+            "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
             "path": "server/src/services/runtime/fleet.ts",
@@ -52301,8 +52341,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 121,
-          "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+          "line": 172,
+          "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -52333,8 +52373,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 121,
-            "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+            "line": 172,
+            "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
             "path": "server/src/services/runtime/fleet.ts",
@@ -52350,8 +52390,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 121,
-          "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+          "line": 172,
+          "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -52382,8 +52422,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 121,
-            "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+            "line": 172,
+            "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
             "path": "server/src/services/runtime/fleet.ts",
@@ -52399,8 +52439,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 121,
-          "claim": "The /saas/internal router checks platform.support.operator, verified operator email, and configured recent operator authentication for mutations."
+          "line": 172,
+          "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
           "path": "server/src/services/runtime/fleet.ts",
@@ -52431,8 +52471,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "The operation runs inside the /saas/internal/support route family, whose router requires a signed-in board Human; source does not establish the configured operator guard for this support-session route."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/runtime/control.ts",
@@ -52444,8 +52484,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "The operation runs inside the /saas/internal/support route family, whose router requires a signed-in board Human; source does not establish the configured operator guard for this support-session route."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/runtime/control.ts",
@@ -52472,8 +52512,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/runtime/control.ts",
@@ -52485,8 +52525,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/runtime/control.ts",
@@ -52513,8 +52553,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/runtime/control.ts",
@@ -52526,8 +52566,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/runtime/control.ts",
@@ -52554,7 +52594,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 983,
+            "line": 1070,
             "claim": "The route calls company(req, companyId, \"runtime:manage\"), which requires an authenticated board Human with active company membership and runtime:manage; then binds an Agent to a hosted runtime cell."
           },
           {
@@ -52567,7 +52607,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 983,
+          "line": 1070,
           "claim": "The route calls company(req, companyId, \"runtime:manage\"), which requires an authenticated board Human with active company membership and runtime:manage; then binds an Agent to a hosted runtime cell."
         },
         {
@@ -52595,8 +52635,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/support.ts",
@@ -52608,8 +52648,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/support.ts",
@@ -52636,8 +52676,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/support.ts",
@@ -52649,8 +52689,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/support.ts",
@@ -52677,8 +52717,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/support.ts",
@@ -52690,8 +52730,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/support.ts",
@@ -52718,8 +52758,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/support.ts",
@@ -52731,8 +52771,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/support.ts",
@@ -52759,8 +52799,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/onboarding.ts",
@@ -52772,8 +52812,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/onboarding.ts",
@@ -52800,8 +52840,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/onboarding.ts",
@@ -52813,8 +52853,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/onboarding.ts",
@@ -52841,8 +52881,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/onboarding.ts",
@@ -52854,8 +52894,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/onboarding.ts",
@@ -52882,8 +52922,8 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 57,
-            "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+            "line": 110,
+            "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/services/saas/onboarding.ts",
@@ -52895,8 +52935,8 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 57,
-          "claim": "user(req) requires an authenticated board Human with a real userId; company(req,...) requires active Human membership and any specified permission."
+          "line": 110,
+          "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/services/saas/onboarding.ts",
@@ -65861,6 +65901,172 @@
       ],
       "operationIds": [
         "existing-api:d1aa2cc7bccda422083f"
+      ]
+    },
+    {
+      "source": "ui/src/pages/SaasAccount.tsx",
+      "clientCall": "saasApi.prepareAccountDeletionReceipt",
+      "apiVerb": "write",
+      "pathSignature": "principal",
+      "routeSignatures": [
+        "post:scoped(\"/saas/account/deletion/receipt-access\", userId)"
+      ],
+      "argumentsSignature": "principal, pending.idempotencyKey",
+      "line": 190,
+      "occurrence": 0,
+      "owner": "server/src/services/saas/account-deletion.ts",
+      "classification": "HUMAN_ONLY",
+      "materiality": "launchcritical",
+      "reviewRationale": "Receipt preparation is a deletion-recovery flow bound to the current Human board session, current session row, authenticated account, and original request key. It grants only the status capability for that account deletion and is not an Agent operation.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/saas.ts",
+            "line": 623,
+            "claim": "The receipt-access route calls user(req), checks the feature gate, requires a board actor from a current session, and verifies that active session row before preparing receipt access."
+          },
+          {
+            "path": "server/src/services/saas/account-deletion.ts",
+            "line": 356,
+            "claim": "The canonical deletion owner binds receipt preparation to the original user/idempotency key and refuses operations without the original stored receipt hash."
+          },
+          {
+            "path": "server/src/routes/saas.ts",
+            "line": 627,
+            "claim": "Preparation requires a board actor from the current session and validates that active auth session before issuing receipt access."
+          },
+          {
+            "path": "packages/shared/src/saas-contracts.ts",
+            "line": 173,
+            "claim": "The strict shared access contract accepts only the original idempotency key."
+          },
+          {
+            "path": "ui/src/api/saas.ts",
+            "line": 519,
+            "claim": "The UI API sends the idempotency key to the session-scoped receipt-access route and requires the exact ready acknowledgement."
+          },
+          {
+            "path": "ui/src/pages/SaasAccount.tsx",
+            "line": 190,
+            "claim": "The deletion form prepares the receipt capability immediately before the original account-deletion request."
+          }
+        ]
+      },
+      "materialityRationale": "Preparing recovery access is necessary to recover the status of the irreversible personal account deletion without restoring account access.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/routes/saas.ts",
+          "line": 623,
+          "claim": "The receipt-access route calls user(req), checks the feature gate, requires a board actor from a current session, and verifies that active session row before preparing receipt access."
+        },
+        {
+          "path": "server/src/services/saas/account-deletion.ts",
+          "line": 356,
+          "claim": "The canonical deletion owner binds receipt preparation to the original user/idempotency key and refuses operations without the original stored receipt hash."
+        },
+        {
+          "path": "server/src/routes/saas.ts",
+          "line": 627,
+          "claim": "Preparation requires a board actor from the current session and validates that active auth session before issuing receipt access."
+        },
+        {
+          "path": "packages/shared/src/saas-contracts.ts",
+          "line": 173,
+          "claim": "The strict shared access contract accepts only the original idempotency key."
+        },
+        {
+          "path": "ui/src/api/saas.ts",
+          "line": 519,
+          "claim": "The UI API sends the idempotency key to the session-scoped receipt-access route and requires the exact ready acknowledgement."
+        },
+        {
+          "path": "ui/src/pages/SaasAccount.tsx",
+          "line": 190,
+          "claim": "The deletion form prepares the receipt capability immediately before the original account-deletion request."
+        }
+      ]
+    },
+    {
+      "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
+      "clientCall": "saasApi.accountDeletionReceipt",
+      "apiVerb": "write",
+      "pathSignature": "signal",
+      "routeSignatures": [
+        "post:\"/saas/account/deletion/receipt\""
+      ],
+      "argumentsSignature": "signal",
+      "line": 15,
+      "occurrence": 0,
+      "owner": "server/src/services/saas/account-deletion.ts",
+      "classification": "HUMAN_ONLY",
+      "materiality": "launchcritical",
+      "reviewRationale": "The read uses only an encrypted HttpOnly cookie scoped to one personal account-deletion operation. It returns minimal status and dates, grants no board session, company, or Agent authority, and is not an Agent operation.",
+      "authorityEvidence": {
+        "sourceEvidence": [
+          {
+            "path": "server/src/routes/saas.ts",
+            "line": 643,
+            "claim": "The receipt read route accepts a strict empty body and reads its capability only from the HttpOnly cookie; it does not resolve a user/session actor."
+          },
+          {
+            "path": "server/src/services/saas/account-deletion.ts",
+            "line": 372,
+            "claim": "The canonical deletion owner rate-limits reads, matches the stored receipt hash and principal hash, and returns only the personal-operation status projection."
+          },
+          {
+            "path": "server/src/routes/saas.ts",
+            "line": 647,
+            "claim": "The read route obtains access only from its encrypted HttpOnly cookie and passes the cookie-bound nonce and principal hash to the receipt owner."
+          },
+          {
+            "path": "packages/shared/src/saas-contracts.ts",
+            "line": 177,
+            "claim": "The strict shared response schema limits the receipt to personal scope, operation ID, status, and dates."
+          },
+          {
+            "path": "ui/src/api/saas.ts",
+            "line": 522,
+            "claim": "The UI API posts an empty body to the cookie-only read route and parses the strict shared receipt schema."
+          },
+          {
+            "path": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
+            "line": 15,
+            "claim": "The signed-out recovery component reads the status through the private receipt cookie and does not restore a session."
+          }
+        ]
+      },
+      "materialityRationale": "The receipt exposes sensitive personal account-erasure state and is deliberately limited to a single operation capability.",
+      "materialityEvidence": [
+        {
+          "path": "server/src/routes/saas.ts",
+          "line": 643,
+          "claim": "The receipt read route accepts a strict empty body and reads its capability only from the HttpOnly cookie; it does not resolve a user/session actor."
+        },
+        {
+          "path": "server/src/services/saas/account-deletion.ts",
+          "line": 372,
+          "claim": "The canonical deletion owner rate-limits reads, matches the stored receipt hash and principal hash, and returns only the personal-operation status projection."
+        },
+        {
+          "path": "server/src/routes/saas.ts",
+          "line": 647,
+          "claim": "The read route obtains access only from its encrypted HttpOnly cookie and passes the cookie-bound nonce and principal hash to the receipt owner."
+        },
+        {
+          "path": "packages/shared/src/saas-contracts.ts",
+          "line": 177,
+          "claim": "The strict shared response schema limits the receipt to personal scope, operation ID, status, and dates."
+        },
+        {
+          "path": "ui/src/api/saas.ts",
+          "line": 522,
+          "claim": "The UI API posts an empty body to the cookie-only read route and parses the strict shared receipt schema."
+        },
+        {
+          "path": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
+          "line": 15,
+          "claim": "The signed-out recovery component reads the status through the private receipt cookie and does not restore a session."
+        }
       ]
     }
   ],

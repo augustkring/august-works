@@ -51,6 +51,7 @@ async function mount(options: { coldSessionFailure?: boolean; passwordless?: boo
   vi.spyOn(saasApi, "sessions").mockResolvedValue([session]);
   vi.spyOn(saasApi, "notificationPreferences").mockResolvedValue([preference]);
   vi.spyOn(saasApi, "deletionReceipts").mockResolvedValue([receipt]);
+  vi.spyOn(saasApi, "prepareAccountDeletionReceipt").mockResolvedValue({ ready: true });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   await render();
   if (!options.coldSessionFailure) {
@@ -350,5 +351,29 @@ it("does not steal focus from current-account input when a same-person source ac
   await vi.waitFor(() => expect(saasApi.sessions).toHaveBeenCalledTimes(2));
   await vi.waitFor(() => expect(host.textContent).toContain(receipt.companyId));
   expect(document.activeElement).toBe(input); expect(input.value).toBe("DELETE MY ACCOUNT");
+  expect(remove).not.toHaveBeenCalled();
+});
+
+
+it("starts no deletion if the original session changes while receipt access is prepared", async () => {
+  await mount(); await confirmDeletion();
+  const prepared = deferred<{ ready: true }>();
+  vi.mocked(saasApi.prepareAccountDeletionReceipt).mockReturnValueOnce(prepared.promise);
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  await act(async () => submitDeletion());
+  await vi.waitFor(() => expect(saasApi.prepareAccountDeletionReceipt).toHaveBeenCalledOnce());
+  await act(async () => {
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-owner"));
+    prepared.resolve({ ready: true });
+  });
+  expect(remove).not.toHaveBeenCalled();
+});
+
+it("keeps receipt setup failure before irreversible account deletion", async () => {
+  await mount(); await confirmDeletion();
+  vi.mocked(saasApi.prepareAccountDeletionReceipt).mockRejectedValueOnce(new Error("Unavailable"));
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  await act(async () => submitDeletion());
+  await vi.waitFor(() => expect(host.textContent).toContain("Your deletion request is not confirmed"));
   expect(remove).not.toHaveBeenCalled();
 });

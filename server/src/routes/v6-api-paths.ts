@@ -75,12 +75,13 @@ export const v6ApiPaths: {
   path: string;
   successStatus: number;
   additionalSuccessStatuses?: number[];
-  auth: "session" | "host" | "provider" | "native";
+  auth: "session" | "host" | "provider" | "native" | "receipt";
   query?: z.ZodType;
   body?: z.ZodType;
   bodyRequired?: boolean;
   result?: z.ZodType;
   privateResponse?: boolean;
+  responseCacheControl?: "no-store" | "private, no-store";
 }[] = [
   {
     method: "get",
@@ -348,6 +349,22 @@ export const v6ApiPaths: {
   },
   {
     method: "post",
+    path: "/api/saas/account/deletion/receipt-access",
+    successStatus: 200,
+    auth: "session",
+    result: z.strictObject({ ready: z.literal(true) }),
+    responseCacheControl: "no-store",
+  },
+  {
+    method: "post",
+    path: "/api/saas/account/deletion/receipt",
+    successStatus: 200,
+    auth: "receipt",
+    result: shared.accountDeletionReceiptSchema,
+    responseCacheControl: "no-store",
+  },
+  {
+    method: "post",
     path: "/api/saas/account/deletion",
     successStatus: 202,
     auth: "session",
@@ -592,6 +609,8 @@ const bodies: Record<string, z.ZodType> = {
     shared.runtimeCapacityQualificationSchema,
   "POST /api/companies/{companyId}/runtime-cells/{cellId}/binding":
     shared.runtimeCellBindingSchema,
+  "POST /api/saas/account/deletion/receipt-access": shared.accountDeletionReceiptAccessSchema,
+  "POST /api/saas/account/deletion/receipt": z.strictObject({}),
   "POST /api/saas/account/deletion": shared.accountDeletionRequestSchema,
   "POST /api/saas/companies": shared.createSaasCompanySchema,
   "PATCH /api/companies/{companyId}/onboarding": shared.updateOnboardingSchema,

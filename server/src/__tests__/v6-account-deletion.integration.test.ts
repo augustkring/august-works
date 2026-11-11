@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   accountDeletionOperations,
+  agents,
   activityLog,
   authAccounts,
   authPasskeys,
@@ -26,6 +27,7 @@ import {
   companySecretVersions,
   emailDeliveries,
   humanWorkflowCoverages,
+  heartbeatRuns,
   principalPermissionGrants,
   supportCaseDeletionMarkers,
   supportCaseEvents,
@@ -43,6 +45,7 @@ import { accountDeletionService as nativeAccountDeletionService } from "../servi
 import { secretService } from "../services/secrets.js";
 import { awsSecretsManagerProvider, createAwsSecretsManagerProvider } from "../secrets/aws-secrets-manager-provider.js";
 import { saasRoutes } from "../routes/saas.js";
+import { open as openSealed, seal } from "../services/saas/crypto.js";
 import { saasCommercialGuard } from "../middleware/saas-commercial-guard.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import type { AuthorizationActor } from "../services/authorization.js";
@@ -72,8 +75,8 @@ const support = await getEmbeddedPostgresTestSupport();
     // session IDs. Provider ceremonies are covered in native-two-factor tests.
     function accountDeletionService(reader: typeof db, callbacks: Parameters<typeof nativeAccountDeletionService>[1]) {
       const service = nativeAccountDeletionService(reader, callbacks);
-      return { ...service, request: (id: string, raw: unknown, now = new Date(), actor = fixtureActors.get(id)) =>
-        service.request(id, raw, now, actor) };
+      return { ...service, request: (id: string, raw: unknown, now = new Date(), actor = fixtureActors.get(id), receiptNonce?: string) =>
+        service.request(id, raw, now, actor, receiptNonce) };
     }
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase(
@@ -225,19 +228,32 @@ const support = await getEmbeddedPostgresTestSupport();
     it("binds HTTP deletion to the authenticated account and rejects stale identity, body targets and local implicit actors", async () => {
       await user("http-user");
       await user("http-other");
+      const companyId = await organization(["http-user", "http-other"]);
+      const [agent] = await db.insert(agents).values({ companyId, name: "Deletion receipt fixture", role: "engineer", adapterType: "process" }).returning();
+      const [pendingRun] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, responsibleUserId: "http-user", status: "queued" }).returning();
+      const outbox = { encryptionKey: "a".repeat(64), keyId: "fixture.outbox", previousKeys: {} as Record<string, string> };
       const platform = {
         accountDeletion: accountDeletionService(db, effects),
+        config: { environment: "production", outbox },
         enabled: async () => true,
       } as unknown as SaasPlatform;
+      await user("legacy-receipt-account");
+      const legacyIdempotencyKey = "legacy-receipt-fixture-001";
+      await db.insert(accountDeletionOperations).values({ userId: "legacy-receipt-account",
+        idempotencyKey: createHash("sha256").update(legacyIdempotencyKey).digest("hex"), status: "completed", completedAt: new Date() });
+      await expect(platform.accountDeletion.prepareReceiptAccess("legacy-receipt-account", legacyIdempotencyKey, ["a".repeat(43)]))
+        .rejects.toMatchObject({ status: 409 });
+      await expect(platform.accountDeletion.request("legacy-receipt-account", { ...input(legacyIdempotencyKey), receiptRequired: true },
+        new Date(), fixtureActors.get("legacy-receipt-account"), "a".repeat(43))).rejects.toMatchObject({ status: 409 });
+      expect((await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, "legacy-receipt-account")))[0]!.receiptKeyHash)
+        .toBeNull();
       const app = express();
       app.use(express.json());
       app.use((req, _res, next) => {
-        req.actor = {
-          type: "board",
-          source: req.header("x-fixture-local") ? "local_implicit" : "session",
-          userId: "http-user",
-          companyIds: [],
-          sessionId: fixtureActors.get("http-user")?.sessionId,
+        const userId = req.header("x-fixture-user") === "http-other" ? "http-other" : "http-user";
+        req.actor = req.header("x-anonymous") ? { type: "none", source: "none" } : {
+          type: "board", source: req.header("x-fixture-local") ? "local_implicit" : "session",
+          userId, companyIds: [], sessionId: fixtureActors.get(userId)?.sessionId,
         };
         next();
       });
@@ -247,7 +263,7 @@ const support = await getEmbeddedPostgresTestSupport();
         saasRoutes(db, platform),
       );
       app.use(errorHandler);
-      const body = input("http-account-fixture-001");
+      const body = { ...input("http-account-fixture-001"), receiptRequired: true };
       expect(
         (
           await request(app)
@@ -270,14 +286,80 @@ const support = await getEmbeddedPostgresTestSupport();
             .send({ ...body, userId: "http-other" })
         ).status,
       ).toBe(400);
+      expect((await request(app).post("/api/saas/account/deletion").send(body)).status).toBe(409);
+      expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, "http-user"))).toHaveLength(0);
+      const accessBody = { idempotencyKey: body.idempotencyKey };
+      const [access, concurrentAccess] = await Promise.all([
+        request(app).post("/api/saas/account/deletion/receipt-access").send(accessBody),
+        request(app).post("/api/saas/account/deletion/receipt-access").send(accessBody),
+      ]);
+      expect(access.status).toBe(200);
+      expect(concurrentAccess.status).toBe(200);
+      expect(access.headers["cache-control"]).toBe("no-store");
+      expect(access.body).toEqual({ ready: true });
+      const receiptCookie = (access.headers["set-cookie"] as string[])[0]!.split(";")[0]!;
+      expect((access.headers["set-cookie"] as string[])[0]).toContain("HttpOnly");
+      expect((access.headers["set-cookie"] as string[])[0]).toContain("SameSite=Strict");
+      expect((access.headers["set-cookie"] as string[])[0]).toContain("Secure");
+      expect((access.headers["set-cookie"] as string[])[0]).toContain("Path=/api/saas/account/deletion");
+      const cookieMaxAge = Number((access.headers["set-cookie"] as string[])[0]!.match(/;\s*Max-Age=(\d+)/i)?.[1]);
+      expect(Number.isInteger(cookieMaxAge)).toBe(true);
+      expect(cookieMaxAge).toBeGreaterThan(0);
+      expect(cookieMaxAge).toBeLessThanOrEqual(90 * 24 * 60 * 60);
+      expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, "http-user"))).toHaveLength(0);
+      const reusedAccess = await request(app).post("/api/saas/account/deletion/receipt-access").set("Cookie", receiptCookie).send(accessBody);
+      expect(reusedAccess.status).toBe(200);
+      expect(reusedAccess.headers["set-cookie"]).toBeUndefined();
+      outbox.previousKeys[outbox.keyId] = outbox.encryptionKey;
+      outbox.encryptionKey = "b".repeat(64);
+      outbox.keyId = "fixture.outbox.next";
+      const foreignAccess = await request(app).post("/api/saas/account/deletion/receipt-access").set("x-fixture-user", "http-other")
+        .send({ idempotencyKey: "http-other-deletion-fixture-001" });
+      const foreignCookie = (foreignAccess.headers["set-cookie"] as string[])[0]!.split(";")[0]!;
+      expect((await request(app).post("/api/saas/account/deletion").set("Cookie", foreignCookie).send(body)).status).toBe(409);
+      expect(await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, "http-user"))).toHaveLength(0);
       const accepted = await request(app)
         .post("/api/saas/account/deletion?expectedUserId=http-user")
+        .set("Cookie", receiptCookie)
         .send(body);
       expect(accepted.status).toBe(202);
       expect(accepted.body.status).toBe("requested");
+      const [storedOperation] = await db.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, "http-user"));
+      expect(storedOperation!.receiptKeyHash).toMatch(/^[a-f0-9]{64}$/);
       expect(
         (await request(app).get("/api/saas/account/sessions")).status,
       ).toBe(401);
+      const concurrentCookie = (concurrentAccess.headers["set-cookie"] as string[])[0]!.split(";")[0]!;
+      const receiptRequest = (cookie = concurrentCookie) => request(app).post("/api/saas/account/deletion/receipt")
+        .set("x-anonymous", "true").set("Cookie", cookie).send({});
+      const foreignLookup = await receiptRequest(foreignCookie);
+      expect(foreignLookup.status).toBe(404);
+      expect(foreignLookup.headers["cache-control"]).toBe("no-store");
+      expect((await receiptRequest("aw_account_deletion_receipt=not-a-valid-envelope")).status).toBe(404);
+      const wireValue = decodeURIComponent(receiptCookie.slice("aw_account_deletion_receipt=".length));
+      const keySeparator = wireValue.indexOf("~"), oldKeyId = Buffer.from(wireValue.slice(0, keySeparator), "base64url").toString("utf8");
+      const originalAccess = openSealed<{ principalHash: string; requestKeyHash: string; nonce: string; expiresAt: number }>(
+        wireValue.slice(keySeparator + 1), "a".repeat(64), "account-deletion-receipt:v1");
+      const foreignPrincipalEnvelope = seal({ ...originalAccess, principalHash: createHash("sha256").update("http-other").digest("hex") },
+        "a".repeat(64), "account-deletion-receipt:v1");
+      const foreignPrincipalCookieValue = `${Buffer.from(oldKeyId, "utf8").toString("base64url")}~${foreignPrincipalEnvelope}`;
+      const foreignPrincipalCookie = `aw_account_deletion_receipt=${encodeURIComponent(foreignPrincipalCookieValue)}`;
+      expect((await receiptRequest(foreignPrincipalCookie)).status).toBe(404);
+      const requested = await receiptRequest();
+      expect(requested.status).toBe(200);
+      expect(requested.headers["cache-control"]).toBe("no-store");
+      expect(requested.body).toMatchObject({ scope: "personal_account", id: storedOperation!.id, status: "requested" });
+      expect(requested.body).not.toHaveProperty("userId");
+      expect(requested.body).not.toHaveProperty("errorCode");
+      await platform.accountDeletion.processOne(new Date(Date.now() + 1000));
+      expect((await receiptRequest()).body.status).toBe("processing");
+      await db.update(heartbeatRuns).set({ status: "cancelled" }).where(eq(heartbeatRuns.id, pendingRun!.id));
+      await platform.accountDeletion.processOne(new Date(Date.now() + 60000));
+      const completed = await receiptRequest();
+      expect(completed.body).toMatchObject({ scope: "personal_account", id: storedOperation!.id, status: "completed" });
+      await db.update(accountDeletionOperations).set({ createdAt: new Date(Date.now() - 91 * 24 * 60 * 60 * 1000) })
+        .where(eq(accountDeletionOperations.userId, "http-user"));
+      expect((await receiptRequest()).status).toBe(404);
       expect(
         (
           await db
@@ -287,6 +369,18 @@ const support = await getEmbeddedPostgresTestSupport();
         )[0]!.emailVerified,
       ).toBe(true);
       await platform.accountDeletion.processOne(new Date(Date.now() + 1000));
+    });
+    it("counts anonymous receipt guesses before lookup and resets only after the budget window", async () => {
+      const service = accountDeletionService(db, effects);
+      const address = "receipt-budget-fixture";
+      const key = "account-deletion-receipt:" + createHash("sha256").update(address).digest("hex");
+      await db.insert(authRateLimits).values({ id: randomUUID(), key, count: 119, lastRequest: Date.now() });
+      await expect(service.readReceipt(null, null, address)).rejects.toMatchObject({ status: 404 });
+      await expect(service.readReceipt(null, null, address)).rejects.toMatchObject({ status: 429 });
+      expect((await db.select().from(authRateLimits).where(eq(authRateLimits.key, key)))[0]!.count).toBe(121);
+      await db.update(authRateLimits).set({ lastRequest: Date.now() - 61_000 }).where(eq(authRateLimits.key, key));
+      await expect(service.readReceipt(null, null, address)).rejects.toMatchObject({ status: 404 });
+      expect((await db.select().from(authRateLimits).where(eq(authRateLimits.key, key)))[0]!.count).toBe(1);
     });
     it("rejects sole owners including archived organizations and a misleading organization name", async () => {
       await user("sole-owner");
