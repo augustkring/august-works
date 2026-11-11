@@ -4,7 +4,7 @@ import { remoteTerminationReceipt, recordNativeRemoteWorkloadStopped } from "./r
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { companySecrets, companySecretVersions, environmentLeases, heartbeatRuns } from "@paperclipai/db";
+import { companySecrets, companySecretVersions, environmentLeases, heartbeatRuns, nativeRunFinalizations } from "@paperclipai/db";
 import type {
   Environment,
   EnvironmentLease,
@@ -346,6 +346,91 @@ export function buildSandboxCapabilityNarrowing(input: {
   }
 
   return narrowing;
+}
+
+/**
+ * A scheduled Native same-run retry keeps its original sandbox lease active.
+ * Reattach that exact durable lease instead of asking a per-turn provider to
+ * allocate a second sandbox. The current coordinator owner and lease are read
+ * together under row locks; this does not enable cross-run or warm reuse.
+ */
+async function reattachNativeSameRunSandboxLease(input: {
+  db: Db;
+  companyId: string;
+  environment: Environment;
+  issueId: string;
+  heartbeatRunId: string;
+  agentId: string | null;
+  executionWorkspaceId: string | null;
+  leaseOwner: string;
+}): Promise<EnvironmentLease> {
+  const storedEnvironmentConfig = parseEnvironmentDriverConfig(input.environment);
+  if (storedEnvironmentConfig.driver !== "sandbox") {
+    throw new Error("Native same-run lease reattachment requires a sandbox environment.");
+  }
+  return await input.db.transaction(async (tx) => {
+    const [run] = await tx.select({
+      agentId: heartbeatRuns.agentId,
+      status: heartbeatRuns.status,
+      runtimeMode: heartbeatRuns.runtimeMode,
+      nativeIssueId: heartbeatRuns.nativeIssueId,
+    }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.heartbeatRunId),
+    )).for("update");
+    if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
+        run.nativeIssueId !== input.issueId || run.agentId !== input.agentId) {
+      throw new Error("Native same-run sandbox lease reattachment lost its run owner.");
+    }
+    const [coordinator] = await tx.select({
+      phase: nativeRunFinalizations.phase,
+      leaseOwner: nativeRunFinalizations.leaseOwner,
+      leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt,
+      resultId: nativeRunFinalizations.resultId,
+    }).from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, input.companyId),
+      eq(nativeRunFinalizations.issueId, input.issueId),
+      eq(nativeRunFinalizations.runId, input.heartbeatRunId),
+    )).for("update");
+    if (!coordinator || coordinator.phase !== "observed" || coordinator.resultId !== null ||
+        coordinator.leaseOwner !== input.leaseOwner || !coordinator.leaseExpiresAt || coordinator.leaseExpiresAt.getTime() <= Date.now()) {
+      throw new Error("Native same-run sandbox lease reattachment lost its coordinator owner.");
+    }
+    const candidates = await tx.select().from(environmentLeases).where(and(
+      eq(environmentLeases.companyId, input.companyId),
+      eq(environmentLeases.heartbeatRunId, input.heartbeatRunId),
+      eq(environmentLeases.status, "active"),
+    )).for("update");
+    if (candidates.length !== 1) {
+      throw new Error("Native same-run sandbox lease is missing or ambiguous.");
+    }
+    const row = candidates[0]!;
+    const metadata = row.metadata ?? {};
+    // Use the provider's canonical lease-metadata reconstruction contract; do
+    // not assume every provider stores every default/config key verbatim.
+    const leaseConfig = sandboxConfigFromLeaseMetadataLoose({ metadata });
+    const leaseConfigFields = new Map<string, unknown>(Object.entries(leaseConfig ?? {}));
+    const configMatches = leaseConfig !== null &&
+      Object.entries(storedEnvironmentConfig.config).every(([key, value]) =>
+        stableStringify(leaseConfigFields.get(key)) === stableStringify(value),
+      );
+    if (
+      row.environmentId !== input.environment.id ||
+      row.issueId !== input.issueId ||
+      row.executionWorkspaceId !== input.executionWorkspaceId ||
+      row.leasePolicy !== "ephemeral" ||
+      !row.providerLeaseId ||
+      row.provider !== storedEnvironmentConfig.config.provider ||
+      !row.expiresAt || row.expiresAt.getTime() <= Date.now() ||
+      metadata.driver !== input.environment.driver ||
+      metadata.provider !== storedEnvironmentConfig.config.provider ||
+      metadata.agentId !== input.agentId ||
+      !configMatches
+    ) {
+      throw new Error("Native same-run sandbox lease no longer matches its originating run configuration.");
+    }
+    return toEnvironmentLeaseSnapshot(row);
+  });
 }
 
 export function buildEnvironmentLeaseContext(input: {
@@ -3894,6 +3979,8 @@ export function environmentRuntimeService(
        * environment with the 403 `environment_company_mismatch`.
        */
       assertCompanyBinding?: boolean;
+      /** Current Native coordinator capability for same-run lease reattachment. */
+      nativeLeaseOwner?: string;
     }): Promise<EnvironmentRuntimeLeaseRecord> {
       if (input.environment.status !== "active") {
         throw new Error(`Environment "${input.environment.name}" is not active.`);
@@ -3903,6 +3990,19 @@ export function environmentRuntimeService(
         persistedExecutionWorkspace: input.persistedExecutionWorkspace,
       });
       const driver = requireDriver(input.environment);
+      if (input.nativeLeaseOwner && input.heartbeatRunId && input.issueId && input.environment.driver === "sandbox") {
+        const lease = await reattachNativeSameRunSandboxLease({
+          db,
+          companyId: input.companyId,
+          environment: input.environment,
+          issueId: input.issueId,
+          heartbeatRunId: input.heartbeatRunId,
+          agentId: input.agentId ?? null,
+          executionWorkspaceId: leaseContext.executionWorkspaceId,
+          leaseOwner: input.nativeLeaseOwner,
+        });
+        return { environment: input.environment, lease, leaseContext };
+      }
       const lease = await driver.acquireRunLease({
         companyId: input.companyId,
         environment: input.environment,

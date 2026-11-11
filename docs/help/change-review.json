@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the managed sandbox preparation phase change against the English recovery guide. It reuses the existing source-bound workspace callback for qualified non-conversation chat Tasks; available retry actions, original-task recovery, pending Stop and unknown-outcome guidance remain accurate."
+      "rationale": "Reviewed the exact per-turn same-Run lease reattachment against the complete English recovery guide. The existing coordinator retains its bounded retries and current authority, and reuses only its original active unexpired lease. Original-task recovery, displayed actions, pending Stop and unknown-outcome guidance remain accurate; no customer configuration step is added."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Gennemg\u00e5et den udskudte workspace-forberedelse mod den danske genoprettelsesvejledning. \u00c6ndringen bruger den eksisterende kildebundne callback for kvalificerede chatopgaver; vejledningen om oprindelig opgave, viste genfors\u00f8g, afventende stop og ukendt resultat er fortsat korrekt."
+      "rationale": "Gennemg\u00e5et den pr\u00e6cise genbrug af den oprindelige aktive lease ved et automatisk genfors\u00f8g p\u00e5 samme per-turn-k\u00f8rsel mod hele den danske vejledning. De eksisterende afgr\u00e6nsede genfors\u00f8g og aktuelle rettigheder bevares. Vejledningen om den oprindelige opgave, viste handlinger, afventende Stop og ukendt resultat er fortsat korrekt; ingen teknisk ops\u00e6tning tilf\u00f8jes for kunden."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Reviewed the exact non-conversation sandbox preparation routing against the English deletion guide. Native termination, runtime-file erasure verification, retention and external-provider limits are unchanged; deferred preparation does not turn a request or Memory deletion into proof of completed erasure."
+      "rationale": "Reviewed the exact lease recovery change against the complete English export/deletion guide. No Native stop projection or erasure receipt is fabricated or cleared; reattachment neither extends lease expiry nor establishes completed storage removal. Existing verified-stop, pending cleanup, retention, receipt and external-provider limits remain accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Gennemg\u00e5et den pr\u00e6cise \u00e6ndring i chatopgavers forberedelsesfase mod den danske slettevejledning. Native-stop, verificeret filoprydning, opbevaring og begr\u00e6nsningen for udbyderdata er u\u00e6ndrede; vejledningens kvitteringer og afventende status er fortsat korrekte."
+      "rationale": "Gennemg\u00e5et den pr\u00e6cise \u00e6ndring i lease-genoprettelsen mod hele den danske eksport- og slettevejledning. Ingen Native-stoptilstand eller slettekvittering opfindes eller nulstilles. Genbrug forl\u00e6nger ikke leasens udl\u00f8bstid og beviser ikke filfjernelse. Vejledningen om verificeret Stop, afventende oprydning, opbevaring, kvitteringer og udbyderdata er fortsat korrekt."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

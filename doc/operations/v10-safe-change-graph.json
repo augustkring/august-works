@@ -5419,7 +5419,7 @@
         },
         {
           "path": "server/src/__tests__/environment-runtime.test.ts",
-          "sha256": "b985fe795e1a095f05a90e8509cf42fe3a5a0ba9d92da7820fa4ac67def0abc3"
+          "sha256": "1ca77c82e801621f6d49b84b55443858f02b30fe23e44de0a30499d85e822da4"
         },
         {
           "path": "server/src/__tests__/fixtures/scheduled-work-recovery-worker.ts",
@@ -5663,7 +5663,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd"
+          "sha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3"
         },
         {
           "path": "server/src/services/issue-assignment-wakeup.ts",
@@ -6147,7 +6147,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd"
+          "sha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.ts",
@@ -7322,7 +7322,7 @@
         },
         {
           "path": "server/src/__tests__/environment-runtime.test.ts",
-          "sha256": "b985fe795e1a095f05a90e8509cf42fe3a5a0ba9d92da7820fa4ac67def0abc3"
+          "sha256": "1ca77c82e801621f6d49b84b55443858f02b30fe23e44de0a30499d85e822da4"
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
@@ -8952,7 +8952,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd"
+          "sha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3"
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
@@ -9965,7 +9965,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd"
+          "sha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3"
         },
         {
           "path": "server/src/services/learning/learning-assets.ts",
@@ -10208,7 +10208,7 @@
         },
         {
           "path": "server/src/services/environment-run-orchestrator.ts",
-          "sha256": "4b4037c47fcb954dbcdadb921cda4123513bb7721d4f2133a0791d6f8f5ab3e3"
+          "sha256": "9d85e81f1a03bfd5593fe561ef930e58dd7df0847dca635a893f70cbe26906ca"
         },
         {
           "path": "server/src/services/execution-workspaces.ts",
@@ -10216,7 +10216,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd"
+          "sha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3"
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
@@ -11077,7 +11077,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd"
+          "sha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3"
         },
         {
           "path": "server/src/services/native-runtime/create-skill.integration.test.ts",
@@ -13392,7 +13392,7 @@
       "sources": [
         {
           "path": ".github/workflows/aw-v4-verification.yml",
-          "sha256": "99918a6300d2471384bbfee0a490ec56001e68e20bac4fa3f59a6b61148ef626"
+          "sha256": "68ad32c1c7224e0990eb1eabf71633fdc8615494c298348333242db6b48c26e1"
         },
         {
           "path": ".github/workflows/aw-v9-coverage.yml",
@@ -20532,7 +20532,7 @@
         },
         {
           "path": "server/src/__tests__/v6-database-quarantine.integration.test.ts",
-          "sha256": "620f474d165282588ade343b274f4d45c71af5e57da307552e56650203aed12f"
+          "sha256": "b7a5a70d8514c73a408d8a5726166ef08473fd1ed8da8bc57d760dd7afbdbcac"
         },
         {
           "path": "server/src/__tests__/v7-derived-memory.integration.test.ts",
@@ -23846,7 +23846,7 @@
         },
         {
           "path": "server/src/services/environment-runtime.ts",
-          "sha256": "2e259a6d202c76ca96d69b708fd2ede0de5ca21425756ea3ca7f0a8776679d36"
+          "sha256": "1953f215860bca053ea214dbd7538af43385c94620ee9528876f6c8fab655871"
         },
         {
           "path": "server/src/services/execution-blocker.ts",
@@ -45837,7 +45837,7 @@
       "id": "source:server/src/__tests__/environment-runtime.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/environment-runtime.test.ts",
-      "sha256": "b985fe795e1a095f05a90e8509cf42fe3a5a0ba9d92da7820fa4ac67def0abc3",
+      "sha256": "1ca77c82e801621f6d49b84b55443858f02b30fe23e44de0a30499d85e822da4",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05"
@@ -46784,7 +46784,7 @@
       "id": "source:server/src/services/heartbeat.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/heartbeat.ts",
-      "sha256": "f1ee786d07235b0126bdd932758f416a09892ac3f737b9afa40090229e0da8bd",
+      "sha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-03",
@@ -50009,7 +50009,7 @@
       "id": "source:server/src/services/environment-run-orchestrator.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/environment-run-orchestrator.ts",
-      "sha256": "4b4037c47fcb954dbcdadb921cda4123513bb7721d4f2133a0791d6f8f5ab3e3",
+      "sha256": "9d85e81f1a03bfd5593fe561ef930e58dd7df0847dca635a893f70cbe26906ca",
       "changeIds": [
         "SCR-V10-HOTSPOT-08"
       ],
@@ -50984,7 +50984,7 @@
       "id": "source:.github/workflows/aw-v4-verification.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/aw-v4-verification.yml",
-      "sha256": "99918a6300d2471384bbfee0a490ec56001e68e20bac4fa3f59a6b61148ef626",
+      "sha256": "68ad32c1c7224e0990eb1eabf71633fdc8615494c298348333242db6b48c26e1",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -57933,7 +57933,7 @@
       "id": "source:server/src/__tests__/v6-database-quarantine.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v6-database-quarantine.integration.test.ts",
-      "sha256": "620f474d165282588ade343b274f4d45c71af5e57da307552e56650203aed12f",
+      "sha256": "b7a5a70d8514c73a408d8a5726166ef08473fd1ed8da8bc57d760dd7afbdbcac",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -61143,7 +61143,7 @@
       "id": "source:server/src/services/environment-runtime.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/environment-runtime.ts",
-      "sha256": "2e259a6d202c76ca96d69b708fd2ede0de5ca21425756ea3ca7f0a8776679d36",
+      "sha256": "1953f215860bca053ea214dbd7538af43385c94620ee9528876f6c8fab655871",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],

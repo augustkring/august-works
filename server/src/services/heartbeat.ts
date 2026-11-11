@@ -22734,6 +22734,7 @@ export function heartbeatService(
           persistedExecutionWorkspace,
           executionWorkspaceSettings: environmentExecutionWorkspaceSettings,
           requestedExpiresAt: requestedLeaseExpiresAt,
+          nativeLeaseOwner: runOptions.nativeLeaseOwner,
         });
         await controllerLease.assertOwned();
         nativeRunnerPreparationSpans.push({

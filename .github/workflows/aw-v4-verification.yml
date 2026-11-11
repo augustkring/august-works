@@ -373,6 +373,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       selectors_json: ${{ steps.plan.outputs.selectors_json }}
+      selected_files_json: ${{ steps.plan.outputs.selected_files_json }}
       has_selectors: ${{ steps.plan.outputs.has_selectors }}
       shard_count: ${{ steps.plan.outputs.shard_count }}
     steps:
@@ -419,7 +420,7 @@ jobs:
             selectors="$(node scripts/check-v10-security-fast-path.mjs --base "${CHANGE_BASE}")"
           fi
           if [ -z "$selectors" ]; then
-            printf 'matrix={"include":[{"shard":1,"count":1}]}\nselectors_json=[]\nhas_selectors=false\nshard_count=0\n' >> "$GITHUB_OUTPUT"
+            printf 'matrix={"include":[{"shard":1,"count":1}]}\nselectors_json=[]\nselected_files_json=[]\nhas_selectors=false\nshard_count=0\n' >> "$GITHUB_OUTPUT"
             echo "No protected V10 source path changed."
             exit 0
           fi
@@ -431,17 +432,18 @@ jobs:
           pnpm exec vitest list --filesOnly --json="$file_list" "${selected_tests[@]}"
           node --input-type=module - "$selector_file" "$file_list" "$GITHUB_OUTPUT" <<'NODE'
           import { appendFileSync, readFileSync } from "node:fs";
+          import { relative } from "node:path";
           const [selectorFile, fileList, outputFile] = process.argv.slice(2);
           const selectors = readFileSync(selectorFile, "utf8").split(/\r?\n/).filter(Boolean);
           const listed = JSON.parse(readFileSync(fileList, "utf8"));
           if (!Array.isArray(listed) || listed.some(entry => !entry || typeof entry.file !== "string" || !entry.file)) {
             throw new Error("Invalid config-aware Vitest file list");
           }
-          const files = [...new Set(listed.map(entry => entry.file))];
+          const files = [...new Set(listed.map(entry => relative(process.cwd(), entry.file)))];
           if (selectors.length === 0 || files.length === 0) throw new Error("Changed security selectors resolved to zero Vitest files");
           const shardCount = Math.min(4, files.length);
           const matrix = { include: Array.from({ length: shardCount }, (_, index) => ({ shard: index + 1, count: shardCount })) };
-          appendFileSync(outputFile, `matrix=${JSON.stringify(matrix)}\nselectors_json=${JSON.stringify(selectors)}\nhas_selectors=true\nshard_count=${shardCount}\n`);
+          appendFileSync(outputFile, `matrix=${JSON.stringify(matrix)}\nselectors_json=${JSON.stringify(selectors)}\nselected_files_json=${JSON.stringify(files)}\nhas_selectors=true\nshard_count=${shardCount}\n`);
           console.log(`Resolved ${selectors.length} original selectors to ${files.length} Vitest files across ${shardCount} serial shards.`);
           NODE
 
@@ -474,7 +476,7 @@ jobs:
           cache: pnpm
 
       - name: Install root-owned Node for runtime asset erasure tests
-        if: contains(fromJSON(needs.security-regression-plan.outputs.selectors_json), 'server/src/services/native-runtime/runtime-asset-retention.test.ts')
+        if: contains(fromJSON(needs.security-regression-plan.outputs.selected_files_json), 'server/src/services/native-runtime/runtime-asset-retention.test.ts')
         shell: bash
         run: |
           set -euo pipefail
