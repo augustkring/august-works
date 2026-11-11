@@ -1,6 +1,49 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { buildMigrationRegister, checkMigrationRegister } from "./platform-skill-migration-register.mjs";
+import { buildMigrationRegister, checkMigrationRegister, discoverSources } from "./platform-skill-migration-register.mjs";
+
+test("source discovery matches tracked, untracked, ignored, hidden, and deleted path rules", async () => {
+  const root = mkdtempSync(join(tmpdir(), "platform-skill-discovery-"));
+  const write = (path, body = "# fixture\n") => {
+    const fullPath = join(root, path);
+    mkdirSync(join(fullPath, ".."), { recursive: true });
+    writeFileSync(fullPath, body);
+  };
+  const git = (...args) => execFileSync("git", args, { cwd: root, stdio: "ignore" });
+  try {
+    git("init", "-q");
+    writeFileSync(join(root, ".gitignore"), "ignored-untracked/\nignored-tracked/\n");
+    write("AGENTS.md");
+    write("nested/AGENTS.md");
+    write(".hidden/AGENTS.md");
+    write("deleted/AGENTS.md");
+    write("ignored-tracked/AGENTS.md");
+    write("ignored-untracked/AGENTS.md");
+    write("skills/paperclip/SKILL.md");
+    write("skills/paperclip/references/guide.md");
+    write("packages/adapters/hermes/skills/bridge/SKILL.md");
+    write("untracked/AGENTS.md");
+    git("add", "AGENTS.md", "nested/AGENTS.md", ".hidden/AGENTS.md", "deleted/AGENTS.md",
+      "skills/paperclip/SKILL.md", "skills/paperclip/references/guide.md", "packages/adapters/hermes/skills/bridge/SKILL.md");
+    git("add", "-f", "ignored-tracked/AGENTS.md");
+    rmSync(join(root, "deleted/AGENTS.md"));
+
+    assert.deepEqual(await discoverSources(root), [
+      "AGENTS.md",
+      "nested/AGENTS.md",
+      "packages/adapters/hermes/skills/bridge/SKILL.md",
+      "skills/paperclip/SKILL.md",
+      "skills/paperclip/references/guide.md",
+      "untracked/AGENTS.md",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("the legacy instruction inventory is source-current and section complete", async () => {
   const register = await buildMigrationRegister();

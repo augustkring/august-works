@@ -98,10 +98,6 @@ jobs:
       - run: node scripts/check-aw-v9-coverage.mjs
       - name: Test Operating Knowledge coverage and field-regression gate
         run: node --test scripts/platform-skill-operating-knowledge.test.mjs
-      - name: Install migration scanner dependency
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ripgrep
       - name: Check legacy Platform Skill migration register
         run: pnpm run check:platform-skill-migration-register
       - name: Test Platform Skill migration register source coverage
@@ -136,6 +132,8 @@ jobs:
     name: V9 component accessibility
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -150,7 +148,14 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm run preflight:workspace-links
       - run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
-      - run: pnpm exec playwright install --with-deps chromium
+      - name: Verify bundled Playwright browser matches the frozen dependency
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          assert.equal(require('@playwright/test/package.json').version, '1.62.1');
+          fs.accessSync(require('@playwright/test').chromium.executablePath(), fs.constants.X_OK);
+          NODE
       - run: node --test scripts/aw-v9-reduced-motion.test.mjs scripts/aw-v9-status-contrast.test.mjs
       - run: pnpm build-storybook
       - run: pnpm exec playwright test --config tests/e2e/aw-v9-storybook.config.ts tests/e2e/aw-v9-storybook.spec.ts

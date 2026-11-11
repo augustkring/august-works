@@ -370,11 +370,11 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "68eb68e0c236b5f5b82b4c9edd495f8ddd95fab99645e7e6c40a91bf393f3480"
+      "sha256": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca"
     },
     {
       "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-      "sha256": "16372a94a1458a5117a4c758d142ec72f9988f6833fe1a5e1a2b676eb090ab7b"
+      "sha256": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -414,7 +414,7 @@
     },
     {
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734"
+      "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
     },
     {
       "path": "server/src/services/workflows/workflow-authoring-tools.ts",

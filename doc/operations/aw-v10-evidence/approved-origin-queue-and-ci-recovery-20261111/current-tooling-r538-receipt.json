@@ -1,0 +1,8 @@
+{
+  "command": "node --test scripts/ci-install-native-sandbox.test.mjs scripts/platform-skill-migration-register.test.mjs scripts/__tests__/e2e-shard.test.mjs",
+  "tests": 20,
+  "passed": 20,
+  "failed": 0,
+  "durationMs": 772.80054,
+  "scope": "fixture-only installer command wiring, Git inventory and CI lane contract; not actual sandbox confinement or browser execution"
+}

@@ -771,7 +771,7 @@
   "sourcePins": [
     {
       "path": ".github/workflows/aw-v9-coverage.yml",
-      "sha256": "3f75345ccd6abdd3eed9be87ae0f09692095ce2288df492f1aec5cdc2cabc73a"
+      "sha256": "cbb704614d028790dc69ec327d8129b5634a6257e4abb5e4f2bf72c2c982451b"
     },
     {
       "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/requirement-reconciliation.json",

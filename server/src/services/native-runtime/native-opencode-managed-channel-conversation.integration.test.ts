@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { agentWakeupRequests, chatActions, chatConversations, chatExternalPrincipals, chatIdentityLinks,
-  chatMessageLinks, chatPublications, createDb, heartbeatRuns, issues,
+  chatMessageLinks, chatPublications, createDb, heartbeatRuns, issueComments, issues,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { makeConversationFixtureTreeWritable } from "../../__tests__/helpers/managed-native-conversation-frame.js";
@@ -69,12 +69,20 @@ describe("managed Native channel conversation", () => {
     const threadId = `slack:${channel}:1789000000.100001`;
     const secondText = "Now continue from the same private conversation and give one brief update.";
     const privateMarker = "PRIVATE_COMMENT_NOT_LINKED_TO_CHANNEL";
-    const post = async (targetThread: string) => ({ id: randomUUID(), threadId: targetThread });
+    const publicationPosts: Array<{ threadId: string; text: string }> = [];
+    const post = async (targetThread: string, content?: unknown) => {
+      const text = typeof content === "string" ? content
+        : content && typeof content === "object" && !Array.isArray(content) &&
+            typeof (content as Record<string, unknown>).markdown === "string"
+          ? (content as Record<string, string>).markdown : null;
+      if (text !== null) publicationPosts.push({ threadId: targetThread, text });
+      return { id: randomUUID(), threadId: targetThread };
+    };
     const threadFor = (targetThread: string) => ({ id: targetThread, channelId: channel, isDM: true,
       channel: { id: channel, name: "native-conversation" },
       adapter: { addReaction: async () => undefined, removeReaction: async () => undefined,
         editMessage: async (_thread: string, id: string) => ({ id, threadId: targetThread }) },
-      startTyping: async () => undefined, subscribe: async () => undefined, post: async () => post(targetThread),
+      startTyping: async () => undefined, subscribe: async () => undefined, post: async (content: unknown) => post(targetThread, content),
       postEphemeral: async () => ({ ...await post(targetThread), usedFallback: false }) });
     const runtime = {
       get: (id: string) => endpoints.get(id) ?? null,
@@ -136,8 +144,8 @@ describe("managed Native channel conversation", () => {
           if (modelInput.includes(privateMarker)) throw new Error("managed_channel_conversation_private_comment_leaked");
           privateHistoryExcluded = true;
         }
-        const turn = (replies.get(runId) ?? 0) + 1; replies.set(runId, turn);
-        return { stop_reason: "end_turn", content: [{ type: "text", text: `Native channel reply ${turn}.` }] };
+        const runTurn = (replies.get(runId) ?? 0) + 1; replies.set(runId, runTurn);
+        return { stop_reason: "end_turn", content: [{ type: "text", text: `Native channel reply ${providerCallCount}.` }] };
       },
       driveScheduler: async ({ heartbeat, companyId, agentId, actor, closeManagedAgentHostForRun, factsForRun }) => {
         if (!actor.userId) throw new Error("managed_channel_conversation_human_missing");
@@ -179,6 +187,14 @@ describe("managed Native channel conversation", () => {
           const [firstAction] = await db.select().from(chatActions).where(and(eq(chatActions.endpointId, endpoint.id),
             eq(chatActions.kind, "inbound_wakeup"), sql`${chatActions.payload}->>'commentId' = ${firstLink.commentId}`)).limit(1);
           if (!firstAction) throw new Error("managed_channel_conversation_first_action_missing");
+          expect(firstLink.conversationId).toBe(firstAction.conversationId);
+          expect(identityLink).toMatchObject({ principalId: principal.id, paperclipUserId: actor.userId, status: "linked" });
+          expect(firstAction.principalId).toBe(principal.id);
+          expect(firstAction.payload).toMatchObject({ commentId: firstLink.commentId,
+            requestedByActorType: "user", requestedByActorId: actor.userId });
+          const [firstSourceComment] = await db.select({ authorType: issueComments.authorType, authorUserId: issueComments.authorUserId })
+            .from(issueComments).where(eq(issueComments.id, firstLink.commentId!)).limit(1);
+          expect(firstSourceComment).toEqual({ authorType: "user", authorUserId: actor.userId });
           const first = await waitForRun(firstAction.id);
           await heartbeat.drainActiveRunExecutions(); await closeManagedAgentHostForRun(first.run.id);
           expect(first.run).toMatchObject({ status: "succeeded", runtimeMode: "native", nativePhase: "committed",
@@ -218,6 +234,13 @@ describe("managed Native channel conversation", () => {
           const [secondAction] = await db.select().from(chatActions).where(and(eq(chatActions.endpointId, endpoint.id),
             eq(chatActions.kind, "inbound_wakeup"), sql`${chatActions.payload}->>'commentId' = ${secondLink.commentId}`)).limit(1);
           if (!secondAction) throw new Error("managed_channel_conversation_second_action_missing");
+          expect(secondLink.conversationId).toBe(secondAction.conversationId);
+          expect(secondAction.principalId).toBe(principal.id);
+          expect(secondAction.payload).toMatchObject({ commentId: secondLink.commentId,
+            requestedByActorType: "user", requestedByActorId: actor.userId });
+          const [secondSourceComment] = await db.select({ authorType: issueComments.authorType, authorUserId: issueComments.authorUserId })
+            .from(issueComments).where(eq(issueComments.id, secondLink.commentId!)).limit(1);
+          expect(secondSourceComment).toEqual({ authorType: "user", authorUserId: actor.userId });
           const second = await waitForRun(secondAction.id);
           await heartbeat.drainActiveRunExecutions(); await closeManagedAgentHostForRun(second.run.id);
           expect(second.run.id).not.toBe(first.run.id);
@@ -239,9 +262,29 @@ describe("managed Native channel conversation", () => {
           expect(secondReservations[0]).toMatchObject({ purpose: "conversation_model", status: "completed",
             conversationRunId: second.run.id, conversationIssueId: issue!.id,
             usage: { inputTokens: 100, outputTokens: 32 }, maximumMinor: expect.any(Number) });
-          expect(providerCallCount).toBeGreaterThanOrEqual(2);
-          expect(await db.select().from(chatPublications).where(and(eq(chatPublications.companyId, companyId),
-            eq(chatPublications.conversationId, firstAction.conversationId!)))).not.toHaveLength(0);
+          expect(providerCallCount).toBe(2);
+          expect(replies).toEqual(new Map([[first.run.id, 1], [second.run.id, 1]]));
+          const finalComments = await db.select({ id: issueComments.id, createdByRunId: issueComments.createdByRunId,
+            body: issueComments.body, metadata: issueComments.metadata }).from(issueComments).where(and(
+            eq(issueComments.companyId, companyId), eq(issueComments.issueId, issue!.id), eq(issueComments.authorType, "agent")));
+          expect(finalComments).toHaveLength(2);
+          expect(finalComments.map(({ createdByRunId, body }) => ({ createdByRunId, body })).sort((a, b) =>
+            String(a.createdByRunId).localeCompare(String(b.createdByRunId)))).toEqual([
+              { createdByRunId: first.run.id, body: "Native channel reply 1." },
+              { createdByRunId: second.run.id, body: "Native channel reply 2." },
+            ].sort((a, b) => a.createdByRunId.localeCompare(b.createdByRunId)));
+          for (const final of finalComments) {
+            expect(final.metadata).toMatchObject({ authorizationReason: "allow_chat_run_presentation" });
+            const publications = await db.select().from(chatPublications).where(and(
+              eq(chatPublications.companyId, companyId), eq(chatPublications.commentId, final.id)));
+            expect(publications).toHaveLength(1);
+            expect(publications[0]).toMatchObject({ state: "published", payload: { text: final.body } });
+          }
+          expect(publicationPosts.filter(value => value.text.startsWith("Native channel reply ")).sort((a, b) =>
+            a.text.localeCompare(b.text))).toEqual([
+              { threadId, text: "Native channel reply 1." },
+              { threadId, text: "Native channel reply 2." },
+            ]);
 
           // Revocation is a source-admission denial: the input may be retained, but it must not reserve or dispatch a model turn.
           await db.update(chatIdentityLinks).set({ status: "revoked", updatedAt: new Date() }).where(eq(chatIdentityLinks.id, identityLink.id));

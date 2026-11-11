@@ -77,7 +77,7 @@ function attachManagedBrowserEntryDiagnostic(page: Page, origin: string) {
   page.on("response", onResponse);
   page.on("pageerror", onPageError);
   return {
-    async reportFailure(entry: "project_card_entry" | "repository_card_entry", composer: Locator, claim: Locator) {
+    async reportFailure(entry: "project_card_entry" | "repository_card_entry" | "governed_handoff_entry", composer: Locator, claim: Locator) {
       let documentFacts: Record<string, unknown> = { readyState: "unavailable", mainPresent: false, statusRolePresent: false, alertRolePresent: false, composerElementPresent: false };
       try {
         documentFacts = await page.evaluate(() => ({
@@ -381,10 +381,20 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
               const chat = await opened.json() as { id: string };
               workflowChatIssueId = chat.id;
               context.onConversationOpened(chat.id);
-              await page.goto(`${context.origin}${route}`);
+              const entryDiagnostic = attachManagedBrowserEntryDiagnostic(page, context.origin);
               const composer = page.getByTestId("task-chat-composer-input").last()
                 .locator('[contenteditable="true"],textarea').first();
-              await browserExpect(composer).toBeVisible({ timeout: 30_000 });
+              const claim = page.getByRole("button", { name: "Claim this instance", exact: true });
+              try {
+                await page.goto(`${context.origin}${route}`);
+                await browserExpect(composer).toBeVisible({ timeout: 30_000 });
+              } catch (error) {
+                try { await entryDiagnostic.reportFailure("governed_handoff_entry", composer, claim); }
+                catch { /* Keep the original browser assertion as the test failure. */ }
+                throw error;
+              } finally {
+                entryDiagnostic.dispose();
+              }
               if (scenario.label === "plan approval hands the preserved revision to an assigned task") {
                 await page.getByTestId("task-chat-composer-mode").click();
                 await page.getByTestId("task-chat-composer-mode-menu").getByText("Plan mode", { exact: true }).click();

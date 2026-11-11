@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -158,17 +159,34 @@ function agensPolicy(path) {
     reason: "This AGENTS file is package, template, or fixture guidance rather than a competing company operating Skill." };
 }
 
-async function discoverSources() {
-  const listed = await new Promise((resolveList, reject) => {
-    execFile("rg", ["--files", "-g", "AGENTS.md", "-g", "skills/paperclip/**/*.md", "-g", "skills/paperclip/SKILL.md", "-g", "packages/adapters/hermes/skills/**/*.md"],
-      { cwd: ROOT, maxBuffer: 1024 * 1024 }, (error, stdout) => error ? reject(error) : resolveList(stdout.split(/\r?\n/).filter(Boolean).sort()));
+// Source inventory follows Git ignore rules; ripgrep-specific ignore files do not govern it.
+const DISCOVERY_PATHS = [":(glob)**/AGENTS.md", ":(glob)AGENTS.md", ":(glob)skills/paperclip/**/*.md", ":(glob)packages/adapters/hermes/skills/**/*.md"];
+
+function gitFiles(root, args) {
+  return new Promise((resolveList, reject) => {
+    execFile("git", args, { cwd: root, maxBuffer: 1024 * 1024 }, (error, stdout) => error ? reject(error) : resolveList(stdout.split("\0").filter(Boolean)));
   });
-  return [...new Set([...OPERATIONAL_SKILL_SOURCES, ...listed])].sort();
+}
+
+export async function discoverSources(root = ROOT) {
+  const [listed, ignored] = await Promise.all([
+    gitFiles(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...DISCOVERY_PATHS]),
+    // `--cached --ignored` is needed because Git normally keeps tracked files
+    // visible even after a matching ignore rule; rg --files hides those too.
+    gitFiles(root, ["ls-files", "--cached", "--ignored", "--exclude-standard", "-z", "--", ...DISCOVERY_PATHS]),
+  ]);
+  const ignoredPaths = new Set(ignored);
+  const discovered = listed.filter((path) => !ignoredPaths.has(path)
+    // Match rg --files' default hidden-path exclusion; fixed operational
+    // sources below remain explicit regardless of their path.
+    && !path.split("/").some((segment) => segment.startsWith("."))
+    && existsSync(resolve(root, path))).sort();
+  return discovered;
 }
 
 export async function buildMigrationRegister() {
   const policies = basePolicies();
-  const paths = await discoverSources();
+  const paths = [...new Set([...OPERATIONAL_SKILL_SOURCES, ...await discoverSources()])].sort();
   const sources = [];
   const rows = [];
   for (const path of paths) {

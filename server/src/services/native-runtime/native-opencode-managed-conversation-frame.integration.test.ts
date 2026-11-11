@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDb } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
-import { makeConversationFixtureTreeWritable, runManagedNativeConversationFrame } from "../../__tests__/helpers/managed-native-conversation-frame.js";
+import { boundedRunnerFailureDiagnostic, makeConversationFixtureTreeWritable, runManagedNativeConversationFrame } from "../../__tests__/helpers/managed-native-conversation-frame.js";
 import { configureManagedConversationSandboxHost } from "../../__tests__/helpers/managed-native-conversation-sandbox-host.js";
 import express from "express";
 import request from "supertest";
@@ -45,6 +45,30 @@ function qualifiedOpenCodeBinary(): string | null {
   try { return execFileSync("which", ["opencode"], { encoding: "utf8" }).trim() || null; }
   catch { return null; }
 }
+
+describe("bounded Native runner failure diagnostics", () => {
+  it("hashes nested error text and keeps only allowlisted codes and names", () => {
+    const secretMessage = "synthetic private prompt and bearer sk-test-only";
+    const diagnostic = boundedRunnerFailureDiagnostic(8, {
+      error: { name: "PrivateProviderError", code: "opaque-provider-code", message: secretMessage,
+        cause: { name: "Error", message: "synthetic nested private error" } },
+      prpEvent: { eventType: "turn.failed", payload: { status: "failed", providerTurnId: "opaque-turn-id",
+        error: { name: "TypeError", code: "managed_provider_failed", message: "synthetic PRP failure" } } },
+    });
+    const serialized = JSON.stringify(diagnostic);
+    for (const privateValue of [secretMessage, "opaque-provider-code", "PrivateProviderError",
+      "synthetic nested private error", "opaque-turn-id", "synthetic PRP failure"])
+      expect(serialized).not.toContain(privateValue);
+    expect(diagnostic).toMatchObject({ seq: 8,
+      error: { kind: "object", name: "other", code: null,
+        codeSha256: createHash("sha256").update("opaque-provider-code").digest("hex"),
+        messageSha256: createHash("sha256").update(secretMessage).digest("hex"),
+        cause: { name: "Error", messageSha256: createHash("sha256").update("synthetic nested private error").digest("hex") } },
+      prpEvent: { eventType: "turn.failed", status: "failed",
+        error: { name: "TypeError", code: "managed_provider_failed",
+          messageSha256: createHash("sha256").update("synthetic PRP failure").digest("hex") } } });
+  });
+});
 
 describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCode frame", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;

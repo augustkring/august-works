@@ -30,6 +30,8 @@ import {
   createDb,
   heartbeatRuns,
   heartbeatRunEvents,
+  issueComments,
+  runIdentityContexts,
   nativeRunFinalizations,
   issues,
   agentExecutionManifests,
@@ -44,6 +46,8 @@ import {
   orchestrationModelReservations,
   supervisionInterventions,
   toolInvocations,
+  toolActionRequests,
+  toolPolicies,
   issueDocuments,
   documents,
   documentRevisions,
@@ -67,7 +71,7 @@ import { orchestrationService } from "../services/orchestration/orchestration-se
 import * as agentRunCancellation from "../agent-run-cancellation.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
-import { validateToolContent } from "../services/tool-content-guards.js";
+import { canonicalToolArguments, readSignedToolArgumentsPayload, verifyToolArgumentsSignature, validateToolContent } from "../services/tool-content-guards.js";
 import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
@@ -99,7 +103,7 @@ import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { buildNativeModelEnvelope, parseNativeExecutionInput, type NativeSession } from "../vendor/paperclip-runner/index.js";
 import { buildRetainedNativeRuntimeContext } from "../services/native-runtime/runtime-context.js";
 import { ensureNativeCompletionContract } from "../services/native-runtime/completion-contracts.js";
-import { initializeRunIdentity } from "../services/run-identity.js";
+import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../services/run-identity.js";
 import { PROCESS_START_REQUESTED } from "../services/native-local-process-stop.js";
 import { resolveDefaultAgentWorkspaceDir } from "../home-paths.js";
 
@@ -1572,6 +1576,99 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(settledInvocations.find(row => row.idempotencyKey === `aw-native-tool:${run.id}:mcp-native-exhausted`))
         .toMatchObject({ status: "authorized", resultHash: null, workflowResultJson: null });
     });
+    it("retains an approved assigned MCP result under its signed accepted identity after steering", async () => {
+      const railway = await prepareConnectionIntentRailwayFixture({ db, companyId: f.home,
+        userId: f.userId, holderAgentId: f.presence.id });
+      const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home,
+        profileKey: `assigned-approved-origin-${randomUUID()}`, name: `Assigned approved origin ${randomUUID()}`, defaultAction: "deny" }).returning();
+      await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id,
+        selectorType: "connection", effect: "include", connectionId: railway.connection.id });
+      await db.insert(toolPolicies).values({ companyId: f.home, name: `Review assigned read ${randomUUID()}`,
+        policyType: "require_approval", selectors: { connectionId: railway.connection.id } });
+      const approvalSigningSecret = "native-assigned-approved-origin-fixture-signing-secret";
+      const gatewayOwner = createToolGatewayService(db, { remoteHttpRequest: railway.request,
+        toolActionSigningSecret: approvalSigningSecret });
+      const namedGateway = await gatewayOwner.createNamedGateway({ companyId: f.home,
+        body: { name: `Assigned approved origin ${randomUUID()}`, profileId: gatewayProfile!.id,
+          agentId: f.presence.id, issueId: task.id }, actor: { userId: f.userId } });
+      const namedToken = await gatewayOwner.createNamedGatewayToken({ companyId: f.home,
+        gatewayId: namedGateway.id, body: { name: "Native approved origin fixture", subjectType: "heartbeat_run",
+          subjectId: run.id, allowedActions: ["tools/list", "tools/call"] }, actor: { userId: f.userId } });
+      const [runIdentity] = await db.select({ activeIdentityContextId: heartbeatRuns.activeIdentityContextId })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+      if (!runIdentity?.activeIdentityContextId) throw new Error("The Native fixture has no accepted identity owner");
+      const [origin] = await db.select().from(runIdentityContexts).where(
+        eq(runIdentityContexts.id, runIdentity.activeIdentityContextId));
+      if (!origin || origin.status !== "accepted") throw new Error("The Native fixture identity is not accepted");
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user",
+        principalId: "steering-human-b", membershipRole: "member", status: "active" });
+      const descriptor = (await gatewayOwner.listToolsForNamedGateway({ gatewayPublicId: namedGateway.gatewayPublicId,
+        bearerToken: namedToken.token })).find(tool => tool.connectionId === railway.connection.id &&
+          tool.catalogEntryId === railway.tool.id);
+      if (!descriptor) throw new Error("The fixed-contract MCP tool is absent from the named Gateway");
+      const app = express();
+      app.use(express.json());
+      app.use(mcpGatewayProtocolRoutes(gatewayOwner));
+      await request(app).post(namedGateway.endpointPath).set("authorization", `Bearer ${namedToken.token}`)
+        .send({ jsonrpc: "2.0", id: randomUUID(), method: "tools/call",
+          params: { name: descriptor.name, arguments: { workspaceId: railway.workspaceId, first: 25 } } })
+        .expect(409);
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(0);
+      const [actionRequest] = await db.select().from(toolActionRequests).where(eq(toolActionRequests.companyId, f.home));
+      if (!actionRequest) throw new Error("The signed MCP approval request was not recorded");
+      const signed = readSignedToolArgumentsPayload({ signedArguments: actionRequest.signedArguments,
+        invocationId: actionRequest.invocationId, toolName: descriptor.name, signingSecret: approvalSigningSecret });
+      expect(signed).toMatchObject({ executionOnApprove: true, identityContextId: origin.id });
+      expect(verifyToolArgumentsSignature({ signedArguments: actionRequest.signedArguments,
+        invocationId: actionRequest.invocationId, toolName: descriptor.name,
+        canonicalArguments: canonicalToolArguments(signed!.arguments),
+        approvalSnapshot: signed!.approvalSnapshot, executionOnApprove: true,
+        identityContextId: origin.id, signingSecret: approvalSigningSecret })).toBe(true);
+
+      const [steeringComment] = await db.insert(issueComments).values({ companyId: f.home, issueId: task.id,
+        authorType: "user", authorUserId: "steering-human-b", body: "Continue under the next accepted identity." }).returning();
+      const steered = await reserveSteeredIdentity(db, { companyId: f.home, runId: run.id,
+        issueId: task.id, messageId: steeringComment!.id });
+      if (!steered) throw new Error("The next Human identity could not be reserved");
+      await reconcileSteeredIdentity(db, steered);
+      const [steeredRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run.id));
+      expect(steeredRun?.responsibleUserId).toBe("steering-human-b");
+
+      const { getNativeAssignedMcpDescriptorCurrent, nativeAssignedMcpDescriptorProjection } =
+        await import("../services/tool-gateway.js");
+      const assignedArguments = { workspaceId: railway.workspaceId, first: 25 };
+      const descriptorProof = nativeAssignedMcpDescriptorProjection(descriptor);
+      const descriptorOwner = { companyId: f.home, issueId: task.id, runId: run.id, agentId: f.presence.id,
+        gatewayId: namedGateway.id, gatewayPublicId: namedGateway.gatewayPublicId, gatewayProfileId: gatewayProfile!.id,
+        descriptorName: descriptor.name, descriptorHash: nativeSha256(descriptorProof),
+        parametersSchemaHash: nativeSha256(descriptor.parametersSchema), providerType: descriptor.providerType,
+        risk: descriptor.risk, connectionId: railway.connection.id, catalogEntryId: railway.tool.id,
+        upstreamToolName: railway.tool.toolName, catalogSchemaHash: railway.tool.schemaHash,
+        arguments: assignedArguments, workMode: "standard" as const };
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, { ...descriptorOwner,
+        responsibleUserId: f.userId, identityContextId: origin.id })).toBeTruthy();
+      await expect(getNativeAssignedMcpDescriptorCurrent(db, { ...descriptorOwner,
+        responsibleUserId: "steering-human-b", identityContextId: origin.id })).resolves.toBeNull();
+
+      const reviewed = await gatewayOwner.approveActionRequest({ companyId: f.home,
+        actionRequestId: actionRequest.id, actor: { userId: f.userId } });
+      expect(reviewed.status).toBe("executed");
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(1);
+      const [invocation] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, actionRequest.invocationId));
+      expect(invocation).toMatchObject({ status: "succeeded", approvalState: "approved",
+        gatewayId: namedGateway.id, gatewayPublicId: namedGateway.gatewayPublicId });
+      expect(invocation?.workflowResultJson).not.toBeNull();
+      expect(validateToolContent({ value: invocation?.workflowResultJson, direction: "result", sensitiveMode: "redact",
+        promptInjectionMode: "block" }).summary.sha256).toBe(invocation?.resultHash);
+
+      // Model a settled producer row for the status-neutral retained-source
+      // owner only; this does not stand in for Native stop/lease cleanup.
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() })
+        .where(eq(heartbeatRuns.id, run.id));
+      expect(await getNativeAssignedMcpDescriptorCurrent(db, { ...descriptorOwner,
+        responsibleUserId: "steering-human-b" })).toBeTruthy();
+    });
+
     it("shares one tool ceiling across both Native protocol authority paths", async () => {
       await db
         .update(issues)

@@ -1,0 +1,28 @@
+✔ the e2e shards form a complete, non-overlapping partition (483.531459ms)
+✔ the ignored spec list matches playwright.config.ts testIgnore (0.789696ms)
+✔ the V7 authenticated suite is covered by its dedicated product-browser lane (0.778889ms)
+✔ V10 authenticated suites run in dedicated authenticated browser lanes (1.720453ms)
+✔ the duration manifest only names specs that still exist (1.021444ms)
+✔ the V9 Storybook suite runs in its dedicated static-component lane (2.549869ms)
+✔ the weighted partition keeps the shards close to balanced (2.527425ms)
+✔ shard arguments are validated (117.133213ms)
+✔ pr.yml calls the trusted PR workflow from the same source commit (1.58545ms)
+✔ the trusted PR workflow keeps a stable aggregate check named e2e over the shard matrix (2.6172ms)
+✔ the trusted PR workflow limits full CI to merge-relevant stack layers (1.325461ms)
+✔ the stacked PR scope selector runs full CI only where intended (64.853101ms)
+✔ the trusted PR workflow passes the shard's spec filter to Playwright without a literal -- (0.90551ms)
+✔ all trusted PR lanes reject stale lockfiles independently (0.66567ms)
+✔ ready native tools skip apt and run the isolation probe (13.041653ms)
+✔ a failed sandbox probe command remains a failure without apt fallback (5.603544ms)
+✔ a missing bwrap uses bounded apt fallback before the sandbox probe command (17.525386ms)
+✔ source discovery matches tracked, untracked, ignored, hidden, and deleted path rules (28.020764ms)
+✔ the legacy instruction inventory is source-current and section complete (407.69468ms)
+✔ runtime compatibility distinguishes implemented delivery from external qualification (134.145098ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 772.80054

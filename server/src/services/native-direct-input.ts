@@ -10,7 +10,7 @@ import { activityLog, agents, issues, projects, projectWorkspaces, issueRelation
   contextManifests, contextManifestItems, contextManifestMemoryRoots, accountDeletionOperations, memoryRecords,
   memoryDeletionMarkers,
   completionContracts, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, agentExecutionManifests, executionWorkspaces, foundationDocuments,
-  nativeRunResults, nativeRunFinalizations, workAssessments, statusDecisions, statusDecisionEffects, documents, orchestrationPlans, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems,
+  nativeRunResults, nativeRunFinalizations, workAssessments, statusDecisions, statusDecisionEffects, documents, orchestrationPlans, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems, runIdentityContexts,
   agentRolePackAssignments, issueThreadInteractions, agentWakeupRequests, issueTreeHolds, orchestrationWorkerAttempts,
   orchestrationWorkers, issuePlanDecompositions, type Db } from "@paperclipai/db";
 import { toolInvocations, toolMcpGateways, toolConnections, toolActionRequests, toolCatalogEntries } from "@paperclipai/db";
@@ -1456,7 +1456,7 @@ export async function assertNativeAssignedMcpApprovalErrorCurrent(db: Db | Trans
   let execution: ReturnType<typeof parseNativeExecutionInput>;
   try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { return fail(); }
   if (execution.task.workMode !== pending.workMode) return fail();
-  if (producerRun.id !== pending.sourceRunId || producerRun.responsibleUserId !== input.responsibleUserId) return fail();
+  if (producerRun.id !== pending.sourceRunId) return fail();
   if (producerRun.id !== run.id) {
     const retainedSets = sourceSets.filter(set => set.inputs.some(source =>
       source.kind === "retained_run" && source.runId === producerRun.id) && set.policy.runIds.includes(producerRun.id));
@@ -1645,8 +1645,19 @@ export async function assertNativeAssignedMcpApprovalErrorCurrent(db: Db | Trans
     request.id !== pending.actionRequestId || request.invocationId !== pending.invocationId) return fail();
   const signed = readSignedToolArgumentsPayload({ signedArguments: request.signedArguments,
     invocationId: String(pending.invocationId), toolName: String(pending.gatewayToolName) });
-  if (!signed || !isDeepStrictEqual(signed.arguments, pending.argumentsProjection) ||
+  if (!signed || signed.executionOnApprove !== true || !signed.identityContextId ||
+    !isDeepStrictEqual(signed.arguments, pending.argumentsProjection) ||
     Buffer.byteLength(JSON.stringify(pending.argumentsProjection), "utf8") > 64 * 1024) return fail();
+  const [signedOrigin] = await db.select({ id: runIdentityContexts.id, runId: runIdentityContexts.runId,
+    companyId: runIdentityContexts.companyId, responsibleUserId: runIdentityContexts.responsibleUserId,
+    cause: runIdentityContexts.cause, status: runIdentityContexts.status }).from(runIdentityContexts).where(and(
+      eq(runIdentityContexts.id, signed.identityContextId), eq(runIdentityContexts.companyId, input.companyId),
+      eq(runIdentityContexts.runId, String(pending.sourceRunId)), eq(runIdentityContexts.status, "accepted"),
+    )).limit(1).for("share");
+  const signedResponsibleUserId = signedOrigin?.cause === "company_default" ? null : signedOrigin?.responsibleUserId ?? null;
+  // The signed producer identity authorizes this approval path, but it does
+  // not authorize a different Human to read the resulting private source.
+  if (!signedOrigin || !signedResponsibleUserId || signedResponsibleUserId !== input.responsibleUserId) return fail();
   let validated: ReturnType<typeof validateToolContent>;
   try { validated = validateToolContent({ value: pending.argumentsProjection, direction: "arguments",
     sensitiveMode: "block", promptInjectionMode: "ignore" }); } catch { return fail(); }
@@ -1660,8 +1671,9 @@ export async function assertNativeAssignedMcpApprovalErrorCurrent(db: Db | Trans
     await import("./tool-gateway.js");
   const currentDescriptor = await getNativeAssignedMcpDescriptorCurrent(db as Db, {
     companyId: input.companyId, issueId: input.issueId, runId: String(pending.sourceRunId), agentId: input.agentId,
-    responsibleUserId: input.responsibleUserId, gatewayId: String(pending.gatewayId),
+    responsibleUserId: signedResponsibleUserId, gatewayId: String(pending.gatewayId),
     gatewayPublicId: String(pending.gatewayPublicId), gatewayProfileId: String(pending.gatewayProfileId),
+    identityContextId: signed.identityContextId,
     descriptorName: String(pending.gatewayToolName), descriptorHash: String(pending.descriptorHash),
     credentialSnapshotHash: String(pending.credentialSnapshotHash),
     parametersSchemaHash: String(pending.parametersSchemaHash), providerType: String(pending.providerType),
@@ -4773,7 +4785,32 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         if (nativeSha256(providerArguments) !== assigned.providerArgumentsHash ||
           assigned.providerArgumentsHash !== capture.argumentsHash)
           throw forbidden("A Native assigned MCP provider argument source changed");
-        const producerResponsibleUserId = producerRun.responsibleUserId;
+        let producerResponsibleUserId = producerRun.responsibleUserId;
+        let approvedIdentityContextId: string | undefined;
+        if (invocation.approvalState === "approved") {
+          const approvedRequests = await db.select({ id: toolActionRequests.id, status: toolActionRequests.status,
+            signedArguments: toolActionRequests.signedArguments }).from(toolActionRequests).where(and(
+              eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.invocationId, invocation.id),
+              eq(toolActionRequests.status, "executed"))).limit(2).for("share");
+          if (approvedRequests.length !== 1) throw forbidden("A Native approved MCP identity proof changed");
+          const signed = readSignedToolArgumentsPayload({ signedArguments: approvedRequests[0]!.signedArguments,
+            invocationId: invocation.id, toolName: invocation.toolName });
+          if (!signed || signed.executionOnApprove !== true || !signed.identityContextId ||
+            !isDeepStrictEqual(signed.arguments, canonicalArguments))
+            throw forbidden("A Native approved MCP identity proof changed");
+          const [origin] = await db.select({ responsibleUserId: runIdentityContexts.responsibleUserId,
+            cause: runIdentityContexts.cause }).from(runIdentityContexts).where(and(
+              eq(runIdentityContexts.id, signed.identityContextId), eq(runIdentityContexts.companyId, input.companyId),
+              eq(runIdentityContexts.runId, source.runId), eq(runIdentityContexts.status, "accepted"),
+            )).limit(1).for("share");
+          const signedResponsibleUserId = origin?.cause === "company_default" ? null : origin?.responsibleUserId ?? null;
+          const readerUserId = input.actor.type === "board" ? input.actor.userId
+            : input.actor.type === "agent" ? input.actor.onBehalfOfUserId : null;
+          if (!origin || !signedResponsibleUserId || signedResponsibleUserId !== readerUserId)
+            throw forbidden("A Native approved MCP identity proof changed");
+          producerResponsibleUserId = signedResponsibleUserId;
+          approvedIdentityContextId = signed.identityContextId;
+        }
         if (!producerResponsibleUserId) throw forbidden("A Native assigned MCP authority owner changed");
         let execution: ReturnType<typeof parseNativeExecutionInput>;
         try { execution = parseNativeExecutionInput(profile?.nativeExecutionInput); }
@@ -4789,6 +4826,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           agentId: producerRun.agentId, responsibleUserId: producerResponsibleUserId,
           gatewayId: assigned.gatewayId, gatewayPublicId: assigned.gatewayPublicId,
           gatewayProfileId: assigned.gatewayProfileId, descriptorName: assigned.gatewayToolName,
+          identityContextId: approvedIdentityContextId,
           descriptorHash: assigned.descriptorHash, parametersSchemaHash: assigned.parametersSchemaHash,
           credentialSnapshotHash: assigned.credentialSnapshotHash,
           providerType: assigned.providerType, risk: assigned.risk, connectionId: assigned.connectionId,

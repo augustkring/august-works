@@ -11,14 +11,14 @@
   },
   "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2062,
+    "sourceDeltaPathCount": 2064,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14693,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths."
+    "fullDiffPathCount": 14721,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
@@ -4203,16 +4203,16 @@
         "identity": "full master base supplied by current build task"
       },
       "sourceInventoryBoundary": {
-        "sourceDeltaPathCount": 2062,
+        "sourceDeltaPathCount": 2064,
         "deletedSourcePathCount": 41,
         "untrackedSourceCandidateCount": 0,
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 14693,
-        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths."
+        "fullDiffPathCount": 14721,
+        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate."
       },
-      "sourceAfterGeneration": "R82 assigned MCP, linked-channel Native conversation, and pinned Skills software checkpoint. Six newly registered source paths link to existing owner groups; existing source ownership and historical requirement crosswalk are preserved. Full workspace TypeScript and build plus focused mixed unit/embedded-PostgreSQL tests passed, while full pnpm test:run and new Native SDK/Host journeys remain unqualified. No phase, lifecycle, release or qualification status is promoted."
+      "sourceAfterGeneration": "R83 registers the two installer paths and refreshes exact source hashes for approved-origin retention, queue physical settlement fixtures, bounded diagnostics, actual Native channel assertions and CI setup. Workspace typecheck/build (r532) and 155 focused tests (r535) passed for the runtime/test changes. Maximum 68,000-outcome analysis/replay/erasure passed (r536 child summary; outer receipt lost during environment restart). Twenty current tooling tests passed (r538). Recovery fixture r537 still fails and Native SDK/Host and full-suite/CI qualification remain open. No historical status or qualification is promoted."
     },
     {
       "id": "SCR-V10-HOTSPOT-01",
@@ -4485,7 +4485,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
-          "sha256": "27b1a59ff6492d87af763c6f08823212706c41f5dbc0493dde977ad2de07f2a3"
+          "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1"
         },
         {
           "path": "server/src/services/orchestration/native-tool-boundary.ts",
@@ -4497,7 +4497,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734"
+          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
         }
       ],
       "kind": "safe_change_record",
@@ -5671,7 +5671,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-          "sha256": "f1311a697aa5771e4ba9c2c762e26460f7c72c68c8abbaeb5ecc56ffa3d94c44"
+          "sha256": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -5747,7 +5747,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "31fbf016a6410b0972a2b414b5c1b8c0ba50cfb53da0651b4b346623729f0fbc"
+          "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b"
         },
         {
           "path": "server/src/__tests__/v9-agent-publication.integration.test.ts",
@@ -5859,7 +5859,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
-          "sha256": "27b1a59ff6492d87af763c6f08823212706c41f5dbc0493dde977ad2de07f2a3"
+          "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1"
         },
         {
           "path": "server/src/services/native-runtime/native-safe-replacement.test.ts",
@@ -5911,7 +5911,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734"
+          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
         },
         {
           "path": "server/src/services/workflows/workflow-executor.ts",
@@ -6331,7 +6331,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734"
+          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -7027,7 +7027,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-          "sha256": "f1311a697aa5771e4ba9c2c762e26460f7c72c68c8abbaeb5ecc56ffa3d94c44"
+          "sha256": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -7219,7 +7219,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
-          "sha256": "077392b94e64dafe5c5613e538b722c1230ffb8284bd6593f7f36f562c7bd94c"
+          "sha256": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -7622,11 +7622,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
-          "sha256": "27b1a59ff6492d87af763c6f08823212706c41f5dbc0493dde977ad2de07f2a3"
+          "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
-          "sha256": "077392b94e64dafe5c5613e538b722c1230ffb8284bd6593f7f36f562c7bd94c"
+          "sha256": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459"
         },
         {
           "path": "server/src/services/native-runtime/native-run-coordinator-store.ts",
@@ -9120,7 +9120,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "31fbf016a6410b0972a2b414b5c1b8c0ba50cfb53da0651b4b346623729f0fbc"
+          "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b"
         },
         {
           "path": "server/src/__tests__/v8-company-purge.integration.test.ts",
@@ -9240,7 +9240,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "68eb68e0c236b5f5b82b4c9edd495f8ddd95fab99645e7e6c40a91bf393f3480"
+          "sha256": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -9284,11 +9284,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
-          "sha256": "27b1a59ff6492d87af763c6f08823212706c41f5dbc0493dde977ad2de07f2a3"
+          "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
-          "sha256": "077392b94e64dafe5c5613e538b722c1230ffb8284bd6593f7f36f562c7bd94c"
+          "sha256": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
@@ -10089,7 +10089,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-          "sha256": "f1311a697aa5771e4ba9c2c762e26460f7c72c68c8abbaeb5ecc56ffa3d94c44"
+          "sha256": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -10165,7 +10165,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "31fbf016a6410b0972a2b414b5c1b8c0ba50cfb53da0651b4b346623729f0fbc"
+          "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b"
         },
         {
           "path": "server/src/__tests__/v9-agent-authored-definition.integration.test.ts",
@@ -10321,7 +10321,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734"
+          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -13184,6 +13184,18 @@
           "sha256": "0973a5adcead92e0e92e8dc9d5195b292803233eb6145f271ee0ae0d15efe95d"
         },
         {
+          "path": "scripts/ci-install-native-sandbox.sh",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "59fb9487dc1eb7aa4f2ac5675177ddfb6928e634a4c5cb38b9d26a5714147d51"
+        },
+        {
+          "path": "scripts/ci-install-native-sandbox.test.mjs",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "scripts/ci-prepare-managed-native-fixture-inputs.sh",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -13545,6 +13557,8 @@
         "packages/shared/src/types/workflow.ts",
         "packages/shared/src/validators/routine.test.ts",
         "packages/shared/src/validators/routine.ts",
+        "scripts/ci-install-native-sandbox.sh",
+        "scripts/ci-install-native-sandbox.test.mjs",
         "scripts/ci-prepare-managed-native-fixture-inputs.sh",
         "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
         "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
@@ -13613,6 +13627,8 @@
         "packages/shared/src/types/workflow.ts",
         "packages/shared/src/validators/routine.test.ts",
         "packages/shared/src/validators/routine.ts",
+        "scripts/ci-install-native-sandbox.sh",
+        "scripts/ci-install-native-sandbox.test.mjs",
         "scripts/ci-prepare-managed-native-fixture-inputs.sh",
         "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
         "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
@@ -13728,7 +13744,7 @@
         },
         {
           "path": ".github/workflows/aw-v9-coverage.yml",
-          "sha256": "3f75345ccd6abdd3eed9be87ae0f09692095ce2288df492f1aec5cdc2cabc73a"
+          "sha256": "cbb704614d028790dc69ec327d8129b5634a6257e4abb5e4f2bf72c2c982451b"
         },
         {
           "path": "packages/shared/src/types/heartbeat.ts",
@@ -13745,6 +13761,14 @@
         {
           "path": "packages/shared/src/validators/routine.ts",
           "sha256": "083760190e238c6760a70c12c610007828afa7a03e3cf256f0992e6abea22e85"
+        },
+        {
+          "path": "scripts/ci-install-native-sandbox.sh",
+          "sha256": "6e552c92761b2ac34e1508bff4656abe0058dbae9f3351223000442cfa60f31f"
+        },
+        {
+          "path": "scripts/ci-install-native-sandbox.test.mjs",
+          "sha256": "9d642dd33128fb9b8ce67f68a564f6b628070be0fc82c7c190a15edf08624499"
         },
         {
           "path": "scripts/ci-prepare-managed-native-fixture-inputs.sh",
@@ -18162,7 +18186,7 @@
         },
         {
           "path": "server/src/modules/wake-queue/adapters/postgres.test.ts",
-          "sha256": "dff75ff4fc20b5c47b084a436d5c3c336b04821d151fea56ae1e8d7380058579"
+          "sha256": "59e63fb9725bcb2a9b9ea84511dab36fa64669cfac1f89cb3649111fe2c33ab9"
         },
         {
           "path": "server/src/modules/wake-queue/adapters/queued-comment-postgres.test.ts",
@@ -24650,7 +24674,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-          "sha256": "16372a94a1458a5117a4c758d142ec72f9988f6833fe1a5e1a2b676eb090ab7b"
+          "sha256": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360"
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
@@ -24746,7 +24770,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
-          "sha256": "27b1a59ff6492d87af763c6f08823212706c41f5dbc0493dde977ad2de07f2a3"
+          "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1"
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
@@ -27977,11 +28001,11 @@
         },
         {
           "path": "scripts/platform-skill-migration-register.mjs",
-          "sha256": "f77fe1fceca3defacc560e1fafcbc2537c2218801b5b50fa7fb83435e74f886d"
+          "sha256": "fd4b65965c221d572c11a77d12846948300eac1e93d00df586ca0aec455fd127"
         },
         {
           "path": "scripts/platform-skill-migration-register.test.mjs",
-          "sha256": "356ab34c7f926e4b34f9d8fa55bf5fafc0d21c0fec93dd9573777c828d1da1d7"
+          "sha256": "3860c48e1d6c4d3bfaeda37a812ee2fbfb6e1a6d4f76849655d7dfdee5d891df"
         },
         {
           "path": "scripts/platform-skill-operating-knowledge.mjs",
@@ -32204,7 +32228,7 @@
         },
         {
           "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-          "sha256": "d5d06149f7a29a8715ea949a06b2656683ed68a0a22f4602dd286245e59fba05"
+          "sha256": "954bd9476ef75c98f70ef9b7bf15662f015b5d94618599ab4480a004db0062a5"
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
@@ -46501,7 +46525,7 @@
       "id": "source:server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
-      "sha256": "27b1a59ff6492d87af763c6f08823212706c41f5dbc0493dde977ad2de07f2a3",
+      "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -46552,7 +46576,7 @@
       "id": "source:server/src/services/tool-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
+      "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -47181,7 +47205,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-frame.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-      "sha256": "f1311a697aa5771e4ba9c2c762e26460f7c72c68c8abbaeb5ecc56ffa3d94c44",
+      "sha256": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -47491,7 +47515,7 @@
       "id": "source:server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-      "sha256": "31fbf016a6410b0972a2b414b5c1b8c0ba50cfb53da0651b4b346623729f0fbc",
+      "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -49078,7 +49102,7 @@
       "id": "source:server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
-      "sha256": "077392b94e64dafe5c5613e538b722c1230ffb8284bd6593f7f36f562c7bd94c",
+      "sha256": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459",
       "changeIds": [
         "SCR-V10-HOTSPOT-04",
         "SCR-V10-HOTSPOT-05",
@@ -50196,7 +50220,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "68eb68e0c236b5f5b82b4c9edd495f8ddd95fab99645e7e6c40a91bf393f3480",
+      "sha256": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -52007,7 +52031,7 @@
       "id": "source:.github/workflows/aw-v9-coverage.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/aw-v9-coverage.yml",
-      "sha256": "3f75345ccd6abdd3eed9be87ae0f09692095ce2288df492f1aec5cdc2cabc73a",
+      "sha256": "cbb704614d028790dc69ec327d8129b5634a6257e4abb5e4f2bf72c2c982451b",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -52076,6 +52100,36 @@
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "present_at_base",
         "sha256": "0973a5adcead92e0e92e8dc9d5195b292803233eb6145f271ee0ae0d15efe95d"
+      }
+    },
+    {
+      "id": "source:scripts/ci-install-native-sandbox.sh",
+      "kind": "current_source_owner",
+      "path": "scripts/ci-install-native-sandbox.sh",
+      "sha256": "6e552c92761b2ac34e1508bff4656abe0058dbae9f3351223000442cfa60f31f",
+      "changeIds": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "scripts/ci-install-native-sandbox.sh",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "59fb9487dc1eb7aa4f2ac5675177ddfb6928e634a4c5cb38b9d26a5714147d51"
+      }
+    },
+    {
+      "id": "source:scripts/ci-install-native-sandbox.test.mjs",
+      "kind": "current_source_owner",
+      "path": "scripts/ci-install-native-sandbox.test.mjs",
+      "sha256": "9d642dd33128fb9b8ce67f68a564f6b628070be0fc82c7c190a15edf08624499",
+      "changeIds": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "scripts/ci-install-native-sandbox.test.mjs",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
       }
     },
     {
@@ -57426,7 +57480,7 @@
       "id": "source:server/src/modules/wake-queue/adapters/postgres.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/modules/wake-queue/adapters/postgres.test.ts",
-      "sha256": "dff75ff4fc20b5c47b084a436d5c3c336b04821d151fea56ae1e8d7380058579",
+      "sha256": "59e63fb9725bcb2a9b9ea84511dab36fa64669cfac1f89cb3649111fe2c33ab9",
       "changeIds": [
         "SCR-V10-CONNECTOR-PROVIDER-LIFECYCLE"
       ],
@@ -62948,7 +63002,7 @@
       "id": "source:server/src/services/native-runtime/managed-native-browser.fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-      "sha256": "16372a94a1458a5117a4c758d142ec72f9988f6833fe1a5e1a2b676eb090ab7b",
+      "sha256": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -66983,7 +67037,7 @@
       "id": "source:scripts/platform-skill-migration-register.mjs",
       "kind": "current_source_owner",
       "path": "scripts/platform-skill-migration-register.mjs",
-      "sha256": "f77fe1fceca3defacc560e1fafcbc2537c2218801b5b50fa7fb83435e74f886d",
+      "sha256": "fd4b65965c221d572c11a77d12846948300eac1e93d00df586ca0aec455fd127",
       "changeIds": [
         "SCR-V10-SKILLS-AND-PUBLICATION"
       ],
@@ -66998,7 +67052,7 @@
       "id": "source:scripts/platform-skill-migration-register.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/platform-skill-migration-register.test.mjs",
-      "sha256": "356ab34c7f926e4b34f9d8fa55bf5fafc0d21c0fec93dd9573777c828d1da1d7",
+      "sha256": "3860c48e1d6c4d3bfaeda37a812ee2fbfb6e1a6d4f76849655d7dfdee5d891df",
       "changeIds": [
         "SCR-V10-SKILLS-AND-PUBLICATION"
       ],
@@ -71995,7 +72049,7 @@
       "id": "source:doc/operations/agent-native-tool-alias-compatibility.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-      "sha256": "d5d06149f7a29a8715ea949a06b2656683ed68a0a22f4602dd286245e59fba05",
+      "sha256": "954bd9476ef75c98f70ef9b7bf15662f015b5d94618599ab4480a004db0062a5",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -85022,6 +85076,16 @@
     {
       "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
       "to": "source:packages/shared/src/validators/routine.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
+      "to": "source:scripts/ci-install-native-sandbox.sh",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS",
+      "to": "source:scripts/ci-install-native-sandbox.test.mjs",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {

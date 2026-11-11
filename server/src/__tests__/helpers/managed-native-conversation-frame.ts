@@ -82,7 +82,7 @@ function safeDiagnosticEnum<T extends readonly string[]>(value: unknown, allowed
   if (value == null) return null;
   return typeof value === "string" && (allowed as readonly string[]).includes(value) ? value as T[number] : "other";
 }
-function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
+export function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
   const value = payload && typeof payload === "object" && !Array.isArray(payload)
     ? payload as Record<string, unknown> : {};
   const code = safeDiagnosticToken(value.errorCode) ?? safeDiagnosticToken(value.code);
@@ -95,8 +95,33 @@ function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
   const safeShape = Object.keys(value).filter(key => /^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(key)).sort().slice(0, 16);
   const message = typeof value.message === "string" ? value.message.slice(0, 2048)
     : typeof failure.message === "string" ? failure.message.slice(0, 2048) : null;
+  const codes = new Set(["adapter_failed", "setup_failed", "runner_ingress_unavailable", "runner_ingress_auth_failed",
+    "managed_provider_failed", "agentcore_active_turn_recovery_requires_review", "native_provider_terminal_failed"]);
+  const names = new Set(["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError",
+    "AbortError", "TimeoutError", "AggregateError", "HttpError", "ZodError", "RunnerIngressConnectionError"]);
+  const record = (raw: unknown) => raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
+  const hash = (raw: unknown) => typeof raw === "string" ? createHash("sha256").update(raw).digest("hex") : null;
+  const errorInfo = (raw: unknown, depth = 0): Record<string, unknown> | null => {
+    if (typeof raw === "string") return codes.has(raw) ? { kind: "code", code: raw } : { kind: "string", messageSha256: hash(raw) };
+    const item = record(raw);
+    if (!item) return null;
+    const errorCode = typeof item.code === "string" ? item.code : typeof item.errorCode === "string" ? item.errorCode : null;
+    const cause = item.cause;
+    return { kind: "object", name: typeof item.name === "string" ? names.has(item.name) ? item.name : "other" : null,
+      code: errorCode && codes.has(errorCode) ? errorCode : null,
+      codeSha256: errorCode && !codes.has(errorCode) ? hash(errorCode) : null,
+      messageSha256: hash(item.message), ...(depth < 1 && cause != null ? { cause: errorInfo(cause, depth + 1) } : {}) };
+  };
+  const prpEvent = record(value.prpEvent);
+  const prpPayload = record(prpEvent?.payload);
+  const prpEventType = ["turn.failed", "session.failed", "turn.interrupted", "turn.cancelled"]
+    .find(candidate => candidate === prpEvent?.eventType || candidate === prpEvent?.type) ?? null;
+  const prpStatus = ["failed", "error", "cancelled", "interrupted"]
+    .find(candidate => candidate === prpPayload?.status || candidate === prpEvent?.status) ?? null;
   return { seq, payloadKeys: safeShape, code, stage, phase, failureCode, failureStage,
-    messageSha256: message === null ? null : createHash("sha256").update(message).digest("hex") };
+    messageSha256: message === null ? null : hash(message), error: errorInfo(value.error),
+    prpEvent: prpEvent ? { eventType: prpEventType, status: prpStatus,
+      error: errorInfo(prpEvent.error ?? prpPayload?.error) } : null };
 }
 
 export async function runManagedNativeConversationFrame(input: {
@@ -1067,7 +1092,17 @@ export async function runManagedNativeConversationFrame(input: {
         errorCode: safeDiagnosticToken(finalRun.errorCode),
         executionStage: safeDiagnosticEnum(finalRun.executionStage, NATIVE_EXECUTION_STAGES),
         nativePhase: safeDiagnosticEnum(finalRun.nativePhase, NATIVE_PHASES),
-      }, runnerFailures };
+      }, runnerFailures,
+      brokerRequestCount: Math.min(brokerRequestFacts.length, 10_000),
+      brokerRequestFacts: brokerRequestFacts.slice(-3).map(({ requestHash, status, code, stage, sqlState,
+        constraint, errorName, errorStatus, errorCode, serviceFrames }) => ({
+        requestHash, status, code, stage, sqlState, constraint, errorName, errorStatus, errorCode, serviceFrames,
+      })),
+      providerHookInvoked,
+      providerWireBodyCount: Math.min(providerWireBodyBytes.length, 10_000),
+      maxProviderWireBodyBytes: providerWireBodyBytes.reduce((max, bytes) =>
+        Number.isSafeInteger(bytes) ? Math.max(max, Math.min(bytes, 1_073_741_824)) : max, 0),
+    };
       console.info("conversation_native_failure_diagnostics", JSON.stringify(nativeFailureDiagnostics));
     }
     const [manifest] = finalRun ? await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, finalRun.id)).limit(1) : [];

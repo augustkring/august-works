@@ -6843,5 +6843,390 @@
       "fullBase81StagedDiffPaths": 14693,
       "remainingUntrackedSourceCandidates": 0
     }
+  },
+  "acceptedOriginNativeMcpHumanGuardCheckpointR83": {
+    "sourceHead": "fdd850d9afc2d1289a7d1eef4259bd67fefe5d68",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "Thirteen source/test/configuration paths are frozen. Signed approved producer identity survives steering; current-Human retained-source checks remain mandatory. Queue fixtures retain physical stop requirements. CI reuses installed sandbox tools and digest-pinned Playwright dependencies without skipping the actual confinement/browser checks. PR42 remains draft and unmerged.",
+    "changes": [
+      {
+        "path": ".github/workflows/aw-v9-coverage.yml",
+        "sha256": "cbb704614d028790dc69ec327d8129b5634a6257e4abb5e4f2bf72c2c982451b",
+        "bytes": 8366,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "25f4ae783a8a583c7ec3657ebea63d2d345aeb9b3c3bfc99f4bc9fa436d25785"
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "scripts/ci-install-native-sandbox.sh",
+        "sha256": "6e552c92761b2ac34e1508bff4656abe0058dbae9f3351223000442cfa60f31f",
+        "bytes": 2068,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "59fb9487dc1eb7aa4f2ac5675177ddfb6928e634a4c5cb38b9d26a5714147d51"
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "scripts/ci-install-native-sandbox.test.mjs",
+        "sha256": "9d642dd33128fb9b8ce67f68a564f6b628070be0fc82c7c190a15edf08624499",
+        "bytes": 2939,
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "scripts/platform-skill-migration-register.mjs",
+        "sha256": "fd4b65965c221d572c11a77d12846948300eac1e93d00df586ca0aec455fd127",
+        "bytes": 20780,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-SKILLS-AND-PUBLICATION"
+        ]
+      },
+      {
+        "path": "scripts/platform-skill-migration-register.test.mjs",
+        "sha256": "3860c48e1d6c4d3bfaeda37a812ee2fbfb6e1a6d4f76849655d7dfdee5d891df",
+        "bytes": 3744,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-SKILLS-AND-PUBLICATION"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+        "sha256": "a51eee559ffb881daeecb2efce11dd2957708cde955443454ebb761350736fb8",
+        "bytes": 82241,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+        "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b",
+        "bytes": 138576,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "0b269adbae7f611db238677bcd199793054eb4f03833cf3f518af9eb338fb705"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/modules/wake-queue/adapters/postgres.test.ts",
+        "sha256": "59e63fb9725bcb2a9b9ea84511dab36fa64669cfac1f89cb3649111fe2c33ab9",
+        "bytes": 84522,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "bd30a752922fb60a8f49e7a81efcd40e6fe00051b3d19bf452b94f30714b21f0"
+        },
+        "ownerGroups": [
+          "SCR-V10-CONNECTOR-PROVIDER-LIFECYCLE"
+        ]
+      },
+      {
+        "path": "server/src/services/native-direct-input.ts",
+        "sha256": "70e652c90580dbd094d8fed2b62b1306604dba3381ecd5a9c17cac638240f1ca",
+        "bytes": 616486,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
+        "sha256": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360",
+        "bytes": 188297,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
+        "sha256": "6c50bb86817c32564439ccd855f26c298c2ce0e3eff56fef82bfcdfa2b5623f1",
+        "bytes": 25229,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+        "sha256": "f3fe8f2a1a60ef4482b8cbe15937093d88cde575feff98f5aa296f46de0f3459",
+        "bytes": 138175,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/tool-gateway.ts",
+        "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
+        "bytes": 586044,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "186dc3e025648c757ada83ea3013b5894a0eb61e78a4a08474c8a40a2ebc77de"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      }
+    ],
+    "inventory": {
+      "sourceDeltaPathCount": 2064,
+      "deletedSourcePathCount": 41,
+      "untrackedSourceCandidateCount": 0,
+      "fullDiffPathCount": 14721,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169
+    },
+    "evidenceRoot": {
+      "path": "doc/operations/aw-v10-evidence/approved-origin-queue-and-ci-recovery-20261111",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "f82f4185a471459077b9b571e9c8fdc54d94411c848858c305d794ec32d543be",
+          "bytes": 3209
+        },
+        {
+          "path": "approved-origin-queue-policy-core-pg-r535-cleanup.json",
+          "sha256": "ac09effdaeb1d0ac92b9a6c5df909c0586586a19bfb107a419f5cfb3142d04cb",
+          "bytes": 273
+        },
+        {
+          "path": "approved-origin-queue-policy-core-pg-r535-receipt.json",
+          "sha256": "5e103bdef6f738c5aff69c5d8174c0a3093be2ac04300b36a37838befb2ab438",
+          "bytes": 4960
+        },
+        {
+          "path": "approved-origin-queue-policy-core-pg-r535-source-after.json",
+          "sha256": "4aad33ead0b9c1a5b19c6ad48092b8050e47e75197f6cbf7ee3f7f757d2bc485",
+          "bytes": 5775
+        },
+        {
+          "path": "approved-origin-queue-policy-core-pg-r535-source-manifest.json",
+          "sha256": "ef4d8af67aaa7c648b40f051905f4fe2d79641f16235b848fccfae5479a6108a",
+          "bytes": 7971
+        },
+        {
+          "path": "approved-origin-queue-policy-core-pg-r535.log.gz",
+          "sha256": "47bc86d6aaa1868a6cdb9389448fddc806ce562707575a710cb1bdca5e139487",
+          "bytes": 201
+        },
+        {
+          "path": "checkpoint-source-pins.json",
+          "sha256": "498415b6d17a352d8f602c5098559f2d12b82e9ec3594eca32e8cd2b00d5d43b",
+          "bytes": 4577
+        },
+        {
+          "path": "ci82-complete-jobs-summary.json",
+          "sha256": "14874fc8653280816f8e34d87ea535a6c72caf17333ac3fd54ba3e6ed71886d1",
+          "bytes": 508
+        },
+        {
+          "path": "ci82-process-recovery-native-entry-r537-cleanup.json",
+          "sha256": "0374f83851c8eb52fdaf52ef4007c5f96348eddc14eb35482407f6cb6a3f0b17",
+          "bytes": 273
+        },
+        {
+          "path": "ci82-process-recovery-native-entry-r537-receipt.json",
+          "sha256": "2aee2304036f061e2d700d680af51e6356221c4a1e7fc7a75b68228ca219d68a",
+          "bytes": 3552
+        },
+        {
+          "path": "ci82-process-recovery-native-entry-r537-source-after.json",
+          "sha256": "ac83002b73fefa5a19460b11206a9aa073f500aab067283bb6de9230da5853af",
+          "bytes": 5093
+        },
+        {
+          "path": "ci82-process-recovery-native-entry-r537-source-manifest.json",
+          "sha256": "1afc6b521d87f3a654f08e819441d42ecd674f2486ecb2891ade3614d7cee981",
+          "bytes": 6970
+        },
+        {
+          "path": "ci82-process-recovery-native-entry-r537.log.gz",
+          "sha256": "e639e36bd973eb25f30b51f411aadb3236373d69bfc86f72750584e8c7735849",
+          "bytes": 901
+        },
+        {
+          "path": "current-tooling-r538-receipt.json",
+          "sha256": "6cf20ae118a0ef632d490b836c64700ebc7f3dd2ea20358d6d8c78ff6857f803",
+          "bytes": 376
+        },
+        {
+          "path": "current-tooling-r538.log",
+          "sha256": "8b355158b9edfbb19126e6d2ca76ad0a0e1bd6e07d052eab88957f8747fbc2d1",
+          "bytes": 1815
+        },
+        {
+          "path": "exact-68000-analysis-pg-r536-recovered-receipt.json",
+          "sha256": "54cd98add1bb45f3fa6e62e298d01305d14efcef6cd555126f2fcf3e6647ca29",
+          "bytes": 1024
+        },
+        {
+          "path": "exact-68000-analysis-pg-r536-source-manifest.json",
+          "sha256": "35dcc4b73af37139968bd5301069a2dd0b3dc512847aa567ecc64592ce432b8b",
+          "bytes": 6999
+        },
+        {
+          "path": "exact-68000-analysis-pg-r536.log.gz",
+          "sha256": "2da828fb0d3e6cb3a46757632b722a2730ce0eed29b7a95adccc48d4072bc03f",
+          "bytes": 307
+        },
+        {
+          "path": "playwright-image-facts.json",
+          "sha256": "e4b4f8bc788e8d656bf9de93f6db100ee68d2bbd641b7a07e434abda5b7df0a1",
+          "bytes": 3863
+        },
+        {
+          "path": "r532-build-phase-0.log.gz",
+          "sha256": "986b4facfa412031d186443447a4b5f519aeb7b3ddc5ecc75b7f189569bdd03d",
+          "bytes": 2392
+        },
+        {
+          "path": "r532-build-phase-1.log.gz",
+          "sha256": "6ed3de2ac437df246726314c9c67afca41737ffd2f927954211ec64f4ac9793a",
+          "bytes": 13017
+        },
+        {
+          "path": "r532-build-receipt.json",
+          "sha256": "1f5012385ce7db57a582eba962c8211297b5cb1ddf5a7a69fe8dcf2054f49ac3",
+          "bytes": 1082
+        },
+        {
+          "path": "r532-read-only-source-protection-restored.json",
+          "sha256": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071",
+          "bytes": 74
+        },
+        {
+          "path": "r532-source-after.json",
+          "sha256": "7c31130743e6cb9580e40baa912c383c281c6c47c93e50c887f873c2385ab48e",
+          "bytes": 1580
+        },
+        {
+          "path": "r532-source-before.json",
+          "sha256": "b4d237fcf625cf1b590cb6fa738e490ceb73c80c652a464eeba353c40e6f26b9",
+          "bytes": 2533
+        },
+        {
+          "path": "scanner-and-lane-node-test-receipt.json",
+          "sha256": "173503f2a88af500d2abd73b213be3e4375918bf1a164842b2f7dcffb961b652",
+          "bytes": 311
+        }
+      ]
+    },
+    "metadataPinRefresh": {
+      "aliasPaths": [
+        "server/src/services/native-direct-input.ts",
+        "server/src/services/native-runtime/managed-native-browser.fixture.ts",
+        "server/src/services/tool-gateway.ts"
+      ],
+      "phasePaths": [
+        ".github/workflows/aw-v9-coverage.yml"
+      ],
+      "ownerAdditions": {
+        "scripts/ci-install-native-sandbox.sh": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ],
+        "scripts/ci-install-native-sandbox.test.mjs": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      }
+    },
+    "rootReviewedHelpPairs": [
+      {
+        "source": "server/src/services/tool-gateway.ts",
+        "articleId": "apps-and-connections",
+        "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
+        "previousRationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged.",
+        "rationale": "Approval execution now carries the accepted producer identity, and retained source access is checked against the current Human. The article's customer-facing connection setup, provider authorization, and reconnect steps remain accurate and unchanged."
+      },
+      {
+        "source": "server/src/services/tool-gateway.ts",
+        "articleId": "apps-and-connections-da",
+        "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
+        "previousRationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged.",
+        "rationale": "Godkendt udf\u00f8relse videref\u00f8rer nu producentens accepterede identitet, og adgang til bevaret kildemateriale kontrolleres mod den aktuelle person. Artiklernes vejledning til kunder om ops\u00e6tning af forbindelser, udbydergodkendelse og genoprettelse er fortsat korrekt og u\u00e6ndret."
+      }
+    ],
+    "rootFinalFacts": {
+      "sourceAfterGeneration": "R83 registers the two installer paths and refreshes exact source hashes for approved-origin retention, queue physical settlement fixtures, bounded diagnostics, actual Native channel assertions and CI setup. Workspace typecheck/build (r532) and 155 focused tests (r535) passed for the runtime/test changes. Maximum 68,000-outcome analysis/replay/erasure passed (r536 child summary; outer receipt lost during environment restart). Twenty current tooling tests passed (r538). Recovery fixture r537 still fails and Native SDK/Host and full-suite/CI qualification remain open. No historical status or qualification is promoted.",
+      "worktreeDisposition": "Thirteen source/test/configuration paths are frozen. Signed approved producer identity survives steering; current-Human retained-source checks remain mandatory. Queue fixtures retain physical stop requirements. CI reuses installed sandbox tools and digest-pinned Playwright dependencies without skipping the actual confinement/browser checks. PR42 remains draft and unmerged.",
+      "checks": {
+        "r532": "full recursive typecheck/build PASS; predates CI/scanner-only edits",
+        "r535": "155 tests across seven files PASS; normal cleanup zero owned processes",
+        "r536": "one maximum-volume actual PostgreSQL test PASS; child log and unchanged recovered pins; outer telemetry unknown after restart",
+        "r537": "one recovery Native-entry fixture FAIL; guard retained and positive requirement not retired",
+        "r538": "20 current tooling Node tests PASS"
+      },
+      "qualificationPromoted": false
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "qualificationPromoted": false,
+      "existingPhaseCasesAndStatusesPreserved": true
+    }
   }
 }

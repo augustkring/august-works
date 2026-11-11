@@ -1825,13 +1825,14 @@ export type NativeAssignedMcpCurrentInput = {
   parametersSchemaHash?: string; providerType?: string; risk?: string; connectionId?: string | null;
   catalogEntryId?: string | null; upstreamToolName?: string | null;
   catalogSchemaHash: string | null; credentialSnapshotHash?: string; arguments: Record<string, unknown>;
+  identityContextId?: string | null;
   workMode: "standard" | "planning" | "ask";
 };
 
 /** Stable descriptor identity used by assigned-MCP retained source witnesses. */
 export function nativeAssignedMcpDescriptorProjection(tool: ToolGatewayDescriptor): Record<string, unknown> {
   const description = tool.description.endsWith(TOOL_APPROVAL_DESCRIPTION_SUFFIX)
-    ? tool.description.slice(0, -TOOL_APPROVAL_DESCRIPTION_SUFFIX.length) : tool.description;
+    ? tool.description.slice(0, -TOOL_APPROVAL_DESCRIPTION_SUFFIX.length).trimEnd() : tool.description;
   return { name: tool.name, displayName: tool.displayName, description, parametersSchema: tool.parametersSchema,
     providerType: tool.providerType, risk: tool.risk, connectionId: tool.connectionId ?? null,
     catalogEntryId: tool.catalogEntryId ?? null, upstreamToolName: tool.upstreamToolName ?? null };
@@ -1902,21 +1903,52 @@ async function nativeMcpCredentialSecuritySnapshot(db: Db, input: {
 export type NativeAssignedMcpScopeInput = {
   companyId: string; issueId: string; runId: string; agentId: string; responsibleUserId: string;
   gatewayId: string; gatewayPublicId: string; gatewayProfileId: string; workMode: "standard" | "planning" | "ask";
+  /** Present only when an exact accepted action request carries this signed origin. */
+  identityContextId?: string | null;
 };
 export type NativeAssignedMcpSourceDescriptor = { descriptor: ToolGatewayDescriptor; credentialSnapshotHash: string };
+
+/** Resolve either the active run identity or an exact accepted signed origin.
+ * The latter is supplied only by the existing approved-operation source path. */
+async function nativeAssignedMcpResponsibleUserCurrent(db: Db, input: NativeAssignedMcpScopeInput,
+  run: { responsibleUserId: string | null; activeIdentityContextId: string | null; status: string }): Promise<string | null | undefined> {
+  if (input.identityContextId) {
+    const [origin] = await db.select().from(runIdentityContexts).where(and(
+      eq(runIdentityContexts.id, input.identityContextId), eq(runIdentityContexts.companyId, input.companyId),
+      eq(runIdentityContexts.runId, input.runId), eq(runIdentityContexts.status, "accepted"),
+    )).limit(1);
+    if (!origin) return undefined;
+    return origin.cause === "company_default" ? null : origin.responsibleUserId;
+  }
+  if (!run.activeIdentityContextId) return run.responsibleUserId;
+  if (run.status === "running") {
+    const identity = await captureRunIdentity(db, {
+      companyId: input.companyId, agentId: input.agentId, runId: input.runId,
+    });
+    return identity.context?.cause === "company_default" ? null : identity.context?.responsibleUserId ?? null;
+  }
+  // Historical retained-source reads must not call captureRunIdentity: it
+  // requires a running lease and can reconcile mutable steering. For a
+  // settled producer, revalidate the exact accepted context already pinned
+  // by the run while retaining the same Human/membership/grant checks below.
+  const [identity] = await db.select({ id: runIdentityContexts.id, responsibleUserId: runIdentityContexts.responsibleUserId,
+    cause: runIdentityContexts.cause }).from(runIdentityContexts).where(and(
+      eq(runIdentityContexts.id, run.activeIdentityContextId), eq(runIdentityContexts.companyId, input.companyId),
+      eq(runIdentityContexts.runId, input.runId), eq(runIdentityContexts.status, "accepted"),
+    )).limit(1);
+  if (!identity) return undefined;
+  return identity.cause === "company_default" ? null : identity.responsibleUserId;
+}
 
 /** Status-neutral owner check also used for empty search results. */
 export async function assertNativeAssignedMcpGatewayCurrent(db: Db, input: NativeAssignedMcpScopeInput): Promise<boolean> {
   const [run] = await db.select({ agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.nativeIssueId,
-    responsibleUserId: heartbeatRuns.responsibleUserId, activeIdentityContextId: heartbeatRuns.activeIdentityContextId })
+    responsibleUserId: heartbeatRuns.responsibleUserId, activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
+    status: heartbeatRuns.status })
     .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId))).limit(1);
   if (!run || run.agentId !== input.agentId || run.issueId !== input.issueId) return false;
-  const identity = run.activeIdentityContextId ? await captureRunIdentity(db, {
-    companyId: input.companyId, agentId: input.agentId, runId: input.runId,
-  }) : null;
-  const responsibleUserId = identity
-    ? identity.context?.cause === "company_default" ? null : identity.context?.responsibleUserId ?? null
-    : run.responsibleUserId;
+  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run);
+  if (responsibleUserId === undefined) return false;
   if (responsibleUserId !== input.responsibleUserId) return false;
   const [issue] = await db.select({ projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, workMode: issues.workMode })
     .from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).limit(1);
@@ -2018,17 +2050,14 @@ export async function getNativeAssignedMcpDescriptorCurrent(
   db: Db, input: NativeAssignedMcpCurrentInput, connectedTools?: ToolGatewayDescriptor[],
 ): Promise<ToolGatewayDescriptor | null> {
   const [run] = await db.select({ agentId: heartbeatRuns.agentId, issueId: heartbeatRuns.nativeIssueId,
-    responsibleUserId: heartbeatRuns.responsibleUserId, activeIdentityContextId: heartbeatRuns.activeIdentityContextId })
+    responsibleUserId: heartbeatRuns.responsibleUserId, activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
+    status: heartbeatRuns.status })
     .from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
   )).limit(1);
   if (!run || run.agentId !== input.agentId || run.issueId !== input.issueId) return null;
-  const identity = run.activeIdentityContextId ? await captureRunIdentity(db, {
-    companyId: input.companyId, agentId: input.agentId, runId: input.runId,
-  }) : null;
-  const responsibleUserId = identity
-    ? identity.context?.cause === "company_default" ? null : identity.context?.responsibleUserId ?? null
-    : run.responsibleUserId;
+  const responsibleUserId = await nativeAssignedMcpResponsibleUserCurrent(db, input, run);
+  if (responsibleUserId === undefined) return null;
   if (responsibleUserId !== input.responsibleUserId) return null;
   const [issue] = await db.select({ projectId: issues.projectId, assigneeAgentId: issues.assigneeAgentId, workMode: issues.workMode })
     .from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).limit(1);
@@ -10371,12 +10400,19 @@ export function createToolGatewayService(
     if (!run || run.runtimeMode !== "native" ||
       (run.status !== "running" && !(approvedOriginalRun && run.status === "succeeded")) ||
       run.agentId !== session.agentId || run.issueId !== session.issueId) return false;
-    const identity = run.activeIdentityContextId ? await captureRunIdentity(db, {
-      companyId: session.companyId, agentId: session.agentId, runId: session.runId,
-    }) : null;
-    const responsibleUserId = identity
-      ? identity.context?.cause === "company_default" ? null : identity.context?.responsibleUserId ?? null
-      : run.responsibleUserId;
+    const originIdentityContextId = approvedOriginalRun ? session.identityContextId : undefined;
+    if (approvedOriginalRun && (!originIdentityContextId || !session.responsibleUserId)) return false;
+    let responsibleUserId: string | null;
+    if (originIdentityContextId) {
+      responsibleUserId = session.responsibleUserId ?? null;
+    } else {
+      const identity = run.activeIdentityContextId ? await captureRunIdentity(db, {
+        companyId: session.companyId, agentId: session.agentId, runId: session.runId,
+      }) : null;
+      responsibleUserId = identity
+        ? identity.context?.cause === "company_default" ? null : identity.context?.responsibleUserId ?? null
+        : run.responsibleUserId;
+    }
     if (!responsibleUserId || (session.responsibleUserId && session.responsibleUserId !== responsibleUserId)) return false;
     const [gateway] = await db.select({ id: toolMcpGateways.id, profileId: toolMcpGateways.profileId })
       .from(toolMcpGateways).where(and(eq(toolMcpGateways.companyId, session.companyId),
@@ -10395,7 +10431,7 @@ export function createToolGatewayService(
       gatewayProfileId: gateway.profileId,
       descriptorProjection: nativeAssignedMcpDescriptorProjection(tool),
       catalogSchemaHash: catalog.schemaHash ?? null, workMode: issue.workMode,
-      arguments: args,
+      arguments: args, identityContextId: originIdentityContextId,
     }));
   }
 

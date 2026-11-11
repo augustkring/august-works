@@ -410,6 +410,20 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
       if (lease) await db.update(environmentLeases).set({ status: "released", cleanupStatus: "success", releasedAt: new Date(), metadata: {} }).where(eq(environmentLeases.id, lease.id));
       if (kind === "finalizer_owner") await db.update(nativeRunFinalizations).set({ leaseOwner: null, leaseExpiresAt: null }).where(eq(nativeRunFinalizations.runId, runId));
       if (kind === "workspace_owner") await db.update(heartbeatRuns).set({ runnerProfileJson: {} }).where(eq(heartbeatRuns.id, runId));
+      if (["unknown_cleanup", "ssh_provider_mismatch"].includes(kind)) {
+        // Metadata edits do not prove the remote owner stopped. Without that
+        // provider's exact Stop/Inspect receipt, the saved wake stays deferred.
+        expect((await release(input)).outcome.kind).toBe("released");
+        expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+          .toMatchObject({ executionRunId: runId, checkoutRunId: runId });
+        expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
+          .toMatchObject({ status: "deferred_issue_execution", runId: null });
+        expect(await db.select().from(heartbeatRuns)).toHaveLength(1);
+        return;
+      }
+      // Establish a real local process exit and the canonical server Stop
+      // receipt after the modeled lease/finalizer blockers have been removed.
+      await recordSettledNativeLocalRun(runId, companyId);
       expect((await release(input)).outcome.kind).toBe("promoted");
       await release(input);
       expect(await db.select().from(heartbeatRuns)).toHaveLength(2);
@@ -417,7 +431,7 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     },
   );
 
-  it.each(["released", "retained", "local_release", "ssh_release", "unrelated_cleanup"])("allows native queue recovery after settled %s cleanup", async kind => {
+  it.each(["released", "retained", "local_release", "ssh_release", "unrelated_cleanup"])("requires native physical Stop proof after %s cleanup", async kind => {
     const companyId = await seedCompany(), agentId = await seedAgent({ companyId });
     const issueId = await seedIssue({ companyId, status: "blocked", assigneeAgentId: agentId });
     const runId = await seedRun({ companyId, agentId, status: "succeeded", contextSnapshot: { issueId } });
@@ -438,13 +452,27 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
       });
     }
     const [comment] = await db.insert(issueComments).values({ companyId, issueId, authorType: "user", authorUserId: "responsible-user", body: "Saved input for the next turn" }).returning();
-    await seedDeferredWake({ companyId, agentId, issueId, requestedByActorId: "responsible-user",
+    const wakeId = await seedDeferredWake({ companyId, agentId, issueId, requestedByActorId: "responsible-user",
       payload: { _paperclipWakeContext: { issueId, wakeReason: "issue_commented", wakeCommentIds: [comment.id] } },
     });
     const release = createReleaseIssueExecution({ issueLock: createPostgresWakeQueueAdapter(db, stubDeps),
       recovery: { escalateStrandedAssignedIssue: async () => undefined, escalateStrandedRecoveryIssueInPlace: async () => undefined },
     });
-    expect((await release({ companyId, runId, now: new Date(), suppressImmediateRecovery: true, resumeStrandedQueue: true })).outcome.kind).toBe("promoted");
+    if (kind === "unrelated_cleanup") {
+      // A real local child exit and exact server Stop receipt prove this run's
+      // owner ended; the foreign Company's failed cleanup remains irrelevant.
+      await recordSettledNativeLocalRun(runId, companyId);
+      expect((await release({ companyId, runId, now: new Date(), suppressImmediateRecovery: true,
+        resumeStrandedQueue: true })).outcome.kind).toBe("promoted");
+      return;
+    }
+    // A lease's terminal-looking fields are not the remote provider's signed
+    // Stop/Inspect proof (and null cleanupStatus is explicitly unknown).
+    expect((await release({ companyId, runId, now: new Date(), suppressImmediateRecovery: true,
+      resumeStrandedQueue: true })).outcome.kind).toBe("released");
+    expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
+      .toMatchObject({ status: "deferred_issue_execution", runId: null });
+    expect(await db.select().from(heartbeatRuns)).toHaveLength(1);
   });
 
   it.each(["assignee", "mentioned"])("preserves a paused recipient's accepted message until resume (%s)", async kind => {
@@ -647,9 +675,10 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     const result = await adapter.withIssueExecutionLock({ companyId, runId, now: new Date() }, async () => { throw new Error("must not restart the outgoing owner"); });
     expect(result).toMatchObject({ outcome: { kind: "released" }, postCommitEffects: [] });
     expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0]).toMatchObject({
-      status: "in_progress", statusVersion: before.statusVersion, assigneeAgentId: agentId, executionRunId: null, checkoutRunId: null,
+      status: "in_progress", statusVersion: before.statusVersion, assigneeAgentId: agentId, executionRunId: runId, checkoutRunId: runId,
     });
     expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0].status).toBe("deferred_issue_execution");
+    expect(await db.select().from(heartbeatRuns)).toHaveLength(1);
     expect(await db.select().from(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, issueId))).toHaveLength(0);
   });
 
@@ -682,7 +711,7 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
 
     expect(result).toMatchObject({ outcome: { kind: "released" }, postCommitEffects: [] });
     expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
-      .toMatchObject({ status: "in_progress", executionRunId: null, checkoutRunId: null });
+      .toMatchObject({ status: "in_progress", executionRunId: runId, checkoutRunId: runId });
     expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
       .toMatchObject({ status: "deferred_issue_execution", runId: null });
     expect((await db.select().from(issueComments).where(eq(issueComments.id, comment.id)))[0]?.body)
@@ -738,7 +767,7 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
 
     expect(recovered).toMatchObject({ outcome: { kind: "released" }, postCommitEffects: [] });
     expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
-      .toMatchObject({ status: "blocked", executionRunId: null, checkoutRunId: null });
+      .toMatchObject({ status: "blocked", executionRunId: runId, checkoutRunId: runId });
     expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
       .toMatchObject({ status: "deferred_issue_execution", runId: null });
     expect((await db.select().from(issueComments).where(eq(issueComments.id, comment.id)))[0]?.body)

@@ -21,14 +21,14 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2062,
+    "sourceDeltaPathCount": 2064,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14693,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths."
+    "fullDiffPathCount": 14721,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate."
   },
   "requirementsCrosswalk": [
     {
@@ -10376,6 +10376,18 @@
           "sha256": "0973a5adcead92e0e92e8dc9d5195b292803233eb6145f271ee0ae0d15efe95d"
         },
         {
+          "path": "scripts/ci-install-native-sandbox.sh",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "59fb9487dc1eb7aa4f2ac5675177ddfb6928e634a4c5cb38b9d26a5714147d51"
+        },
+        {
+          "path": "scripts/ci-install-native-sandbox.test.mjs",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "scripts/ci-prepare-managed-native-fixture-inputs.sh",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -10737,6 +10749,8 @@
         "packages/shared/src/types/workflow.ts",
         "packages/shared/src/validators/routine.test.ts",
         "packages/shared/src/validators/routine.ts",
+        "scripts/ci-install-native-sandbox.sh",
+        "scripts/ci-install-native-sandbox.test.mjs",
         "scripts/ci-prepare-managed-native-fixture-inputs.sh",
         "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
         "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
@@ -10805,6 +10819,8 @@
         "packages/shared/src/types/workflow.ts",
         "packages/shared/src/validators/routine.test.ts",
         "packages/shared/src/validators/routine.ts",
+        "scripts/ci-install-native-sandbox.sh",
+        "scripts/ci-install-native-sandbox.test.mjs",
         "scripts/ci-prepare-managed-native-fixture-inputs.sh",
         "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
         "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
@@ -25997,7 +26013,7 @@
       "sourceReviewBoundary": "Candidate source inventory derived from branch diff and V10 register paths. It is not a behavior audit, test receipt, phase approval, or release claim."
     }
   ],
-  "sourceAfterGeneration": "R82 assigned MCP, linked-channel Native conversation, and pinned Skills software checkpoint. Six newly registered source paths link to existing owner groups; existing source ownership and historical requirement crosswalk are preserved. Full workspace TypeScript and build plus focused mixed unit/embedded-PostgreSQL tests passed, while full pnpm test:run and new Native SDK/Host journeys remain unqualified. No phase, lifecycle, release or qualification status is promoted.",
+  "sourceAfterGeneration": "R83 registers the two installer paths and refreshes exact source hashes for approved-origin retention, queue physical settlement fixtures, bounded diagnostics, actual Native channel assertions and CI setup. Workspace typecheck/build (r532) and 155 focused tests (r535) passed for the runtime/test changes. Maximum 68,000-outcome analysis/replay/erasure passed (r536 child summary; outer receipt lost during environment restart). Twenty current tooling tests passed (r538). Recovery fixture r537 still fails and Native SDK/Host and full-suite/CI qualification remain open. No historical status or qualification is promoted.",
   "crosswalkLinkageBasis": "Only currentAssessment.sourceOwners, currentAssessment.scopedEvidence[*].paths, and explicit sourcePath fields are treated as requirement-to-source links. Nested generic path fields, review pins, and human reference strings are excluded. Links remain traceability only and do not close acceptance.",
   "currentSourceRecovery": {
     "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

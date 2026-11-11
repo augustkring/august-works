@@ -2677,18 +2677,18 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
+      "sourceSha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
+      "rationale": "Approval execution now carries the accepted producer identity, and retained source access is checked against the current Human. The article's customer-facing connection setup, provider authorization, and reconnect steps remain accurate and unchanged."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
+      "sourceSha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
+      "rationale": "Godkendt udf\u00f8relse videref\u00f8rer nu producentens accepterede identitet, og adgang til bevaret kildemateriale kontrolleres mod den aktuelle person. Artiklernes vejledning til kunder om ops\u00e6tning af forbindelser, udbydergodkendelse og genoprettelse er fortsat korrekt og u\u00e6ndret."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",
