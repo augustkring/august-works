@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 577,
-    "latestOfficialMigration": "0577_native_prelaunch_container_occupancy",
+    "last": 578,
+    "latestOfficialMigration": "0578_keen_celestials",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -585,6 +585,32 @@
       ],
       "recovery": "Stop/revoke remains original sandbox owner; stale capabilities cannot revive admission. No physical sandbox target, privileged provider, fleet rollback or deployed restore qualification is inferred.",
       "qualificationScope": "Source inventory and controlled PostgreSQL policy-contract coverage only. The actual six-probe managed conformance and protected physical-host qualification remain open."
+    },
+    {
+      "id": "github-provider-resource-migration-lineage",
+      "migrations": [
+        578
+      ],
+      "purpose": "Exact GitHub repository-coordinate migration receipts are committed atomically with stable-resource rename and conversation/issue-origin rebinding. Historical deliveries may cross only completed exact resource-coordinate edges; no historical aliases or backfill are inferred.",
+      "authority": "The provider inventory stable repository ID identifies one existing endpoint resource. The successful database transaction records its exact old and new repository coordinates; current authorization still rechecks endpoint, resource, issue, conversation, linked message, Human and runtime ownership.",
+      "durableState": [
+        "chat_github_resource_migrations company/endpoint/resource/providerRepositoryId/from/to receipt",
+        "chat_endpoint_resources current stable repository identity and coordinate",
+        "chat_conversations and issues current rebound thread/origin"
+      ],
+      "compatibility": "Old readers ignore the additive receipt table. New readers require exact complete migration edges; historical coordinates created by old writers remain unproven and fail closed. Downgrade keeps receipts; destructive table rollback or receipt deletion is outside this candidate.",
+      "recovery": "Receipt insertion and stable-resource/thread/origin updates share one transaction. A failed transaction leaves no migration edge; source reads follow at most 32 exact unambiguous edges and fail closed on cycles or branches.",
+      "owners": [
+        "packages/db/src/migrations/0578_keen_celestials.sql",
+        "packages/db/src/schema/chat_github.ts",
+        "packages/db/src/schema/index.ts",
+        "server/src/services/chat-channels.ts",
+        "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts"
+      ],
+      "tests": [
+        "server/src/__tests__/chat-channels.integration.test.ts"
+      ],
+      "qualificationScope": "Source and selected actual PostgreSQL case inventory only. Does not qualify provider-side rename behavior, fleet compatibility, rollback, restore, production deployment, Human approval or overall V10 acceptance."
     }
   ],
   "phaseCases": [
@@ -1105,7 +1131,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "a882181c85245684e90e60f62a5943726553af4b988d543884306e2aa00f0647"
+      "sha256": "506df6cfe8b12162feb0646a35589233f8757ad0203cf37793ee025908e1db36"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1486,6 +1512,30 @@
     {
       "path": "packages/db/src/migrations/0577_native_prelaunch_container_occupancy.sql",
       "sha256": "19d4619718d00f73d91d0de0f59985a557f6f2559ecf54a0827d7dd7772aa7b4"
+    },
+    {
+      "path": "packages/db/src/migrations/0578_keen_celestials.sql",
+      "sha256": "f70b741198c5e1cd51bc805f7c6cad0976ab1df3d241885c132dffbdb2b23543"
+    },
+    {
+      "path": "packages/db/src/schema/chat_github.ts",
+      "sha256": "fad6eae2570436abddff6d58a53c035af2b518570b14df7135fea2a18c127933"
+    },
+    {
+      "path": "packages/db/src/schema/index.ts",
+      "sha256": "3df027d8cb9cb9704e06911a8ed6c91d1d628842566275b2a319cb4071766c65"
+    },
+    {
+      "path": "server/src/__tests__/chat-channels.integration.test.ts",
+      "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c"
+    },
+    {
+      "path": "server/src/services/chat-channels.ts",
+      "sha256": "cdf774e9f1680e3991c5af5e2a6f700e4052059ae9f9e0ffddd824bc4fed7c8d"
+    },
+    {
+      "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
+      "sha256": "539c9cf85362fcba9427e01c7bbe1e372dff0e43812661ac413f793485a98b2e"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1493,16 +1543,16 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 74,
+    "currentAffectedCount": 77,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0575_native_attachment_stage_remote_receipt_contract"
+    "currentAffectedLast": "0578_keen_celestials"
   },
-  "sourcePinFinality": "INTERIM PRIVATE COMPOSED INVENTORY: two approved code/test source pins and two own-documentation pins are recorded individually. The exact 28-file source manifest identifies the current code. Prior b1 checks remain historical exact-input receipts; current composed consistency requires its own capture. Runtime/SDK, fleet compatibility, rollback/restore and operator/physical/provider/Human qualification remain separately gated.",
+  "sourcePinFinality": "Exact R86 source/SQL/owner/test pins frozen by Root after passing official generation, actual PostgreSQL regression and full workspace typecheck/build. Historical phase cases and qualification states remain unchanged.",
   "latestMigrationPublication": {
-    "migration": "0577_native_prelaunch_container_occupancy",
+    "migration": "0578_keen_celestials",
     "sourceCommit": null,
-    "sourceState": "Current uncommitted source snapshot; inventory candidate includes official migrations 0576 and 0577. Publication is pending Root review, staging, and official derived graph generation.",
-    "qualificationScope": "Source inventory only. Reported software receipts do not establish Native process-stop, physical Host, paid provider, external storage removal, production deployment, rollback, restore, merge readiness, or overall V10 acceptance."
+    "sourceState": "R86 exact source-hash publication candidate; official generated SQL, snapshot and journal, reviewed by Root before committing on the existing feature branch.",
+    "qualificationScope": "Source and local software receipts only; this does not establish fleet compatibility, physical Host, paid provider, production deployment, rollback, restore, Human acceptance or complete V10 readiness."
   },
   "affectedMigrationReasons": {
     "0502": "Extends auth_security_events action contract with board_api_key_id, owner/user and company-null constraints, and expiry index; board-key audit rows use the existing user-auth event writer.",
@@ -1519,10 +1569,11 @@
     "0574": "Append-only original-event projection for the exact installed AWText in-process admission/settled lifecycle. Settlement requires latest exact admission and cannot clear a live OS-process start or identity hold.",
     "0575": "Bounded, unique remote attachment-stage receipts must match currently delivered attachment inputs, their immutable source captures, and the exact Native dispatch intent. Invalid or mismatched receipts never qualify a remote stage.",
     "0576": "Adds durable Native review-model reservation identity and bounded reservation state for the plan review dispatch lane; does not change existing Support Assistant funding or provider qualification.",
-    "0577": "Adds typed prelaunch setup-container occupancy settlement and receipt reconciliation. This is resource cleanup evidence only; it is distinct from Native process-stop projection and makes no claim of process termination, provider erasure, or storage removal."
+    "0577": "Adds typed prelaunch setup-container occupancy settlement and receipt reconciliation. This is resource cleanup evidence only; it is distinct from Native process-stop projection and makes no claim of process termination, provider erasure, or storage removal.",
+    "0578": "Adds a company/endpoint/stable GitHub repository-scoped old-to-new coordinate receipt in the same transaction as repository rename and conversation/origin rebinding; no backfill or guessed aliases."
   },
-  "revisionDate": "2026-11-03",
-  "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",
+  "revisionDate": "2026-11-11",
+  "sourceHead": "9091d2c55f24d37d250ccf2ab9f64637eb3a3011",
   "previousCurrentRegister": {
     "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/historical-phase-matrix-2026-10-30.json",
     "sha256": "cd326df9b733887f54e4bc969e86955337981e06ea58728c47702372bbe71673",
@@ -1560,6 +1611,13 @@
       ],
       "qualificationSummary": "17/17 current responsibility PostgreSQL tests; official generated 0565 apply 1/1 from 0564; server TSC and Oxc 1002 passed; UI 10/10 and UI typecheck; exact 35-file hash guard and single 0560 snapshot prune passed.",
       "phaseBoundary": "No backfill; new scan/pointer tables begin empty, optional company contact refs are nullable and are not inferred from history. Candidate cache is advisory, readers recheck current Native authority. Restore cache behavior and retirement remain unqualified."
+    },
+    {
+      "migration": "0578_keen_celestials",
+      "sourceCommit": null,
+      "sourceHead": "9091d2c55f24d37d250ccf2ab9f64637eb3a3011",
+      "sourceState": "Official generated R86 source snapshot with exact pins and software receipts.",
+      "phaseBoundary": "Software source inventory only; no prior phase qualification or status is promoted."
     }
   ],
   "recoverySourceBasis": {

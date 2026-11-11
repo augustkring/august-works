@@ -4033,6 +4033,13 @@
       "when": 1794380993576,
       "tag": "0577_native_prelaunch_container_occupancy",
       "breakpoints": true
+    },
+    {
+      "idx": 578,
+      "version": "7",
+      "when": 1794419743867,
+      "tag": "0578_keen_celestials",
+      "breakpoints": true
     }
   ]
 }

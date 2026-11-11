@@ -8179,5 +8179,328 @@
       "phaseStatusesPromoted": 0,
       "qualificationPromoted": false
     }
+  },
+  "githubProviderResourceMigrationLineageCheckpointR86": {
+    "sourceHead": "9091d2c55f24d37d250ccf2ab9f64637eb3a3011",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "Eight exact source/generated paths frozen: seven source rows plus the separately pinned official journal. Eighteen evidence files pinned. Root applies four metadata candidates, generates the official graph, checks and stages exact publication membership.",
+    "changes": [
+      {
+        "path": "packages/db/src/migrations/0578_keen_celestials.sql",
+        "sha256": "f70b741198c5e1cd51bc805f7c6cad0976ab1df3d241885c132dffbdb2b23543",
+        "bytes": 1895,
+        "mtimeNs": 1794419743863542238,
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ]
+      },
+      {
+        "path": "packages/db/src/migrations/meta/0578_snapshot.json",
+        "sha256": "9c70dcd7408501315d9fbaef46271573d38c23441e12dc200339b64e76b293dd",
+        "bytes": 2830104,
+        "mtimeNs": 1794419743863542238,
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ]
+      },
+      {
+        "path": "packages/db/src/schema/chat_github.ts",
+        "sha256": "fad6eae2570436abddff6d58a53c035af2b518570b14df7135fea2a18c127933",
+        "bytes": 7317,
+        "mtimeNs": 1794419662023229964,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "f7c3d019c3169866a3174f9ebba488f5c368687069258e780d96ec74f82c17bf"
+        },
+        "ownerGroups": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ]
+      },
+      {
+        "path": "packages/db/src/schema/index.ts",
+        "sha256": "3df027d8cb9cb9704e06911a8ed6c91d1d628842566275b2a319cb4071766c65",
+        "bytes": 15256,
+        "mtimeNs": 1794419662017582723,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "5dc372793aaa00e727fa5fd04d03bd28cafcbc0bf4444601398a26c99f5633dc"
+        },
+        "ownerGroups": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/chat-channels.integration.test.ts",
+        "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c",
+        "bytes": 2636510,
+        "mtimeNs": 1794419885149737952,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "3a5f87add0b9c8a5d3fe7f0b4bc5e830f425a02784545b8acae55b69e89da880"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/chat-channels.ts",
+        "sha256": "cdf774e9f1680e3991c5af5e2a6f700e4052059ae9f9e0ffddd824bc4fed7c8d",
+        "bytes": 1455525,
+        "mtimeNs": 1794419662017582723,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "10454054c67f5a2eeaaceb84d1036ddb18adbb2272e8a9c79e61f0f31de9fd3d"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
+        "sha256": "539c9cf85362fcba9427e01c7bbe1e372dff0e43812661ac413f793485a98b2e",
+        "bytes": 21941,
+        "mtimeNs": 1794419662018303295,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      }
+    ],
+    "inventory": {
+      "sourceDeltaPathCount": 2072,
+      "deletedSourcePathCount": 41,
+      "untrackedSourceCandidateCount": 0,
+      "fullDiffPathCount": 14802,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169
+    },
+    "evidenceRoot": {
+      "path": "doc/operations/aw-v10-evidence/github-stable-repository-migration-lineage-20261111",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "e55906d216f0de4eba1a6ed8ee8e5f6a3eb96433955d31bcc1b0642299971653",
+          "bytes": 3274,
+          "mtimeNs": 1794420612965596665
+        },
+        {
+          "path": "final-source-pins.json",
+          "sha256": "c08772aa0821e51ff60ec69aa0bfea81f923287a8c5ad63677a7319777d22917",
+          "bytes": 3228,
+          "mtimeNs": 1794420612965102182
+        },
+        {
+          "path": "prior-r84-native-project-create-summary.json",
+          "sha256": "99cf9c58bfbe3af492a970f4d175fb4f039deba2139112b93b7ee39607fe0402",
+          "bytes": 771,
+          "mtimeNs": 1794420612965555523
+        },
+        {
+          "path": "r561-generate.log.gz",
+          "sha256": "d3c26496ad27c903644ab72fc04cdb70801af56c68fd8b75ae2bf27174d64860",
+          "bytes": 5352,
+          "mtimeNs": 1794420446126959480
+        },
+        {
+          "path": "r561-historical-snapshot-preservation.json",
+          "sha256": "130a59fcf7b9a4a67bf719230b47c32ac007afbd08a687c746e51c2ec0c904f8",
+          "bytes": 3013,
+          "mtimeNs": 1794420446125489231
+        },
+        {
+          "path": "r561-receipt.json",
+          "sha256": "be2f9a3838e901fd04dcafed4a641e7ed0e00cf14ad38b09f208829299aa3f25",
+          "bytes": 313,
+          "mtimeNs": 1794420446125002490
+        },
+        {
+          "path": "r561-schema-source-before.json",
+          "sha256": "97d02a789e51d968eed9825764d42aefd775c70e3ed755bb5da1f0c02d6f2083",
+          "bytes": 874,
+          "mtimeNs": 1794420446125255741
+        },
+        {
+          "path": "r564-cleanup.json",
+          "sha256": "44bbe50be23b2164f3ce0b55ac60cc41401237ce746424b16f94fd77981e1495",
+          "bytes": 273,
+          "mtimeNs": 1794420446152637451
+        },
+        {
+          "path": "r564-receipt.json",
+          "sha256": "13ea6d4bc44fe3bc4734bc06ceef7cf30eacb1b8b9fb15ba63e85ca33d6fa38b",
+          "bytes": 4399,
+          "mtimeNs": 1794420446127026171
+        },
+        {
+          "path": "r564-source-after.json",
+          "sha256": "140f153a816ee9175e67cf01ac9124d0847f9dc9d53ac0d49631419ae8dd1934",
+          "bytes": 5333,
+          "mtimeNs": 1794420446152595979
+        },
+        {
+          "path": "r564-source-manifest.json",
+          "sha256": "f84e9291afb64d76b6768ab11bcac995151e3672152edf8ca1e06e3c93674986",
+          "bytes": 7013,
+          "mtimeNs": 1794420446152521747
+        },
+        {
+          "path": "r564.log.gz",
+          "sha256": "489019118acdbebfdd63a20b2fc3c81e89a0c320e3a58c74dd440ec463cbcf2f",
+          "bytes": 201,
+          "mtimeNs": 1794420446152745533
+        },
+        {
+          "path": "r565-build-receipt.json",
+          "sha256": "5f35ef750e5c3cf1c0b77a43d2d7d419324a2855cca2381f3d2771d4cf9a4e46",
+          "bytes": 896,
+          "mtimeNs": 1794420612567201564
+        },
+        {
+          "path": "r565-phase-0.log.gz",
+          "sha256": "f5d9e4411077a625d7e1762193e9a8af5fb0e9fce4ac1d387297a7d667631b1b",
+          "bytes": 2766,
+          "mtimeNs": 1794420612568422207
+        },
+        {
+          "path": "r565-phase-1.log.gz",
+          "sha256": "f9616a3c9e328ed6db8b2ada04b5f13ee44f80e57ddbafc6195b49808c712c37",
+          "bytes": 13020,
+          "mtimeNs": 1794420612570487399
+        },
+        {
+          "path": "r565-read-only-source-protection-restored.json",
+          "sha256": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071",
+          "bytes": 74,
+          "mtimeNs": 1794420612567681385
+        },
+        {
+          "path": "r565-source-after.json",
+          "sha256": "9db56deecf961b886ee6755780603c6a291699cf13744a1b0dbbb5651e0be85e",
+          "bytes": 1422,
+          "mtimeNs": 1794420612567643978
+        },
+        {
+          "path": "r565-source-before.json",
+          "sha256": "47862b03c245d8b6bb223749e86be0e90c7beb407f797d15dde56b8f7e46bc9a",
+          "bytes": 2217,
+          "mtimeNs": 1794420612567597018
+        }
+      ]
+    },
+    "migrationJournalEntry": {
+      "idx": 578,
+      "tag": "0578_keen_celestials",
+      "version": "7",
+      "breakpoints": true
+    },
+    "metadataPinRefresh": {
+      "ownerAdditions": {
+        "packages/db/src/schema/chat_github.ts": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ],
+        "packages/db/src/migrations/0578_keen_celestials.sql": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ],
+        "packages/db/src/migrations/meta/0578_snapshot.json": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ]
+      },
+      "aliasPaths": [],
+      "phasePaths": [
+        "packages/db/src/migrations/meta/_journal.json"
+      ],
+      "helpPairs": [],
+      "officialMigration": "0578_keen_celestials",
+      "newPhaseSourcePins": [
+        "packages/db/src/migrations/0578_keen_celestials.sql",
+        "packages/db/src/schema/chat_github.ts",
+        "packages/db/src/schema/index.ts",
+        "server/src/__tests__/chat-channels.integration.test.ts",
+        "server/src/services/chat-channels.ts",
+        "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts"
+      ],
+      "officialGraph": "generated by Root after applying this private source-manifest and phase-register candidate"
+    },
+    "rootFinalFacts": {
+      "checksClosed": true,
+      "sourceFrozen": true,
+      "evidencePinned": true,
+      "qualificationPromoted": false,
+      "worktreeDisposition": "Eight exact source/generated paths frozen: seven source rows plus the separately pinned official journal. Eighteen evidence files pinned. Root applies four metadata candidates, generates the official graph, checks and stages exact publication membership.",
+      "checks": {
+        "r561": {
+          "status": "PASS",
+          "scope": "official pnpm9.15.4 schema generation; prior historical snapshots preserved",
+          "receipt": "doc/operations/aw-v10-evidence/github-stable-repository-migration-lineage-20261111/r561-receipt.json"
+        },
+        "r563": {
+          "status": "PASS",
+          "scope": "exact linked-Human GH case including schema and source boundaries; retained privately, superseded by full R564 cohort"
+        },
+        "r564": {
+          "status": "PASS",
+          "scope": "19 focused actual PostgreSQL regressions; normal cleanup zero owned processes",
+          "receipt": "doc/operations/aw-v10-evidence/github-stable-repository-migration-lineage-20261111/r564-receipt.json"
+        },
+        "r565": {
+          "status": "PASS",
+          "scope": "full recursive workspace typecheck and build; exact source pins/times stable, modes restored",
+          "receipt": "doc/operations/aw-v10-evidence/github-stable-repository-migration-lineage-20261111/r565-build-receipt.json"
+        }
+      },
+      "phasePublication": {
+        "migration": "0578_keen_celestials",
+        "journalIndex": 578,
+        "journalEntryCount": 577,
+        "qualificationPromoted": false
+      },
+      "fullDiffPathCount": 14802,
+      "sourcePathCountIncludingJournal": 8,
+      "migrationJournalPin": {
+        "path": "packages/db/src/migrations/meta/_journal.json",
+        "sha256": "506df6cfe8b12162feb0646a35589233f8757ad0203cf37793ee025908e1db36",
+        "bytes": 87385,
+        "mtimeNs": 1794419743863542238,
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "566cd657d0f7ecfc33cce22a729b8e84473451d3961b96daf0f415b79af51a8c"
+        }
+      }
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "qualificationPromoted": false,
+      "existingPhaseCasesAndStatusesPreserved": true
+    }
   }
 }

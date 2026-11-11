@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { chatActions, chatConversations, chatDeliveries, chatEndpointResources, chatEndpoints,
-  chatExternalPrincipals, chatIdentityLinks, chatMessageLinks, companyMemberships, issues, toolConnections,
+  chatExternalPrincipals, chatIdentityLinks, chatMessageLinks, chatGitHubResourceMigrations, companyMemberships, issues, toolConnections,
   type Db } from "@paperclipai/db";
 import { forbidden } from "../../errors.js";
 import { credentialFingerprint, runtimeGeneration } from "../chat-runtime-fence.js";
@@ -59,6 +59,64 @@ async function telegramMigrationLineageMatches(
     if (resourceId === currentIdentity.resourceId) return true;
   }
   return false;
+}
+
+async function githubRepositoryMigrationLineageMatches(
+  db: Db | DbTransaction,
+  input: { companyId: string; endpointId: string; resourceId: string; oldRepository: string; currentRepository: string },
+): Promise<boolean> {
+  const coordinate = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+  if (!coordinate.test(input.oldRepository) || !coordinate.test(input.currentRepository)) return false;
+  const [resource] = await db.select({
+    endpointId: chatEndpointResources.endpointId,
+    type: chatEndpointResources.type,
+    providerResourceId: chatEndpointResources.providerResourceId,
+    providerRepositoryId: sql<string | null>`${chatEndpointResources.metadata}->>'providerRepositoryId'`,
+  }).from(chatEndpointResources).where(and(
+    eq(chatEndpointResources.companyId, input.companyId),
+    eq(chatEndpointResources.endpointId, input.endpointId),
+    eq(chatEndpointResources.id, input.resourceId),
+  )).limit(1);
+  if (!resource || resource.type !== "repository" ||
+      resource.providerRepositoryId === null || !/^[0-9]+$/.test(resource.providerRepositoryId) ||
+      resource.providerResourceId.toLowerCase() !== input.currentRepository.toLowerCase()) return false;
+  let repository = input.oldRepository.toLowerCase();
+  const target = input.currentRepository.toLowerCase();
+  const visited = new Set<string>();
+  for (let hop = 0; hop < 32; hop += 1) {
+    if (visited.has(repository)) return false;
+    visited.add(repository);
+    const edges = await db.selectDistinct({
+      target: sql<string>`lower(${chatGitHubResourceMigrations.toRepository})`,
+    }).from(chatGitHubResourceMigrations).where(and(
+      eq(chatGitHubResourceMigrations.companyId, input.companyId),
+      eq(chatGitHubResourceMigrations.endpointId, input.endpointId),
+      eq(chatGitHubResourceMigrations.resourceId, input.resourceId),
+      eq(chatGitHubResourceMigrations.providerRepositoryId, resource.providerRepositoryId),
+      sql`lower(${chatGitHubResourceMigrations.fromRepository}) = ${repository}`,
+    )).limit(2);
+    if (edges.length !== 1 || typeof edges[0]!.target !== "string" || !coordinate.test(edges[0]!.target)) return false;
+    repository = edges[0]!.target.toLowerCase();
+    if (repository === target) return true;
+  }
+  return false;
+}
+
+async function githubThreadMigrationLineageMatches(
+  db: Db | DbTransaction, companyId: string, endpointId: string, resourceId: string,
+  oldThreadId: string, currentThreadId: string,
+): Promise<boolean> {
+  const parse = (value: string) => {
+    const match = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(:.*)?$/.exec(value);
+    return match ? { repository: match[1]!, suffix: match[2] ?? "" } : null;
+  };
+  const oldIdentity = parse(oldThreadId);
+  const currentIdentity = parse(currentThreadId);
+  if (!oldIdentity || !currentIdentity || oldIdentity.suffix !== currentIdentity.suffix) return false;
+  return githubRepositoryMigrationLineageMatches(db, {
+    companyId, endpointId, resourceId, oldRepository: oldIdentity.repository,
+    currentRepository: currentIdentity.repository,
+  });
 }
 
 function issueOriginThreadId(originId: string | null, endpointId: string, generation: number): string | null {
@@ -265,7 +323,11 @@ export async function readCanonicalInboundWakeupDbSource(db: Db | DbTransaction,
     typeof eventThreadId === "string" && await telegramMigrationLineageMatches(
       db, action.companyId, endpoint.id, eventThreadId, conversation.externalThreadId,
     );
-  if (typeof eventThreadId !== "string" || (!sameThread && !migratedTelegramThread) ||
+  const migratedGitHubThread = !sameThread && endpoint.provider === "github" &&
+    typeof eventThreadId === "string" && conversation.resourceId !== null &&
+    await githubThreadMigrationLineageMatches(db, action.companyId, endpoint.id, conversation.resourceId,
+      eventThreadId, conversation.externalThreadId);
+  if (typeof eventThreadId !== "string" || (!sameThread && !migratedTelegramThread && !migratedGitHubThread) ||
       eventMessage.providerMessageId !== source.providerMessageId) throw deny();
   return { action, issue, endpoint, delivery, conversation, responsibleUserId: expectedUserId,
     sourceCommentId: input.expectedCommentId, runtimeGeneration: generation,

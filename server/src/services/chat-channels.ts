@@ -18,7 +18,7 @@ import { githubChatManagementService } from "./chat-github-management.js";
 import { githubReviewCheckService } from "./chat-github-checks.js";
 import { githubAutomaticReviewEvent, githubAutomaticAdmission, githubPreviousAssessment } from "./chat-github-events.js";
 import { githubReviewPrompt } from "./chat-github-review-policy.js";
-import { chatGitHubConfigurations, chatGitHubReviews } from "@paperclipai/db";
+import { chatGitHubConfigurations, chatGitHubReviews, chatGitHubResourceMigrations } from "@paperclipai/db";
 import type { GitHubReviewEventContext, GitHubReviewPolicy } from "@paperclipai/shared";
 import { githubChatReviewService } from "./chat-github-reviews.js";
 import { githubChatRegistrationService } from "./chat-github-registration.js";
@@ -7357,6 +7357,14 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
 
         const oldRepository = stableResource.providerResourceId;
         const oldThreadPrefix = `github:${oldRepository}`;
+        await tx.insert(chatGitHubResourceMigrations).values({
+          companyId: endpoint.companyId,
+          endpointId: endpoint.id,
+          resourceId: stableResource.id,
+          providerRepositoryId: stableGitHubId,
+          fromRepository: oldRepository,
+          toRepository: item.providerResourceId,
+        }).onConflictDoNothing();
         const newThreadPrefix = `github:${item.providerResourceId}`;
         const oldProviderUrl = `https://github.com/${oldRepository}`;
         const newProviderUrl = `https://github.com/${item.providerResourceId}`;

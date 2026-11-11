@@ -9,7 +9,7 @@ import { githubAutomaticReviewEvent } from "../services/chat-github-events.js";
 import { githubBotToolsForSession } from "../services/chat-github-tools.js";
 import { resolveGitHubOperationCredentials } from "../services/github-operation-credentials.js";
 import { initializeRunIdentity } from "../services/run-identity.js";
-import { chatGitHubRegistrations, chatGitHubReviews, toolCatalogEntries } from "@paperclipai/db";
+import { chatGitHubRegistrations, chatGitHubReviews, chatGitHubResourceMigrations, toolCatalogEntries } from "@paperclipai/db";
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as cloudRuntimeIdentity from "../services/cloud-runtime-identity.js";
 import {
@@ -10834,19 +10834,45 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const context = await configuredGitHubEndpoint(fixture);
     const { callbacks, endpoint, service, webhookSecret } = context;
     const originalResource = (await service.listResources(endpoint.id))[0]!;
+    const githubUserId = "18446744073709551";
+    const originalThread = makeThread({
+      channelId: "PaperclipAI/Paperclip",
+      id: "github:PaperclipAI/Paperclip:issue:77",
+      name: "PaperclipAI/Paperclip",
+    }).thread;
     await deliverMessage({
-      callbacks,
-      endpointId: endpoint.id,
-      provider: "github",
-      thread: makeThread({
-        channelId: "PaperclipAI/Paperclip",
-        id: "github:PaperclipAI/Paperclip:issue:77",
-        name: "PaperclipAI/Paperclip",
-      }).thread,
+      callbacks, endpointId: endpoint.id, provider: "github", thread: originalThread,
       message: makeMessage({
-        id: "github-rename-root",
-        text: "@maya keep this task through repository moves",
-        mentioned: true,
+        id: "github-rename-link-seed", text: "identity link seed", userId: githubUserId,
+        userName: "octocat-rename",
+      }),
+      trigger: "subscribed_message",
+    });
+    const [externalPrincipal] = await db.select().from(chatExternalPrincipals).where(and(
+      eq(chatExternalPrincipals.companyId, fixture.companyId),
+      eq(chatExternalPrincipals.provider, "github"),
+      eq(chatExternalPrincipals.externalId, githubUserId),
+    )).limit(1);
+    expect(externalPrincipal).toBeDefined();
+    const linkedUserId = `github-rename-${randomUUID()}`;
+    const identityNow = new Date();
+    await db.insert(authUsers).values({
+      id: linkedUserId, name: "GitHub Rename Reviewer", email: `${linkedUserId}@example.com`,
+      emailVerified: true, createdAt: identityNow, updatedAt: identityNow,
+    });
+    await db.insert(companyMemberships).values({
+      companyId: fixture.companyId, principalType: "user", principalId: linkedUserId,
+      status: "active", membershipRole: "operator",
+    });
+    const linkIntent = await service.createLinkIntent(endpoint.id, externalPrincipal!.id, 1_800);
+    const linkToken = new URL(linkIntent.confirmationUrl).searchParams.get("token");
+    if (!linkToken) throw new Error("GitHub identity-link token was absent");
+    await service.confirmIdentityLink(linkToken, linkedUserId);
+    await deliverMessage({
+      callbacks, endpointId: endpoint.id, provider: "github", thread: originalThread,
+      message: makeMessage({
+        id: "github-rename-root", text: "@maya keep this task through repository moves",
+        mentioned: true, userId: githubUserId, userName: "octocat-rename",
       }),
       trigger: "mention",
     });
@@ -10912,6 +10938,15 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       }),
     );
 
+    await service.handleWebhook(
+      endpoint.publicId, "github", signedGitHubWebhookRequest({
+        delivery: "github-repository-noop-refresh", event: "installation_repositories",
+        payload: { action: "added", installation: { id: 2468 },
+          repositories_added: [transferredRepository], repositories_removed: [] },
+        webhookSecret,
+      }),
+    );
+
     const [migratedConversation] = await db
       .select()
       .from(chatConversations)
@@ -10925,6 +10960,132 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       providerUrl:
         "https://github.com/new-owner/paperclip-renamed/issues/77#issuecomment-github-rename-root",
     });
+
+    const [historicalDelivery] = await db.select().from(chatDeliveries).where(and(
+      eq(chatDeliveries.endpointId, endpoint.id),
+      sql`${chatDeliveries.normalizedEvent}->'message'->>'providerMessageId' = 'github-rename-root'`,
+    )).limit(1);
+    expect(historicalDelivery).toBeDefined();
+    const [historicalAction] = await db.select().from(chatActions).where(and(
+      eq(chatActions.endpointId, endpoint.id), eq(chatActions.kind, "inbound_wakeup"),
+      eq(chatActions.deliveryId, historicalDelivery!.id),
+    )).limit(1);
+    expect(historicalAction).toBeDefined();
+    const expectedHistoricalUserId = historicalAction!.payload.requestedByActorType === "user"
+      ? String(historicalAction!.payload.requestedByActorId) : null;
+    const checkHistoricalGitHubSource = () => readCanonicalInboundWakeupDbSource(db, {
+      action: historicalAction!, expectedIssueId: originalConversation.issueId,
+      expectedAgentId: fixture.assignedAgentId,
+      expectedCommentId: String(historicalAction!.payload.commentId),
+      expectedUserId: expectedHistoricalUserId, requireLinkedHuman: true,
+    });
+    expect(expectedHistoricalUserId).toBe(linkedUserId);
+    const migrationRows = await db.select().from(chatGitHubResourceMigrations).where(and(
+      eq(chatGitHubResourceMigrations.companyId, fixture.companyId),
+      eq(chatGitHubResourceMigrations.endpointId, endpoint.id),
+      eq(chatGitHubResourceMigrations.resourceId, originalResource.id),
+    ));
+    expect(migrationRows).toHaveLength(2);
+    expect(migrationRows.map((row) => [row.providerRepositoryId, row.fromRepository, row.toRepository]))
+      .toEqual(expect.arrayContaining([
+        ["97531", originalResource.providerResourceId, "paperclipai/paperclip-renamed"],
+        ["97531", "paperclipai/paperclip-renamed", "new-owner/paperclip-renamed"],
+      ]));
+    const foreignCompany = await seedCompany();
+    await expect(db.insert(chatGitHubResourceMigrations).values({
+      companyId: foreignCompany.companyId, endpointId: endpoint.id,
+      resourceId: originalResource.id, providerRepositoryId: "97531",
+      fromRepository: "PaperclipAI/Paperclip", toRepository: "new-owner/paperclip-renamed",
+    })).rejects.toMatchObject({ cause: { code: "23503" } });
+    await expect(checkHistoricalGitHubSource()).resolves.toMatchObject({
+      conversation: { id: originalConversation.id, externalThreadId: "github:new-owner/paperclip-renamed:issue:77" },
+    });
+
+    for (const invalid of [{ fromRepository: "invalid coordinate" }, { providerRepositoryId: "not-numeric" }]) {
+      await expect(db.insert(chatGitHubResourceMigrations).values({
+        companyId: fixture.companyId, endpointId: endpoint.id, resourceId: originalResource.id,
+        providerRepositoryId: "97531", fromRepository: originalResource.providerResourceId,
+        toRepository: "new-owner/paperclip-renamed", ...invalid,
+      })).rejects.toMatchObject({ cause: { code: "23514" } });
+    }
+    const secondEdge = migrationRows.find(row => row.toRepository === "new-owner/paperclip-renamed")!;
+    try {
+      for (const mutation of [
+        { toRepository: originalResource.providerResourceId },
+        { fromRepository: originalResource.providerResourceId },
+      ]) {
+        await db.update(chatGitHubResourceMigrations).set({
+          fromRepository: secondEdge.fromRepository, toRepository: secondEdge.toRepository, ...mutation,
+        }).where(eq(chatGitHubResourceMigrations.id, secondEdge.id));
+        await expect(checkHistoricalGitHubSource()).rejects.toMatchObject({
+          status: 403, details: { code: "chat_action_authorization_changed" },
+        });
+      }
+    } finally {
+      await db.update(chatGitHubResourceMigrations).set({
+        fromRepository: secondEdge.fromRepository, toRepository: secondEdge.toRepository,
+      }).where(eq(chatGitHubResourceMigrations.id, secondEdge.id));
+    }
+
+    const unrelatedEndpoint = await service.create(fixture.companyId, {
+      provider: "github", assignedAgentId: fixture.assignedAgentId, name: "Unrelated GitHub endpoint",
+    }, "owner-user");
+    await db.delete(chatGitHubResourceMigrations).where(and(
+      eq(chatGitHubResourceMigrations.companyId, fixture.companyId),
+      eq(chatGitHubResourceMigrations.endpointId, endpoint.id),
+      eq(chatGitHubResourceMigrations.resourceId, originalResource.id),
+    ));
+    try {
+      await db.insert(chatGitHubResourceMigrations).values({
+        companyId: fixture.companyId, endpointId: unrelatedEndpoint.id, resourceId: originalResource.id,
+        providerRepositoryId: "97531", fromRepository: "PaperclipAI/Paperclip",
+        toRepository: "new-owner/paperclip-renamed",
+      });
+      await expect(checkHistoricalGitHubSource()).rejects.toMatchObject({
+        status: 403, details: { code: "chat_action_authorization_changed" },
+      });
+    } finally {
+      await db.delete(chatGitHubResourceMigrations).where(eq(chatGitHubResourceMigrations.endpointId, unrelatedEndpoint.id));
+      await db.insert(chatGitHubResourceMigrations).values(migrationRows);
+    }
+
+    await db.delete(chatGitHubResourceMigrations).where(and(
+      eq(chatGitHubResourceMigrations.companyId, fixture.companyId),
+      eq(chatGitHubResourceMigrations.endpointId, endpoint.id),
+      eq(chatGitHubResourceMigrations.resourceId, originalResource.id),
+    ));
+    try {
+      await db.insert(chatGitHubResourceMigrations).values({
+        companyId: fixture.companyId, endpointId: endpoint.id, resourceId: originalResource.id,
+        providerRepositoryId: "99999", fromRepository: "PaperclipAI/Paperclip",
+        toRepository: "new-owner/paperclip-renamed",
+      });
+      await expect(checkHistoricalGitHubSource()).rejects.toMatchObject({
+        status: 403, details: { code: "chat_action_authorization_changed" },
+      });
+    } finally {
+      await db.delete(chatGitHubResourceMigrations).where(and(
+        eq(chatGitHubResourceMigrations.companyId, fixture.companyId),
+        eq(chatGitHubResourceMigrations.endpointId, endpoint.id),
+        eq(chatGitHubResourceMigrations.resourceId, originalResource.id),
+      ));
+      await db.insert(chatGitHubResourceMigrations).values(migrationRows);
+    }
+
+    const originalEvent = structuredClone(historicalDelivery!.normalizedEvent);
+    const changedThreadEvent = structuredClone(originalEvent);
+    (changedThreadEvent.conversation as Record<string, unknown>).externalThreadId =
+      "github:PaperclipAI/Paperclip:issue:78";
+    await db.update(chatDeliveries).set({ normalizedEvent: changedThreadEvent })
+      .where(eq(chatDeliveries.id, historicalDelivery!.id));
+    try {
+      await expect(checkHistoricalGitHubSource()).rejects.toMatchObject({
+        status: 403, details: { code: "chat_action_authorization_changed" },
+      });
+    } finally {
+      await db.update(chatDeliveries).set({ normalizedEvent: originalEvent })
+        .where(eq(chatDeliveries.id, historicalDelivery!.id));
+    }
 
     await deliverMessage({
       callbacks,

@@ -1,0 +1,16 @@
+{
+  "completed_at": "2026-11-11T17:46:39Z",
+  "conclusion": "success",
+  "head_sha": "d1555bce44864ab22007fc33cb0dd48dbdbf0bf8",
+  "html_url": "https://github.com/augustkring/august-works/actions/runs/43068419791/job/130697946550",
+  "id": 130697946550,
+  "name": "ci / General tests (managed Native (4/31))",
+  "started_at": "2026-11-11T17:43:07Z",
+  "status": "completed",
+  "actualCheckoutMergeSha": "7b39239df468d7f6dee3aa20e7aab3e9e8850588",
+  "actualSelectedSuite": "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts",
+  "passedTests": 2,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "qualification": "Actual CI suite scope at R84 only; no claim for R86, every Native journey, external paid provider or product release."
+}
