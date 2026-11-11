@@ -122,6 +122,7 @@ export async function captureNativeRemoteAttachmentStageOwner(db: Db | Transacti
       adapterType: agent.adapterType ?? "", environmentDriver: "sandbox", companyId: input.companyId,
       agentId: input.agentId, issueId: input.issueId, runId: input.runId,
       responsibleUserId: run.responsibleUserId, conversationSessionGeneration: generation,
+      sourceCommentId: typeof runContext.wakeCommentId === "string" ? runContext.wakeCommentId : null,
     }) : null;
     const ephemeralTaskRoot = scope?.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
     const leaseMetadata = record(activeLease.metadata);

@@ -98,6 +98,10 @@ export async function findNativeChatWorkspaceScope(
       canonicalConversationGenerationMatches: typeof input.conversationSessionGeneration === "number" &&
         issue.conversationSessionGeneration === input.conversationSessionGeneration,
       canonicalConversationRunMatches: Boolean(input.runId) && issue.executionRunId === input.runId,
+      channelBindingInputsComplete: Boolean(input.runId && input.responsibleUserId && input.sourceCommentId &&
+        typeof input.conversationSessionGeneration === "number" &&
+        Number.isSafeInteger(input.conversationSessionGeneration) && input.conversationSessionGeneration >= 1),
+      sourceCommentPresent: Boolean(input.sourceCommentId),
       selectedCanonicalConversationScope: canonicalRunBoundConversation,
     }));
   }

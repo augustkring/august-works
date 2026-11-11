@@ -18,6 +18,7 @@ let completed = 0;
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), "managed-chat-dispatch-boundaries-"));
   vi.stubEnv("PAPERCLIP_HOME", root);
+  vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
   database = await startEmbeddedPostgresTestDatabase("managed-chat-dispatch-boundaries-", { preserveDataOnFailure: () => completed !== 4 });
   db = createDb(database.connectionString, { maxConnections: 3 });
 }, 60_000);

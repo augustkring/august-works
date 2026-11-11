@@ -8722,5 +8722,166 @@
       "legacy36Closed": false,
       "sdkTestsPassed": false
     }
+  },
+  "nativeChatWorkspaceSourceBindingCheckpointR88": {
+    "sourceHead": "b273ad721a4a56b265708ba9c617e0ef6840d3da",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "Six exact source paths frozen on R87 baseline. Missing original wake-comment inputs are forwarded through strict existing channel owner; scoped component/command checks are distinct from unqualified actual SDK and signed Host journeys.",
+    "changes": [
+      {
+        "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
+        "worktreeSha256": "fc6e0e8dd45d2c0757c6bff4ef3ba092e1a9776cca21ded437c801519c44b508",
+        "bytes": 10591,
+        "mtimeNs": 1794424513628915153,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "worktreeSha256": "ea180f828c6581459cef0ba367405f049363ec6b1448e67f34d1309d68e23c81",
+        "bytes": 419908,
+        "mtimeNs": 1794424513628915153,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-attachment-remote-stage-owner.ts",
+        "worktreeSha256": "d56e2ec4e20daf985318e157a62b3cf00dc891c04802d0ec573c891ea3fe0603",
+        "bytes": 19342,
+        "mtimeNs": 1794424765718167863,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-chat-workspace.test.ts",
+        "worktreeSha256": "7deafc2d6105594c3959deb7e094ff7fbbfa4892415baebd99b610f08c5ccfd2",
+        "bytes": 18122,
+        "mtimeNs": 1794425041223817292,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "00c4f32a02032a37748e1e1c5948634f8a3e543105a7fa293a0ace0ef526a51c"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-chat-workspace.ts",
+        "worktreeSha256": "0deaf858f831e0e8dfcd2f1bde8c42d4ea80b0073827350703c28a118d634936",
+        "bytes": 8879,
+        "mtimeNs": 1794424513646912437,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "4861739be69984ab668687b133b613faf8bf9e1336060235fe6e90b7b9838555"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/runtime/control.ts",
+        "worktreeSha256": "a3ff83a9a7834b9286d6b3e099e33eadeb52188290dfdb9048a15ac987bbb302",
+        "bytes": 325273,
+        "mtimeNs": 1794424691525909093,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "b3c73b873477d8addc967e513b099a549380b45f65435731b048e6f544c135ef"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      }
+    ],
+    "inventory": {
+      "sourceDeltaPathCount": 2075,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "deletedSourcePathCount": 41,
+      "untrackedSourceCandidateCount": 0,
+      "fullDiffPathCount": 14842
+    },
+    "evidenceRoot": "doc/operations/aw-v10-evidence/native-channel-workspace-source-binding-20261111",
+    "metadataPinRefresh": {
+      "ownerAdditions": {},
+      "capabilityPaths": [],
+      "phasePaths": [],
+      "helpPairs": []
+    },
+    "rootFinalFacts": {
+      "R572": {
+        "status": "FAILED",
+        "cause": "Required conversation external label omitted by component fixture; corrected."
+      },
+      "R573": {
+        "status": "FAILED",
+        "testsPassed": 6,
+        "testsFailed": 1,
+        "cause": "Component run context omitted exact generation/wake comment, so original foreign-file check stopped at current-turn guard; fixture corrected, original assertion retained."
+      },
+      "R574": {
+        "status": "PASS",
+        "testsPassed": 7,
+        "scope": "Full workspace component boundary after both fixture corrections; before three runtime forwarding lines."
+      },
+      "R575": {
+        "status": "PASS",
+        "testsPassed": 15,
+        "testFiles": 3,
+        "seconds": 30.733832241006894,
+        "scope": "Full workspace boundary, remote attachment command/receipt and runtime context suites on exact six-path final source; normal cleanup and stable pins."
+      },
+      "R576": {
+        "status": "FAILED",
+        "cause": "Component fixture supplied internal runtimeGeneration as an unsupported typed setup property; corrected to actual setup plus canonical runtime-generation reader; build did not run."
+      },
+      "qualification": "Actual SDK/Host behavior and the original earlier chat selector denial remain open; no requirement/phase qualification promoted.",
+      "R577": {
+        "status": "PASS",
+        "testsPassed": 15,
+        "testFiles": 3,
+        "seconds": 29.129866598988883,
+        "scope": "Final six-path workspace, remote-stage and runtime-context source snapshot; stable exact pins and normal cleanup."
+      },
+      "R578": {
+        "status": "PASS",
+        "scope": "Final server typecheck/build after fixture typing correction; protected source inputs.",
+        "seconds": [
+          119.00798026099801,
+          125.10514270298881
+        ],
+        "sourceHashesAndMtimesUnchanged": true,
+        "originalModesRestored": true
+      }
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "hostResolved": false,
+      "sdkQualified": false
+    }
   }
 }

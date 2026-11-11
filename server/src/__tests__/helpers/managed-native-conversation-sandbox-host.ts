@@ -2967,7 +2967,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const chatScope = !workerRun && task
         ? await findNativeChatWorkspaceScope(db, { adapterType: "paperclip_runner", environmentDriver: "sandbox",
             companyId, agentId: run.agentId, issueId: task.id, runId: run.id, responsibleUserId,
-            conversationSessionGeneration: conversationGeneration })
+            conversationSessionGeneration: conversationGeneration,
+            sourceCommentId: typeof context.wakeCommentId === "string" ? context.wakeCommentId : null })
         : null;
       const [channelConversation] = task?.originKind === "chat_channel" ? await db.select({
         sessionGeneration: chatConversations.sessionGeneration, state: chatConversations.state,

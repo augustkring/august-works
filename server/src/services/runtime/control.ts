@@ -3933,6 +3933,7 @@ export function runtimeControlService(
           adapterType: source.source.agent.adapterType, environmentDriver: "sandbox", companyId: claims.company_id,
           agentId: source.run.agentId!, issueId: task.id, runId: source.run.id,
           responsibleUserId: source.run.responsibleUserId, conversationSessionGeneration: generation,
+          sourceCommentId: typeof contextSnapshot.wakeCommentId === "string" ? contextSnapshot.wakeCommentId : null,
         }) : null;
         const expectedTaskRoot = workspaceScope?.projectId === null ? nativeChatWorkspaceCwd(workspaceScope, null, false) : null;
         const filesystem = source.policy.compilation.compiledPolicy.filesystem;
@@ -4053,6 +4054,7 @@ export function runtimeControlService(
           adapterType: source.source.agent.adapterType, environmentDriver: "sandbox", companyId: claims.company_id,
           agentId: source.run.agentId!, issueId: task.id, runId: source.run.id,
           responsibleUserId: source.run.responsibleUserId, conversationSessionGeneration: generation,
+          sourceCommentId: typeof contextSnapshot.wakeCommentId === "string" ? contextSnapshot.wakeCommentId : null,
         }) : null;
         const expectedTaskRoot = workspaceScope?.projectId === null ? nativeChatWorkspaceCwd(workspaceScope, null, false) : null;
         const filesystem = source.policy.compilation.compiledPolicy.filesystem;
@@ -4707,6 +4709,7 @@ export function runtimeControlService(
         runId: initialSource.run.id,
         responsibleUserId: initialSource.run.responsibleUserId,
         conversationSessionGeneration,
+        sourceCommentId: typeof contextSnapshot.wakeCommentId === "string" ? contextSnapshot.wakeCommentId : null,
       });
       const expectedTaskRoot = workspaceScope && workspaceScope.projectId === null
         ? nativeChatWorkspaceCwd(workspaceScope, null, false)
