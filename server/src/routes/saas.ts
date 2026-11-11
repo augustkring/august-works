@@ -43,6 +43,10 @@ import {
   type V6FeatureKey,
   accountDeletionReceiptAccessSchema,
   accountDeletionRequestSchema,
+  companyDeletionRecoveryRequestSchema,
+  companyDeletionRecoveryResultSchema,
+  companyDeletionFailuresQuerySchema,
+  companyDeletionFailuresResultSchema,
 } from "@paperclipai/shared";
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from "../errors.js";
 import { accessService } from "../services/access.js";
@@ -522,7 +526,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       actor = await user(req),
       receipt = await platform.offboarding.get(companyId);
     if (receipt?.requestedByUserId !== actor.id) await company(req, companyId);
-    res.json(receipt);
+    res.set("Cache-Control", "private, no-store").json(receipt);
   });
   router.use("/companies/:companyId/support-sessions", (_req, res, next) => {
     res.set("Cache-Control", "private, no-store");
@@ -767,6 +771,25 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         );
     },
   );
+  router.get("/saas/internal/company-deletions", async (req, res) => {
+    // Reconciliation of accepted erasure stays reachable after rollout withdrawal.
+    const query = companyDeletionFailuresQuerySchema.parse(req.query);
+    const result = await operatorRead(req, async reader => {
+      const rows = await reader.select({ id: companyDeletionOperations.id, companyId: companyDeletionOperations.companyId,
+        stage: companyDeletionOperations.stage, errorCode: companyDeletionOperations.errorCode,
+        lastFailure: sql`jsonb_build_object('observedAt', ${companyDeletionOperations.evidence}->'lastFailure'->'observedAt')`,
+      }).from(companyDeletionOperations).where(and(eq(companyDeletionOperations.status, "failed"),
+        query.after ? gt(companyDeletionOperations.id, query.after) : undefined))
+        .orderBy(companyDeletionOperations.id).limit(101);
+      return { operations: rows.slice(0, 100), nextCursor: rows.length > 100 ? rows[99]!.id : null };
+    });
+    res.set("Cache-Control", "private, no-store").json(companyDeletionFailuresResultSchema.parse(result));
+  });
+  router.post("/saas/internal/company-deletions/:companyId/retry", async (req, res) => {
+    const expected = companyDeletionRecoveryRequestSchema.parse(req.body);
+    res.set("Cache-Control", "private, no-store").status(202).json(companyDeletionRecoveryResultSchema.parse(
+      await platform.offboarding.recover(z.string().uuid().parse(req.params.companyId), req.actor, expected)));
+  });
   router.get("/saas/internal/operations", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);

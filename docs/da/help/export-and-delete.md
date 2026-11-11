@@ -27,6 +27,8 @@ Blentera har særskilte handlinger til at eksportere en virksomhed, slette en or
 
 Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerhedskopier når deres slettefrist. Finansielle poster og en minimal kvittering for sletning kan blive gemt, hvor det kræves. Følg status og trin på sletningssiden. En indsendt anmodning beviser ikke, at den endelige sletning er gennemført.
 
+Hvis siden viser **kræver support**, er sletningen ikke gennemført. Kontakt menneskelig support på [privacy@blentera.com](mailto:privacy@blentera.com) med det viste anmodnings-ID. En operatør skal rette det fejlede trin, før den samme anmodning kan fortsætte. Indsend ikke en ny anmodning. Ved automatisk afklaring viser siden det tidligste tidspunkt for næste kontrol. Fejlede trin sætter automatiske genforsøg på pause, indtil en operatør har rettet dem. Du kan stadig følge en accepteret anmodning, når nye sletteanmodninger midlertidigt er utilgængelige.
+
 ## Anmod om sletning af personlig konto
 
 Åbn **Company settings → Security** for at gennemgå sletning af din personlige konto. Indtast **DELETE MY ACCOUNT**, og bekræft, at du har gemt de eksporter, du har brug for. Hvis du bruger en adgangskode, skal du bekræfte din aktuelle adgangskode. Nogle konti uden adgangskode kan bekræfte sletningen gennem virksomhedens login. Hvis siden tilbyder det, skal du fortsætte til virksomhedens identitetsudbyder og vende tilbage hertil. Gennemfør også den ekstra faktor, som siden eventuelt kræver, og gennemgå derefter anmodningen, før du sender den. Virksomhedslogin erstatter ikke en faktor, som din konto kræver. Hvis anmodningen accepteres, viderestilles kontosiden og viser en kvittering, når den er tilgængelig.

@@ -570,10 +570,20 @@ function zodToOpenApiSchema(schema: z.ZodTypeAny): JsonSchema {
   }
 
   if (typeName === "array") {
-    return {
+    const jsonSchema: JsonSchema = {
       type: "array",
       items: zodToOpenApiSchema(def.element as z.ZodTypeAny),
     };
+    for (const check of (def.checks as unknown[]) ?? []) {
+      const constraint = checkDef(check);
+      if (constraint?.check === "min_length") jsonSchema.minItems = constraint.minimum;
+      else if (constraint?.check === "max_length") jsonSchema.maxItems = constraint.maximum;
+      else if (constraint?.check === "length_equals") {
+        jsonSchema.minItems = constraint.length;
+        jsonSchema.maxItems = constraint.length;
+      }
+    }
+    return jsonSchema;
   }
 
   if (typeName === "record") {
@@ -2018,6 +2028,16 @@ function applyDocumentFixups(document: any): any {
     deletionReceiptOperation["x-paperclip-authorization"] = {
       actor: "capability", scope: "one_personal_account_deletion_status", boardOrAgentAuthority: false,
     };
+  }
+
+  for (const contract of v6ApiPaths) {
+    if (!contract.operatorSession) continue;
+    const operation = document.paths[contract.path]?.[contract.method];
+    if (!operation) throw new Error(`Missing operator erasure operation: ${contract.path}`);
+    operation.security = [securityRequirement(BOARD_SESSION_AUTH_SCHEME)];
+    operation["x-paperclip-authorization"] = { actor: "board", humanSession: true,
+      configuredOperator: true, phishingResistant: true, recentAuthentication: contract.operatorSession === "recent",
+      noCompanyAdminBypass: true, acceptedErasureRecoveryOnly: true };
   }
 
   for (const contract of v7ApiPaths) {
@@ -12255,7 +12275,9 @@ for (const operation of v6ApiPaths) {
     ...(operation.auth === "provider" ? { surface: "PARTNER / PREVIEW" as const } : {}),
     tags: [operation.auth === "native" ? "Native" : operation.auth === "session" || operation.auth === "receipt" ? "V6 SaaS" : "V6 machine ingress"],
     summary: `${operation.method.toUpperCase()} ${operation.path}`,
-    description: operation.auth === "native"
+    description: operation.operatorSession
+      ? "Requires a current configured platform operator with a verified phishing-resistant Human session. Recovery also requires recent authentication and the exact original failed operation, reason and observation time. This accepted-erasure safety path remains available after rollout withdrawal; it creates no new deletion and does not confirm physical erasure."
+      : operation.auth === "native"
       ? "Requires the original Native actor, company and resource authority. Endpoint-specific privacy, account and rollout checks remain authoritative; a resource or receipt ID grants no access. These endpoints do not require a SaaS deployment profile."
       : operation.auth === "session"
       ? "SaaS profile only, behind applicable default-off V6 gates. Requires a current verified session and native company permissions before entitlement checks. Internal operator paths additionally require the named allowlist; privileged support-session actions require current owner consent."

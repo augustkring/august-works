@@ -82,6 +82,7 @@ export const v6ApiPaths: {
   result?: z.ZodType;
   privateResponse?: boolean;
   responseCacheControl?: "no-store" | "private, no-store";
+  operatorSession?: "current" | "recent";
 }[] = [
   {
     method: "get",
@@ -190,6 +191,7 @@ export const v6ApiPaths: {
     path: "/api/companies/{companyId}/deletion",
     successStatus: 200,
     auth: "session",
+    privateResponse: true,
   },
   {
     method: "get",
@@ -346,6 +348,16 @@ export const v6ApiPaths: {
     path: "/api/saas/account/deletion-receipts",
     successStatus: 200,
     auth: "session",
+  },
+  {
+    method: "get", path: "/api/saas/internal/company-deletions", successStatus: 200,
+    auth: "session", operatorSession: "current", query: shared.companyDeletionFailuresQuerySchema,
+    result: shared.companyDeletionFailuresResultSchema, privateResponse: true,
+  },
+  {
+    method: "post", path: "/api/saas/internal/company-deletions/{companyId}/retry", successStatus: 202,
+    auth: "session", operatorSession: "recent", result: shared.companyDeletionRecoveryResultSchema,
+    privateResponse: true,
   },
   {
     method: "post",
@@ -600,6 +612,7 @@ export const v6ApiPaths: {
 ];
 
 const bodies: Record<string, z.ZodType> = {
+  "POST /api/saas/internal/company-deletions/{companyId}/retry": shared.companyDeletionRecoveryRequestSchema,
   "POST /api/companies/{companyId}/support-sessions":
     shared.supportSessionSchema,
   "POST /api/companies/{companyId}/support-sessions/reviews":

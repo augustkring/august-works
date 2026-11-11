@@ -186,12 +186,12 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 254,
+            "line": 258,
             "claim": "The activation consent route requires company(req) before calling the canonical activation consent service."
           },
           {
@@ -225,12 +225,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 254,
+          "line": 258,
           "claim": "The activation consent route requires company(req) before calling the canonical activation consent service."
         },
         {
@@ -279,12 +279,12 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 266,
+            "line": 270,
             "claim": "The consent-withdraw route requires company(req) before calling the canonical activation consent service."
           },
           {
@@ -318,12 +318,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 266,
+          "line": 270,
           "claim": "The consent-withdraw route requires company(req) before calling the canonical activation consent service."
         },
         {
@@ -3557,7 +3557,7 @@
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction’s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
+      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction\u2019s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -4390,7 +4390,7 @@
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction’s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
+      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction\u2019s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -7975,7 +7975,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -7988,7 +7988,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -8752,7 +8752,7 @@
       "owner": "server/src/services/ai-governance/governance-service.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "The client includes expectedUserId. The owning route’s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
+      "reviewRationale": "The client includes expectedUserId. The owning route\u2019s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -8865,7 +8865,7 @@
       "owner": "server/src/services/inbox-agent-policy.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "The self-service endpoint calls selfUserId, which requires a Board user and binds the write to that user’s own company policy.",
+      "reviewRationale": "The self-service endpoint calls selfUserId, which requires a Board user and binds the write to that user\u2019s own company policy.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -11250,7 +11250,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -11263,7 +11263,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -11291,7 +11291,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -11304,7 +11304,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -13498,7 +13498,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -13508,7 +13508,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -13538,7 +13538,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -13548,7 +13548,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -13930,7 +13930,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -13943,7 +13943,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -13971,7 +13971,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -13984,7 +13984,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -14012,7 +14012,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -14025,7 +14025,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -14053,7 +14053,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -14066,7 +14066,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -14136,7 +14136,7 @@
           {
             "path": "server/src/routes/sidebar-preferences.ts",
             "line": 8,
-            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
           },
           {
             "path": "server/src/services/sidebar-preferences.ts",
@@ -14149,7 +14149,7 @@
         {
           "path": "server/src/routes/sidebar-preferences.ts",
           "line": 8,
-          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
         },
         {
           "path": "server/src/services/sidebar-preferences.ts",
@@ -15734,7 +15734,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -15747,7 +15747,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -15770,7 +15770,7 @@
       "owner": "server/src/routes/access.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Route invokes assertCompanyPermission(users:invite), which explicitly checks a current same-company Agent principal’s users:invite grant (or the Board user’s permission). The actor is recorded as agent/user in activity. For bootstrap invites revoke is separately instance-admin only; this ordinary company invite operation is Agent-accessible when permission is granted, with invite join types constrained by the invite record.",
+      "reviewRationale": "Route invokes assertCompanyPermission(users:invite), which explicitly checks a current same-company Agent principal\u2019s users:invite grant (or the Board user\u2019s permission). The actor is recorded as agent/user in activity. For bootstrap invites revoke is separately instance-admin only; this ordinary company invite operation is Agent-accessible when permission is granted, with invite join types constrained by the invite record.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -15881,7 +15881,7 @@
       "owner": "server/src/routes/access.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Route invokes assertCompanyPermission(users:invite), which explicitly checks a current same-company Agent principal’s users:invite grant (or the Board user’s permission). The actor is recorded as agent/user in activity. For bootstrap invites revoke is separately instance-admin only; this ordinary company invite operation is Agent-accessible when permission is granted, with invite join types constrained by the invite record.",
+      "reviewRationale": "Route invokes assertCompanyPermission(users:invite), which explicitly checks a current same-company Agent principal\u2019s users:invite grant (or the Board user\u2019s permission). The actor is recorded as agent/user in activity. For bootstrap invites revoke is separately instance-admin only; this ordinary company invite operation is Agent-accessible when permission is granted, with invite join types constrained by the invite record.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -16224,7 +16224,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -16237,7 +16237,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -17435,7 +17435,7 @@
       "owner": "server/src/routes/access.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Route invokes assertCompanyPermission(users:invite), which explicitly checks a current same-company Agent principal’s users:invite grant (or the Board user’s permission). The actor is recorded as agent/user in activity. For bootstrap invites revoke is separately instance-admin only; this ordinary company invite operation is Agent-accessible when permission is granted, with invite join types constrained by the invite record.",
+      "reviewRationale": "Route invokes assertCompanyPermission(users:invite), which explicitly checks a current same-company Agent principal\u2019s users:invite grant (or the Board user\u2019s permission). The actor is recorded as agent/user in activity. For bootstrap invites revoke is separately instance-admin only; this ordinary company invite operation is Agent-accessible when permission is granted, with invite join types constrained by the invite record.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17738,7 +17738,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17748,7 +17748,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -17778,7 +17778,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17788,7 +17788,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -17818,7 +17818,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17828,7 +17828,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -17858,7 +17858,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17868,7 +17868,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -17898,7 +17898,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17908,7 +17908,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -17938,7 +17938,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17948,7 +17948,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -17978,7 +17978,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -17988,7 +17988,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -18018,7 +18018,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -18028,7 +18028,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -18058,7 +18058,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -18068,7 +18068,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -19041,7 +19041,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -19054,7 +19054,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -19082,7 +19082,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -19095,7 +19095,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -19164,7 +19164,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -19177,7 +19177,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -19199,7 +19199,7 @@
       "owner": "server/src/routes/announcements.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "nonmaterial",
-      "reviewRationale": "The request helper sends a POST to the caller-specific dismissal route. The announcement router requires an authenticated Board user, and the handler writes that Human user’s personal dismissal preference.",
+      "reviewRationale": "The request helper sends a POST to the caller-specific dismissal route. The announcement router requires an authenticated Board user, and the handler writes that Human user\u2019s personal dismissal preference.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -19296,7 +19296,7 @@
           {
             "path": "server/src/routes/sidebar-preferences.ts",
             "line": 8,
-            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
           },
           {
             "path": "server/src/services/sidebar-preferences.ts",
@@ -19309,7 +19309,7 @@
         {
           "path": "server/src/routes/sidebar-preferences.ts",
           "line": 8,
-          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
         },
         {
           "path": "server/src/services/sidebar-preferences.ts",
@@ -19631,7 +19631,7 @@
           {
             "path": "server/src/routes/sidebar-preferences.ts",
             "line": 8,
-            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
           },
           {
             "path": "server/src/services/sidebar-preferences.ts",
@@ -19644,7 +19644,7 @@
         {
           "path": "server/src/routes/sidebar-preferences.ts",
           "line": 8,
-          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
         },
         {
           "path": "server/src/services/sidebar-preferences.ts",
@@ -19672,7 +19672,7 @@
           {
             "path": "server/src/routes/resource-memberships.ts",
             "line": 11,
-            "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user’s own resource membership/star state."
+            "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user\u2019s own resource membership/star state."
           },
           {
             "path": "server/src/services/resource-memberships.ts",
@@ -19685,7 +19685,7 @@
         {
           "path": "server/src/routes/resource-memberships.ts",
           "line": 11,
-          "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user’s own resource membership/star state."
+          "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user\u2019s own resource membership/star state."
         },
         {
           "path": "server/src/services/resource-memberships.ts",
@@ -19713,7 +19713,7 @@
           {
             "path": "server/src/routes/resource-memberships.ts",
             "line": 11,
-            "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user’s own resource membership/star state."
+            "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user\u2019s own resource membership/star state."
           },
           {
             "path": "server/src/services/resource-memberships.ts",
@@ -19726,7 +19726,7 @@
         {
           "path": "server/src/routes/resource-memberships.ts",
           "line": 11,
-          "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user’s own resource membership/star state."
+          "claim": "requireBoardUserId requires a board actor with userId; the route mutates that user\u2019s own resource membership/star state."
         },
         {
           "path": "server/src/services/resource-memberships.ts",
@@ -19891,7 +19891,7 @@
       "routeSignatures": [
         "post:`/companies/${companyId}/secrets`"
       ],
-      "argumentsSignature": "companyId, {\n    name: `${envKey} · agent setup`,\n    key: `${envKey}.setup.${crypto.randomUUID()}`,\n    value: value.trim(),\n    description: \"Adapter credential supplied during agent setup.\",\n  }",
+      "argumentsSignature": "companyId, {\n    name: `${envKey} \u00b7 agent setup`,\n    key: `${envKey}.setup.${crypto.randomUUID()}`,\n    value: value.trim(),\n    description: \"Adapter credential supplied during agent setup.\",\n  }",
       "line": 19,
       "occurrence": 0,
       "owner": "server/src/services/secrets.ts",
@@ -19973,13 +19973,13 @@
       "routeSignatures": [
         "post:`/companies/${companyId}/user-secret-definitions`"
       ],
-      "argumentsSignature": "companyId, {\n    key,\n    name: `${envKey} · agent setup`,\n    description: \"Model provider credential for a new agent setup.\",\n  }",
+      "argumentsSignature": "companyId, {\n    key,\n    name: `${envKey} \u00b7 agent setup`,\n    description: \"Model provider credential for a new agent setup.\",\n  }",
       "line": 43,
       "occurrence": 0,
       "owner": "server/src/services/secrets.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
+      "reviewRationale": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -19989,7 +19989,7 @@
           },
           {
             "path": "server/src/services/secrets.ts",
-            "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+            "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
           }
         ]
       },
@@ -20002,7 +20002,7 @@
         },
         {
           "path": "server/src/services/secrets.ts",
-          "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+          "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
         }
       ]
     },
@@ -20020,7 +20020,7 @@
       "owner": "server/src/services/secrets.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
+      "reviewRationale": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -20030,7 +20030,7 @@
           },
           {
             "path": "server/src/services/secrets.ts",
-            "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+            "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
           }
         ]
       },
@@ -20043,7 +20043,7 @@
         },
         {
           "path": "server/src/services/secrets.ts",
-          "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+          "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
         }
       ]
     },
@@ -20364,7 +20364,7 @@
       "owner": "server/src/services/ai-governance/governance-service.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "The client includes expectedUserId. The owning route’s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
+      "reviewRationale": "The client includes expectedUserId. The owning route\u2019s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -20477,7 +20477,7 @@
       "owner": "server/src/services/ai-governance/governance-service.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "The client includes expectedUserId. The owning route’s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
+      "reviewRationale": "The client includes expectedUserId. The owning route\u2019s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -20590,7 +20590,7 @@
       "owner": "server/src/services/ai-governance/governance-service.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "The client includes expectedUserId. The owning route’s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
+      "reviewRationale": "The client includes expectedUserId. The owning route\u2019s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -20683,7 +20683,7 @@
       "owner": "server/src/services/ai-governance/governance-service.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "The client includes expectedUserId. The owning route’s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
+      "reviewRationale": "The client includes expectedUserId. The owning route\u2019s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -20776,7 +20776,7 @@
       "owner": "server/src/services/ai-governance/governance-service.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "The client includes expectedUserId. The owning route’s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
+      "reviewRationale": "The client includes expectedUserId. The owning route\u2019s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -20869,7 +20869,7 @@
       "owner": "server/src/services/ai-governance/governance-service.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "The client includes expectedUserId. The owning route’s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
+      "reviewRationale": "The client includes expectedUserId. The owning route\u2019s account-bound company guard compares that ID to the board actor before calling the governance service; exact API writes are Human-only, even where a record is named an assessment or profile.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -20967,7 +20967,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -20980,7 +20980,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -21008,17 +21008,17 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "req.actor.type !== \"board\" ||"
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 144,
+            "line": 148,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
@@ -21032,17 +21032,17 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "req.actor.type !== \"board\" ||"
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 144,
+          "line": 148,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
@@ -25105,7 +25105,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -25118,7 +25118,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -32632,7 +32632,7 @@
           {
             "path": "server/src/routes/sidebar-preferences.ts",
             "line": 8,
-            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+            "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
           },
           {
             "path": "server/src/services/sidebar-preferences.ts",
@@ -32645,7 +32645,7 @@
         {
           "path": "server/src/routes/sidebar-preferences.ts",
           "line": 8,
-          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user’s own sidebar preferences."
+          "claim": "requireBoardUserId calls assertBoard and requires a signed-in board user; service stores that user\u2019s own sidebar preferences."
         },
         {
           "path": "server/src/services/sidebar-preferences.ts",
@@ -33535,7 +33535,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -33545,7 +33545,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -33575,18 +33575,18 @@
       "owner": "server/src/routes/companies.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "V10 §17.2 makes security/support contacts accountable responsible objects, and §17.7 says no generic Agent may reassign material ownership by itself. This endpoint now requires a current Human Board session plus current company owner/admin authority; company-defaults permission alone is insufficient.",
+      "reviewRationale": "V10 \u00a717.2 makes security/support contacts accountable responsible objects, and \u00a717.7 says no generic Agent may reassign material ownership by itself. This endpoint now requires a current Human Board session plus current company owner/admin authority; company-defaults permission alone is insufficient.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
             "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
             "line": 2673,
-            "claim": "V10 §17.2 lists security contact as an accountable responsible object."
+            "claim": "V10 \u00a717.2 lists security contact as an accountable responsible object."
           },
           {
             "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
             "line": 2674,
-            "claim": "V10 §17.2 lists support/incident contact as an accountable responsible object."
+            "claim": "V10 \u00a717.2 lists support/incident contact as an accountable responsible object."
           },
           {
             "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
@@ -33625,7 +33625,7 @@
           }
         ]
       },
-      "materialityRationale": "These fields assign the accountable security and support/incident contact, the responsible objects named by V10 §17.2; the labels do not grant access, but changing those assignments is material ownership work.",
+      "materialityRationale": "These fields assign the accountable security and support/incident contact, the responsible objects named by V10 \u00a717.2; the labels do not grant access, but changing those assignments is material ownership work.",
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
@@ -40695,7 +40695,7 @@
       "owner": "server/src/routes/issues.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "Queued-comment steering requires a Board user and issue comment permission before changing the active run’s pending input.",
+      "reviewRationale": "Queued-comment steering requires a Board user and issue comment permission before changing the active run\u2019s pending input.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -41913,7 +41913,7 @@
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction’s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
+      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction\u2019s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -44661,7 +44661,7 @@
           {
             "path": "server/src/services/customer-feedback.ts",
             "line": 856,
-            "claim": "withdrawal resolves only the current principal’s owned feedback row."
+            "claim": "withdrawal resolves only the current principal\u2019s owned feedback row."
           }
         ]
       },
@@ -46972,7 +46972,7 @@
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction’s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
+      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction\u2019s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50222,7 +50222,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50232,7 +50232,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50303,7 +50303,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50313,7 +50313,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50343,7 +50343,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50353,7 +50353,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50383,7 +50383,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50393,7 +50393,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50423,7 +50423,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50433,7 +50433,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50463,7 +50463,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50473,7 +50473,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50544,7 +50544,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50554,7 +50554,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50625,7 +50625,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50635,7 +50635,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50665,7 +50665,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50675,7 +50675,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50705,7 +50705,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50715,7 +50715,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50745,7 +50745,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50755,7 +50755,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -50785,7 +50785,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -50795,7 +50795,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -51102,7 +51102,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -51112,7 +51112,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -51440,7 +51440,7 @@
       "owner": "server/src/services/routines.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it.",
+      "reviewRationale": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -51450,7 +51450,7 @@
           },
           {
             "path": "server/src/services/routines.ts",
-            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest’s paused, targetless routine draft contract and are not assumed covered by it."
+            "claim": "Existing routine management APIs permit the assigned Agent to change their own routine configuration. These are distinct from the manifest\u2019s paused, targetless routine draft contract and are not assumed covered by it."
           }
         ]
       },
@@ -51618,7 +51618,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -51631,7 +51631,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -51743,7 +51743,7 @@
           }
         ]
       },
-      "materialityRationale": "This call is part of the authenticated Human’s high-impact account-deletion reauthentication flow; its identity and session proof must remain Human-only.",
+      "materialityRationale": "This call is part of the authenticated Human\u2019s high-impact account-deletion reauthentication flow; its identity and session proof must remain Human-only.",
       "materialityEvidence": [
         {
           "path": "server/src/auth/enterprise-auth-plugins.ts",
@@ -51841,7 +51841,7 @@
           }
         ]
       },
-      "materialityRationale": "This call is part of the authenticated Human’s high-impact account-deletion reauthentication flow; its identity and session proof must remain Human-only.",
+      "materialityRationale": "This call is part of the authenticated Human\u2019s high-impact account-deletion reauthentication flow; its identity and session proof must remain Human-only.",
       "materialityEvidence": [
         {
           "path": "server/src/auth/enterprise-auth-plugins.ts",
@@ -51889,7 +51889,7 @@
       "owner": "server/src/auth/enterprise-auth-plugins.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Completes the Human’s native TOTP or backup-code factor bound to the exact account-deletion SSO challenge and current session; no Agent or company authority is involved.",
+      "reviewRationale": "Completes the Human\u2019s native TOTP or backup-code factor bound to the exact account-deletion SSO challenge and current session; no Agent or company authority is involved.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -51934,7 +51934,7 @@
           }
         ]
       },
-      "materialityRationale": "This call is part of the authenticated Human’s high-impact account-deletion reauthentication flow; its identity and session proof must remain Human-only.",
+      "materialityRationale": "This call is part of the authenticated Human\u2019s high-impact account-deletion reauthentication flow; its identity and session proof must remain Human-only.",
       "materialityEvidence": [
         {
           "path": "server/src/auth/enterprise-auth-plugins.ts",
@@ -51977,7 +51977,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -51986,7 +51986,7 @@
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 659,
+            "line": 663,
             "claim": "When receiptRequired is set, the route binds the encrypted cookie to the current Human and exact idempotency key before account deletion dispatch."
           },
           {
@@ -52010,7 +52010,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52019,7 +52019,7 @@
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 659,
+          "line": 663,
           "claim": "When receiptRequired is set, the route binds the encrypted cookie to the current Human and exact idempotency key before account deletion dispatch."
         },
         {
@@ -52058,7 +52058,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52071,7 +52071,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52099,7 +52099,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52112,7 +52112,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52130,7 +52130,7 @@
         "delete:scoped(companyPath(companyId), userId)"
       ],
       "argumentsSignature": "selectedCompanyId!, identity.userId!, {\n        confirmation,\n        acknowledgeExport: true,\n        idempotencyKey: requestKey,\n      }",
-      "line": 39,
+      "line": 37,
       "occurrence": 0,
       "owner": "server/src/services/saas/offboarding.ts",
       "classification": "HUMAN_ONLY",
@@ -52140,17 +52140,17 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 514,
+            "line": 518,
             "claim": "The company DELETE route resolves the request through the authenticated Human company membership helper before dispatch."
           },
           {
             "path": "server/src/services/saas/offboarding.ts",
-            "line": 52,
+            "line": 76,
             "claim": "The offboarding transaction requires an active owner membership for the exact target company."
           },
           {
             "path": "server/src/services/saas/offboarding.ts",
-            "line": 66,
+            "line": 90,
             "claim": "The service requires the Human to confirm the exact company name before creating offboarding."
           }
         ]
@@ -52159,17 +52159,17 @@
       "materialityEvidence": [
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "line": 95,
+          "line": 119,
           "claim": "The original offboarding transaction archives the company and records the deletion request."
         },
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "line": 113,
+          "line": 137,
           "claim": "The transaction pauses company Agents and revokes their company API keys."
         },
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "line": 135,
+          "line": 159,
           "claim": "The same transaction revokes current support sessions for the company."
         }
       ]
@@ -52193,7 +52193,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 172,
+            "line": 176,
             "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
@@ -52206,7 +52206,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 172,
+          "line": 176,
           "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
@@ -52234,7 +52234,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52247,7 +52247,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52275,7 +52275,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 172,
+            "line": 176,
             "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
@@ -52292,7 +52292,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 172,
+          "line": 176,
           "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
@@ -52324,7 +52324,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 172,
+            "line": 176,
             "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
@@ -52341,7 +52341,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 172,
+          "line": 176,
           "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
@@ -52373,7 +52373,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 172,
+            "line": 176,
             "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
@@ -52390,7 +52390,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 172,
+          "line": 176,
           "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
@@ -52422,7 +52422,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 172,
+            "line": 176,
             "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
           },
           {
@@ -52439,7 +52439,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 172,
+          "line": 176,
           "claim": "The /saas/internal middleware requires the configured operator, verified email, and recent operator authentication for mutations."
         },
         {
@@ -52471,7 +52471,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52484,7 +52484,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52512,7 +52512,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52525,7 +52525,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52553,7 +52553,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52566,7 +52566,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52594,7 +52594,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 1070,
+            "line": 1093,
             "claim": "The route calls company(req, companyId, \"runtime:manage\"), which requires an authenticated board Human with active company membership and runtime:manage; then binds an Agent to a hosted runtime cell."
           },
           {
@@ -52607,7 +52607,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 1070,
+          "line": 1093,
           "claim": "The route calls company(req, companyId, \"runtime:manage\"), which requires an authenticated board Human with active company membership and runtime:manage; then binds an Agent to a hosted runtime cell."
         },
         {
@@ -52635,7 +52635,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52648,7 +52648,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52676,7 +52676,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52689,7 +52689,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52717,7 +52717,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52730,7 +52730,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52758,7 +52758,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52771,7 +52771,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52799,7 +52799,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52812,7 +52812,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52840,7 +52840,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52853,7 +52853,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52881,7 +52881,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52894,7 +52894,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52922,7 +52922,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 110,
+            "line": 114,
             "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
           },
           {
@@ -52935,7 +52935,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 110,
+          "line": 114,
           "claim": "The user(req) helper requires a board Human, rejects local implicit actors, and resolves the persisted auth user."
         },
         {
@@ -52958,7 +52958,7 @@
       "owner": "server/src/services/secrets.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
+      "reviewRationale": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -52968,7 +52968,7 @@
           },
           {
             "path": "server/src/services/secrets.ts",
-            "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+            "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
           }
         ]
       },
@@ -52981,7 +52981,7 @@
         },
         {
           "path": "server/src/services/secrets.ts",
-          "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+          "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
         }
       ]
     },
@@ -52999,7 +52999,7 @@
       "owner": "server/src/services/secrets.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
+      "reviewRationale": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -53009,7 +53009,7 @@
           },
           {
             "path": "server/src/services/secrets.ts",
-            "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+            "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
           }
         ]
       },
@@ -53022,7 +53022,7 @@
         },
         {
           "path": "server/src/services/secrets.ts",
-          "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+          "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
         }
       ]
     },
@@ -53327,7 +53327,7 @@
       "owner": "server/src/services/secrets.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
+      "reviewRationale": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -53337,7 +53337,7 @@
           },
           {
             "path": "server/src/services/secrets.ts",
-            "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+            "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
           }
         ]
       },
@@ -53350,7 +53350,7 @@
         },
         {
           "path": "server/src/services/secrets.ts",
-          "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+          "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
         }
       ]
     },
@@ -53409,7 +53409,7 @@
       "owner": "server/src/services/secrets.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "launchcritical",
-      "reviewRationale": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
+      "reviewRationale": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -53419,7 +53419,7 @@
           },
           {
             "path": "server/src/services/secrets.ts",
-            "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+            "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
           }
         ]
       },
@@ -53432,7 +53432,7 @@
         },
         {
           "path": "server/src/services/secrets.ts",
-          "claim": "Changing the company’s secret schema/requirements controls shared credential policy and remains Human/admin authority."
+          "claim": "Changing the company\u2019s secret schema/requirements controls shared credential policy and remains Human/admin authority."
         }
       ]
     },
@@ -55878,7 +55878,7 @@
       "owner": "server/src/routes/issues.ts",
       "classification": "DIRECT_AGENT",
       "materiality": "launchcritical",
-      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction’s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
+      "reviewRationale": "Resolution is admitted only after current issue/run containment and the interaction\u2019s effective resolver audience decision. An Agent can use this endpoint only when that decision authorizes its principal; governed tool actions use the downstream approval callback.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -57545,7 +57545,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57558,7 +57558,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -57586,7 +57586,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57599,7 +57599,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -57627,7 +57627,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57640,7 +57640,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -57668,7 +57668,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57681,7 +57681,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -57750,7 +57750,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57763,7 +57763,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -57791,7 +57791,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57804,7 +57804,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -57832,7 +57832,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57845,7 +57845,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -57873,7 +57873,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -57886,7 +57886,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -58007,7 +58007,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -58020,7 +58020,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -58345,7 +58345,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -58358,7 +58358,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -58386,7 +58386,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -58399,7 +58399,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -58427,7 +58427,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -58440,7 +58440,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -58468,7 +58468,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -58481,7 +58481,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -58509,7 +58509,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -58522,7 +58522,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -62891,7 +62891,7 @@
       "owner": "server/src/services/connectors/slack-search-oauth.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation.",
+      "reviewRationale": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -62901,7 +62901,7 @@
           },
           {
             "path": "server/src/services/connectors/slack-search-oauth.ts",
-            "claim": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation."
+            "claim": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation."
           }
         ]
       },
@@ -62914,7 +62914,7 @@
         },
         {
           "path": "server/src/services/connectors/slack-search-oauth.ts",
-          "claim": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation."
+          "claim": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation."
         }
       ]
     },
@@ -62932,7 +62932,7 @@
       "owner": "server/src/services/connectors/slack-search-oauth.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation.",
+      "reviewRationale": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -62942,7 +62942,7 @@
           },
           {
             "path": "server/src/services/connectors/slack-search-oauth.ts",
-            "claim": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation."
+            "claim": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation."
           }
         ]
       },
@@ -62955,7 +62955,7 @@
         },
         {
           "path": "server/src/services/connectors/slack-search-oauth.ts",
-          "claim": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation."
+          "claim": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation."
         }
       ]
     },
@@ -62973,7 +62973,7 @@
       "owner": "server/src/services/connectors/slack-search-oauth.ts",
       "classification": "HUMAN_ONLY",
       "materiality": "ordinary",
-      "reviewRationale": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation.",
+      "reviewRationale": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation.",
       "authorityEvidence": {
         "sourceEvidence": [
           {
@@ -62983,7 +62983,7 @@
           },
           {
             "path": "server/src/services/connectors/slack-search-oauth.ts",
-            "claim": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation."
+            "claim": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation."
           }
         ]
       },
@@ -62996,7 +62996,7 @@
         },
         {
           "path": "server/src/services/connectors/slack-search-oauth.ts",
-          "claim": "This changes the signed-in Human’s Slack search integration consent/configuration, not an Agent operation."
+          "claim": "This changes the signed-in Human\u2019s Slack search integration consent/configuration, not an Agent operation."
         }
       ]
     },
@@ -64325,7 +64325,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -64338,7 +64338,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -64407,7 +64407,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -64420,7 +64420,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -64448,7 +64448,7 @@
           {
             "path": "server/src/routes/tool-access.ts",
             "line": 544,
-            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+            "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
           },
           {
             "path": "server/src/services/tool-access.ts",
@@ -64461,7 +64461,7 @@
         {
           "path": "server/src/routes/tool-access.ts",
           "line": 544,
-          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human’s explicit consent."
+          "claim": "Tool connection management routes require a board actor plus active tool membership or connection-manager/creator authority; personal OAuth also requires the Human\u2019s explicit consent."
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -65922,7 +65922,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 623,
+            "line": 627,
             "claim": "The receipt-access route calls user(req), checks the feature gate, requires a board actor from a current session, and verifies that active session row before preparing receipt access."
           },
           {
@@ -65932,7 +65932,7 @@
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 627,
+            "line": 631,
             "claim": "Preparation requires a board actor from the current session and validates that active auth session before issuing receipt access."
           },
           {
@@ -65956,7 +65956,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 623,
+          "line": 627,
           "claim": "The receipt-access route calls user(req), checks the feature gate, requires a board actor from a current session, and verifies that active session row before preparing receipt access."
         },
         {
@@ -65966,7 +65966,7 @@
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 627,
+          "line": 631,
           "claim": "Preparation requires a board actor from the current session and validates that active auth session before issuing receipt access."
         },
         {
@@ -66005,7 +66005,7 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/saas.ts",
-            "line": 643,
+            "line": 647,
             "claim": "The receipt read route accepts a strict empty body and reads its capability only from the HttpOnly cookie; it does not resolve a user/session actor."
           },
           {
@@ -66015,7 +66015,7 @@
           },
           {
             "path": "server/src/routes/saas.ts",
-            "line": 647,
+            "line": 651,
             "claim": "The read route obtains access only from its encrypted HttpOnly cookie and passes the cookie-bound nonce and principal hash to the receipt owner."
           },
           {
@@ -66039,7 +66039,7 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/saas.ts",
-          "line": 643,
+          "line": 647,
           "claim": "The receipt read route accepts a strict empty body and reads its capability only from the HttpOnly cookie; it does not resolve a user/session actor."
         },
         {
@@ -66049,7 +66049,7 @@
         },
         {
           "path": "server/src/routes/saas.ts",
-          "line": 647,
+          "line": 651,
           "claim": "The read route obtains access only from its encrypted HttpOnly cookie and passes the cookie-bound nonce and principal hash to the receipt owner."
         },
         {

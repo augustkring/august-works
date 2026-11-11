@@ -4216,5 +4216,60 @@
     "unknownTitle": "Opgaven er sat på pause.",
     "unknownDetail": "Gennemgå det arbejde, der er sat på pause, før du genoptager det.",
     "reviewResume": "Gennemgå genoptagelse"
+  },
+  "organizationDeletion": {
+    "heading": "Slet organisation",
+    "loading": "Kontrollerer sletteanmodningen…",
+    "unavailable": "Slettetjenesten kunne ikke kontrolleres. Prøv igen, før du indsender en anmodning.",
+    "disabled": "Nye anmodninger om organisationssletning er endnu ikke tilgængelige.",
+    "statusLabel": "Sletning: {{status}}",
+    "stepLabel": "Aktuelt trin: {{step}}",
+    "requestId": "Anmodnings-ID: {{id}}",
+    "retention": "Nyt arbejde er blokeret. Bevarede sikkerhedskopier skal nå deres slettefrist før den endelige sletning.",
+    "recoveryRequired": "Sletningen er ikke gennemført og kræver, at en operatør retter det fejlede trin. Kontakt menneskelig support med dette anmodnings-ID. Indsend ikke en ny sletteanmodning.",
+    "awaitingConfirmation": "Sletningen afventer bekræftelse. Kontakt menneskelig support med dette anmodnings-ID, hvis tilstanden fortsætter.",
+    "retainedRecords": "Finansielle poster og en minimal slettekvittering bevares, hvor det kræves.",
+    "retry": "Kontrollér status igen",
+    "consequences": "Sletning blokerer nyt agentarbejde og starter stop af aktivt arbejde, sletning af administrerede runtimes og fjernelse af organisationens indhold efter opbevaringsperioden. Det kan ikke fortrydes. Delte agenter skal først flyttes til en anden hjemmeorganisation.",
+    "export": "Eksportér organisationen før sletning",
+    "exported": "Jeg har gemt de eksporter, jeg har brug for.",
+    "confirm": "Skriv {{name}} for at bekræfte",
+    "organizationName": "organisationens navn",
+    "back": "Tilbage til indstillinger",
+    "submit": "Anmod om sletning af organisation",
+    "status": {
+      "requested": "modtaget",
+      "processing": "behandles",
+      "waitingRetention": "afventer opbevaringsfrist",
+      "failed": "kræver support",
+      "completed": "gennemført",
+      "cancelled": "annulleret",
+      "unknown": "skal kontrolleres"
+    },
+    "stage": {
+      "revoke": "Tilbagekalder adgang",
+      "stopping": "Stopper aktivt arbejde",
+      "runtimes": "Sletter administrerede runtimes",
+      "billing": "Afslutter fakturering",
+      "retention": "Afventer bevarede sikkerhedskopier",
+      "purge": "Sletter organisationens indhold",
+      "completed": "Gennemført",
+      "unknown": "Kontakt support om det aktuelle trin"
+    },
+    "nextReconciliation": "Næste automatiske kontrol, tidligst: {{date}}",
+    "manualReconciliation": "Automatiske genforsøg er sat på pause, indtil en operatør retter dette trin.",
+    "reason": {
+      "providerIdentity": "Den oprindelige identitet for sletning hos udbyderen skal rettes.",
+      "runtimeRepair": "Sletning af administrerede runtimes kræver operatørens afklaring.",
+      "stageRepair": "Sletteforløbet kræver operatørens rettelse.",
+      "providerAccess": "Adgangen til den oprindelige sletteudbyder skal rettes.",
+      "providerRequest": "Den oprindelige sletteanmodning til udbyderen skal rettes.",
+      "providerPending": "Den oprindelige udbyder har endnu ikke bekræftet sletning.",
+      "runtimePending": "Sletning af administrerede runtimes er endnu ikke bekræftet.",
+      "backupPending": "Bevarede sikkerhedskopier har endnu ikke nået deres slettefrist.",
+      "retentionHold": "Et opbevaringspåbud skal gennemgås af den udpegede ansvarlige.",
+      "imagePending": "Sletning af administrerede billeder er endnu ikke bekræftet.",
+      "reconciliationPending": "Den sletteansvarlige afklarer et ubekræftet resultat."
+    }
   }
 }

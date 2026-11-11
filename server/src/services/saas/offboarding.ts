@@ -1,7 +1,8 @@
 import { secretService, assertCompanyManagedSecretErasureComplete } from "../secrets.js";
-import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import {
   activityLog,
+  platformAdminAudit,
   agentApiKeys,
   agentIdentities,
   agents,
@@ -19,8 +20,8 @@ import {
   memoryJobs,
   type Db,
 } from "@paperclipai/db";
-import { companyDeletionRequestSchema } from "@paperclipai/shared";
-import { conflict, forbidden, notFound } from "../../errors.js";
+import { companyDeletionRecoveryRequestSchema, companyDeletionRequestSchema } from "@paperclipai/shared";
+import { conflict, forbidden, notFound, HttpError } from "../../errors.js";
 import { purgeCompanyContent } from "./company-purge.js";
 import type { companyObjectErasure } from "./object-erasure.js";
 import { companyService } from "../companies.js";
@@ -29,6 +30,28 @@ import type { runtimeControlService } from "../runtime/control.js";
 import { assertCompanyManagedOpenCodeRuntimeDataErased, enqueueCompanyManagedOpenCodeRuntimeErasure,
   retireCompanyNativeLegacyRuntimeProfiles } from "../native-runtime/runtime-asset-retention.js";
 import { memoryJobService } from "../memory/memory-jobs.js";
+import { SecretProviderClientError } from "../../secrets/types.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
+
+// Only closed, typed owner failures need a human repair. Unknown physical
+// outcomes remain pending; failure never releases their retained liabilities.
+function offboardingFailure(error: unknown) {
+  if (error instanceof HttpError && error.details && typeof error.details === "object" && "code" in error.details) {
+    const code = error.details.code;
+    if (code === "secret_provider_erasure_identity_unresolved" || code === "runtime_erasure_attempts_exhausted" ||
+        code === "offboarding_stage_invalid") return { code, recoveryRequired: true };
+    if (code === "secret_provider_erasure_pending" || code === "feedback_retention_hold_pending" ||
+        code === "feedback_image_erasure_pending") return { code, recoveryRequired: false };
+  }
+  if (error instanceof SecretProviderClientError) {
+    if (error.code === "access_denied" || error.code === "invalid_request")
+      return { code: `offboarding_provider_${error.code}`, recoveryRequired: true };
+    return { code: "secret_provider_erasure_pending", recoveryRequired: false };
+  }
+  return { code: "offboarding_reconciliation_pending", recoveryRequired: false };
+}
+
 export function saasOffboardingService(
   db: Db,
   billing: ReturnType<typeof billingService>,
@@ -36,6 +59,7 @@ export function saasOffboardingService(
   objects: ReturnType<typeof companyObjectErasure>,
   retireHost?: (hostId: string) => Promise<unknown>,
   removeFeedbackImages?: (companyId: string) => Promise<unknown>,
+  operatorUserIds: readonly string[] = [],
 ) {
   async function request(
     companyId: string,
@@ -164,9 +188,41 @@ export function saasOffboardingService(
       .limit(1);
     return row ?? null;
   }
+  async function recover(companyId: string, actor: AuthorizationActor, raw: unknown) {
+    const expected = companyDeletionRecoveryRequestSchema.parse(raw);
+    return db.transaction(async tx => {
+      await assertConfiguredOperatorAuthentication(tx, actor, operatorUserIds);
+      if (actor.type !== "board" || !actor.userId) throw forbidden("Configured platform operator required");
+      const [company] = await tx.select({ status: companies.status }).from(companies)
+        .where(eq(companies.id, companyId)).for("update");
+      const [operation] = await tx.select().from(companyDeletionOperations)
+        .where(and(eq(companyDeletionOperations.companyId, companyId),
+          eq(companyDeletionOperations.id, expected.operationId))).for("update");
+      if (!company || !operation) throw notFound();
+      const failure = operation.evidence.lastFailure;
+      if (company.status !== "archived" || operation.status !== "failed" || operation.completedAt ||
+          operation.errorCode !== expected.errorCode || !failure || typeof failure !== "object" ||
+          !("observedAt" in failure) || failure.observedAt !== expected.failedAt ||
+          !("code" in failure) || failure.code !== operation.errorCode ||
+          !("stage" in failure) || failure.stage !== operation.stage ||
+          !("recoveryRequired" in failure) || failure.recoveryRequired !== true)
+        throw conflict("Deletion recovery state changed; refresh the original operation");
+      // Requeue the SAME stage/operation. Its original erasure owners must
+      // prove every pending resource again; this records no physical success.
+      const recoveredAt = new Date();
+      await tx.update(companyDeletionOperations).set({ status: "processing", errorCode: null, notBefore: recoveredAt })
+        .where(eq(companyDeletionOperations.id, operation.id));
+      await tx.insert(platformAdminAudit).values({ companyId, operatorUserId: actor.userId,
+        action: "company.deletion_recovery_requested", resourceId: operation.id,
+        safeDetails: { stage: operation.stage, errorCode: operation.errorCode, failedAt: expected.failedAt } });
+      await assertConfiguredOperatorAuthentication(tx, actor, operatorUserIds);
+      return { id: operation.id, companyId, stage: operation.stage, status: "processing" as const };
+    });
+  }
   async function processOne(now = new Date()) {
     const [operation] = await db
-      .select()
+      .select({ ...getTableColumns(companyDeletionOperations),
+        notBeforeCursor: sql<string>`extract(epoch from ${companyDeletionOperations.notBefore})::text` })
       .from(companyDeletionOperations)
       .where(
         and(
@@ -181,6 +237,14 @@ export function saasOffboardingService(
       .orderBy(companyDeletionOperations.createdAt)
       .limit(1);
     if (!operation) return false;
+    // A late worker may retain its effect receipt, but cannot move a newer or
+    // operator-paused operation using an earlier stage snapshot.
+    const currentOperation = and(
+      eq(companyDeletionOperations.id, operation.id),
+      eq(companyDeletionOperations.stage, operation.stage),
+      sql`extract(epoch from ${companyDeletionOperations.notBefore})::text = ${operation.notBeforeCursor}`,
+      eq(companyDeletionOperations.status, operation.status),
+    );
     try {
       if (operation.stage === "revoke" || operation.stage === "revoke_finalizing") {
         await companyService(db).archive(operation.companyId, {
@@ -242,6 +306,7 @@ export function saasOffboardingService(
           if (failed.length >= 3)
             throw conflict(
               "Runtime erasure attempts require operator reconciliation",
+              { code: "runtime_erasure_attempts_exhausted" },
             );
           const key =
             "offboard:" +
@@ -276,7 +341,7 @@ export function saasOffboardingService(
               notBefore: new Date(now.getTime() + 10000),
               errorCode: "runtime_erasure_pending",
             })
-            .where(eq(companyDeletionOperations.id, operation.id));
+            .where(currentOperation);
           return true;
         }
         await db
@@ -284,12 +349,10 @@ export function saasOffboardingService(
           .set({
             stage: "billing",
             errorCode: null,
-            evidence: {
-              ...operation.evidence,
-              runtimesErasedAt: now.toISOString(),
-            },
+            evidence: sql`coalesce(${companyDeletionOperations.evidence}, '{}'::jsonb) ||
+              ${JSON.stringify({ runtimesErasedAt: now.toISOString() })}::jsonb`,
           })
-          .where(eq(companyDeletionOperations.id, operation.id));
+          .where(currentOperation);
         return true;
       }
       if (operation.stage === "billing") {
@@ -299,13 +362,10 @@ export function saasOffboardingService(
           .set({
             stage: "retention",
             errorCode: null,
-            evidence: {
-              ...operation.evidence,
-              billing: evidence,
-              billingReconciledAt: now.toISOString(),
-            },
+            evidence: sql`coalesce(${companyDeletionOperations.evidence}, '{}'::jsonb) ||
+              ${JSON.stringify({ billing: evidence, billingReconciledAt: now.toISOString() })}::jsonb`,
           })
-          .where(eq(companyDeletionOperations.id, operation.id));
+          .where(currentOperation);
         return true;
       }
       if (operation.stage === "retention") {
@@ -332,7 +392,7 @@ export function saasOffboardingService(
               ),
               errorCode: "backup_retention_pending",
             })
-            .where(eq(companyDeletionOperations.id, operation.id));
+            .where(currentOperation);
           return true;
         }
         await db
@@ -343,7 +403,7 @@ export function saasOffboardingService(
             notBefore: now,
             errorCode: null,
           })
-          .where(eq(companyDeletionOperations.id, operation.id));
+          .where(currentOperation);
         return true;
       }
       if (operation.stage === "purge") {
@@ -352,8 +412,8 @@ export function saasOffboardingService(
           await tx.execute(sql`set local lock_timeout='1s'`);
           await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, operation.companyId)).for("update");
           const [current] = await tx.select({ stage: companyDeletionOperations.stage, status: companyDeletionOperations.status })
-            .from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id)).for("update");
-          if (!current || current.stage !== "purge" || current.status === "completed") return false;
+            .from(companyDeletionOperations).where(currentOperation).for("update");
+          if (!current || current.stage !== "purge" || current.status === "completed" || current.status === "failed") return false;
           // Fence/cancel never-dispatched support reservations before touching
           // external company objects. A dispatch with an unknown or pending
           // provider outcome must settle at the original broker first.
@@ -371,7 +431,7 @@ export function saasOffboardingService(
           if (supportOutcome) return false;
           const held = await tx.execute(sql`select 1 from customer_feedback_retention where company_id=${operation.companyId}::uuid
             and legal_hold and (hold_release_at is null or hold_release_at>clock_timestamp()) limit 1`);
-          if (held.length) throw conflict("Feedback retention hold requires its original operator before company erasure");
+          if (held.length) throw conflict("Feedback retention hold requires its original operator before company erasure", { code: "feedback_retention_hold_pending" });
           return true;
         });
         if (!admitted) return false;
@@ -400,7 +460,7 @@ export function saasOffboardingService(
           if (managedRunIds.some(runId => !hasCurrentReceipt(runId))) {
             const waitingOnStop = managedRunIds.some(runId => latest.get(`runtime-asset-erasure:v1:${runId}`)?.status === "failed");
             await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + (waitingOnStop ? 60000 : 10000)),
-              errorCode: "managed_provider_erasure_pending" }).where(eq(companyDeletionOperations.id, operation.id));
+              errorCode: "managed_provider_erasure_pending" }).where(currentOperation);
             return true;
           }
         }
@@ -422,7 +482,7 @@ export function saasOffboardingService(
           if (!(error && typeof error === "object" && "status" in error && error.status === 409)) throw error;
           await db.update(companyDeletionOperations).set({ notBefore: new Date(now.getTime() + 10000),
             errorCode: retiredLegacyRunIds.length ? "legacy_runtime_asset_erasure_pending" : "managed_provider_erasure_pending" })
-            .where(eq(companyDeletionOperations.id, operation.id));
+            .where(currentOperation);
           return true;
         }
         // Drain through the original secret owner outside the purge transaction.
@@ -448,7 +508,7 @@ export function saasOffboardingService(
         const [pendingImage] = await db.select({ id: feedbackImageDeletions.id }).from(feedbackImageDeletions).where(and(
           eq(feedbackImageDeletions.companyId, operation.companyId), isNull(feedbackImageDeletions.deletedAt),
         )).limit(1);
-        if (pendingImage) throw conflict("Feedback image erasure is awaiting physical confirmation");
+        if (pendingImage) throw conflict("Feedback image erasure is awaiting physical confirmation", { code: "feedback_image_erasure_pending" });
         await db
           .update(companyDeletionOperations)
           .set({
@@ -456,8 +516,7 @@ export function saasOffboardingService(
             stage: "completed",
             completedAt: now,
             errorCode: null,
-            evidence: {
-              ...operation.evidence,
+            evidence: sql`coalesce(${companyDeletionOperations.evidence}, '{}'::jsonb) || ${JSON.stringify({
               objects: objectEvidence,
               database: databaseEvidence,
               ...(databaseEvidence.platformModelFunding
@@ -467,27 +526,27 @@ export function saasOffboardingService(
                 ? { nativeConversationModelFunding: databaseEvidence.nativeConversationModelFunding }
                 : {}),
               completedAt: now.toISOString(),
-            },
+            })}::jsonb`,
           })
-          .where(eq(companyDeletionOperations.id, operation.id));
+          .where(currentOperation);
         return true;
       }
-      throw conflict("Unknown offboarding stage");
-    } catch {
+      throw conflict("Unknown offboarding stage", { code: "offboarding_stage_invalid" });
+    } catch (error) {
+      const failure = offboardingFailure(error);
       await db
         .update(companyDeletionOperations)
         .set({
           notBefore: new Date(now.getTime() + 60000),
-          errorCode: "offboarding_reconciliation_pending",
+          errorCode: failure.code,
+          ...(failure.recoveryRequired ? { status: "failed" } : {}),
+          evidence: sql`coalesce(${companyDeletionOperations.evidence}, '{}'::jsonb) ||
+            jsonb_build_object('lastFailure', ${JSON.stringify({ code: failure.code, stage: operation.stage,
+              observedAt: now.toISOString(), recoveryRequired: failure.recoveryRequired })}::jsonb)`,
         })
-        .where(and(
-          eq(companyDeletionOperations.id, operation.id),
-          eq(companyDeletionOperations.stage, operation.stage),
-          eq(companyDeletionOperations.notBefore, operation.notBefore),
-          inArray(companyDeletionOperations.status, ["requested", "processing", "waiting_retention"]),
-        ));
+        .where(currentOperation);
       return true;
     }
   }
-  return { request, get, processOne };
+  return { request, get, recover, processOne };
 }

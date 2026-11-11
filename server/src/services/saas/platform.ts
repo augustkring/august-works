@@ -216,6 +216,7 @@ export function saasPlatform(
       for (let count = 0; count < 3; count++)
         if (!(await processFeedbackImageDeletion(db, storage, undefined, companyId))) break;
     },
+    config.operatorUserIds,
   );
   const support = saasSupportService(db, config, notifications.notifyCompany);
   const logs = config.runLogs

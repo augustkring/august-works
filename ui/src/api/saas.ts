@@ -496,9 +496,10 @@ export const saasApi = {
         userId,
       ),
     ),
-  deletion: (companyId: string, userId: string) =>
+  deletion: (companyId: string, userId: string, signal?: AbortSignal) =>
     api.get<SaasDeletion | null>(
       scoped(companyPath(companyId) + "/deletion", userId),
+      { signal, cache: "no-store" },
     ),
   deleteCompany: (
     companyId: string,

@@ -229,10 +229,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
+      "sourceSha256": "0d10be6c640663a8be5ca9cfef901a0c837507074389dc0180c9ee521a5ac053",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -253,10 +253,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity",
-      "sourceSha256": "f754a9775bc3d90f63660d1a4b72769871e8e9db1446c27d6daaa9f157255c1a",
+      "sourceSha256": "a390c21998e48ce5055ad3773bd083fde097628cfa0e2a3be46fb4119a771a16",
       "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -269,10 +269,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
+      "sourceSha256": "0d10be6c640663a8be5ca9cfef901a0c837507074389dc0180c9ee521a5ac053",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/services/billing/billing.ts",
@@ -293,10 +293,10 @@
     {
       "source": "ui/src/api/saas.ts",
       "articleId": "billing-and-capacity-da",
-      "sourceSha256": "f754a9775bc3d90f63660d1a4b72769871e8e9db1446c27d6daaa9f157255c1a",
+      "sourceSha256": "a390c21998e48ce5055ad3773bd083fde097628cfa0e2a3be46fb4119a771a16",
       "articleSha256": "b11c75a4dc5766898ef17113a345aebb2fb8700f1a14b5d07b4aa8c4e598ef5d",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -373,10 +373,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
+      "sourceSha256": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17",
       "articleSha256": "60fb27696b7e053d78cfb8579ae3c99b826d0a97c62acbdce88ca3979e58747f",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -509,10 +509,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
+      "sourceSha256": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17",
       "articleSha256": "fde0e0a405c5576829b43ec70b1224abd15e44827d20aed3e786322f1dea2f04",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
@@ -629,10 +629,10 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced",
-      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
+      "sourceSha256": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17",
       "articleSha256": "7e3f602d0174f483880b0c5b4656888a27e45894aad13ab36d00911a27727161",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "cli/src/index.ts",
@@ -653,170 +653,170 @@
     {
       "source": "server/src/routes/openapi.ts",
       "articleId": "developer-and-advanced-da",
-      "sourceSha256": "0583fcc6e0bc458b6c1ab09905f72052ed5b74a496bb398faa100fb0f95e19e9",
+      "sourceSha256": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17",
       "articleSha256": "2075f5ee10f13c7bf13eeaad37fe0e3e2c6d302bf343d6f6c23b7df2891f6efd",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "sourceSha256": "f14b60703ce7801a7baed34d2c7b6496f14d0fc1c698eca691dfce1f6c7e8aa1",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete",
-      "sourceSha256": "26895e94931ae7e5a74bcb6c9ddc0ff8263255a5c407eaffbb6f29d73d17cf05",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "sourceSha256": "72505ddaa9b869e830a85ce206f4895caba3b3027a0a42d58138b0109b995fe4",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/routes/memory.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "1fae08e6465ba1c6ea49efcafed34f650d4c0b5cf10a4f197a81ef9c297c3356",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "3dd1e3dc75f0a443d577189ae6d744261a59141584f4289eb6cb9623977e781f",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/memory/memory-service.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "3ce39db7256780a86a89b3663e8e9163d18908c230b39c8afba7f61db179861c",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/saas/account-deletion.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "587dad80d99260da82f21d295f7453d161f00092c11284e724eb38861663e046",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "sourceSha256": "f14b60703ce7801a7baed34d2c7b6496f14d0fc1c698eca691dfce1f6c7e8aa1",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/CompanyExport.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "9b297a2235267531f717947eb1ae2a10b24ae0e0aa4ebe99bc786af2a1c2c0db",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/Memory.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "868990402f0308c8cf6640b7d2ff2d89265a29af3b4343dd7482a476ce675f74",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/SaasAccount.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "9896df1b563a26874860b6565c141f9875aa06492412a4d9f48e675cebb5acb1",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/SaasDeletion.tsx",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "26895e94931ae7e5a74bcb6c9ddc0ff8263255a5c407eaffbb6f29d73d17cf05",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "sourceSha256": "72505ddaa9b869e830a85ce206f4895caba3b3027a0a42d58138b0109b995fe4",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "packages/shared/src/agent-packages.ts",
@@ -909,10 +909,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
+      "sourceSha256": "0d10be6c640663a8be5ca9cfef901a0c837507074389dc0180c9ee521a5ac053",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "199b3d40e269eeb9101c81df7826b95313dd974f78da0f77ce64f1f797adf389",
+      "sourceSha256": "9ac1d09ce7d26acc4bbca7e986ff8357faf51ccf78ae372eb248ee08664df8d4",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1221,10 +1221,10 @@
     {
       "source": "server/src/routes/saas.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "221d5d25cf04841b34e8495aa370fb0270b35d9e114cd3e6245fa8840bc069a1",
+      "sourceSha256": "0d10be6c640663a8be5ca9cfef901a0c837507074389dc0180c9ee521a5ac053",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/saas-platform-config.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "199b3d40e269eeb9101c81df7826b95313dd974f78da0f77ce64f1f797adf389",
+      "sourceSha256": "9ac1d09ce7d26acc4bbca7e986ff8357faf51ccf78ae372eb248ee08664df8d4",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -2006,65 +2006,65 @@
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "a806e5a2f86478815af58e095ff94370ce6f981d3b36651a4bef1b5736098068",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/memory/memory-jobs.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "a81e334aeb8ecfd9c6b918cddd9b3554de80cbdb340cd7365e3684d57353ba89",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/native-runtime/runtime-asset-retention.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "a806e5a2f86478815af58e095ff94370ce6f981d3b36651a4bef1b5736098068",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/native-local-process-stop.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "eb8b745482355d518555e4de7a11a06ac1d22abab150db061a8838ad2ffe265f",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
       "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
       "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article now explains the post-logout personal-account receipt, original operation scope, browser-cookie availability up to 90 days, dated status download and unavailable-versus-accepted distinction. Company/provider retention remains separate."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2789,50 +2789,50 @@
     {
       "source": "ui/src/i18n/experience/en.json",
       "articleId": "create-and-track-work",
-      "sourceSha256": "5abedef1c1b6a27304e5e5e9c79dd444a10fe5434abf20bb2dae9d18dd0e6ae5",
+      "sourceSha256": "68d2b87166c9e6718336abdc59a90e445a94e42f207416eeadb40f31c683fc5b",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "updated",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "ui/src/i18n/experience/da.json",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "12fb1f8eb59328386380ae34f8cd4a1000e814203075b30ce06a6728e9bbc415",
+      "sourceSha256": "50492d84011a3ce984666700f2da8b274b7793a16dcc281303b3e178782fc52d",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "updated",
-      "rationale": "Reviewed the personal-account receipt additions in this shared source. Billing, capacity, Help/support and Task actions and their current authorization are unchanged; the article still describes those actions accurately."
+      "rationale": "Reviewed the new organization-deletion operator routes, OpenAPI constraints, private status read and isolated organizationDeletion EN/DA copy. Existing billing, import/export, developer references, Task copy and customer Help/support behavior described by this article is unchanged; internal recovery adds no public integration or customer authorization."
     },
     {
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
       "articleId": "export-and-delete",
       "sourceSha256": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
-      "articleSha256": "530c708f4d82a6a223c5844672ca44c828774ccff6c42df11b75bb0040d8905f",
+      "articleSha256": "7a0426348c7ca94f6af767e59a7cbd7c99429d5bb8660240032487de5aa2cf2c",
       "decision": "updated",
-      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/pages/Auth.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "50a391c98431cf735bc349a531a8e566760993077a1c2e112eba2d0cc6f1f721",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     },
     {
       "source": "ui/src/components/PersonalAccountDeletionReceipt.tsx",
       "articleId": "export-and-delete-da",
       "sourceSha256": "8be3d5194f6fcb654d53e64d79ff4a1f0921f883173b8cb36971b84be5026829",
-      "articleSha256": "563f4a17d58c71cffe58a79400f1ad52a9e82f08a36a6ab008add5142e95d343",
+      "articleSha256": "e68f2248e4bd9a9c0a768fea597fcc81c4228e6acf0a75d13363ab6a77028bd4",
       "decision": "updated",
-      "rationale": "The EN/DA article describes the same-browser private personal-deletion receipt after logout, its status and scope, download snapshot, expiry and unknown-result limitations."
+      "rationale": "Reviewed the EN/DA organization-deletion recovery guidance: failed means incomplete and requires human/operator repair of the original request; retain the request ID, avoid a second request and retain status access when new admission is withdrawn. Personal account receipts, provider confirmation and legal retention remain separately scoped."
     }
   ]
 }

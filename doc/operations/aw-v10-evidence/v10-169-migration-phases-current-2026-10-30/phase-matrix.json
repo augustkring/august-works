@@ -838,7 +838,7 @@
     },
     {
       "path": "doc/operations/aw-v6-runtime.md",
-      "sha256": "b49bb952657b904e60faea4bdbe1880e7b2064eef99f71426e207bdd9149b785"
+      "sha256": "a96c4276fcc2385eb8f6ffc35bf47fc47dec5fd76bc754ef2f4bd7c4c6c2b32e"
     },
     {
       "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
@@ -1510,7 +1510,7 @@
     },
     {
       "path": "server/src/services/saas/platform.ts",
-      "sha256": "f5294702ef6b8748144b946224e0d70212c20749a2dd863092467c18b263e1ff"
+      "sha256": "129877cf13d924cbd89c9658fb017968d8be1fb35ce31de93302b0fd3c2263c8"
     },
     {
       "path": "ui/src/api/companies.ts",

@@ -1,0 +1,22 @@
+{
+  "baseline": "fd9ce5e36d6bdf778b909305040cc13fa6f8ff90",
+  "sourcePaths": {
+    "packages/shared/src/saas-contracts.ts": "cdb983c9d7285273f752f5f5da39b78eca88abcf31d66c0312979958ef7e1f6c",
+    "packages/shared/src/saas-types.ts": "88a6c052c1c3e98a40fb0785d6897ed09a501987b5b8e4d81d66e56d41eb68d8",
+    "server/src/__tests__/openapi-routes.test.ts": "6093928228bda46b0900833a5a3b641abcaac3f531a9ef4194e7ae4a0ffbd772",
+    "server/src/__tests__/v6-company-purge.integration.test.ts": "381ca5f88e7f158386254a72dbb1f445102b92fc7175fe2fe6acfd50dffd5506",
+    "server/src/routes/openapi.ts": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17",
+    "server/src/routes/saas.ts": "0d10be6c640663a8be5ca9cfef901a0c837507074389dc0180c9ee521a5ac053",
+    "server/src/routes/v6-api-paths.ts": "b00000d1914f22200b7de0d2ca0614ea114df3a1aa0a2e204dd448cc21fa32bb",
+    "server/src/services/company-search-help.generated.ts": "9ac1d09ce7d26acc4bbca7e986ff8357faf51ccf78ae372eb248ee08664df8d4",
+    "server/src/services/saas/offboarding.ts": "f14b60703ce7801a7baed34d2c7b6496f14d0fc1c698eca691dfce1f6c7e8aa1",
+    "server/src/services/saas/platform.ts": "129877cf13d924cbd89c9658fb017968d8be1fb35ce31de93302b0fd3c2263c8",
+    "ui/src/api/saas.ts": "a390c21998e48ce5055ad3773bd083fde097628cfa0e2a3be46fb4119a771a16",
+    "ui/src/i18n/experience/da.json": "50492d84011a3ce984666700f2da8b274b7793a16dcc281303b3e178782fc52d",
+    "ui/src/i18n/experience/en.json": "68d2b87166c9e6718336abdc59a90e445a94e42f207416eeadb40f31c683fc5b",
+    "ui/src/pages/SaasDeletion.test.tsx": "87d4fddeeb290a50ee0c6fb32a093459f0a2869c343590e638f57d270da3bc8e",
+    "ui/src/pages/SaasDeletion.tsx": "72505ddaa9b869e830a85ce206f4895caba3b3027a0a42d58138b0109b995fe4"
+  },
+  "noRequirementStatusPromotion": true,
+  "actualProviderPasskeyCeremonyHostQualification": false
+}

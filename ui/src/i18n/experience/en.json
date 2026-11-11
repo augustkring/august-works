@@ -4216,5 +4216,60 @@
     "unknownTitle": "Task is paused.",
     "unknownDetail": "Review the paused work before resuming it.",
     "reviewResume": "Review resume"
+  },
+  "organizationDeletion": {
+    "heading": "Delete organization",
+    "loading": "Checking the deletion request…",
+    "unavailable": "The deletion service could not be checked. Try again before making a request.",
+    "disabled": "New organization deletion requests are not available yet.",
+    "statusLabel": "Deletion: {{status}}",
+    "stepLabel": "Current step: {{step}}",
+    "requestId": "Request ID: {{id}}",
+    "retention": "New work is blocked. Retained backups must reach their deletion date before final erasure.",
+    "recoveryRequired": "Erasure is incomplete and requires an operator to repair the failed step. Contact human support with this request ID. Do not submit another deletion request.",
+    "awaitingConfirmation": "Erasure is awaiting confirmation. Contact human support with this request ID if this state continues.",
+    "retainedRecords": "Financial records and a minimal deletion receipt are retained where required.",
+    "retry": "Check status again",
+    "consequences": "Deletion blocks new agent work and starts stopping active work, erasing managed runtimes and removing your organization’s content after the retention period. This cannot be undone. Shared agents must be moved to another home organization first.",
+    "export": "Export your organization before deletion",
+    "exported": "I have saved the exports I need.",
+    "confirm": "Type {{name}} to confirm",
+    "organizationName": "the organization name",
+    "back": "Back to settings",
+    "submit": "Request organization deletion",
+    "status": {
+      "requested": "requested",
+      "processing": "processing",
+      "waitingRetention": "waiting for retention",
+      "failed": "requires support",
+      "completed": "completed",
+      "cancelled": "cancelled",
+      "unknown": "checking required"
+    },
+    "stage": {
+      "revoke": "Revoking access",
+      "stopping": "Stopping active work",
+      "runtimes": "Erasing managed runtimes",
+      "billing": "Closing billing",
+      "retention": "Waiting for retained backups",
+      "purge": "Erasing organization content",
+      "completed": "Completed",
+      "unknown": "Contact support for the current step"
+    },
+    "nextReconciliation": "Next automatic check, no earlier than: {{date}}",
+    "manualReconciliation": "Automatic retries are paused until an operator repairs this step.",
+    "reason": {
+      "providerIdentity": "The original provider erasure identity needs repair.",
+      "runtimeRepair": "Managed runtime erasure needs operator reconciliation.",
+      "stageRepair": "The deletion workflow needs operator repair.",
+      "providerAccess": "Access to the original erasure provider needs repair.",
+      "providerRequest": "The original provider erasure request needs repair.",
+      "providerPending": "The original provider has not yet confirmed erasure.",
+      "runtimePending": "Managed runtime erasure has not yet been confirmed.",
+      "backupPending": "Retained backups have not yet reached their deletion date.",
+      "retentionHold": "A retention hold must be reviewed by its designated owner.",
+      "imagePending": "Managed image erasure has not yet been confirmed.",
+      "reconciliationPending": "The deletion owner is reconciling an unconfirmed result."
+    }
   }
 }

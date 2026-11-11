@@ -156,6 +156,27 @@ export const companyDeletionRequestSchema = z
   })
   .strict();
 
+export const companyDeletionRecoveryRequestSchema = z.object({
+  operationId: z.string().uuid(),
+  errorCode: z.enum(["secret_provider_erasure_identity_unresolved", "runtime_erasure_attempts_exhausted",
+    "offboarding_stage_invalid", "offboarding_provider_access_denied", "offboarding_provider_invalid_request"]),
+  failedAt: z.string().datetime(),
+}).strict();
+export const companyDeletionRecoveryResultSchema = z.object({
+  id: z.string().uuid(), companyId: z.string().uuid(), stage: z.string().min(1).max(100), status: z.literal("processing"),
+}).strict();
+export const companyDeletionFailuresQuerySchema = z.object({
+  after: z.string().uuid().optional(), expectedUserId: z.string().min(1).max(300).optional(),
+}).strict();
+export const companyDeletionFailuresResultSchema = z.object({
+  operations: z.array(z.object({
+    id: z.string().uuid(), companyId: z.string().uuid(), stage: z.string().min(1).max(100),
+    errorCode: z.string().max(100).nullable(),
+    lastFailure: z.object({ observedAt: z.string().datetime().nullable() }).strict(),
+  }).strict()).max(100),
+  nextCursor: z.string().uuid().nullable(),
+}).strict();
+
 export const accountDeletionRequestSchema = z
   .object({
     confirmation: z.literal("DELETE MY ACCOUNT"),

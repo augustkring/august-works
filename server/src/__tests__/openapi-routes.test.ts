@@ -139,6 +139,30 @@ it("documents the operator model dependency projection as private noncacheable m
   expect(response.content?.["application/json"].schema?.properties).toHaveProperty("modelDependencies");
 });
 
+it("documents accepted company-erasure recovery with distinct current and recent operator sessions", () => {
+  const paths = buildOpenApiSpec().paths as Record<string, Record<string, any>>;
+  const list = paths["/api/saas/internal/company-deletions"].get;
+  const retry = paths["/api/saas/internal/company-deletions/{companyId}/retry"].post;
+  for (const operation of [list, retry]) {
+    expect(operation.security).toEqual([{ BoardSessionAuth: [] }]);
+    expect(operation["x-paperclip-authorization"]).toMatchObject({ actor: "board", humanSession: true,
+      configuredOperator: true, phishingResistant: true, noCompanyAdminBypass: true, acceptedErasureRecoveryOnly: true });
+    const status = operation === list ? 200 : 202;
+    expect(operation.responses[status].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(operation.description).toContain("rollout withdrawal");
+  }
+  expect(list["x-paperclip-authorization"].recentAuthentication).toBe(false);
+  expect(retry["x-paperclip-authorization"].recentAuthentication).toBe(true);
+  expect(list.parameters.filter((p: { in: string }) => p.in === "query").map((p: { name: string }) => p.name).sort())
+    .toEqual(["after", "expectedUserId"]);
+  expect(list.responses[200].content["application/json"].schema.properties.operations.maxItems).toBe(100);
+  const body = retry.requestBody.content["application/json"].schema;
+  expect(body.additionalProperties).toBe(false);
+  expect(Object.keys(body.properties).sort()).toEqual(["errorCode", "failedAt", "operationId"]);
+  expect(body.properties.errorCode.enum).toContain("offboarding_provider_access_denied");
+  expect(retry.responses[202].content["application/json"].schema.properties.status.enum).toEqual(["processing"]);
+});
+
 it("documents deletion receipt preparation as Human-session-only and status as a narrow cookie capability", () => {
   const paths = buildOpenApiSpec().paths as Record<string, Record<string, any>>;
   const prepare = paths["/api/saas/account/deletion/receipt-access"].post;

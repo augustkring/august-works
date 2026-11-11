@@ -27,6 +27,8 @@ Open **Company settings → Deletion** to review the organization deletion reque
 
 Deletion may remain in a retention state while managed backups reach their deletion date. Financial records and a minimal deletion receipt may be retained where required. Follow the status and stage shown on the deletion page; a submitted request is not proof that final erasure has completed.
 
+If the page says **requires support**, erasure is incomplete. Contact human support at [privacy@blentera.com](mailto:privacy@blentera.com) with the displayed request ID. An operator must repair the failed step before the same request can continue. Do not submit a second request. Pending automatic reconciliation shows its earliest next check time; failed steps pause automatic retries until an operator repairs them. You can still check an accepted request when new deletion requests are temporarily unavailable.
+
 ## Request personal account deletion
 
 Open **Company settings → Security** to review personal account deletion. Enter **DELETE MY ACCOUNT** and confirm that you saved the exports you need. If you use a password, confirm your current password. Some accounts without a password can use company sign-in confirmation. If the page offers it, continue to your company identity provider and return to this page. Complete any additional factor requested here, then review the deletion request before submitting it; company sign-in does not replace a factor your account requires. If the request is accepted, the account page redirects and provides a deletion receipt when available.
