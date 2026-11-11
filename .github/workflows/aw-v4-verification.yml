@@ -615,6 +615,9 @@ jobs:
       - name: Prepare workspace build dependencies
         run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
 
+      - name: Use canonical Ubuntu archive for Playwright system dependencies
+        run: bash scripts/ci-canonicalize-ubuntu-apt-mirrors.sh
+
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 

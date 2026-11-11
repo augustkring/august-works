@@ -97,6 +97,14 @@ describe("bounded Native runner failure diagnostics", () => {
       code: "adapter_failed", codeSha256: null,
     });
   });
+  it("hashes persisted error event text and preserves the payload fallback", () => {
+    const secret = "private runner failure with bearer sk-event-test-only";
+    const expectedHash = createHash("sha256").update(secret).digest("hex");
+    const eventOnly = boundedRunnerFailureDiagnostic(11, null, secret);
+    expect(JSON.stringify(eventOnly)).not.toContain(secret);
+    expect(eventOnly).toMatchObject({ seq: 11, payloadKeys: [], messageSha256: expectedHash });
+    expect(boundedRunnerFailureDiagnostic(12, { message: secret }, null).messageSha256).toBe(expectedHash);
+  });
 });
 
 describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCode frame", () => {

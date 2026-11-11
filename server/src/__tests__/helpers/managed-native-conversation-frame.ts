@@ -84,7 +84,7 @@ function safeDiagnosticEnum<T extends readonly string[]>(value: unknown, allowed
   if (value == null) return null;
   return typeof value === "string" && (allowed as readonly string[]).includes(value) ? value as T[number] : "other";
 }
-export function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
+export function boundedRunnerFailureDiagnostic(seq: number, payload: unknown, eventMessage?: string | null) {
   const value = payload && typeof payload === "object" && !Array.isArray(payload)
     ? payload as Record<string, unknown> : {};
   const hash = (raw: unknown) => typeof raw === "string" ? createHash("sha256").update(raw).digest("hex") : null;
@@ -102,7 +102,8 @@ export function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
   const payloadKeyNames = Object.keys(value).sort();
   const safeShape = payloadKeyNames.filter(key => RUNNER_FAILURE_PAYLOAD_KEYS.has(key)).slice(0, 16);
   const unknownPayloadKeys = payloadKeyNames.filter(key => !RUNNER_FAILURE_PAYLOAD_KEYS.has(key));
-  const message = typeof value.message === "string" ? value.message.slice(0, 2048)
+  const message = typeof eventMessage === "string" ? eventMessage.slice(0, 2048)
+    : typeof value.message === "string" ? value.message.slice(0, 2048)
     : typeof failure.message === "string" ? failure.message.slice(0, 2048) : null;
   const names = new Set(["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError",
     "AbortError", "TimeoutError", "AggregateError", "HttpError", "ZodError", "RunnerIngressConnectionError"]);
@@ -1090,13 +1091,13 @@ export async function runManagedNativeConversationFrame(input: {
       let runnerFailures: Array<Record<string, unknown>> = [];
       try {
         runnerFailures = (await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType,
-          payload: heartbeatRunEvents.payload })
+          message: heartbeatRunEvents.message, payload: heartbeatRunEvents.payload })
           .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
             eq(heartbeatRunEvents.runId, finalRun.id),
             inArray(heartbeatRunEvents.eventType, ["error", "turn.failed"])))
           .orderBy(asc(heartbeatRunEvents.seq)).limit(4))
           .map(event => ({ eventType: event.eventType === "error" ? "error" : "turn.failed",
-            ...boundedRunnerFailureDiagnostic(event.seq, event.payload) }));
+            ...boundedRunnerFailureDiagnostic(event.seq, event.payload, event.message) }));
       } catch {
         runnerFailures = [{ diagnosticRead: "unavailable" }];
       }

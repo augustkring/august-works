@@ -16,6 +16,51 @@ function sameThreadIdentity(provider: string, left: string, right: string): bool
   return canonicalLeft !== null && canonicalLeft === canonicalTeamsThreadId(right);
 }
 
+// A processed Telegram migration lifecycle delivery is the durable provider
+// receipt for this exact old-resource -> new-resource edge. Bound traversal
+// and refuse ambiguous branches; never infer aliases from resource metadata.
+async function telegramMigrationLineageMatches(
+  db: Db | DbTransaction,
+  companyId: string,
+  endpointId: string,
+  oldThreadId: string,
+  currentThreadId: string,
+): Promise<boolean> {
+  const parse = (value: string) => {
+    const match = /^telegram:([^:]+)(.*)$/.exec(value);
+    if (!match || (match[2] !== "" && !match[2].startsWith(":"))) return null;
+    return { resourceId: match[1]!, suffix: match[2] };
+  };
+  const oldIdentity = parse(oldThreadId);
+  const currentIdentity = parse(currentThreadId);
+  if (!oldIdentity || !currentIdentity || oldIdentity.suffix !== currentIdentity.suffix) return false;
+  if (oldIdentity.resourceId === currentIdentity.resourceId) return true;
+
+  let resourceId = oldIdentity.resourceId;
+  const visited = new Set<string>();
+  for (let hop = 0; hop < 32; hop += 1) {
+    if (visited.has(resourceId)) return false;
+    visited.add(resourceId);
+    const edges = await db.selectDistinct({
+      target: sql<string>`${chatDeliveries.normalizedEvent}->'lifecycle'->>'providerResourceId'`,
+    }).from(chatDeliveries).where(and(
+      eq(chatDeliveries.companyId, companyId),
+      eq(chatDeliveries.endpointId, endpointId),
+      eq(chatDeliveries.state, "processed"),
+      eq(chatDeliveries.eventKind, "installation"),
+      sql`${chatDeliveries.normalizedEvent}->'lifecycle'->>'provider' = 'telegram'`,
+      sql`${chatDeliveries.normalizedEvent}->'lifecycle'->>'kind' = 'resource'`,
+      sql`${chatDeliveries.normalizedEvent}->'lifecycle'->>'resourceType' = 'chat'`,
+      sql`${chatDeliveries.normalizedEvent}->'lifecycle'->>'previousProviderResourceId' = ${resourceId}`,
+    )).limit(2);
+    if (edges.length !== 1 || typeof edges[0]!.target !== "string" ||
+        edges[0]!.target.length === 0 || edges[0]!.target.includes(":")) return false;
+    resourceId = edges[0]!.target;
+    if (resourceId === currentIdentity.resourceId) return true;
+  }
+  return false;
+}
+
 function issueOriginThreadId(originId: string | null, endpointId: string, generation: number): string | null {
   const prefix = `${endpointId}:`;
   const suffix = `:${generation}`;
@@ -214,7 +259,13 @@ export async function readCanonicalInboundWakeupDbSource(db: Db | DbTransaction,
   const eventConversation = event.conversation && typeof event.conversation === "object" ? event.conversation as Record<string, unknown> : {};
   const eventMessage = event.message && typeof event.message === "object" ? event.message as Record<string, unknown> : {};
   const eventThreadId = eventConversation.externalThreadId;
-  if (typeof eventThreadId !== "string" || !sameThreadIdentity(endpoint.provider, eventThreadId, conversation.externalThreadId) ||
+  const sameThread = typeof eventThreadId === "string" &&
+    sameThreadIdentity(endpoint.provider, eventThreadId, conversation.externalThreadId);
+  const migratedTelegramThread = !sameThread && endpoint.provider === "telegram" &&
+    typeof eventThreadId === "string" && await telegramMigrationLineageMatches(
+      db, action.companyId, endpoint.id, eventThreadId, conversation.externalThreadId,
+    );
+  if (typeof eventThreadId !== "string" || (!sameThread && !migratedTelegramThread) ||
       eventMessage.providerMessageId !== source.providerMessageId) throw deny();
   return { action, issue, endpoint, delivery, conversation, responsibleUserId: expectedUserId,
     sourceCommentId: input.expectedCommentId, runtimeGeneration: generation,

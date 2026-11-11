@@ -1,0 +1,62 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.652757328993175,
+      "filesAdvised": 397225,
+      "memoryAfter": 5819846656,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+    "src/__tests__/controlled-native-signoff-backend.test.ts",
+    "-t",
+    "bounded Native runner failure diagnostics|controlled Native signoff backend recovery"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.469699342735112e-05,
+  "sourceManifest": "native-event-privacy-and-policy-retry-r557-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 0,
+  "seconds": 18.889209246990504,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 1636794368,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 732514,
+      "parentPid": 732467,
+      "executable": "node",
+      "rssBytes": 879353856,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 732538,
+      "parentPid": 732514,
+      "executable": "node",
+      "rssBytes": 757440512,
+      "nodeOptions": "--max-old-space-size=1536"
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 2,
+  "observedPostgresRelatedPids": [],
+  "uniqueTempRoot": "/var/tmp/mpg-i2u7kbls",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 79,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+}

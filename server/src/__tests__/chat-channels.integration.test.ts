@@ -63143,6 +63143,28 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       .update(chatEndpoints)
       .set({ status: "active" })
       .where(eq(chatEndpoints.id, endpoint.id));
+    await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
+    const configured = await service.get(endpoint.id);
+    if (!configured.providerAccountId)
+      throw new Error("Expected configured Telegram provider account");
+    const [humanPrincipal] = await db
+      .insert(chatExternalPrincipals)
+      .values({
+        companyId: fixture.companyId,
+        provider: "telegram",
+        providerAccountId: configured.providerAccountId,
+        externalId: "telegram-migration-user",
+        kind: "user",
+        displayName: "Telegram migration user",
+        isBot: false,
+      })
+      .returning();
+    const linkIntent = await service.createLinkIntent(endpoint.id, humanPrincipal!.id, 1_800);
+    const linkToken = new URL(linkIntent.confirmationUrl).searchParams.get("token");
+    if (!linkToken) throw new Error("Expected Telegram migration identity-link token");
+    await service.confirmIdentityLink(linkToken, "owner-user");
+    await service.update(endpoint.id, { allowUnlinkedPeople: false }, "owner-user");
+
     const previousChatId = "-5546433913";
     const migratedChatId = "-1004415501660";
     const topicId = 77;
@@ -63233,6 +63255,78 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       state: "active",
     });
 
+    const [migrationReceipt] = await db.select().from(chatDeliveries).where(and(
+      eq(chatDeliveries.endpointId, endpoint.id),
+      eq(chatDeliveries.providerEventId, "lifecycle:telegram:46"),
+    )).limit(1);
+    expect(migrationReceipt).toMatchObject({ state: "processed", eventKind: "installation" });
+    const [historicalDelivery] = await db.select().from(chatDeliveries).where(and(
+      eq(chatDeliveries.endpointId, endpoint.id),
+      sql`${chatDeliveries.normalizedEvent}->'message'->>'providerMessageId' = ${`${previousChatId}:40`}`,
+    )).limit(1);
+    expect(historicalDelivery).toBeDefined();
+    const [historicalAction] = await db.select().from(chatActions).where(and(
+      eq(chatActions.endpointId, endpoint.id),
+      eq(chatActions.kind, "inbound_wakeup"),
+      eq(chatActions.deliveryId, historicalDelivery!.id),
+    )).limit(1);
+    expect(historicalAction).toBeDefined();
+    const historicalUserId = historicalAction!.payload.requestedByActorType === "user"
+      ? String(historicalAction!.payload.requestedByActorId) : null;
+    const checkHistoricalSource = () => readCanonicalInboundWakeupDbSource(db, {
+      action: historicalAction!, expectedIssueId: beforeMigration.issueId,
+      expectedAgentId: fixture.assignedAgentId,
+      expectedCommentId: String(historicalAction!.payload.commentId),
+      expectedUserId: historicalUserId,
+      requireLinkedHuman: true,
+    });
+    expect(historicalUserId).toBe("owner-user");
+    await expect(checkHistoricalSource()).resolves.toMatchObject({
+      conversation: { id: beforeMigration.id, externalThreadId: `telegram:${migratedChatId}:${topicId}` },
+    });
+
+    // A receipt must be completed and scoped to this exact endpoint.
+    await db.update(chatDeliveries).set({ state: "retry" }).where(eq(chatDeliveries.id, migrationReceipt!.id));
+    await expect(checkHistoricalSource()).rejects.toMatchObject({
+      status: 403, details: { code: "chat_action_authorization_changed" },
+    });
+    await db.update(chatDeliveries).set({ state: "processed" }).where(eq(chatDeliveries.id, migrationReceipt!.id));
+    const unrelatedEndpoint = await service.create(fixture.companyId, {
+      provider: "telegram", assignedAgentId: fixture.assignedAgentId, name: "Unrelated Telegram endpoint",
+    }, "owner-user");
+    await db.update(chatDeliveries).set({ endpointId: unrelatedEndpoint.id }).where(eq(chatDeliveries.id, migrationReceipt!.id));
+    await expect(checkHistoricalSource()).rejects.toMatchObject({
+      status: 403, details: { code: "chat_action_authorization_changed" },
+    });
+    await db.update(chatDeliveries).set({ endpointId: endpoint.id }).where(eq(chatDeliveries.id, migrationReceipt!.id));
+
+    const originalLifecycleEvent = structuredClone(migrationReceipt!.normalizedEvent);
+    for (const [key, value] of [["provider", "github"], ["resourceType", "channel"]] as const) {
+      const changed = structuredClone(originalLifecycleEvent);
+      const lifecycle = changed.lifecycle as Record<string, unknown>;
+      lifecycle[key] = value;
+      await db.update(chatDeliveries).set({ normalizedEvent: changed }).where(eq(chatDeliveries.id, migrationReceipt!.id));
+      await expect(checkHistoricalSource()).rejects.toMatchObject({
+        status: 403, details: { code: "chat_action_authorization_changed" },
+      });
+    }
+    await db.update(chatDeliveries).set({ normalizedEvent: originalLifecycleEvent }).where(eq(chatDeliveries.id, migrationReceipt!.id));
+
+    const originalHistoricalEvent = structuredClone(historicalDelivery!.normalizedEvent);
+    const mismatchedSuffix = structuredClone(originalHistoricalEvent);
+    (mismatchedSuffix.conversation as Record<string, unknown>).externalThreadId = `telegram:${previousChatId}:78`;
+    await db.update(chatDeliveries).set({ normalizedEvent: mismatchedSuffix }).where(eq(chatDeliveries.id, historicalDelivery!.id));
+    await expect(checkHistoricalSource()).rejects.toMatchObject({
+      status: 403, details: { code: "chat_action_authorization_changed" },
+    });
+    const missingEdge = structuredClone(originalHistoricalEvent);
+    (missingEdge.conversation as Record<string, unknown>).externalThreadId = `telegram:-9999999999:${topicId}`;
+    await db.update(chatDeliveries).set({ normalizedEvent: missingEdge }).where(eq(chatDeliveries.id, historicalDelivery!.id));
+    await expect(checkHistoricalSource()).rejects.toMatchObject({
+      status: 403, details: { code: "chat_action_authorization_changed" },
+    });
+    await db.update(chatDeliveries).set({ normalizedEvent: originalHistoricalEvent }).where(eq(chatDeliveries.id, historicalDelivery!.id));
+
     const migratedTopic = makeThread({
       channelId: `telegram:${migratedChatId}`,
       id: `telegram:${migratedChatId}:${topicId}`,
@@ -63270,6 +63364,46 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       { body: "Continue by replying after the group migration" },
     ]);
     expect(wakeup).toHaveBeenCalledTimes(2);
+
+    const thirdChatId = "-1004415501777";
+    const secondMigrationResponse = await service.handleWebhook(
+      endpoint.publicId, "telegram", new Request("https://paperclip.example/telegram", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ update_id: 47, message: {
+          message_id: 42, date: 1_788_700_042,
+          chat: { id: Number(migratedChatId), type: "supergroup", title: "Telegram migration group" },
+          migrate_to_chat_id: Number(thirdChatId),
+        } }),
+      }),
+    );
+    expect(secondMigrationResponse.status).toBe(202);
+    await expect(checkHistoricalSource()).resolves.toMatchObject({
+      conversation: { id: beforeMigration.id, externalThreadId: `telegram:${thirdChatId}:${topicId}` },
+    });
+    const [secondMigrationReceipt] = await db.select().from(chatDeliveries).where(and(
+      eq(chatDeliveries.endpointId, endpoint.id),
+      eq(chatDeliveries.providerEventId, "lifecycle:telegram:47"),
+    )).limit(1);
+    expect(secondMigrationReceipt).toMatchObject({ state: "processed" });
+    const originalSecondReceipt = structuredClone(secondMigrationReceipt!.normalizedEvent);
+    const secondReceiptMutations: Array<[string, string]> = [
+      ["providerResourceId", "-1004415501999"],
+      ["providerResourceId", previousChatId],
+      ["previousProviderResourceId", previousChatId],
+    ];
+    try {
+      for (const [field, value] of secondReceiptMutations) {
+        const changed = structuredClone(originalSecondReceipt);
+        (changed.lifecycle as Record<string, unknown>)[field] = value;
+        await db.update(chatDeliveries).set({ normalizedEvent: changed }).where(eq(chatDeliveries.id, secondMigrationReceipt!.id));
+        await expect(checkHistoricalSource()).rejects.toMatchObject({
+          status: 403, details: { code: "chat_action_authorization_changed" },
+        });
+      }
+    } finally {
+      await db.update(chatDeliveries).set({ normalizedEvent: originalSecondReceipt }).where(eq(chatDeliveries.id, secondMigrationReceipt!.id));
+    }
+
   });
 
   it("enforces Telegram group reach and privacy-mode addressing before retaining message content", async () => {

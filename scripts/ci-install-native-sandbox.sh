@@ -23,6 +23,7 @@ if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]] &&
 fi
 
 if ((${#aw_packages[@]})); then
+  bash "$(dirname -- "${BASH_SOURCE[0]}")/ci-canonicalize-ubuntu-apt-mirrors.sh"
   # A stalled runner package mirror must not consume the whole test job.
   aw_apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
   timeout --kill-after=10s 180s sudo apt-get "${aw_apt_options[@]}" update

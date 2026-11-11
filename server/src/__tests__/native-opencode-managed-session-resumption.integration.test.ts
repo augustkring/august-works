@@ -216,9 +216,9 @@ describe.each(variants)("genuine managed OpenCode checkpoint resumption (%s)", v
             const profile = current?.runnerProfileJson as Record<string, any> | null;
             const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
               ? profile!.nativeToolResultSourceCaptures as Array<Record<string, any>> : [];
-            return captures.find(value => value.callId === confirmationCallId &&
-              value.tool === "request_human_input" && typeof value.resultDigest === "string") ?? null;
-          }, "persisted_human_question_tool_result", 60_000);
+            return Boolean(captures.find(value => value.callId === confirmationCallId &&
+              value.tool === "request_human_input" && typeof value.resultDigest === "string"));
+          }, 60_000);
           const [questionRun] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson,
             resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
           const questionProfile = questionRun!.runnerProfileJson as Record<string, any>;
@@ -310,7 +310,36 @@ describe.each(variants)("genuine managed OpenCode checkpoint resumption (%s)", v
         expect(recovered).toMatchObject({ id: wake.id, runtimeMode: "native", nativeIssueId: task.id,
           completionContractId: interrupted?.completionContractId, status: "succeeded", nativePhase: "committed" });
         expect(recovered?.runnerProfileJson).toMatchObject({ nativeExecutionInput: { completionContract: frozenContract } });
+        const restoredCheckpoint = (recovered?.runnerProfileJson as Record<string, any>).sessionCheckpoint as PersistedNativeSession;
+        expect(restoredCheckpoint).toMatchObject({
+          identity: checkpoint.identity,
+          providerSessionId: checkpoint.providerSessionId,
+        });
         expect(callsByRun.get(wake.id)).toBeGreaterThan(1);
+        const [persistedPlan] = await db.select({ id: documents.id, revisionId: documents.latestRevisionId,
+          revisionNumber: documents.latestRevisionNumber }).from(issueDocuments).innerJoin(documents,
+          and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+          .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id),
+            eq(issueDocuments.key, "plan"))).limit(1);
+        expect(persistedPlan).toMatchObject({
+          id: planDocument!.id,
+          revisionId: planDocument!.revisionId,
+          revisionNumber: planDocument!.revisionNumber,
+        });
+        const savedPlanBindings = await db.select({ id: issueDocuments.id }).from(issueDocuments)
+          .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id),
+            eq(issueDocuments.key, "plan")));
+        expect(savedPlanBindings).toHaveLength(1);
+        const planWrites = await db.select({ id: toolInvocations.id, status: toolInvocations.status })
+          .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId),
+            eq(toolInvocations.runId, wake.id), eq(toolInvocations.issueId, task.id),
+            eq(toolInvocations.toolName, "write_document")));
+        expect(planWrites).toEqual([expect.objectContaining({ status: "succeeded" })]);
+        if (variant === "unchanged") {
+          const unchangedTaskRuns = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns)
+            .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.nativeIssueId, task.id)));
+          expect(unchangedTaskRuns).toEqual([{ id: wake.id }]);
+        }
         const [result] = await db.select().from(nativeRunResults).where(eq(nativeRunResults.runId, wake.id));
         expect(result).toMatchObject({ runId: wake.id, completionContractId: interrupted?.completionContractId, schemaStatus: "accepted" });
         const [finalization] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, wake.id));

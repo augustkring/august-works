@@ -196,7 +196,7 @@ it("materializes agent-pinned Skill versions and installed MCP assignments in re
           const projectFailure = async (label: "primary" | "secondary", run: typeof primaryRun) => {
             if (!run) return { label, found: false };
             const events = await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType,
-              payload: heartbeatRunEvents.payload })
+              message: heartbeatRunEvents.message, payload: heartbeatRunEvents.payload })
               .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
                 eq(heartbeatRunEvents.runId, run.id), inArray(heartbeatRunEvents.eventType, ["error", "turn.failed"])))
               .orderBy(asc(heartbeatRunEvents.seq)).limit(4);
@@ -209,7 +209,7 @@ it("materializes agent-pinned Skill versions and installed MCP assignments in re
               error: boundedRunnerFailureDiagnostic(0, { error: { code: run.errorCode, message: run.error } }).error,
               stage, phase, providerHookObserved: actualRuns.has(run.agentId),
               runnerFailures: events.map(event => ({ eventType: event.eventType === "error" ? "error" : "turn.failed",
-                ...boundedRunnerFailureDiagnostic(event.seq, event.payload) })) };
+                ...boundedRunnerFailureDiagnostic(event.seq, event.payload, event.message) })) };
           };
           try {
             console.info("native_runtime_skill_settlement_failure", JSON.stringify({
