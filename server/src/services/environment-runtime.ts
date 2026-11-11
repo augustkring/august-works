@@ -1,5 +1,6 @@
 import { readEnvironmentCreationCleanupError } from "@paperclipai/plugin-sdk";
 import { verifyNativeCleanupRuntimeState } from "./execution-sandbox/run-lease-cleanup.js";
+import { isNativeBootstrapPrelaunchCleanupCandidate, verifyNativeBootstrapPrelaunchRuntimeState } from "./execution-sandbox/native-prelaunch-cleanup.js";
 import { remoteTerminationReceipt, recordNativeRemoteWorkloadStopped } from "./remote-execution-termination.js";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -1427,6 +1428,13 @@ function createSandboxEnvironmentDriver(
       run.runnerProfileJson.nativeRemoteRuntimeAssetLocator === undefined) return undefined;
     const scope = { companyId: run.companyId, runId: run.id, leaseId: lease.id };
     if (!options.stopSandboxRunLease) throw new Error("The canonical Native Sandbox cleanup state owner is unavailable");
+    if (await isNativeBootstrapPrelaunchCleanupCandidate(db, { companyId: run.companyId, runId: run.id })) {
+      // This exact terminal prelaunch lane has no Native session-start binding;
+      // its separate owner proves setup admission Stop/Inspect and never falls
+      // through to the started-session receipt verifier.
+      const receipt = await options.stopSandboxRunLease(scope);
+      return await verifyNativeBootstrapPrelaunchRuntimeState(db, scope, receipt);
+    }
     const receipt = await options.stopSandboxRunLease(scope);
     return await verifyNativeCleanupRuntimeState(db, scope, receipt);
   };

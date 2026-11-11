@@ -54,6 +54,7 @@ vi.mock("../services/secrets.js", async importOriginal => {
   } };
 });
 const DIRECT_ADAPTERS = [
+  ["process", "process"],
   ["codex_local", "codex"],
   ["claude_local", "claude"],
   ["opencode_local", "opencode"],

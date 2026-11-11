@@ -1,4 +1,5 @@
 import { exactNativeManagedArtifactCommand } from "../native-runtime/native-artifact-preparation.js";
+import { readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
 import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentReadbackOwner, captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
 import { NATIVE_GIT_CONTEXT_PROBE_SCRIPT } from "@paperclipai/adapter-utils/execution-target";
@@ -100,6 +101,7 @@ import { sandboxProbeCases, nativeRuntimeCleanupProbeCases } from "../execution-
 import { SANDBOX_CONTROLS, NATIVE_RUNTIME_CLEANUP_PURPOSE, NATIVE_RUNTIME_CLEANUP_PROFILE } from "@paperclipai/shared";
 import { nativeSandboxHostTransport, type RemoteRuntimeCleanupAttestation } from "../execution-sandbox/native-host-bridge.js";
 import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState } from "../execution-sandbox/run-lease-cleanup.js";
+import { isNativeBootstrapPrelaunchCleanupCandidate, readNativeBootstrapPrelaunchCleanup, verifyNativeBootstrapPrelaunchStopReceipt, type NativeBootstrapPrelaunchCleanupOwner } from "../execution-sandbox/native-prelaunch-cleanup.js";
 import {
   assertRemoteRuntimeAssetErasureReady,
   assertRemoteRuntimeAssetErasureClaimCurrent,
@@ -854,10 +856,15 @@ export function runtimeControlService(
     hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string;
     executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string; now?: Date;
     nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string };
+    nativePrelaunchCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; owner: NativeBootstrapPrelaunchCleanupOwner };
   }) {
     const now = input.now ?? new Date();
     const cleanup = input.nativeCleanup;
+    const prelaunchCleanup = input.nativePrelaunchCleanup;
+    if (cleanup && prelaunchCleanup) throw conflict("Native cleanup receipt kinds are mutually exclusive");
     const physical = cleanup ? await verifyRunLeaseCleanupReceipt(tx, cleanup, cleanup.receipt) : null;
+    const prelaunchPhysical = prelaunchCleanup ? await verifyNativeBootstrapPrelaunchStopReceipt(tx, prelaunchCleanup,
+      prelaunchCleanup.receipt) : null;
     if (cleanup && (input.action !== "stop" || cleanup.companyId !== input.companyId ||
       cleanup.originalRequesterUserId !== input.userId || physical?.sandboxStop.stopCommandId !== input.hostCommandId))
       throw conflict("Native cleanup state requires the exact original signed Stop");
@@ -870,6 +877,18 @@ export function runtimeControlService(
         owner.startRequest.requesterUserId !== cleanup.originalRequesterUserId)
         throw conflict("Native cleanup state lost its original admission scope");
     }
+    if (prelaunchCleanup) {
+      if (input.action !== "stop" || prelaunchCleanup.companyId !== input.companyId ||
+          prelaunchCleanup.owner.requesterUserId !== input.userId ||
+          prelaunchPhysical?.prelaunchStop.stopCommandId !== input.hostCommandId)
+        throw conflict("Native prelaunch cleanup state requires its exact signed Stop");
+      const owner = await readNativeBootstrapPrelaunchCleanup(tx, prelaunchCleanup, prelaunchCleanup.owner);
+      if (owner.owner.cellId !== input.cellId || owner.owner.bindingId !== input.bindingId ||
+          owner.owner.generation !== input.generation || owner.owner.claimKey !== input.claimKey ||
+          owner.owner.policySnapshotId !== input.policySnapshotId || owner.owner.manifestId !== input.executionManifestId ||
+          owner.owner.manifestHash !== input.executionManifestHash || owner.owner.policyHash !== input.policyHash)
+        throw conflict("Native prelaunch cleanup state lost its original admission scope");
+    }
     const [cell] = await tx.select().from(runtimeCells).where(and(
       eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, input.cellId),
       eq(runtimeCells.generation, BigInt(input.generation)), isNull(runtimeCells.deletedAt),
@@ -880,7 +899,7 @@ export function runtimeControlService(
       eq(runtimeHostCommands.runtimeCellId, input.cellId), eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
       eq(runtimeHostCommands.commandType, SANDBOX_HOST_COMMAND), eq(runtimeHostCommands.status, "SUCCEEDED"),
     )).limit(1).for("share");
-    if (!cell || !binding || !(cleanup ? ["admitting", "running", "stopping", "quarantined", "stopped"].includes(String(binding.status)) : String(binding.status) === (input.action === "start" ? "admitting" : "stopping")) || String(binding.cell_generation) !== input.generation || !command)
+    if (!cell || !binding || !((cleanup || prelaunchCleanup) ? ["admitting", "running", "stopping", "quarantined", "stopped"].includes(String(binding.status)) : String(binding.status) === (input.action === "start" ? "admitting" : "stopping")) || String(binding.cell_generation) !== input.generation || !command)
       throw conflict("Signed sandbox workload receipt is no longer current");
     const payload = command.payload as Record<string, any>;
     const reply = command.safeResult as Record<string, any> | null;
@@ -906,7 +925,7 @@ export function runtimeControlService(
       !Number.isSafeInteger(expectedVersion) || claimVersion !== expectedVersion + 1 ||
       payload.start?.idempotencyKey !== `v7-sandbox-start:${input.bindingId}:${input.generation}:${claimVersion}:${input.policySnapshotId}`))
       throw conflict("Sandbox Start receipt is not bound to the current admission epoch");
-    if (cleanup && !["HEALTHY", "STOPPED"].includes(cell.status))
+    if ((cleanup || prelaunchCleanup) && !["HEALTHY", "STOPPED"].includes(cell.status))
       throw conflict("Native cleanup cannot settle an ambiguous runtime meter state");
     const operationId = randomUUID();
     const requestHash = input.action === "stop" && input.idempotencyKey
@@ -914,11 +933,16 @@ export function runtimeControlService(
       : sha256(JSON.stringify({ sandboxBindingId: input.bindingId, generation: input.generation, hostCommandId: input.hostCommandId, claimKey: input.claimKey, policySnapshotId: input.policySnapshotId, action: input.action }));
     const [operation] = await tx.insert(runtimeOperations).values({
       id: operationId, companyId: input.companyId, runtimeCellId: input.cellId,
-      operationType: input.action, status: "SUCCEEDED", requestedByType: cleanup ? "system" : "user", requestedById: cleanup ? "native-run-cleanup" : input.userId,
+      operationType: input.action, status: "SUCCEEDED", requestedByType: cleanup || prelaunchCleanup ? "system" : "user", requestedById: cleanup ? "native-run-cleanup" : prelaunchCleanup ? "native-bootstrap-cleanup" : input.userId,
       idempotencyKey: input.idempotencyKey ?? `sandbox-${input.action}:${input.bindingId}:${input.generation}:${input.hostCommandId}`,
       requestHash,
       desiredState: { sandboxAdmission: true, sandboxBindingId: input.bindingId, generation: input.generation, sandboxHostCommandId: input.hostCommandId, claimKey: input.claimKey, policySnapshotId: input.policySnapshotId, executionManifestId: input.executionManifestId, executionManifestHash: input.executionManifestHash, policyHash: input.policyHash,
-        ...(cleanup ? { nativeCleanup: { companyId: cleanup.companyId, runId: cleanup.runId, leaseId: cleanup.leaseId, physicalReceiptDigest: nativeSha256(physical), originalRequesterUserId: cleanup.originalRequesterUserId } } : {}) },
+        ...(cleanup ? { nativeCleanup: { companyId: cleanup.companyId, runId: cleanup.runId, leaseId: cleanup.leaseId, physicalReceiptDigest: nativeSha256(physical), originalRequesterUserId: cleanup.originalRequesterUserId } } : {}),
+        ...(prelaunchCleanup ? { nativeBootstrapPrelaunchCleanup: { companyId: prelaunchCleanup.companyId,
+          runId: prelaunchCleanup.runId, leaseId: prelaunchCleanup.leaseId, ownerDigest: nativeSha256(prelaunchCleanup.owner),
+          physicalReceiptDigest: nativeSha256(prelaunchPhysical), physicalReceipt: prelaunchPhysical,
+          stopCommandId: prelaunchPhysical!.prelaunchStop.stopCommandId,
+          inspectCommandId: prelaunchPhysical!.prelaunchStop.inspectCommandId } } : {}) },
       deadlineAt: now, completedAt: now,
     }).returning();
     if (!operation) throw conflict("Runtime workload operation receipt could not be recorded");
@@ -3121,6 +3145,14 @@ export function runtimeControlService(
       startBinding, cleanupAuthorityDeadlineAt };
   }
   async function stopSandboxRunLeaseForCleanup(input: { companyId: string; runId: string; leaseId: string }) {
+    if (await isNativeBootstrapPrelaunchCleanupCandidate(db, input)) {
+      // Claim the exact binding generation under the cell/binding locks before
+      // the Host can receive Stop. A concurrent admission now sees stopping.
+      const sandbox = executionSandboxService(db, { recordRuntimeWorkloadState: recordSandboxWorkloadState });
+      await sandbox.claimNativeBootstrapPrelaunchStop(input);
+      const physical = await nativeSandboxHostTransport(db).stopNativeBootstrapPrelaunchLease(input);
+      return await sandbox.recordNativeBootstrapPrelaunchStop(input, physical);
+    }
     const physical = await nativeSandboxHostTransport(db).stopRunLeaseForCleanup(input);
     return await executionSandboxService(db, { recordRuntimeWorkloadState: recordSandboxWorkloadState })
       .recordNativeCleanupStop(input, physical);
@@ -4224,12 +4256,15 @@ export function runtimeControlService(
       }
       const modelCredential = request.modelBrokerCredential;
       const modelClaims = modelCredential ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "worker_model") : null;
+      const reviewModelClaims = modelCredential
+        ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "review_model") : null;
       const conversationModelClaims = modelCredential
         ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "conversation_model") : null;
       const conformanceModelClaims = modelCredential
         ? verifyRuntimeToolsToken(modelCredential.capabilityToken, "provider_conformance") : null;
       const modelBinding = modelClaims?.worker_model;
       const conversationBinding = conversationModelClaims?.conversation_model;
+      const reviewBinding = reviewModelClaims?.review_model;
       const [modelAttempt] = modelBinding ? await tx.select().from(orchestrationWorkerAttempts).where(and(
         eq(orchestrationWorkerAttempts.companyId, claims.company_id),
         eq(orchestrationWorkerAttempts.id, modelBinding.workerAttemptId),
@@ -4280,11 +4315,25 @@ export function runtimeControlService(
           request.env.PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS === String(modelCredential.maxOutputTokens) &&
           Date.parse(modelCredential.expiresAt) > Date.now() &&
           Date.parse(modelCredential.expiresAt) <= Date.parse(request.modelBrokerSession?.sessionDeadlineAt ?? request.deadlineAt);
-        const workerCredentialValid = !!modelCredential && !!modelClaims?.worker_model && !conversationModelClaims?.conversation_model && !!modelBinding &&
+        const workerCredentialValid = !!modelCredential && !!modelClaims?.worker_model && !conversationModelClaims?.conversation_model && !reviewModelClaims?.review_model && !!modelBinding &&
           modelClaims.company_id === claims.company_id && modelClaims.sub === source.run.agentId &&
           modelClaims.run_id === source.run.id && modelClaims.responsible_user_id === source.run.responsibleUserId &&
           modelClaims.exp * 1000 >= Date.now() && Date.parse(modelCredential.expiresAt) <= modelClaims.exp * 1000 &&
           !!modelAttempt && !!modelPlan && modelPlan.issueId === source.run.nativeIssueId;
+        let reviewCredentialValid = false;
+        if (reviewBinding && modelCredential && source.run.responsibleUserId && source.run.agentId) {
+          const current = await options.workerModels?.issueForReviewRun({ companyId: claims.company_id,
+            agentId: source.run.agentId, runId: source.run.id, responsibleUserId: source.run.responsibleUserId });
+          const currentClaims = current ? verifyRuntimeToolsToken(current.token, "review_model") : null;
+          reviewCredentialValid = !!currentClaims?.review_model && !!source.capability.modelBrokerProviderProfile &&
+            exactProfileAndEnvironment && inputAndExpiryValid && reviewModelClaims?.company_id === claims.company_id &&
+            reviewModelClaims.sub === source.run.agentId && reviewModelClaims.run_id === source.run.id &&
+            reviewModelClaims.responsible_user_id === source.run.responsibleUserId && reviewModelClaims.exp * 1000 >= Date.now() &&
+            Date.parse(modelCredential.expiresAt) <= reviewModelClaims.exp * 1000 && reviewBinding.reviewerAgentId === source.run.agentId &&
+            reviewBinding.reviewerRunId === source.run.id && reviewBinding.issueId === source.run.nativeIssueId &&
+            reviewBinding.executionManifestId === source.manifest.id &&
+            nativeSha256(reviewBinding) === nativeSha256(currentClaims.review_model);
+        }
         let conversationCredentialValid = false;
         let conversationCredentialChecks: Record<string, boolean> | null = null;
         const conformanceContext = source.run.contextSnapshot && typeof source.run.contextSnapshot === "object" &&
@@ -4366,13 +4415,13 @@ export function runtimeControlService(
           }
         }
         if (!modelCredential || !source.capability.modelBrokerProviderProfile || !exactProfileAndEnvironment ||
-          !inputAndExpiryValid || (!workerCredentialValid && !conversationCredentialValid && !conformanceCredentialValid)) {
+          !inputAndExpiryValid || (!workerCredentialValid && !reviewCredentialValid && !conversationCredentialValid && !conformanceCredentialValid)) {
           const failedChecks = [
             ...(!modelCredential ? ["credential_absent"] : []),
             ...(!source.capability.modelBrokerProviderProfile ? ["provider_profile_absent"] : []),
             ...(!exactProfileAndEnvironment ? ["profile_or_origin_mismatch"] : []),
             ...(!inputAndExpiryValid ? ["bounds_or_expiry_invalid"] : []),
-            ...(!workerCredentialValid && !conversationCredentialValid && !conformanceCredentialValid
+            ...(!workerCredentialValid && !reviewCredentialValid && !conversationCredentialValid && !conformanceCredentialValid
               ? (conversationCredentialChecks
                   ? Object.entries(conversationCredentialChecks).filter(([, valid]) => !valid).map(([name]) => name)
                   : ["conversation_claim_or_binding_missing"])
@@ -4795,9 +4844,12 @@ export function runtimeControlService(
             .where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, current.id), eq(heartbeatRuns.status, "running")));
         });
       } else {
-        minted = hasConversationIdentity && !initialSource.attempt
-          ? await options.workerModels.issueForConversationRun(mintInput)
-          : await options.workerModels.issueForRun(mintInput);
+        const nativeReview = readNativeReviewAssignmentContext(initialSource.run.contextSnapshot);
+        minted = nativeReview && !initialSource.attempt
+          ? await options.workerModels.issueForReviewRun(mintInput)
+          : hasConversationIdentity && !initialSource.attempt
+            ? await options.workerModels.issueForConversationRun(mintInput)
+            : await options.workerModels.issueForRun(mintInput);
       }
       const credentialCeiling = modelBrokerSession ? Date.parse(modelBrokerSession.sessionDeadlineAt) : deadlineAt.getTime();
       const expiresAt = new Date(Math.min(Date.parse(minted.expiresAt), credentialCeiling, initialSource.lease.expiresAt!.getTime()));

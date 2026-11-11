@@ -3,6 +3,7 @@ import { environmentLeases, heartbeatRunEvents, heartbeatRuns, runtimeHostComman
 
 import { appendHeartbeatRunEvent } from "./heartbeat-run-events.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import { isNativeBootstrapPrelaunchCleanupCandidate, verifyNativeBootstrapPrelaunchRuntimeState } from "./execution-sandbox/native-prelaunch-cleanup.js";
 
 export const NATIVE_REMOTE_WORKLOAD_STOPPED = "native.remote_workload_stopped";
 
@@ -34,8 +35,12 @@ export async function currentRemoteTerminationReceipt(db: Db, lease: LeaseIdenti
   )) : [];
   if (run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson) &&
     run.runnerProfileJson.nativeRemoteRuntimeAssetLocator !== undefined) {
+    const scope = { companyId: run.companyId, runId: run.id, leaseId: lease.id };
+    if (value && typeof value === "object" && !Array.isArray(value) &&
+        (value as Record<string, unknown>).executionKind === "native_bootstrap_prelaunch")
+      return await verifyNativeBootstrapPrelaunchRuntimeState(db, scope, value);
     const { verifyNativeCleanupRuntimeState } = await import("./execution-sandbox/run-lease-cleanup.js");
-    return await verifyNativeCleanupRuntimeState(db, { companyId: run.companyId, runId: run.id, leaseId: lease.id }, value);
+    return await verifyNativeCleanupRuntimeState(db, scope, value);
   }
   return remoteTerminationReceipt(lease, value);
 }
@@ -68,7 +73,10 @@ export async function stoppedRemoteCleanupScopes(db: Db, companyId: string, runI
   ));
   if (run?.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson) &&
     run.runnerProfileJson.nativeRemoteRuntimeAssetLocator !== undefined) {
-    if (!await verifiedNativeRemoteStopProofs(db, { companyId, runId }, run, leases)) return null;
+    const launch = await readNativeRemoteWorkloadIntent(db, { companyId, runId, agentId: run.agentId });
+    if (!launch) {
+      if (!await verifiedNativeBootstrapPrelaunchStopProofs(db, { companyId, runId }, run, leases)) return null;
+    } else if (!await verifiedNativeRemoteStopProofs(db, { companyId, runId }, run, leases)) return null;
   }
   return [...new Set(leases.map(lease => remoteLeaseCleanupScope(lease)!))];
 }
@@ -93,6 +101,30 @@ export async function readNativeRemoteWorkloadIntent(db: Db, input: {
 }
 
 /** Pure currentness shared by the scoped reader and explicit write owner. */
+async function verifiedNativeBootstrapPrelaunchStopProofs(db: Db, input: { companyId: string; runId: string },
+  run: typeof heartbeatRuns.$inferSelect, leases: Array<typeof environmentLeases.$inferSelect>) {
+  if (!await isNativeBootstrapPrelaunchCleanupCandidate(db, input) || !leases.length ||
+      leases.some(lease => !lease.provider || lease.provider === "local" || !hasRemoteTerminationReceipt(lease))) return null;
+  const proofs: Array<{ leaseId: string; receiptDigest: string }> = [];
+  try {
+    for (const lease of leases) {
+      const verified = await verifyNativeBootstrapPrelaunchRuntimeState(db,
+        { companyId: input.companyId, runId: input.runId, leaseId: lease.id }, lease.metadata?.remoteExecutionTermination);
+      proofs.push({ leaseId: lease.id, receiptDigest: nativeSha256(verified) });
+    }
+  } catch { return null; }
+  // The phase/run authority and all Host/ledger proof are re-read by the verifier;
+  // no process-start event is synthesized for this branch.
+  const [currentRun] = await db.select({ nativePhase: heartbeatRuns.nativePhase, status: heartbeatRuns.status,
+    errorCode: heartbeatRuns.errorCode }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+      eq(heartbeatRuns.agentId, run.agentId))).limit(1);
+  if (currentRun?.status !== "failed" || currentRun.nativePhase !== "terminal_failure" ||
+      currentRun.errorCode !== "provider_initialize_protocol_error" ||
+      !await isNativeBootstrapPrelaunchCleanupCandidate(db, input)) return null;
+  return { proofs };
+}
+
 async function verifiedNativeRemoteStopProofs(db: Db, input: { companyId: string; runId: string },
   run: typeof heartbeatRuns.$inferSelect, leases: Array<typeof environmentLeases.$inferSelect>) {
   if (run.runtimeMode !== "native" || !run.runnerProfileJson?.nativeRemoteRuntimeAssetLocator || !leases.length ||

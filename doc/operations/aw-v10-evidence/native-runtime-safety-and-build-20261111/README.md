@@ -1,0 +1,9 @@
+# Native runtime safety and build evidence — 2026-11-11
+
+The prelaunch cleanup case passed with actual controlled PostgreSQL, the existing signed software Host Stop/Inspect path and the canonical runtime operation. It observes occupied capacity at the actual Stop receipt before lease-cleanup publication, then verifies release and five contradictory-evidence holds. The Native process cleanup projection stays NULL: no Native process started, and no Native process-stop event or model charge is invented. Prepared SDK artifacts are distinct from SDK execution qualification.
+
+The final server typecheck, complete workspace typecheck, and required root build passed. Separate receipts retain 15 token/receipt component cases and six selected model-budget/Help cases. Summaries include skipped counts; those cases remain unqualified by that invocation. Each receipt includes its actual resource bounds and exact before/after source hashes. Raw fixture logs stay private; failure receipts and their causes remain recorded rather than being counted as successes.
+
+The source parent is `8a5895389dc6d36d5eca6a09db0c6534f1953fb7`; individual hashes identify the uncommitted checkpoint bytes. The reviewer model lane is compiled, but its actual SDK-positive journey is not qualified here. The current environment lacks the fixed privileged socket observer; the supported CI setup is a separate validation lane. Browser progress/history cases and managed progress-comment support remain under implementation. Historical 169-requirement and migration-phase statuses are not promoted by this inventory.
+
+This evidence does not establish production Host behavior, external paid-provider behavior, deployed migration safety, representative Human qualification, GA, overall V10 acceptance, release or merge readiness.

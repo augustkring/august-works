@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import request from "supertest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { createDb, agentExecutionManifests, agentWakeupRequests, agents, environmentLeases, heartbeatRuns, issues,
-  statusDecisions, statusDecisionEffects, workAssessments, activityLog, companyMemberships } from "@paperclipai/db";
+  statusDecisions, statusDecisionEffects, issueThreadInteractions, workAssessments, activityLog, companyMemberships,
+  orchestrationModelReservations, orchestrationPlans, toolInvocations } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent } from "../native-direct-input.js";
 import { captureNativeFinalizedStageTaskBodyRead, readNativeStageTaskBodyStep } from "../native-stage-task-body-source.js";
@@ -14,6 +15,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { captureNativeFinalizedContinuationSummary } from "../execution-continuation.js";
 import { captureNativeStageContinuationForDispatch } from "../native-stage-wake-source.js";
 import { issueService } from "../issues.js";
+import { orchestrationService } from "../orchestration/orchestration-service.js";
 import { verifyNativeCleanupRuntimeState } from "../execution-sandbox/run-lease-cleanup.js";
 import { withManagedNativeHeartbeatFixture } from "../../__tests__/helpers/managed-native-heartbeat-fixture.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
@@ -22,6 +24,16 @@ import { createControlledNativeSignoffBackend } from "../../__tests__/helpers/co
 import { nativeSha256 } from "./canonical.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
 
+
+const postgresCause = (error: unknown): { code?: string; message?: string } => {
+  let current = error;
+  for (let depth = 0; depth < 8 && current && typeof current === "object"; depth++) {
+    const value = current as { code?: string; message?: string; cause?: unknown };
+    if (value.code) return value;
+    current = value.cause;
+  }
+  return {};
+};
 
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
 let db: ReturnType<typeof createDb>;
@@ -347,15 +359,6 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
       expect(parseNativeExecutionInput(reviewerProfile.nativeExecutionInput).task.prompt).toContain(stageContinuation!.summary!.body);
       expect(preNativeStageSummary).toEqual({runId:reviewerRun!.id,body:stageContinuation!.summary!.body});
 
-      const postgresCause = (error: unknown): { code?: string; message?: string } => {
-        let current = error;
-        for (let depth = 0; depth < 8 && current && typeof current === "object"; depth++) {
-          const value = current as { code?: string; message?: string; cause?: unknown };
-          if (value.code) return value;
-          current = value.cause;
-        }
-        return {};
-      };
       const forgedUpdate = async (kind: "literal" | "missing_receipt" | "copied_receipt" | "reordered" | "pruned") => {
         let reachedDeferredGuard = false;
         let rejection: unknown;
@@ -638,3 +641,188 @@ it("executes the declared Reviewer comment and terminal result from one actual m
   });
   completed=true;
 },600_000);
+
+it("captures the exact native completion review source for a real managed Reviewer run", async () => {
+  completed = false;
+  let issueId = "";
+  let executorId = "";
+  let reviewerId = "";
+  const calls = new Map<string, number>();
+  await withManagedNativeHeartbeatFixture({
+    db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 180,
+    schedulerMode: "serial", managedTwoAgentSignoff: true,
+    providerReply: ({ body, execution, runId }) => {
+      calls.set(runId, (calls.get(runId) ?? 0) + 1);
+      const callIndex = calls.get(runId)!;
+      if (callIndex > 3) throw new Error("native_review_source_unexpected_provider_replay");
+      if (callIndex === 3) return { stop_reason: "end_turn", content: [{ type: "text", text: "The bounded review turn is complete." }] };
+      const tools = body.tools as Array<{ name: string; input_schema?: unknown }>;
+      const tool = (name: string) => {
+        const found = tools.find(value => value.name === name ||
+          ["paperclip__", "paperclip_", "paperclip."].some(prefix => value.name === `${prefix}${name}`));
+        if (!found) throw new Error(`native_review_source_missing_tool_${name}`);
+        return found;
+      };
+      const reviewer = execution.binding.agentId === reviewerId;
+      if (!reviewer && execution.binding.agentId !== executorId) throw new Error("native_review_source_unassigned_agent");
+      if (reviewer) {
+        const names = tools.map(value => value.name.replace(/^(?:paperclip__|paperclip_|paperclip\.)/, ""));
+        expect(names).toContain("resolve_review");
+        expect(names).not.toEqual(expect.arrayContaining(["write_document", "create_task", "create_project", "call_api", "self_remember"]));
+      }
+      if (!reviewer && callIndex === 1) return { stop_reason: "tool_use", content: [{
+        type: "tool_use", id: `write-${runId}`, name: tool("write_document").name,
+        input: { idempotencyKey: `review-result-${runId}`, key: "review-result", title: "Submitted work",
+          body: "The bounded task output is ready for the separately assigned Reviewer.", baseRevisionId: null },
+      }] };
+      if (reviewer && callIndex === 1) {
+        expect(execution.task.title).toMatch(/^Review:/);
+        return { stop_reason: "tool_use", content: [{ type: "tool_use", id: `resolve-${runId}`,
+          name: tool("resolve_review").name, input: { decision: "accept" } }] };
+      }
+      const finish = {
+        type: "tool_use", id: `finish-${runId}`, name: tool("paperclip_finish").name,
+        input: { schema: "paperclip.run_result.v1", reportedWorkDisposition: reviewer ? "done" : "needs_review",
+          summary: reviewer ? "Reviewed the submitted work and accepted the assigned completion review." : "Prepared the work for independent review.",
+          completionClaim: { contractRevision: execution.completionContract.contract.revision, objectiveSatisfied: true,
+            criteria: execution.completionContract.contract.criteria.map((criterion: { id: string }) =>
+              ({ criterionId: criterion.id, status: "satisfied", evidenceRefs: [] })), remainingWork: [] },
+          evidence: [], verification: [],
+          attentionRequests: reviewer ? [] : [{ kind: "review", ownerClass: "agent", summary: "Review the completed work against the task.", targetAgentId: reviewerId }],
+          artifacts: [] },
+      };
+      return { stop_reason: "tool_use", content: [finish] };
+    },
+    driveScheduler: async ({ actor, companyId, heartbeat, managedAgentIds, managedSignoff }) => {
+      if (!managedAgentIds || !managedSignoff) throw new Error("native_review_source_two_agents_missing");
+      executorId = managedAgentIds.executor;
+      reviewerId = managedAgentIds.reviewer;
+      const created = await request(managedSignoff.app).post(`/api/companies/${companyId}/issues`)
+        .set("Cookie", managedSignoff.humanCookie).send({ title: "Native completion review source closure",
+          description: "Complete the work, then have the separately assigned Reviewer inspect and accept it.", status: "todo" });
+      expect(created.status).toBe(201);
+      issueId = created.body.id as string;
+      await issueService(db).update(issueId, { assigneeAgentId: executorId, actorUserId: actor.userId!,
+        privacyActor: actor, companyGuard: companyId });
+      const [plannedTask] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).limit(1);
+      if (!plannedTask || !actor.userId) throw new Error("native_review_source_current_human_plan_input_missing");
+      const plan = await orchestrationService(db).create(actor, companyId, { issueId,
+        expectedIssueUpdatedAt: plannedTask.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Complete the assigned task, then independently review its completion.",
+          requiredOutputs: [{ kind: "task_document", key: "review-result" }],
+          businessInvariants: ["A separate assigned Reviewer decides the completion review"] },
+        budgets: { maxModelCostMinor: 20, maxToolActions: 10 }, workers: [{ key: "writer", issueId }] });
+      await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
+        action: "start", rationale: "Authorize this bounded managed Native completion-review test" });
+      const wake = await heartbeat.wakeup(executorId, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: actor.userId!,
+        payload: { issueId }, contextSnapshot: { issueId } });
+      expect(wake).toBeTruthy();
+      const deadline = Date.now() + 360_000;
+      let runs: typeof heartbeatRuns.$inferSelect[] = [];
+      while (Date.now() < deadline) {
+        runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+          or(eq(heartbeatRuns.nativeIssueId, issueId), sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${issueId}`)));
+        if (runs.length === 2 && runs.every(run => ["succeeded", "failed", "cancelled", "timed_out"].includes(run.status))) break;
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      await heartbeat.drainActiveRunExecutions();
+      expect(runs).toHaveLength(2);
+      const sourceRun = runs.find(run => run.agentId === executorId)!;
+      const reviewerRun = runs.find(run => run.agentId === reviewerId)!;
+      expect(sourceRun).toMatchObject({ status: "succeeded", nativePhase: "committed", nativeProcessCleanupPending: false });
+      expect(reviewerRun).toMatchObject({ status: "succeeded", nativePhase: "committed", nativeProcessCleanupPending: false });
+      const [completedReviewPlan] = await db.select().from(orchestrationPlans).where(and(
+        eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, plan.id))).limit(1);
+      expect(completedReviewPlan?.status).toBe("running");
+      const pausedReviewPlan = await orchestrationService(db).decide(actor, companyId, plan.id, {
+        expectedVersion: completedReviewPlan!.version, action: "pause",
+        rationale: "Pause after review to verify retained receipt history.",
+      });
+      expect(pausedReviewPlan).toMatchObject({ status: "paused", version: completedReviewPlan!.version + 1 });
+      expect([2, 3]).toContain(calls.get(sourceRun.id));
+      expect([2, 3]).toContain(calls.get(reviewerRun.id));
+      const reviewerProfile = reviewerRun.runnerProfileJson as Record<string, unknown>;
+      const reviewerModelIntents = Array.isArray(reviewerProfile.nativeAwModelWireIntents)
+        ? reviewerProfile.nativeAwModelWireIntents.filter(value => value && typeof value === "object" &&
+          (value as Record<string, unknown>).modelPurpose === "review_model") as Array<Record<string, unknown>> : [];
+      expect(reviewerModelIntents.length).toBeGreaterThan(0);
+      const reviewerReservations = await db.select().from(orchestrationModelReservations).where(and(
+        eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.purpose, "review_model"),
+        eq(orchestrationModelReservations.reviewRunId, reviewerRun.id)));
+      expect(reviewerReservations).toHaveLength(reviewerModelIntents.length);
+      expect(reviewerReservations.every(row => row.status === "completed" && row.workerAttemptId === null && row.workerId === null &&
+        row.reviewAgentId === reviewerId && row.reviewSourceRunId === sourceRun.id && row.reviewIssueId === issueId)).toBe(true);
+      const immutableReviewReservation = reviewerReservations[0]!;
+      const reservationRebindError = await db.update(orchestrationModelReservations).set({
+        reviewPlanVersion: immutableReviewReservation.reviewPlanVersion! + 1,
+      }).where(and(eq(orchestrationModelReservations.companyId, companyId),
+        eq(orchestrationModelReservations.id, immutableReviewReservation.id))).returning().then(() => null, error => error);
+      expect(postgresCause(reservationRebindError).code).toBe("23514");
+      expect(postgresCause(reservationRebindError).message).toContain("review_model_reservation_binding_immutable");
+      const [retainedReviewReservation] = await db.select().from(orchestrationModelReservations).where(and(
+        eq(orchestrationModelReservations.companyId, companyId), eq(orchestrationModelReservations.id, immutableReviewReservation.id),
+      )).limit(1);
+      expect(retainedReviewReservation).toMatchObject({ status: immutableReviewReservation.status,
+        reviewInteractionId: immutableReviewReservation.reviewInteractionId,
+        reviewPlanVersion: immutableReviewReservation.reviewPlanVersion });
+      expect(reviewerModelIntents.every(intent => reviewerReservations.some(row => row.id === intent.reservationId &&
+        row.inputHash === intent.requestHash))).toBe(true);
+      const [resolveInvocation] = await db.select().from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, reviewerRun.id),
+        eq(toolInvocations.toolName, "resolve_review"), eq(toolInvocations.status, "succeeded"))).limit(1);
+      expect(resolveInvocation).toBeTruthy();
+      const [decision] = await db.select().from(statusDecisions).where(and(eq(statusDecisions.companyId, companyId),
+        eq(statusDecisions.issueId, issueId), eq(statusDecisions.runId, sourceRun.id))).limit(1);
+      expect(decision).toMatchObject({ applicationState: "applied", toStatus: "in_review" });
+      const [effect] = await db.select().from(statusDecisionEffects).where(and(eq(statusDecisionEffects.companyId, companyId),
+        eq(statusDecisionEffects.issueId, issueId), eq(statusDecisionEffects.decisionId, decision!.id),
+        eq(statusDecisionEffects.effectKind, "bind_reviewer"), eq(statusDecisionEffects.targetType, "issue_thread_interaction"))).limit(1);
+      expect(effect?.targetId).toBeTruthy();
+      const [interaction] = await db.select().from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId, companyId),
+        eq(issueThreadInteractions.issueId, issueId), eq(issueThreadInteractions.id, effect!.targetId!))).limit(1);
+      expect(interaction).toMatchObject({ sourceRunId: sourceRun.id, addresseeAgentId: reviewerId });
+      const profile = reviewerRun.runnerProfileJson as Record<string, unknown>;
+      const receipt = nativeRunInputSourceReceiptSchema.parse(profile.nativeInputSourceReceipt);
+      const wakeSource = receipt.bootstrap.inputs.find((input): input is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+        input.kind === "native_task_wake" && input.runId === reviewerRun.id && input.issueId === issueId);
+      expect(wakeSource?.nativeReview).toMatchObject({ reviewerRunId: reviewerRun.id, reviewerAgentId: reviewerId,
+        interactionId: interaction!.id, decisionId: decision!.id, sourceRunId: sourceRun.id, sourceAgentId: executorId,
+        sourceReceiptDigest: nativeRunInputSourceReceiptSchema.parse((sourceRun.runnerProfileJson as Record<string, unknown>)
+          .nativeInputSourceReceipt).digest });
+      const reader: AuthorizationActor = { type: "agent", source: "none", companyId, agentId: reviewerId,
+        runId: reviewerRun.id, onBehalfOfUserId: reviewerRun.responsibleUserId };
+      await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId, runId: reviewerRun.id, actor: reader,
+        ...receipt.bootstrap })).resolves.toBeUndefined();
+      const reviewMarker = receipt.dispatches.flatMap(dispatch => dispatch.inputs).find((input): input is Extract<NativePayloadSourceInput,
+        { kind: "review_model_dispatch" }> => input.kind === "review_model_dispatch" && input.runId === reviewerRun.id);
+      const reviewDispatch = reviewMarker && receipt.dispatches.find(dispatch => {
+        const finalInput = dispatch.inputs.at(-1);
+        return finalInput?.kind === "review_model_dispatch" && finalInput.reservationId === reviewMarker.reservationId;
+      });
+      expect(reviewDispatch).toBeTruthy();
+      const reviewPlanId = reviewerReservations[0]!.planId;
+      if (!reviewPlanId) throw new Error("review_model_reservation_missing_plan_id");
+      const [reviewPlan] = await db.select().from(orchestrationPlans).where(and(
+        eq(orchestrationPlans.companyId, companyId), eq(orchestrationPlans.id, reviewPlanId))).limit(1);
+      expect(reviewPlan).toMatchObject({ status: "paused" });
+      expect(reviewPlan!.version).toBeGreaterThan(reviewerReservations[0]!.reviewPlanVersion!);
+      await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId, runId: reviewerRun.id, actor: reader,
+        policy: reviewDispatch!.policy, inputs: reviewDispatch!.inputs })).resolves.toBeUndefined();
+      const forgedInputs = [...reviewDispatch!.inputs.slice(0, -1), { ...reviewMarker!, planId: randomUUID() }];
+      await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId, runId: reviewerRun.id, actor: reader,
+        policy: reviewDispatch!.policy, inputs: forgedInputs })).rejects.toBeDefined();
+      const originalSummary = interaction!.summary;
+      try {
+        await db.update(issueThreadInteractions).set({ summary: `${originalSummary} changed after capture` })
+          .where(and(eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.id, interaction!.id)));
+        await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId, runId: reviewerRun.id, actor: reader,
+          ...receipt.bootstrap })).rejects.toBeDefined();
+      } finally {
+        await db.update(issueThreadInteractions).set({ summary: originalSummary })
+          .where(and(eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.id, interaction!.id)));
+      }
+    },
+  });
+  completed = true;
+}, 600_000);

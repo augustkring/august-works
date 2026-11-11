@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import {
   issues,
@@ -21,6 +22,8 @@ import {
   type ModelTariffCeiling,
   type ModelReservationQuote,
   type ModelProviderWireReceipt,
+  type ReviewModelBinding,
+  reviewModelBindingSchema,
   companyPurposeFundingSchema,
   companyPurposeReservationInputSchema,
   type CompanyPurposeFunding,
@@ -98,6 +101,7 @@ const requestSchema = z
     expectedPlanVersion: z.number().int().positive(),
     purpose: z.enum([
       "worker_model",
+      "review_model",
       "read_only_verification",
       "read_only_trajectory",
       "provider_conformance",
@@ -106,6 +110,7 @@ const requestSchema = z
     ]),
     workerId: z.string().uuid().nullable().default(null),
     workerAttemptId: z.string().uuid().nullable().default(null),
+    reviewBinding: reviewModelBindingSchema.optional(),
     idempotencyKey: z.string().min(1).max(200),
     inputHash: z.string().regex(/^[a-f0-9]{64}$/),
     authorityHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -124,6 +129,15 @@ const conversationRequestSchema = z.object({
 }).strict();
 type ConversationRequest = z.infer<typeof conversationRequestSchema>;
 type Reservation = typeof orchestrationModelReservations.$inferSelect;
+function reviewBindingFromReservation(row: Reservation): ReviewModelBinding | undefined {
+  if (row.purpose !== "review_model") return undefined;
+  const parsed = reviewModelBindingSchema.safeParse({ planId: row.planId, issueId: row.reviewIssueId, interactionId: row.reviewInteractionId,
+    decisionId: row.reviewDecisionId, sourceRunId: row.reviewSourceRunId, sourceResultId: row.reviewSourceResultId, sourceWorkerId: row.reviewSourceWorkerId, sourceAgentId: row.reviewSourceAgentId, sourceAttemptId: row.reviewSourceAttemptId,
+    sourceReceiptDigest: row.reviewSourceReceiptDigest, sourceResultCanonicalSha256: row.reviewSourceResultCanonicalSha256, reviewerAgentId: row.reviewAgentId, reviewerRunId: row.reviewRunId,
+    executionManifestId: row.reviewExecutionManifestId, expectedPlanVersion: row.reviewPlanVersion });
+  if (!parsed.success) throw forbidden("Persisted review model reservation binding is incomplete");
+  return parsed.data;
+}
 type CompanyPurposeRequest = z.infer<typeof companyPurposeReservationInputSchema>;
 type CompanyPurposeReservation = typeof orchestrationCompanyPurposeReservations.$inferSelect;
 type CompanyPurposeDispatchClaim = {
@@ -183,6 +197,9 @@ export function modelReservationService(
         workerAttemptId: string | null;
       },
     ): Promise<string>;
+    /** Internal callback must rederive the current review card/source, current Human ACL,
+     * accepted plan and reviewer run/manifest; request bindings are comparison inputs only. */
+    currentReviewAuthority?(tx: Db, actor: AuthorizationActor, input: { companyId: string; planId: string; binding: ReviewModelBinding }): Promise<{ principalUserId: string; authorityHash: string; binding: ReviewModelBinding }>;
     qualifiedConversationTariff?(
       input: { companyId: string; agentId: string; runId: string },
       now: Date,
@@ -230,9 +247,19 @@ export function modelReservationService(
     workerId: string | null,
     workerAttemptId: string | null,
     now: Date,
+    reviewBinding?: ReviewModelBinding,
   ) {
     let userId: string;
-    if (purpose === "decision_shadow" && actor.type === "agent") {
+    let reviewAuthority: Awaited<ReturnType<NonNullable<typeof options.currentReviewAuthority>>> | null = null;
+    if (purpose === "review_model") {
+      const currentReviewAuthority = options.currentReviewAuthority;
+      if (!currentReviewAuthority || actor.type !== "agent" || !reviewBinding || actor.agentId !== reviewBinding.reviewerAgentId ||
+        actor.runId !== reviewBinding.reviewerRunId || !actor.onBehalfOfUserId)
+        throw forbidden("Current assigned Native Reviewer and bound review authority are required");
+      // Do not inspect review ownership before the canonical plan lock. The
+      // callback below rechecks and locks the exact review/source rows under it.
+      userId = actor.onBehalfOfUserId;
+    } else if (purpose === "decision_shadow" && actor.type === "agent") {
       if (!actor.agentId || !actor.runId || actor.companyId !== companyId) throw forbidden("A current Agent run is required for shadow decisions");
       const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, actor.runId),
         eq(heartbeatRuns.agentId, actor.agentId), eq(heartbeatRuns.status, "running"))).for("share");
@@ -263,6 +290,14 @@ export function modelReservationService(
       .for("update");
     if (!plan || plan.erasedAt)
       throw notFound("Current model budget plan not found");
+    if (purpose === "review_model") {
+      const currentReviewAuthority = options.currentReviewAuthority;
+      reviewAuthority = reviewBinding && currentReviewAuthority
+        ? await currentReviewAuthority(tx, actor, { companyId, planId, binding: reviewBinding }) : null;
+      if (!reviewAuthority || !isDeepStrictEqual(reviewAuthority.binding, reviewBinding) ||
+        reviewAuthority.principalUserId !== userId)
+        throw forbidden("The canonical review assignment or original Human authority changed");
+    }
     const originalUserId =
       plan.executionPrincipal?.type === "user"
         ? plan.executionPrincipal.userId
@@ -274,13 +309,13 @@ export function modelReservationService(
       (expectedVersion !== null && plan.version !== expectedVersion) ||
       ["completed", "cancelled", "failed"].includes(plan.status) ||
       (dispatch && !["running", "paused", "verifying"].includes(plan.status)) ||
-      (dispatch && ["worker_model", "decision_shadow"].includes(purpose) && plan.status !== "running") ||
+      (dispatch && ["worker_model", "review_model", "decision_shadow"].includes(purpose) && plan.status !== "running") ||
       plan.riskClass === "C4"
     )
       throw forbidden(
         "Current initiating human and eligible plan are required for model spend",
       );
-    if (["worker_model", "decision_shadow"].includes(purpose) && plan.budgets.maxModelCostMinor === null)
+    if (["worker_model", "review_model", "decision_shadow"].includes(purpose) && plan.budgets.maxModelCostMinor === null)
       throw forbidden("Explicit model cost cap required for this broker");
     if (
       plan.startedAt &&
@@ -899,11 +934,12 @@ export function modelReservationService(
           input.workerId,
           input.workerAttemptId,
           now,
+          input.reviewBinding,
         );
-        if (
-          (await options.currentAuthority(tx, actor, input)) !==
-          input.authorityHash
-        )
+        if ((input.purpose === "review_model") !== Boolean(input.reviewBinding) ||
+          (input.purpose === "review_model" ?
+            (await options.currentReviewAuthority?.(tx, actor, { companyId: input.companyId, planId: input.planId, binding: input.reviewBinding! }))?.authorityHash !== input.authorityHash :
+            (await options.currentAuthority(tx, actor, input)) !== input.authorityHash))
           throw conflict(
             "Model source or principal authority changed before reservation",
           );
@@ -932,6 +968,15 @@ export function modelReservationService(
             );
           return existing;
         }
+        if (input.purpose === "review_model") {
+          const [unresolved] = await tx.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations).where(and(
+            eq(orchestrationModelReservations.companyId, input.companyId),
+            eq(orchestrationModelReservations.planId, input.planId),
+            eq(orchestrationModelReservations.reviewInteractionId, input.reviewBinding!.interactionId),
+            inArray(orchestrationModelReservations.status, ["reserved", "dispatched", "unknown"]),
+          )).for("update");
+          if (unresolved) throw conflict("The assigned review already has an unresolved model charge");
+        }
         if (
           plan.budgets.maxModelCostMinor !== null &&
           plan.modelCostReserved + quote.maximumMinor > plan.budgets.maxModelCostMinor
@@ -957,6 +1002,13 @@ export function modelReservationService(
             planId: input.planId,
             workerId: input.workerId,
             workerAttemptId: input.workerAttemptId,
+            ...(input.reviewBinding ? { reviewIssueId: input.reviewBinding.issueId, reviewInteractionId: input.reviewBinding.interactionId,
+              reviewDecisionId: input.reviewBinding.decisionId, reviewSourceRunId: input.reviewBinding.sourceRunId, reviewSourceResultId: input.reviewBinding.sourceResultId,
+              reviewSourceWorkerId: input.reviewBinding.sourceWorkerId, reviewSourceAgentId: input.reviewBinding.sourceAgentId,
+              reviewSourceAttemptId: input.reviewBinding.sourceAttemptId, reviewSourceReceiptDigest: input.reviewBinding.sourceReceiptDigest,
+              reviewSourceResultCanonicalSha256: input.reviewBinding.sourceResultCanonicalSha256,
+              reviewAgentId: input.reviewBinding.reviewerAgentId, reviewRunId: input.reviewBinding.reviewerRunId,
+              reviewExecutionManifestId: input.reviewBinding.executionManifestId, reviewPlanVersion: input.reviewBinding.expectedPlanVersion } : {}),
             purpose: input.purpose,
             principalUserId: userId,
             idempotencyKey: input.idempotencyKey,
@@ -1060,6 +1112,7 @@ export function modelReservationService(
           initial.workerId,
           initial.workerAttemptId,
           now,
+          reviewBindingFromReservation(initial),
         );
         const [record] = await tx
           .select()
@@ -1165,7 +1218,7 @@ export function modelReservationService(
         } else {
           if (!initial.planId) throw forbidden("The original model reservation plan is required");
           const { plan, userId } = await authority(tx, actor, companyId, initial.planId, null, true,
-            initial.purpose, initial.workerId, initial.workerAttemptId, now);
+            initial.purpose, initial.workerId, initial.workerAttemptId, now, reviewBindingFromReservation(initial));
           if (userId !== initial.principalUserId) throw forbidden("The original model reservation principal is required");
           const quote = await freshQuote({ companyId, planId: plan.id, purpose: initial.purpose,
             inputTokensUpperBound: initial.quote.inputTokensUpperBound, maxOutputTokens: initial.quote.maxOutputTokens }, now);
@@ -1173,7 +1226,7 @@ export function modelReservationService(
             throw conflict("Model tariff or reservation scope changed before provider dispatch");
         }
 
-        if (initial.purpose === "worker_model" || initial.purpose === "conversation_model") {
+        if (initial.purpose === "worker_model" || initial.purpose === "review_model" || initial.purpose === "conversation_model") {
           if (typeof observed.callId !== "string") throw forbidden("Managed model dispatch requires its exact provider call ID");
         } else if (observed.callId !== undefined && observed.callId !== null) {
           throw forbidden("Non-tool model dispatch cannot attach a provider tool call ID");

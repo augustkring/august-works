@@ -21,6 +21,7 @@ export interface IssueAssignmentWakeupDeps {
       source?: WakeupSource;
       triggerDetail?: WakeupTriggerDetail;
       reason?: string | null;
+      failedRunId?: string | null;
       payload?: Record<string, unknown> | null;
       idempotencyKey?: string | null;
       allowRunCoalescing?: boolean;

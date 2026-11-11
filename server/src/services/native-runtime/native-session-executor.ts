@@ -75,10 +75,10 @@ import type {
   AdapterExecutionResult,
   AdapterRuntimeEvent,
 } from "../../adapters/index.js";
-import { conversationModelBindingSchema, nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, unionNativePayloadSourceInputs,
+import { conversationModelBindingSchema, reviewModelBindingSchema, nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, unionNativePayloadSourceInputs,
   type NativeFinalizationResult, type NativePayloadSourceInput, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import type { NativeBootstrapSourceClosure, NativeConsumedSourceComponent, NativeModelOutputCapture, NativePayloadSourceSet } from "./native-execution-input.js";
-import { exactNativeInteractionSourceInputs, nativeTaskWakeGuidanceSourceMatches } from "./native-execution-input.js";
+import { exactNativeInteractionSourceInputs, nativeTaskWakeGuidanceSourceMatches, nativeTaskFields } from "./native-execution-input.js";
 import { isCurrentWorkerConversationRoot } from "./worker-conversation-root.js";
 import type {
   HarnessRuntimeRequestResolution,
@@ -186,7 +186,7 @@ import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM } from "../orchestration/native-opencode-conformance-source.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
-import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
+import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import {
   assertCurrentWakeCommentsRead,
@@ -7773,10 +7773,26 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   // the source Agent remains assigned while the distinct reviewer Agent owns
   // this run. Reuse the existing exact interaction/decision/run authority;
   // this does not change the Task body, ACL, or dispatch source checks below.
-  const assignedReviewCurrent = !!currentTask && !taskAssignmentCurrent && !!await getNativeReviewAssignment(tx as unknown as Db, {
+  const reviewContext = readNativeReviewAssignmentContext(run.contextSnapshot);
+  const reviewAssignment = currentTask && reviewContext && !taskAssignmentCurrent ? await getNativeReviewAssignment(tx as unknown as Db, {
     companyId: run.companyId, issueId: currentTask.id, agentId: run.agentId,
     contextSnapshot: run.contextSnapshot, actingRunId: run.id, issueExecutionRunId: currentTask.executionRunId,
-  });
+    allowResolvedByRunId: run.id,
+  }) : null;
+  const reviewWake = closure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+    source.kind === "native_task_wake");
+  const reviewContract = run.completionContractId && run.completionContractSha256
+    ? { id: run.completionContractId, sha256: run.completionContractSha256 } : null;
+  const exactReviewAssignment = reviewAssignment && reviewWake.length === 1 && reviewWake[0]!.nativeReview && reviewContract
+    ? await captureNativeReviewWakeWitness(tx as unknown as Db, {
+      companyId: run.companyId, issueId: currentTask!.id, reviewerRunId: run.id, reviewerAgentId: run.agentId,
+      responsibleUserId: run.responsibleUserId ?? "", reviewerCompletionContract: reviewContract, assignment: reviewAssignment,
+    }).then(current => current && isDeepStrictEqual(current, reviewWake[0]!.nativeReview) ? reviewAssignment : null)
+    : null;
+  const reviewEvidencePresent = Boolean(reviewContext) || reviewWake.some(source => source.nativeReview !== undefined);
+  if ((reviewAssignment && !exactReviewAssignment) || (reviewEvidencePresent && !exactReviewAssignment))
+    return no("task_source");
+  const assignedReviewCurrent = !!exactReviewAssignment;
   const sourceActor: AuthorizationActor = { type: "agent", source: "none", companyId: run.companyId,
     agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
   if (!currentTask || (!taskAssignmentCurrent && !assignedReviewCurrent) || workspaceSource.origin === "execution_workspace" &&
@@ -7841,9 +7857,16 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
     input.kind === "task" && input.issueId === parsedExecution.binding.issueId);
   const renderedTaskProjection = { identifier: parsedExecution.task.identifier, title: parsedExecution.task.title,
     description: parsedExecution.task.description, workMode: parsedExecution.task.workMode };
-  const currentTaskProjection = currentTask && { identifier: currentTask.identifier, title: currentTask.title,
-    description: currentTask.description, workMode: currentTask.workMode };
-  const legacyRenderedTaskHash = currentTask && nativeSha256({ id: currentTask.id, ...currentTaskProjection });
+  const wakeInputs = closure.sourceSet.inputs.filter((input): input is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+    input.kind === "native_task_wake");
+  const persistedWake = record(record(run.contextSnapshot).paperclipWake);
+  const closedExternalWake = wakeInputs.length === 1 && typeof persistedWake.externalChatProvider === "string" &&
+    wakeInputs[0]!.externalChatProvider === persistedWake.externalChatProvider ? persistedWake : null;
+  // Match the producer's neutral external-chat fields only with its closed wake
+  // source. The current raw Task body hash and ACL remain mandatory below.
+  const currentTaskProjection = currentTask && nativeTaskFields(currentTask, closedExternalWake, exactReviewAssignment);
+  const legacyRenderedTaskHash = currentTask && nativeSha256({ id: currentTask.id, identifier: currentTask.identifier,
+    title: currentTask.title, description: currentTask.description, workMode: currentTask.workMode });
   if (!taskInput || !currentTask || taskInput.contentHash !== currentTask.ownerBodyHash &&
     taskInput.contentHash !== legacyRenderedTaskHash ||
     !isDeepStrictEqual(renderedTaskProjection, currentTaskProjection))
@@ -7853,8 +7876,7 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
   // input is built; it is intentionally not a second field in that contract.
   // The closure's taskEnvelopeDigest binds those final prompt bytes, while the
   // server-only wake capture preserves the exact source payload hash.
-  const wakeInputs = closure.sourceSet.inputs.filter((input): input is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
-    input.kind === "native_task_wake");
+
   if (wakeInputs.length > 1 || wakeInputs.some(input => input.runId !== run.id || input.issueId !== run.nativeIssueId)) return no("wake_binding");
   if (!nativeTaskWakeGuidanceSourceMatches(wakeInputs, "initialCommunicationGuidance" in parsedExecution ? parsedExecution.initialCommunicationGuidance : null)) return no("wake_binding");
   // The Task source was checked against its current payload-only owner hash
@@ -8633,7 +8655,7 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       const outputCaptureMatchesCall = Boolean(managedOutputCapture && managedOutputCapture.runId === input.runId &&
         managedUse?.callId === input.callId && managedUse.toolName === input.tool &&
         managedUse.argumentsHash === input.argumentsHash && managedUse.responseContentHash === matchingModelCalls[0]!.responseContentHash &&
-        managedOutputCapture.dispatch.kind === "worker_model_dispatch" &&
+        ["worker_model_dispatch", "review_model_dispatch"].includes(managedOutputCapture.dispatch.kind) &&
         managedOutputCapture.dispatch.runId === input.runId &&
         managedOutputCapture.dispatch.reservationId === matchingModelCalls[0]!.reservationId &&
         managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
@@ -9085,7 +9107,7 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
   if (typeof matchedIntent.responseContentHash !== "string" || typeof matchedIntent.reservationId !== "string")
     throw new Error("managed_opencode_tool_call_response_receipt_missing");
   const purpose = matchedIntent.modelPurpose === "conversation_model" ? "conversation_model" :
-    matchedIntent.modelPurpose === "worker_model" ? "worker_model" : null;
+    matchedIntent.modelPurpose === "review_model" ? "review_model" : matchedIntent.modelPurpose === "worker_model" ? "worker_model" : null;
   const [reservation] = purpose ? await input.db.select().from(orchestrationModelReservations).where(and(
     eq(orchestrationModelReservations.companyId, input.companyId),
     eq(orchestrationModelReservations.id, matchedIntent.reservationId),
@@ -9094,12 +9116,23 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
   )) : [];
   const binding = purpose === "conversation_model"
     ? conversationModelBindingSchema.safeParse(matchedIntent.conversationModelBinding) : null;
+  const reviewBinding = purpose === "review_model" ? reviewModelBindingSchema.safeParse(matchedIntent.reviewModelBinding) : null;
   if (!reservation || reservation.status !== "completed" || typeof reservation.providerResponseHash !== "string" ||
     (purpose === "conversation_model" && (!binding?.success || reservation.conversationAgentId !== input.agentId ||
       reservation.conversationRunId !== input.runId || reservation.conversationIssueId !== input.issueId ||
       reservation.conversationSessionGeneration !== binding?.data.conversationSessionGeneration ||
       reservation.executionManifestId !== binding?.data.executionManifestId ||
-      reservation.executionManifestHash !== binding?.data.executionManifestHash)))
+      reservation.executionManifestHash !== binding?.data.executionManifestHash)) ||
+    (purpose === "review_model" && (!reviewBinding?.success || reservation.planId !== reviewBinding.data.planId ||
+      reservation.reviewIssueId !== input.issueId || reservation.reviewInteractionId !== reviewBinding.data.interactionId ||
+      reservation.reviewDecisionId !== reviewBinding.data.decisionId || reservation.reviewSourceRunId !== reviewBinding.data.sourceRunId ||
+      reservation.reviewSourceResultId !== reviewBinding.data.sourceResultId || reservation.reviewSourceAttemptId !== reviewBinding.data.sourceAttemptId ||
+      reservation.reviewSourceReceiptDigest !== reviewBinding.data.sourceReceiptDigest ||
+      reservation.reviewSourceResultCanonicalSha256 !== reviewBinding.data.sourceResultCanonicalSha256 ||
+      reservation.reviewSourceWorkerId !== reviewBinding.data.sourceWorkerId || reservation.reviewSourceAgentId !== reviewBinding.data.sourceAgentId ||
+      reservation.reviewPlanVersion !== reviewBinding.data.expectedPlanVersion || reservation.workerId !== null || reservation.workerAttemptId !== null ||
+      reservation.reviewAgentId !== input.agentId || reservation.reviewRunId !== input.runId ||
+      reservation.reviewExecutionManifestId !== reviewBinding.data.executionManifestId)))
     throw new Error("managed_opencode_tool_call_response_unsettled");
 }
 
@@ -9134,7 +9167,7 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
     throw new Error("managed_opencode_output_capture_tool_use_ambiguous");
   const intent = matching[0]!;
   const purpose = intent.modelPurpose === "conversation_model" ? "conversation_model" :
-    intent.modelPurpose === "worker_model" ? "worker_model" : null;
+    intent.modelPurpose === "review_model" ? "review_model" : intent.modelPurpose === "worker_model" ? "worker_model" : null;
   const [reservation] = purpose ? await input.db.select().from(orchestrationModelReservations).where(and(
     eq(orchestrationModelReservations.companyId, input.companyId),
     eq(orchestrationModelReservations.id, intent.reservationId as string),
@@ -9143,13 +9176,24 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
   const conversationBinding = purpose === "conversation_model"
     ? conversationModelBindingSchema.safeParse(intent.conversationModelBinding) : null;
   const conversationBindingData = conversationBinding?.success ? conversationBinding.data : null;
+  const reviewBinding = purpose === "review_model" ? reviewModelBindingSchema.safeParse(intent.reviewModelBinding) : null;
+  const reviewBindingData = reviewBinding?.success ? reviewBinding.data : null;
   if (!reservation || reservation.status !== "completed" || typeof reservation.providerResponseHash !== "string" ||
     reservation.inputHash !== intent.requestHash || (purpose === "conversation_model" &&
       (!conversationBinding?.success || reservation.conversationAgentId !== input.agentId ||
         reservation.conversationRunId !== input.runId || reservation.conversationIssueId !== input.issueId ||
         reservation.conversationSessionGeneration !== conversationBindingData?.conversationSessionGeneration ||
         reservation.executionManifestId !== conversationBindingData?.executionManifestId ||
-        reservation.executionManifestHash !== conversationBindingData?.executionManifestHash)))
+        reservation.executionManifestHash !== conversationBindingData?.executionManifestHash)) || (purpose === "review_model" &&
+      (!reviewBinding?.success || reservation.planId !== reviewBindingData?.planId || reservation.reviewIssueId !== input.issueId ||
+        reservation.reviewInteractionId !== reviewBindingData?.interactionId || reservation.reviewDecisionId !== reviewBindingData?.decisionId ||
+        reservation.reviewSourceRunId !== reviewBindingData?.sourceRunId || reservation.reviewSourceResultId !== reviewBindingData?.sourceResultId ||
+        reservation.reviewSourceAttemptId !== reviewBindingData?.sourceAttemptId || reservation.reviewSourceReceiptDigest !== reviewBindingData?.sourceReceiptDigest ||
+        reservation.reviewSourceResultCanonicalSha256 !== reviewBindingData?.sourceResultCanonicalSha256 ||
+        reservation.reviewSourceWorkerId !== reviewBindingData?.sourceWorkerId || reservation.reviewSourceAgentId !== reviewBindingData?.sourceAgentId ||
+        reservation.reviewPlanVersion !== reviewBindingData?.expectedPlanVersion || reservation.workerId !== null || reservation.workerAttemptId !== null ||
+        reservation.reviewAgentId !== input.agentId || reservation.reviewRunId !== input.runId ||
+        reservation.reviewExecutionManifestId !== reviewBindingData?.executionManifestId)))
     throw new Error("managed_opencode_output_capture_reservation_unavailable");
   const parsedDispatchInput = nativePayloadSourceInputSchema.parse(purpose === "conversation_model" ? {
     kind: "conversation_model_dispatch", runId: input.runId, agentId: input.agentId, issueId: input.issueId,
@@ -9158,16 +9202,26 @@ async function prepareManagedOpenCodeOutputCapture(input: Parameters<typeof rene
     executionManifestHash: conversationBindingData!.executionManifestHash, reservationId: reservation.id,
     callId: intent.callId, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash,
     responseHash: reservation.providerResponseHash,
+  } : purpose === "review_model" ? {
+    kind: "review_model_dispatch", runId: input.runId, reservationId: reservation.id, callId: intent.callId,
+    planId: reviewBindingData!.planId, issueId: reviewBindingData!.issueId, interactionId: reviewBindingData!.interactionId,
+    decisionId: reviewBindingData!.decisionId, sourceRunId: reviewBindingData!.sourceRunId,
+    sourceWorkerId: reviewBindingData!.sourceWorkerId, sourceAgentId: reviewBindingData!.sourceAgentId,
+    sourceResultId: reviewBindingData!.sourceResultId, sourceAttemptId: reviewBindingData!.sourceAttemptId,
+    sourceReceiptDigest: reviewBindingData!.sourceReceiptDigest, sourceResultCanonicalSha256: reviewBindingData!.sourceResultCanonicalSha256,
+    reviewerAgentId: reviewBindingData!.reviewerAgentId, executionManifestId: reviewBindingData!.executionManifestId,
+    expectedPlanVersion: reviewBindingData!.expectedPlanVersion, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash, responseHash: reservation.providerResponseHash,
   } : { kind: "worker_model_dispatch", runId: input.runId, reservationId: reservation.id,
     callId: intent.callId, requestHash: intent.requestHash, wireBodyHash: intent.wireBodyHash,
     responseHash: reservation.providerResponseHash });
-  if (parsedDispatchInput.kind !== "worker_model_dispatch" && parsedDispatchInput.kind !== "conversation_model_dispatch")
+  if (parsedDispatchInput.kind !== "worker_model_dispatch" && parsedDispatchInput.kind !== "conversation_model_dispatch" && parsedDispatchInput.kind !== "review_model_dispatch")
     throw new Error("managed_opencode_output_capture_dispatch_unavailable");
-  const dispatchInput: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" | "conversation_model_dispatch" }> = parsedDispatchInput;
+  const dispatchInput: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" | "conversation_model_dispatch" | "review_model_dispatch" }> = parsedDispatchInput;
   const dispatches = receipt.data.dispatches;
   const matchingDispatches = dispatches.filter(dispatch => dispatch.inputs.some(source => source.kind === dispatchInput.kind &&
     source.reservationId === reservation.id && source.callId === intent.callId && source.requestHash === intent.requestHash &&
-    source.wireBodyHash === intent.wireBodyHash && source.responseHash === reservation.providerResponseHash));
+    source.wireBodyHash === intent.wireBodyHash && source.responseHash === reservation.providerResponseHash &&
+    (source.kind !== "review_model_dispatch" || isDeepStrictEqual(source, dispatchInput))));
   if (matchingDispatches.length < 1) throw new Error("managed_opencode_output_capture_dispatch_unavailable");
   const consumedRaw = record(intent.consumedSourceSet);
   const consumedPolicy = nativePayloadSourcePolicySchema.safeParse(consumedRaw.policy);
@@ -9937,6 +9991,9 @@ export async function executePaperclipNativeSession(input: {
   execution: NativeExecutionInput;
   /** Canonical immutable Heartbeat input hash, before per-run staged descriptors are appended. */
   nativeBootstrapExecutionInputHash?: string;
+  testBeforeRunnerProcessSpawn?: () => Promise<void>;
+  /** Test-only observer after the canonical DB checkpoint transaction commits. */
+  testAfterPersistedSessionCheckpoint?: (snapshot: PersistedNativeSession) => Promise<void>;
   /** Compiler-owned closed bootstrap source set; NULL means unknown. */
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   /** Rebuild the exact bootstrap closure after inbound files are verified and staged. */
@@ -10791,6 +10848,9 @@ async function executePaperclipNativeSessionWithinScope(
     },
     {
       serializeTransaction: serializeSourceOperation,
+      ...(input.testAfterPersistedSessionCheckpoint ? {
+        testAfterPersistedSessionCheckpoint: input.testAfterPersistedSessionCheckpoint,
+      } : {}),
       onCommittedEvent: async (event, markAppendDiagnosticStage) => {
         markAppendDiagnosticStage?.("callback_tool_trace_observe");
         await toolTrace.observe(event);
@@ -11437,8 +11497,10 @@ async function executePaperclipNativeSessionWithinScope(
                   if (launchEventSeq === null || !stagedAttachments)
                     throw new Error("native_attachment_stage_capture_binding_changed");
                   const immutableExecution = baseExecution ?? input.execution;
+                  // SQL binds the base to the persisted raw Task. The final
+                  // digest binds the actual wire Task, including initial guidance.
                   const baseTaskDigest = nativeTaskDigest(immutableExecution.task);
-                  const finalTaskDigest = nativeTaskDigest(input.execution.task);
+                  const finalTaskDigest = nativeTaskDigest(buildNativeModelEnvelope(input.execution).task);
                   const closureAttachmentInputs = input.bootstrapSourceClosure?.sourceSet.inputs.filter(
                     (source): source is Extract<NativePayloadSourceInput, { kind: "attachment" }> => source.kind === "attachment") ?? [];
                   // Ordinary historical staging remains an observation. Only a
@@ -13344,7 +13406,8 @@ export function createRemoteRunnerProcessLauncher(input: {
           ],
           bypassSession: true,
           timeoutMs: 10_000,
-          ...(input.nativeHarnessState ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
+          ...(input.nativeHarnessState || input.nativeSessionStart
+            ? { nativePreparationPurpose: "native_harness_state" as const } : {}),
         }).catch(async () => {
           // kill() follows Node's synchronous child-process contract. A deleted
           // sandbox or failed signal RPC must not reject outside that boundary
@@ -13463,13 +13526,19 @@ export function createRemoteRunnerProcessLauncher(input: {
       }
       launchedIdentity = { nonce: identityNonce, ...identity };
       child.pid = identity.pid;
-      await input.onSpawn?.({
-        pid: identity.pid,
-        processGroupId: null,
-        startedAt: identity.startedAt,
-        identitySource: "remote_marker",
-        remoteRunnerInstanceId: input.runnerInstanceId,
-      });
+      let spawnCallbackFailure: { error: unknown } | null = null;
+      try {
+        await input.onSpawn?.({
+          pid: identity.pid,
+          processGroupId: null,
+          startedAt: identity.startedAt,
+          identitySource: "remote_marker",
+          remoteRunnerInstanceId: input.runnerInstanceId,
+        });
+      } catch (error) {
+        spawnCallbackFailure = { error };
+        child.kill("SIGKILL");
+      }
       await input.trace?.record({
         name: "runner.process.launch",
         parentName: "runner.session.startup",
@@ -13625,6 +13694,7 @@ export function createRemoteRunnerProcessLauncher(input: {
             }),
           }));
         }
+        if (spawnCallbackFailure) throw spawnCallbackFailure.error;
         const stateSummary = `runner_remote_process_exited lifecycle=${lifecycle}${recoverableFailure ? ` recoverableFailure=${redactSensitiveText(recoverableFailure).slice(-1_000)}` : ""}${stateDiagnostics.length > 0 ? ` diagnostics=${JSON.stringify(stateDiagnostics)}` : ""}`;
         return {
           code: null,
@@ -13787,6 +13857,7 @@ export async function createRunnerdBackend(input: {
   /** Internal mode accepted only for the canonical hidden conformance Run and its server-created probe selector. */
   providerConformanceProbe?: true;
   nativeBootstrapExecutionInputHash?: string;
+  testBeforeRunnerProcessSpawn?: () => Promise<void>;
   bootstrapSourceClosure?: NativeBootstrapSourceClosure | null;
   runnerInstanceId: string;
   chatAttachmentReadScope?: NativeChatAttachmentReadScope;
@@ -14187,8 +14258,11 @@ async function createRunnerdBackendWithinSessionClaim(
     const stageCommentCatalog = input.conversationMode !== true && input.bootstrapSourceClosure?.sourceSet &&
       await nativeStageCommentApiEligible(input.db,{...input.execution.binding,
         preparedSourceSet:input.bootstrapSourceClosure.sourceSet});
-    const allowedNames = new Set(["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context",
-      "call_api", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
+    const allowedNames = new Set(nativeReview
+      ? ["read_document", "read_context", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
+        "resolve_review", "paperclip_finish", "paperclip_block"]
+      : ["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context",
+        "call_api", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
       let name = raw.name;
@@ -14250,7 +14324,8 @@ async function createRunnerdBackendWithinSessionClaim(
       return providerTool;
     }));
     const names = schemas.map((tool) => tool.name);
-    if ((!blockedHumanInteraction && (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
+    if ((nativeReview && (!names.includes("read_document") || !names.includes("resolve_review"))) ||
+      (!nativeReview && !blockedHumanInteraction && (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
       (input.nativeModelOutputCapture && !names.includes("self_remember")) ||
       (input.nativeModelOutputCapture && !names.includes("read_context")))) ||
       !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
@@ -14260,17 +14335,15 @@ async function createRunnerdBackendWithinSessionClaim(
     // terminal controls. Keep them in the broker's exact catalog proof, but
     // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
     managedOpenCodeDynamicTools = schemas.filter((tool) =>
-      ["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-        "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(String(tool.name)));
+      allowedNames.has(String(tool.name)) && !["paperclip_finish", "paperclip_block"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
-      (!blockedHumanInteraction && !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name))) ||
-      (!blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("create_project")) ||
-      (!blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
-      (!blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
-      (blockedHumanInteraction && resumeToolNames.some(name => !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) ||
-      resumeToolNames.some(name => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-        "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(name)))
+      (!nativeReview && !blockedHumanInteraction && !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name))) ||
+      (!nativeReview && !blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("create_project")) ||
+      (!nativeReview && !blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
+      (!nativeReview && !blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
+      (blockedHumanInteraction && !nativeReview && resumeToolNames.some(name => !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) ||
+      resumeToolNames.some(name => !allowedNames.has(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
     const taskEnvelope = nativeSessionTaskEnvelope(input.execution);
     const sourceContextForAuthority = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;
@@ -14448,6 +14521,7 @@ async function createRunnerdBackendWithinSessionClaim(
       remoteCwd: remoteTarget.remoteCwd,
     });
   }
+  await input.testBeforeRunnerProcessSpawn?.();
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const explicitRemoteCodex = input.runnerRemoteCodexPath?.trim() || null;
   const remoteCodexNpmSpec = input.runnerRemoteCodexNpmSpec?.trim() || null;

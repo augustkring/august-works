@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "860654da71dd4451cb4a90ca8861eb68357694b7727231219156dc3784b422f4"
+      "sha256": "94724c905706b9e23dfd31e546782247150a7c62bb5ed2b78fc22a521e6ac90a"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
@@ -378,11 +378,11 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "c6f4b148fe69653985b26a8068d02bcf8958e406c9400b1766966bbc2c4e2945"
+      "sha256": "8d328bd0fab550847536aed2c5dcc38af016d46fe9f55d6ded9654ed6d91f07a"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "05ba04e1b40dcd91d68055cedaa973dd00fcd1bad4a83eca9be59106bf4dc00b"
+      "sha256": "e60c935386ba516524602387f17a606c13d82d10e25bb51f7565eb0237eb5947"
     },
     {
       "path": "server/src/services/notification-preference-proposals.ts",
@@ -390,7 +390,7 @@
     },
     {
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "4999c60a21f364ee62cf6264a6f7796ec3a8b5d5e021e92be578ab4cc47b029e"
+      "sha256": "f80c961cc428ccd485b44433fe3ce91be736226ad5cfbbcf577d8dcc46a1b31c"
     },
     {
       "path": "server/src/services/process-findings.ts",

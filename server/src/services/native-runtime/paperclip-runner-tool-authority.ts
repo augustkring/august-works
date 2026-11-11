@@ -682,7 +682,7 @@ export class PaperclipRunnerToolAuthority {
     onManagedProjectCreateCapture?: (capture: NativeManagedProjectCreateCapture) => void,
     onManagedStageCommentCapture?: (capture: NativeManagedStageCommentCapture) => void): Promise<unknown> {
     if (this.binding.nativeReview) {
-      if (call.tool === "resolve_review") return this.#resolveReview(call.arguments);
+      if (call.tool === "resolve_review") return this.#resolveReview(call.arguments, call.callId);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
         throw forbidden("This review run may only inspect the assigned task and resolve its review.");
       }
@@ -1570,7 +1570,7 @@ export class PaperclipRunnerToolAuthority {
     return row;
   }
 
-  async #resolveReview(value: unknown) {
+  async #resolveReview(value: unknown, callId: string) {
     const input = record(value);
     if (Object.keys(input).some((key) => !["decision", "reason"].includes(key))
       || !["accept", "reject"].includes(String(input.decision))) {
@@ -1589,19 +1589,49 @@ export class PaperclipRunnerToolAuthority {
       if (review.interaction.status !== expectedStatus) throw badRequest("This review already has a different decision.");
       return { interactionId: review.interaction.id, status: expectedStatus, deduplicated: true };
     }
+    const idempotencyKey = `aw-native-tool:${this.binding.runId}:${callId}`;
+    const requestHash = nativeSha256({ interactionId: review.interaction.id, decision: input.decision, reason });
+    const [invocation] = await this.db.transaction(async (transaction) => {
+      const tx = transaction as unknown as Db;
+      const [existing] = await tx.select().from(toolInvocations).where(and(eq(toolInvocations.companyId, this.binding.companyId),
+        eq(toolInvocations.idempotencyKey, idempotencyKey))).limit(1);
+      if (existing) {
+        if (existing.idempotencyRequestHash !== requestHash || existing.runId !== this.binding.runId ||
+          existing.issueId !== this.binding.issueId || existing.toolName !== "resolve_review")
+          throw conflict("Native review action identity changed");
+        if (existing.status === "succeeded") return [existing];
+        throw conflict("Native review action is already committed or unresolved");
+      }
+      return tx.insert(toolInvocations).values({ companyId: this.binding.companyId, idempotencyKey,
+        idempotencyRequestHash: requestHash, runId: this.binding.runId, issueId: this.binding.issueId,
+        agentId: this.binding.agentId, actorType: "agent", actorId: this.binding.agentId, toolName: "resolve_review",
+        argumentsHash: requestHash, riskLevel: "low", policyDecision: "allow", approvalState: "not_required",
+        status: "executing", startedAt: new Date() }).returning();
+    });
+    if (!invocation) throw forbidden("The bounded Native review action could not be charged");
+    if (invocation.status === "succeeded") return { interactionId: review.interaction.id, status: expectedStatus, deduplicated: true };
     const apiUrl = this.binding.apiUrl ?? process.env.PAPERCLIP_API_URL;
     const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId,
       context.actor.adapterType, this.binding.runId, context.run.responsibleUserId);
     if (!apiUrl || !token) throw new Error("Review tool authentication is unavailable");
     // Use the existing resolution route so authorization, activity, dependency
     // wakes and request-changes continuation have one implementation.
-    const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/issues/${this.binding.issueId}/interactions/${review.interaction.id}/${input.decision}`, {
-      method: "POST", redirect: "error", signal: AbortSignal.timeout(30_000),
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Paperclip-Run-Id": this.binding.runId },
-      body: JSON.stringify(input.decision === "reject" ? { reason } : {}),
-    });
-    if (!response.ok) throw new Error(`Review decision was not accepted (${response.status}): ${(await response.text()).slice(0, 2_000)}`);
-    return { interactionId: review.interaction.id, status: expectedStatus };
+    try {
+      const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/issues/${this.binding.issueId}/interactions/${review.interaction.id}/${input.decision}`, {
+        method: "POST", redirect: "error", signal: AbortSignal.timeout(30_000),
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "X-Paperclip-Run-Id": this.binding.runId },
+        body: JSON.stringify(input.decision === "reject" ? { reason } : {}),
+      });
+      if (!response.ok) throw new Error(`Review decision was not accepted (${response.status}): ${(await response.text()).slice(0, 2_000)}`);
+      const result = { interactionId: review.interaction.id, status: expectedStatus };
+      await this.db.update(toolInvocations).set({ status: "succeeded", resultHash: nativeSha256(result), completedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(toolInvocations.companyId, this.binding.companyId), eq(toolInvocations.id, invocation.id), eq(toolInvocations.status, "executing")));
+      return result;
+    } catch (error) {
+      await this.db.update(toolInvocations).set({ status: "failed", errorCode: "native_review_action_failed", completedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(toolInvocations.companyId, this.binding.companyId), eq(toolInvocations.id, invocation.id), eq(toolInvocations.status, "executing")));
+      throw error;
+    }
   }
 
   async #reportProgress(input: Record<string, unknown>): Promise<unknown> {

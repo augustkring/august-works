@@ -62,11 +62,26 @@ import {
 } from "../native-runtime/runtime-asset-retention.js";
 import { nativeRuntimeCleanupProbeCases, SANDBOX_QUALIFICATION_BINDING_STATES, type SandboxAdmissionCleanup } from "./backend.js";
 import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState, type RunLeaseCleanup } from "./run-lease-cleanup.js";
+import { assertNativeBootstrapPrelaunchStopClaim, readNativeBootstrapPrelaunchCleanup,
+  type NativeBootstrapPrelaunchCleanupOwner } from "./native-prelaunch-cleanup.js";
 import { fenceSandboxAdmissionOutcome } from "./sandbox-guardian.js";
 const RUN_LEASE_CLEANUP = "__runLeaseCleanup";
+const NATIVE_BOOTSTRAP_PRELAUNCH_CLEANUP = "__nativeBootstrapPrelaunchCleanup";
 const STOPPED_NATIVE_ERASURE = "__stoppedNativeErasure";
 const NATIVE_CONFORMANCE_ADMISSION_CLEANUP = "__nativeConformanceAdmissionCleanup";
 const NATIVE_CONFORMANCE_POLICY_PROOF = "__nativeConformancePolicyProof";
+type NativeBootstrapPrelaunchCleanupClaim = Readonly<{ version: 1; owner: NativeBootstrapPrelaunchCleanupOwner }>;
+function storedNativeBootstrapPrelaunchCleanup(value: unknown): NativeBootstrapPrelaunchCleanupClaim | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw conflict("Native sandbox command payload is invalid");
+  const claim = (value as Record<string, unknown>)[NATIVE_BOOTSTRAP_PRELAUNCH_CLEANUP];
+  if (claim === undefined) return undefined;
+  if (!claim || typeof claim !== "object" || Array.isArray(claim)) throw conflict("Native prelaunch cleanup claim is invalid");
+  const row = claim as Record<string, unknown>;
+  if (row.version !== 1 || !row.owner || typeof row.owner !== "object" || Array.isArray(row.owner))
+    throw conflict("Native prelaunch cleanup claim is invalid");
+  return structuredClone(row) as unknown as NativeBootstrapPrelaunchCleanupClaim;
+}
+
 type NativeConformanceAdmissionCleanupClaim = Readonly<{
   version: 1;
   conformance: NativeOpenCodeConformanceHostAuthority;
@@ -208,6 +223,7 @@ function parseStoredSandboxHostRequest(value: unknown, hydrateCredential = false
   delete stored[STOPPED_NATIVE_ERASURE];
   delete stored[NATIVE_CONFORMANCE_ADMISSION_CLEANUP];
   delete stored[NATIVE_CONFORMANCE_POLICY_PROOF];
+  delete stored[NATIVE_BOOTSTRAP_PRELAUNCH_CLEANUP];
   const parsed = sandboxHostRequestSchema.parse(stored);
   if (sealed === undefined || !hydrateCredential) return parsed;
   if (!hashes || typeof (sealed as Record<string, unknown>).sealed !== "string") throw conflict("Qualification credential envelope is invalid");
@@ -271,6 +287,7 @@ export function nativeSandboxHostTransport(
     erasure?: StoppedNativeErasureClaim,
     nativeAdmissionCleanup?: NativeConformanceAdmissionCleanupClaim,
     nativeConformanceProof?: NativeConformancePolicyProofClaim,
+    nativePrelaunchCleanup?: NativeBootstrapPrelaunchCleanupClaim,
   ) {
     let conformanceProofOwner: { sourceAuthorityHash: string; runId: string; taskId: string; manifestId: string;
       manifestHash: string; leaseId: string; workspaceRoot: string } | null = null;
@@ -300,6 +317,31 @@ export function nativeSandboxHostTransport(
         if (!command || command.idempotencyKey !== expectedStoredKey || !persistedClaim ||
             nativeSha256(persistedClaim) !== nativeSha256(nativeAdmissionCleanup))
           throw conflict("Native conformance cleanup command lost its immutable server claim");
+      }
+    }
+    let prelaunchScope: Awaited<ReturnType<typeof readNativeBootstrapPrelaunchCleanup>> | null = null;
+    if (nativePrelaunchCleanup) {
+      if (cleanup || erasure || nativeAdmissionCleanup || nativeConformanceProof ||
+          !["stop", "inspect"].includes(request.action) ||
+          request.requesterUserId !== nativePrelaunchCleanup.owner.requesterUserId)
+        throw conflict("Native prelaunch cleanup owner changed");
+      prelaunchScope = await readNativeBootstrapPrelaunchCleanup(tx, {
+        companyId: nativePrelaunchCleanup.owner.companyId, runId: nativePrelaunchCleanup.owner.runId,
+        leaseId: nativePrelaunchCleanup.owner.leaseId,
+      }, nativePrelaunchCleanup.owner);
+      await assertNativeBootstrapPrelaunchStopClaim(tx, prelaunchScope.owner);
+      if (nativeSha256(request.scope) !== nativeSha256(prelaunchScope.scope) ||
+          request.hostEpoch !== nativePrelaunchCleanup.owner.hostEpoch ||
+          request.imageDigest !== nativePrelaunchCleanup.owner.imageDigest ||
+          request.expectedTarget?.sandboxId !== nativePrelaunchCleanup.owner.sandboxId ||
+          request.expectedTarget.containerId !== nativePrelaunchCleanup.owner.containerId)
+        throw conflict("Native prelaunch Stop escaped the exact original setup target");
+      if (commandId) {
+        const [command] = await tx.select({ idempotencyKey: runtimeHostCommands.idempotencyKey, payload: runtimeHostCommands.payload })
+          .from(runtimeHostCommands).where(eq(runtimeHostCommands.id, commandId)).limit(1);
+        const persisted = storedNativeBootstrapPrelaunchCleanup(command?.payload);
+        if (!command || !persisted || nativeSha256(persisted) !== nativeSha256(nativePrelaunchCleanup))
+          throw conflict("Native prelaunch cleanup command lost its immutable owner");
       }
     }
     const cleanupScope = cleanup ? await readRunLeaseCleanup(tx, cleanup, cleanup) : null;
@@ -350,7 +392,7 @@ export function nativeSandboxHostTransport(
       (binding.sandboxRef ?? `aw-v7-${binding.id}`) !== request.scope.sandboxRef ||
       (["apply", "start", "prove_policy"].includes(request.action) && binding.status !== "admitting") ||
       ["deleted"].includes(binding.status) ||
-      (!cleanupScope && !erasure && !safety(request.action) && binding.status === "quarantined") ||
+      (!cleanupScope && !prelaunchScope && !erasure && !safety(request.action) && binding.status === "quarantined") ||
       !host ||
       host.credentialVersion !== request.hostEpoch ||
       !host.publicKeyPem ||
@@ -391,6 +433,9 @@ export function nativeSandboxHostTransport(
         throw conflict("Stopped Native erasure target resumed before dispatch");
       await stoppedErasureCurrent(tx, request, hostId, erasure);
       // Exact claimed privacy job and canonical stopped workload; no Human grant or business renewal.
+    } else if (nativePrelaunchCleanup) {
+      // The terminal Native bootstrap owner binds this Stop to the exact original
+      // setup admission; it does not assert that a Native process ever launched.
     } else if (nativeAdmissionCleanup) {
       // The original server admission claim and prepared Host target authorize
       // only this exact Stop/inspection lifecycle, even after Human rights fall.
@@ -1313,6 +1358,64 @@ export function nativeSandboxHostTransport(
     }
   }
   /** Internal cleanup composition only: no Human grant, execution capability, or business deadline renewal. */
+  async function stopNativeBootstrapPrelaunchLease(input: { companyId: string; runId: string; leaseId: string }) {
+    const original = await readNativeBootstrapPrelaunchCleanup(db, input);
+    const claim: NativeBootstrapPrelaunchCleanupClaim = { version: 1, owner: original.owner };
+    const command = async (action: "stop" | "inspect") => {
+      const now = new Date();
+      const request = sandboxHostRequestSchema.parse({ version: 1, scope: original.scope, action,
+        hostEpoch: original.owner.hostEpoch, imageDigest: original.owner.imageDigest,
+        requesterUserId: original.owner.requesterUserId,
+        expectedTarget: { sandboxId: original.owner.sandboxId, containerId: original.owner.containerId } });
+      const payload = { ...request, [NATIVE_BOOTSTRAP_PRELAUNCH_CLEANUP]: claim };
+      const key = `native-bootstrap-prelaunch-cleanup:v1:${nativeSha256({ owner: original.owner, action })}`;
+      const queued = await withV7ActivityTransaction(db, async (tx, publications) => {
+        await current(tx, request, original.owner.hostId, now, undefined, undefined, undefined, undefined, undefined, claim);
+        const [existing] = await tx.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, key)).limit(1);
+        if (existing) {
+          if (nativeSha256(existing.payload) !== nativeSha256(payload)) throw conflict("Native prelaunch cleanup key changed");
+          return existing;
+        }
+        const [row] = await tx.insert(runtimeHostCommands).values({ companyId: input.companyId,
+          runtimeHostId: original.owner.hostId, runtimeCellId: original.owner.cellId,
+          cellGeneration: BigInt(original.owner.generation), commandType: SANDBOX_HOST_COMMAND,
+          payload, idempotencyKey: key, deadlineAt: new Date(now.getTime() + Math.min(30000, options.timeoutMs ?? 20000)) }).returning();
+        if (!row) throw conflict("Native prelaunch cleanup command was not persisted");
+        await logActivity(tx, { companyId: input.companyId, actorType: "system", actorId: "native-bootstrap-cleanup",
+          action: "sandbox.native_prelaunch_cleanup_queued", entityType: "runtime_sandbox", entityId: original.owner.bindingId,
+          details: { runId: input.runId, leaseId: input.leaseId, commandId: row.id, action } }, publications);
+        return row;
+      });
+      while (true) {
+        const [row] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.id, queued.id)).limit(1);
+        if (!row) throw conflict("Native prelaunch cleanup receipt unavailable");
+        if (row.status === "SUCCEEDED") return db.transaction(async transaction => {
+          const tx = transaction as unknown as Db;
+          await current(tx, request, row.runtimeHostId, new Date(), row.id, undefined, undefined, undefined, undefined, claim);
+          const reply = sandboxHostReplySchema.parse(row.safeResult);
+          if (reply.action !== action) throw conflict("Native prelaunch cleanup receipt action changed");
+          return { id: row.id, reply, completedAt: row.completedAt! };
+        });
+        if (["FAILED", "CANCELED", "EXPIRED"].includes(row.status) || row.deadlineAt <= new Date())
+          throw conflict("Native prelaunch physical outcome is unknown", { commandId: row.id });
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    };
+    const stop = await command("stop");
+    const inspect = await command("inspect");
+    if (stop.reply.action !== "stop" || stop.reply.stopped !== true || stop.reply.sandboxId !== original.owner.sandboxId ||
+        stop.reply.containerId !== original.owner.containerId || inspect.reply.action !== "inspect" ||
+        inspect.reply.sandboxId !== original.owner.sandboxId || inspect.reply.containerId !== original.owner.containerId ||
+        inspect.reply.state !== "stopped" || inspect.reply.generation !== original.owner.generation ||
+        inspect.reply.imageDigest !== original.owner.imageDigest || inspect.reply.policyHash !== original.owner.policyHash)
+      throw conflict("Native prelaunch cleanup lacks independent signed stopped observation");
+    await readNativeBootstrapPrelaunchCleanup(db, input, original.owner);
+    return { schema: "paperclip.remote-termination.v1", executionKind: "native_bootstrap_prelaunch" as const,
+      companyId: input.companyId, runId: input.runId, leaseId: input.leaseId, provider: original.lease.provider!,
+      providerLeaseId: original.lease.providerLeaseId!, state: "stopped" as const, confirmedAt: inspect.completedAt.toISOString(),
+      prelaunchStop: { owner: original.owner, scope: original.scope, stopCommandId: stop.id, inspectCommandId: inspect.id } };
+  }
+
   async function stopRunLeaseForCleanup(input: { companyId: string; runId: string; leaseId: string }) {
     const original = await readRunLeaseCleanup(db, input);
     if (original.binding.status !== "stopped") await fenceSandboxAdmissionOutcome(db, {
@@ -1380,6 +1483,7 @@ export function nativeSandboxHostTransport(
   }
   return {
     stopRunLeaseForCleanup,
+    stopNativeBootstrapPrelaunchLease,
     eraseStoppedNativeSession,
     refreshRemoteRuntimeCleanupAttestation,
     bridge(actor: AuthorizationActor, conformance?: NativeOpenCodeConformanceHostAuthority): OpenShellHostBridge {
@@ -1571,7 +1675,8 @@ export function nativeSandboxHostTransport(
             command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
             command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
             storedNativeConformanceAdmissionCleanup(command.payload),
-          storedNativeConformancePolicyProof(command.payload)));
+          storedNativeConformancePolicyProof(command.payload),
+            storedNativeBootstrapPrelaunchCleanup(command.payload)));
         } catch {
           await tx
             .update(runtimeHostCommands)
@@ -1600,7 +1705,8 @@ export function nativeSandboxHostTransport(
           command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
           command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
           storedNativeConformanceAdmissionCleanup(command.payload),
-          storedNativeConformancePolicyProof(command.payload));
+          storedNativeConformancePolicyProof(command.payload),
+          storedNativeBootstrapPrelaunchCleanup(command.payload));
         return {
           id: command.id,
           deadlineAt: command.deadlineAt,
@@ -1642,7 +1748,8 @@ export function nativeSandboxHostTransport(
           command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
           command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
           storedNativeConformanceAdmissionCleanup(command.payload),
-          storedNativeConformancePolicyProof(command.payload));
+          storedNativeConformancePolicyProof(command.payload),
+          storedNativeBootstrapPrelaunchCleanup(command.payload));
         if (input.reply && input.reply.action !== request.action)
           throw forbidden("Native sandbox action mismatch");
         if (["SUCCEEDED", "FAILED"].includes(command.status)) {
@@ -1667,7 +1774,8 @@ export function nativeSandboxHostTransport(
           command.payload?.[RUN_LEASE_CLEANUP] as RunLeaseCleanup | undefined,
           command.payload?.[STOPPED_NATIVE_ERASURE] as StoppedNativeErasureClaim | undefined,
           storedNativeConformanceAdmissionCleanup(command.payload),
-          storedNativeConformancePolicyProof(command.payload));
+          storedNativeConformancePolicyProof(command.payload),
+          storedNativeBootstrapPrelaunchCleanup(command.payload));
         await tx
           .update(runtimeHostCommands)
           .set({

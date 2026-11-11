@@ -126,6 +126,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   afterSandboxStartReceipt?: (facts: { scope: import("../../services/execution-sandbox/backend.js").SandboxIdentity;
     cleanup: import("../../services/execution-sandbox/backend.js").SandboxAdmissionCleanup;
     attemptStop(cleanup: import("../../services/execution-sandbox/backend.js").SandboxAdmissionCleanup): Promise<unknown> }) => Promise<void>;
+  /** Test-only callback after the managed Host's actual Stop and before cleanup publication. */
+  afterManagedSandboxStopReceipt?: (facts: { scope: { companyId: string; runId: string; leaseId: string }; receipt: unknown }) => Promise<void>;
   runOpenCodeConformance?: (context: {
     db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyIds: { primary: string; peer: string };
     agentIds: { primary: string; peer: string }; profiles: ReadonlyMap<string, WorkerModelProfile>;
@@ -142,6 +144,12 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   }) => Promise<T>;
   /** Existing Native session test seam for API-policy components that must not dispatch a provider request. */
   controlledNativeSessionBackendFactory?: (execution: NativeExecutionInput) => NativeSessionBackend;
+  /** Bootstrap fault after source/lease binding, before provider state or process creation. */
+  testBeforeNativeRunnerSpawn?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testBeforeNativeRunnerSpawn"]>;
+  /** Observe a genuine persisted checkpoint from the Heartbeat-owned run. */
+  afterPersistedNativeSessionCheckpoint?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testAfterPersistedNativeSessionCheckpoint"]>;
+  /** Original scheduler control-gate observer; no authority, Source or result is substituted. */
+  beforeChatControlRecoveryCheck?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["beforeChatControlRecoveryCheck"]>;
   /** Private fixture observer before the real Native runtime selection; no Run state is mutated. */
   beforeNativeRuntimeSelection?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["beforeNativeRuntimeSelection"]>;
   providerReply: (facts: { body: Record<string, unknown>; callIndex: number; execution: NativeExecutionInput;
@@ -159,6 +167,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   configureHeartbeat?: (context: Parameters<NonNullable<FrameInput["configureHeartbeat"]>>[0] & {
     withVerifiedModelRun: VerifiedModelRunScope;
     preparedRegistration?: ManagedSandboxProviderRegistration;
+    afterManagedSandboxStopReceipt?: (facts: { scope: { companyId: string; runId: string; leaseId: string }; receipt: unknown }) => Promise<void>;
   }) => ReturnType<NonNullable<FrameInput["configureHeartbeat"]>>;
   driveScheduler: (context: { db: ReturnType<typeof createDb>; actor: AuthorizationActor; companyId: string;
     agentId: string; gateway: ReturnType<typeof workerModelGateway>; heartbeat: ReturnType<typeof heartbeatService>;
@@ -870,6 +879,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest,
       observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; },
       withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work),
+      ...(!input.managedTwoAgentSignoff && !input.managedOpenCodeConformance
+        ? { afterManagedSandboxStopReceipt: input.afterManagedSandboxStopReceipt } : {}),
       preparedRegistration: registrationsByAgent.get(configuredAgentId) });
     if (!host) throw new Error("scheduler_fixture_host_configuration_missing");
     const schedulerHost = host as ConfiguredHost;
@@ -953,7 +964,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         stopSandboxRunLease: async scope => {
           const host = (await hostForRun(scope.runId)).host;
           if (!host.stopManagedSandboxRunLease) throw new Error("scheduler_fixture_host_cleanup_owner_missing");
-          return await host.stopManagedSandboxRunLease(scope);
+          const receipt = await host.stopManagedSandboxRunLease(scope);
+          await input.afterManagedSandboxStopReceipt?.({ scope, receipt });
+          return receipt;
         },
       }),
       beforeNativeExecution: async (args: Parameters<NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>>[0]) => {
@@ -1035,9 +1048,16 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   registerNativeDraftGateway(db, gateway);
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
     environmentRuntime: sandboxHeartbeat?.environmentRuntime,
+    ...(input.beforeChatControlRecoveryCheck ? { beforeChatControlRecoveryCheck: input.beforeChatControlRecoveryCheck } : {}),
     ...(input.beforeNativeRuntimeSelection ? { beforeNativeRuntimeSelection: input.beforeNativeRuntimeSelection } : {}),
     ...(input.controlledNativeSessionBackendFactory
       ? { nativeSessionBackendFactory: input.controlledNativeSessionBackendFactory }
+      : {}),
+    ...(input.testBeforeNativeRunnerSpawn
+      ? { testBeforeNativeRunnerSpawn: input.testBeforeNativeRunnerSpawn }
+      : {}),
+    ...(input.afterPersistedNativeSessionCheckpoint
+      ? { testAfterPersistedNativeSessionCheckpoint: input.afterPersistedNativeSessionCheckpoint }
       : {}),
     testNativeRunnerEnvironment: async ({ execution, runId, issueId,
     agentId: currentAgentId, responsibleUserId, bootstrapSourceClosure }) => {

@@ -686,6 +686,61 @@ describe("remote runner launch fingerprint compatibility", () => {
 });
 
 describe("remote runner process supervision", () => {
+  it.each([true, false].flatMap(nativeHarnessState =>
+    (["stopped", "stop_failed", "identity_changed"] as const).map(outcome => ({ nativeHarnessState, outcome }))))(
+    "contains a failed spawn callback before reporting its outcome ($outcome, harness=$nativeHarnessState)", async ({ outcome, nativeHarnessState }) => {
+      const callbackError = new Error("provider_initialize_protocol_error");
+      const stopError = new Error("signed_stop_unavailable");
+      let nonce = "";
+      const operations: string[] = [];
+      const execute = vi.fn(async (command: {
+        command?: string; args?: string[]; nativePreparationPurpose?: string;
+        modelBrokerSessionPhase?: string;
+      }) => {
+        const label = command.args?.[2];
+        const result = { exitCode: 0, signal: null, timedOut: false, stdout: "", stderr: "" };
+        if (label === "paperclip-runner-launch") {
+          nonce = command.args![4]!;
+          return result;
+        }
+        if (label === "paperclip-runner-process-identity")
+          return { ...result, stdout: `${nonce}\n4321\n2026-09-06T00:00:00.000Z\nrunner-remote\n` };
+        if (label === "paperclip-runner-signal") {
+          expect(command.nativePreparationPurpose).toBe("native_harness_state");
+          expect(command.args?.slice(3)).toEqual(["/runtime/runner-process.identity", nonce,
+            "runner-remote", "4321", "require-fingerprint"]);
+          expect(command.args?.[1]).toContain('kill -KILL "$expected_pid"');
+          operations.push("signal");
+          return result;
+        }
+        if (label === "paperclip-runner-monitor") {
+          expect(command.nativePreparationPurpose).toBe(nativeHarnessState ? "native_harness_state" : undefined);
+          operations.push(command.modelBrokerSessionPhase!);
+          if (command.modelBrokerSessionPhase === "stop" && outcome === "stop_failed") throw stopError;
+          return { ...result, exitCode: outcome === "identity_changed" ? 4 : 3 };
+        }
+        if (label === "paperclip-runner-diagnostics" || command.args?.[1]?.includes("base64"))
+          return { ...result, exitCode: 1 };
+        throw new Error("unexpected_remote_spawn_cleanup_command");
+      });
+      const launcher = createRemoteRunnerProcessLauncher({
+        target: { kind: "remote", transport: "sandbox", environmentId: "environment-remote",
+          leaseId: "lease-remote", remoteCwd: "/workspace" }, runner: { execute } as never,
+        remoteBinary: "/runtime/paperclip-runnerd", processIdentityPath: "/runtime/runner-process.identity",
+        stateDirectory: "/runtime", diagnosticsDirectory: "/runtime/diagnostics", runnerInstanceId: "runner-remote",
+        nativeSessionStart: true, managedModelSession: true, nativeHarnessState,
+        onSpawn: async () => { throw callbackError; },
+      });
+      const handle = launcher({ command: "/controller/paperclip-runnerd", args: ["--runner-id", "runner-remote"],
+        cwd: "/controller", environment: {} });
+      if (outcome === "stopped") await expect(handle.completion).rejects.toBe(callbackError);
+      else if (outcome === "stop_failed") await expect(handle.completion).rejects.toBe(stopError);
+      else await expect(handle.completion).rejects.toThrow("runner_remote_process_identity_mismatch");
+      expect(operations).toEqual(outcome === "identity_changed" ? ["signal", "refresh"] : ["signal", "refresh", "stop"]);
+      expect(handle.child.kill("SIGKILL")).toBe(false);
+    },
+  );
+
   it.each(["delivered", "sandbox_missing", "logging_failed"] as const)(
     "detaches runnerd and contains asynchronous signal failures (%s)", async (signalOutcome) => {
     let launchNonce = "";

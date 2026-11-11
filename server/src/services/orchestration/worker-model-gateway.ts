@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
-import { and, eq, gt, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   agents,
   agentIdentities,
@@ -16,6 +16,10 @@ import {
   heartbeatRuns,
   heartbeatRunEvents,
   issues,
+  issuePlanDecompositions,
+  issueThreadInteractions,
+  issueDocuments,
+  documents,
   orchestrationPlans,
   orchestrationWorkers,
   orchestrationWorkerAttempts,
@@ -36,6 +40,8 @@ import {
   nativePayloadSourcePolicySchema,
   modelProviderWireReceiptSchema,
   type WorkerModelBinding,
+  type ReviewModelBinding,
+  reviewModelBindingSchema,
   type ConversationModelBinding,
   type WorkerModelCall,
   type NativePayloadSourceInput,
@@ -54,6 +60,8 @@ import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertV7Authorization, assertV7Enabled } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
+import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { isCurrentConversationModelRoot, isCurrentWorkerConversationRoot } from "../native-runtime/worker-conversation-root.js";
 import type { NativeConsumedSourceComponent, NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
@@ -95,8 +103,9 @@ type BoundClaims = RuntimeToolsTokenClaims & {
   scope: "worker_model";
   worker_model: WorkerModelBinding;
 };
+type ReviewClaims = RuntimeToolsTokenClaims & { scope: "review_model"; review_model: ReviewModelBinding };
 type ConversationClaims = RuntimeToolsTokenClaims & { scope: "conversation_model"; conversation_model: ConversationModelBinding };
-type ManagedModelClaims = BoundClaims | ConversationClaims;
+type ManagedModelClaims = BoundClaims | ReviewClaims | ConversationClaims;
 type ManagedSourceComponent = NativeConsumedSourceComponent;
 
 function mergeManagedSourceComponents(components: ManagedSourceComponent[], bootstrap: { policy: unknown; inputs: unknown[] }) {
@@ -141,7 +150,18 @@ export function exactManagedAssistantHistoryPrefix(input: {
   });
   if (!isDeepStrictEqual(recomposed, { policy: policy.data, inputs: sources.data })) return null;
   const conversationBinding = conversationModelBindingSchema.safeParse(input.intent.conversationModelBinding);
-  const markerValue = input.intent.modelPurpose === "conversation_model"
+  const reviewBinding = reviewModelBindingSchema.safeParse(input.intent.reviewModelBinding);
+  const markerValue = input.intent.modelPurpose === "review_model"
+    ? reviewBinding.success ? { kind: "review_model_dispatch", runId: input.runId, reservationId: input.intent.reservationId,
+      planId: reviewBinding.data.planId, issueId: reviewBinding.data.issueId, interactionId: reviewBinding.data.interactionId,
+      decisionId: reviewBinding.data.decisionId, sourceRunId: reviewBinding.data.sourceRunId,
+      sourceWorkerId: reviewBinding.data.sourceWorkerId, sourceAgentId: reviewBinding.data.sourceAgentId,
+      sourceResultId: reviewBinding.data.sourceResultId, sourceAttemptId: reviewBinding.data.sourceAttemptId,
+      sourceReceiptDigest: reviewBinding.data.sourceReceiptDigest, sourceResultCanonicalSha256: reviewBinding.data.sourceResultCanonicalSha256,
+      reviewerAgentId: reviewBinding.data.reviewerAgentId, executionManifestId: reviewBinding.data.executionManifestId,
+      expectedPlanVersion: reviewBinding.data.expectedPlanVersion, callId: input.intent.callId, requestHash: input.intent.requestHash, wireBodyHash: input.intent.wireBodyHash,
+      responseHash: input.providerResponseHash } : null
+    : input.intent.modelPurpose === "conversation_model"
     ? conversationBinding.success ? { kind: "conversation_model_dispatch", runId: input.runId,
       agentId: input.intent.agentId, issueId: conversationBinding.data.issueId,
       conversationSessionGeneration: conversationBinding.data.conversationSessionGeneration,
@@ -155,7 +175,7 @@ export function exactManagedAssistantHistoryPrefix(input: {
         callId: input.intent.callId, requestHash: input.intent.requestHash,
         wireBodyHash: input.intent.wireBodyHash, responseHash: input.providerResponseHash } : null;
   const marker = markerValue ? nativePayloadSourceInputSchema.safeParse(markerValue) : null;
-  if (!marker?.success || !["worker_model_dispatch", "conversation_model_dispatch"].includes(marker.data.kind)) return null;
+  if (!marker?.success || !["worker_model_dispatch", "conversation_model_dispatch", "review_model_dispatch"].includes(marker.data.kind)) return null;
   const expectedInputs = nativePayloadSourceInputSchema.array().max(256).safeParse([...sources.data, marker.data]);
   if (!expectedInputs.success) return null;
   const matches = input.receipt.dispatches.filter(dispatch => dispatch.executionInputDigest === dispatchDigest &&
@@ -309,7 +329,7 @@ function nativeWorkerConsumedSourceComponents(receipt: NativeRunInputSourceRecei
   if (subset(receipt.bootstrap)) components.push({ kind: "bootstrap" });
   for (const dispatch of receipt.dispatches) {
     if (!subset(dispatch) || !dispatch.inputs.some(source => source.kind === "worker_model_dispatch" ||
-      source.kind === "conversation_model_dispatch")) continue;
+      source.kind === "conversation_model_dispatch" || source.kind === "review_model_dispatch")) continue;
     components.push({ kind: "dispatch", executionInputDigest: dispatch.executionInputDigest,
       policy: dispatch.policy, inputs: dispatch.inputs });
   }
@@ -523,7 +543,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   }).sort((a, b) => a.name.localeCompare(b.name));
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
     actualTools.some((tool) => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-      "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"].includes(tool.name)))
+      "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block",
+      ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
@@ -545,19 +566,31 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
       const qualifiedIntents = [] as Array<{ intent: Record<string, unknown>; providerResponseHash: string }>;
       for (const intent of matchingIntents) {
         if (typeof intent.reservationId !== "string") continue;
-        const expectedPurpose = claims.scope === "conversation_model" ? "conversation_model" : "worker_model";
+        const expectedPurpose = claims.scope === "conversation_model" ? "conversation_model" :
+          claims.scope === "review_model" ? "review_model" : "worker_model";
         const [reservation] = await db.select().from(orchestrationModelReservations)
           .where(and(eq(orchestrationModelReservations.companyId, claims.company_id),
             eq(orchestrationModelReservations.id, intent.reservationId),
             eq(orchestrationModelReservations.purpose, expectedPurpose),
             eq(orchestrationModelReservations.status, "completed")));
         const conversationBinding = claims.scope === "conversation_model" ? claims.conversation_model : null;
+        const reviewBinding = claims.scope === "review_model" ? claims.review_model : null;
         const exactConversationReservation = !conversationBinding || (reservation?.conversationAgentId === claims.sub &&
           reservation.conversationRunId === claims.run_id && reservation.conversationIssueId === conversationBinding.issueId &&
           reservation.conversationSessionGeneration === conversationBinding.conversationSessionGeneration &&
           reservation.executionManifestId === conversationBinding.executionManifestId &&
           reservation.executionManifestHash === conversationBinding.executionManifestHash);
-        if (reservation?.status === "completed" && exactConversationReservation && typeof reservation.providerResponseHash === "string")
+        const exactReviewReservation = !reviewBinding || (reservation?.planId === reviewBinding.planId &&
+          reservation.reviewIssueId === reviewBinding.issueId && reservation.reviewInteractionId === reviewBinding.interactionId &&
+          reservation.reviewDecisionId === reviewBinding.decisionId && reservation.reviewSourceRunId === reviewBinding.sourceRunId &&
+          reservation.reviewSourceResultId === reviewBinding.sourceResultId && reservation.reviewSourceAttemptId === reviewBinding.sourceAttemptId &&
+          reservation.reviewSourceReceiptDigest === reviewBinding.sourceReceiptDigest &&
+          reservation.reviewSourceResultCanonicalSha256 === reviewBinding.sourceResultCanonicalSha256 &&
+          reservation.reviewSourceWorkerId === reviewBinding.sourceWorkerId && reservation.reviewSourceAgentId === reviewBinding.sourceAgentId &&
+          reservation.reviewPlanVersion === reviewBinding.expectedPlanVersion && reservation.workerId === null && reservation.workerAttemptId === null &&
+          reservation.reviewAgentId === claims.sub && reservation.reviewRunId === claims.run_id &&
+          reservation.reviewExecutionManifestId === reviewBinding.executionManifestId);
+        if (reservation?.status === "completed" && exactConversationReservation && exactReviewReservation && typeof reservation.providerResponseHash === "string")
           qualifiedIntents.push({ intent, providerResponseHash: reservation.providerResponseHash });
       }
       // The content hash alone is not a dispatch identity: repeated identical
@@ -695,7 +728,8 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         }
         if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
           !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-            "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(toolName))
+            "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
+            ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(toolName))
         {
           if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
             console.info("managed-native-result-receipt-miss", JSON.stringify({
@@ -1229,6 +1263,202 @@ export function workerModelGateway(db: Db, options: Options) {
     return selectWorkerModelProfile(options.profiles, { companyId, agentId, profileId, configurationHash,
       sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin, purpose });
   }
+  /** Current completion Reviewer authority, deliberately independent from the source writer attempt. */
+  async function currentReview(tx: Db, claims: ReviewClaims, requireInputReceipt = true, preNativeIssueId?: string,
+    preNativeReviewerContract?: { id: string; sha256: string }) {
+    const b = claims.review_model, now = new Date();
+    if (claims.scope !== "review_model" || claims.exp * 1000 <= now.getTime() || b.reviewerAgentId !== claims.sub || b.reviewerRunId !== claims.run_id)
+      throw forbidden("Current run-scoped assigned Reviewer model capability required");
+    await assertV7Enabled(tx, "orchestration_v7");
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, claims.company_id),
+      eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.id, claims.run_id)));
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, claims.company_id),
+      eq(agentExecutionManifests.id, b.executionManifestId), eq(agentExecutionManifests.agentId, claims.sub), eq(agentExecutionManifests.runId, claims.run_id)));
+    const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, b.issueId)));
+    const reviewContext = readNativeReviewAssignmentContext(run?.contextSnapshot);
+    const preNativeBinding = preNativeIssueId === b.issueId && run?.nativeIssueId === null;
+    const assignment = run && reviewContext ? await getNativeReviewAssignment(tx, { companyId: claims.company_id, issueId: b.issueId,
+      agentId: claims.sub, contextSnapshot: reviewContext,
+      ...(preNativeBinding ? {} : { actingRunId: claims.run_id }),
+      issueExecutionRunId: task?.executionRunId ?? undefined,
+      ...(!preNativeBinding ? { allowResolvedByRunId: claims.run_id } : {}) }) : null;
+    // The pending path must still own the issue execution lease. Resolution may
+    // clear that lease; it may never hand the task to another run while this
+    // reviewer retains a short-lived capability.
+    const reviewStillPending = assignment?.interaction.status === "pending" && task?.status === "in_review" &&
+      task.executionRunId === claims.run_id;
+    const reviewResolvedByThisRun = !!assignment && (assignment.interaction.status === "accepted" || assignment.interaction.status === "rejected") &&
+      assignment.interaction.resolvedByRunId === claims.run_id && assignment.interaction.resolvedByAgentId === claims.sub &&
+      (assignment.interaction.status === "accepted" ? task?.status === "in_review" || task?.status === "done" : task?.status === "todo") &&
+      (task.executionRunId === null || task.executionRunId === claims.run_id);
+    if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
+      (run.nativeIssueId !== b.issueId && !preNativeBinding) || run.responsibleUserId !== claims.responsible_user_id || !manifest || manifest.manifest.responsibleUserId !== claims.responsible_user_id ||
+      !task || task.assigneeAgentId !== b.sourceAgentId || !(reviewStillPending || reviewResolvedByThisRun) || !assignment ||
+      assignment.interaction.id !== b.interactionId || assignment.sourceDecision.id !== b.decisionId || assignment.sourceRun.id !== b.sourceRunId ||
+      assignment.sourceRun.status !== "succeeded" || assignment.sourceRun.nativePhase !== "committed" ||
+      assignment.sourceRun.nativeProcessCleanupPending !== false)
+      throw forbidden("The exact current assigned review and committed source are required");
+    const sourceAttemptRows = await tx.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers, plan: orchestrationPlans })
+      .from(orchestrationWorkerAttempts)
+      .innerJoin(orchestrationWorkers, and(eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+        eq(orchestrationWorkers.planId, orchestrationWorkerAttempts.planId), eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId)))
+      .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
+        eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
+      .where(and(eq(orchestrationWorkerAttempts.companyId, claims.company_id), eq(orchestrationWorkerAttempts.runId, b.sourceRunId),
+        eq(orchestrationWorkerAttempts.id, b.sourceAttemptId), eq(orchestrationWorkerAttempts.workerId, b.sourceWorkerId),
+        eq(orchestrationWorkerAttempts.planId, b.planId), inArray(orchestrationWorkerAttempts.status, ["running", "succeeded"]),
+        eq(orchestrationWorkerAttempts.agentId, b.sourceAgentId), eq(orchestrationWorkers.issueId, b.issueId),
+        eq(orchestrationWorkers.agentId, b.sourceAgentId))).limit(2);
+    if (sourceAttemptRows.length !== 1) throw forbidden("The committed source must belong to its exact successful plan attempt");
+    const { attempt, worker, plan } = sourceAttemptRows[0]!;
+    if (plan.mode === "single_worker" && (task.id !== plan.issueId || worker.issueId !== plan.issueId))
+      throw forbidden("The single-worker plan no longer owns this exact review Task");
+    if (plan.mode === "planned_parallel") {
+      if (!plan.acceptedPlanRevisionId) throw forbidden("The accepted decomposition revision is unavailable");
+      const [accepted] = await tx.select().from(issuePlanDecompositions).where(and(
+        eq(issuePlanDecompositions.companyId, claims.company_id), eq(issuePlanDecompositions.sourceIssueId, plan.issueId),
+        eq(issuePlanDecompositions.acceptedPlanRevisionId, plan.acceptedPlanRevisionId!)));
+      const [currentPlanDoc] = await tx.select({ revisionId: documents.latestRevisionId }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .where(and(eq(issueDocuments.companyId, claims.company_id), eq(issueDocuments.issueId, plan.issueId), eq(issueDocuments.key, "plan")));
+      const [confirmation] = accepted?.acceptedInteractionId ? await tx.select().from(issueThreadInteractions).where(and(
+        eq(issueThreadInteractions.companyId, claims.company_id), eq(issueThreadInteractions.id, accepted.acceptedInteractionId))) : [];
+      if (!accepted || accepted.status !== "completed" || currentPlanDoc?.revisionId !== plan.acceptedPlanRevisionId || confirmation?.status !== "accepted")
+        throw forbidden("The accepted decomposition and Human Plan confirmation changed");
+    }
+    const [otherLiveAttempt] = await tx.select({ id: orchestrationWorkerAttempts.id }).from(orchestrationWorkerAttempts).where(and(
+      eq(orchestrationWorkerAttempts.companyId, claims.company_id), eq(orchestrationWorkerAttempts.planId, plan.id),
+      eq(orchestrationWorkerAttempts.status, "running"), ne(orchestrationWorkerAttempts.id, b.sourceAttemptId))).limit(1);
+    if (otherLiveAttempt) throw forbidden("Another plan attempt is active during the assigned review");
+    if (plan.status !== "running" || plan.erasedAt || plan.executionPrincipal?.type !== "user" ||
+      plan.executionPrincipal.userId !== claims.responsible_user_id || plan.actionClass !== "internal_draft" ||
+      !["C0", "C1"].includes(plan.riskClass) || plan.budgets.maxModelCostMinor === null || !plan.startedAt ||
+      now.getTime() >= plan.startedAt.getTime() + plan.budgets.maxWallClockSeconds * 1000 ||
+      plan.version !== b.expectedPlanVersion || !attempt.executionManifestId)
+      throw forbidden("The accepted plan, source attempt, Human principal or deadline changed");
+    const reviewerContract = run.completionContractId && run.completionContractSha256
+      ? { id: run.completionContractId, sha256: run.completionContractSha256 }
+      : preNativeBinding ? preNativeReviewerContract : undefined;
+    const reviewWitness = reviewerContract && run.responsibleUserId
+      ? await captureNativeReviewWakeWitness(tx, { companyId: claims.company_id, issueId: b.issueId, reviewerRunId: run.id,
+          reviewerAgentId: claims.sub, responsibleUserId: run.responsibleUserId,
+          reviewerCompletionContract: reviewerContract, assignment }) : null;
+    if (!reviewWitness || reviewWitness.sourceReceiptDigest !== b.sourceReceiptDigest ||
+      reviewWitness.sourceResultCanonicalSha256 !== b.sourceResultCanonicalSha256 || reviewWitness.sourceResultId !== b.sourceResultId ||
+      reviewWitness.sourceRunId !== assignment.sourceRun.id || reviewWitness.interactionId !== assignment.interaction.id ||
+      reviewWitness.decisionId !== assignment.sourceDecision.id || reviewWitness.reviewerRunId !== run.id ||
+      reviewWitness.reviewerAgentId !== claims.sub)
+      throw forbidden("The current canonical Native completion-review witness changed");
+    const [currentManifest] = await tx.select({ id: agentExecutionManifests.id }).from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, claims.company_id), eq(agentExecutionManifests.id, b.executionManifestId),
+      eq(agentExecutionManifests.agentId, claims.sub), eq(agentExecutionManifests.runId, claims.run_id)));
+    if (!currentManifest) throw forbidden("The current Reviewer run requires its own Runtime Fabric manifest");
+    const principal: AuthorizationActor = { type: "board", source: "session", userId: claims.responsible_user_id };
+    const rootTask = await tx.select().from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, plan.issueId))).then(rows => rows[0]);
+    const rootTaskDoneByThisReview = plan.mode === "single_worker" && !!rootTask && rootTask.id === task.id && task.status === "done" &&
+      reviewResolvedByThisRun && assignment.interaction.status === "accepted";
+    if (!rootTask || rootTask.hiddenAt || rootTask.status === "cancelled" ||
+      (rootTask.status === "done" && !rootTaskDoneByThisReview) || task.hiddenAt ||
+      task.requestDepth < rootTask.requestDepth || task.requestDepth - rootTask.requestDepth > plan.budgets.maxDelegationDepth ||
+      (plan.mode === "planned_parallel" && (task.parentId !== rootTask.id || task.projectId !== rootTask.projectId)))
+      throw forbidden("The original accepted plan Task topology is unavailable");
+    await assertV7Authorization(tx, principal, claims.company_id, "issue:mutate", { type: "issue", companyId: claims.company_id,
+      issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId,
+      assigneeUserId: task.assigneeUserId, status: task.status });
+    await assertV7Authorization(tx, principal, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
+      issueId: rootTask.id, projectId: rootTask.projectId });
+    if (!await retainedOrchestrationContract(tx, claims.company_id, task.id)) throw forbidden("The accepted completion contract changed");
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: claims.company_id,
+      agentId: claims.sub, runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id };
+    await assertV7Authorization(tx, actor, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
+      issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId,
+      assigneeUserId: task.assigneeUserId, status: task.status });
+    await assertAgentRunWriteAllowed(tx, claims.company_id, { agentId: claims.sub, runId: claims.run_id });
+    if (requireInputReceipt && (run.nativeInputSourceProtocolVersion !== 1 ||
+      !nativeRunInputSourceReceiptSchema.safeParse(managedRecord(run.runnerProfileJson).nativeInputSourceReceipt).success))
+      throw forbidden("The Reviewer Native input receipt is unavailable");
+    const qualified = await qualifyWorkerTransport(tx, { companyId: claims.company_id, agentId: claims.sub,
+      responsibleUserId: claims.responsible_user_id }, true);
+    // The reservation ledger is the atomic authority for the actual request
+    // quote. Do not add the current qualification envelope here: on dispatch
+    // and response rechecks the exact call has already been debited, which
+    // would double-count a cap-fitting final reservation.
+    if (reviewStillPending && plan.toolActionsUsed >= plan.budgets.maxToolActions)
+      throw forbidden("The original accepted plan has no remaining review tool-action budget");
+    const binding = reviewModelBindingSchema.parse({ ...b, planId: plan.id, sourceWorkerId: worker.id,
+      sourceAgentId: assignment.sourceRun.agentId, sourceAttemptId: attempt.id, sourceRunId: assignment.sourceRun.id,
+      issueId: task.id, interactionId: assignment.interaction.id, decisionId: assignment.sourceDecision.id,
+      sourceReceiptDigest: reviewWitness.sourceReceiptDigest, sourceResultCanonicalSha256: reviewWitness.sourceResultCanonicalSha256, reviewerAgentId: claims.sub, reviewerRunId: run.id, executionManifestId: manifest.id });
+    const authorityHash = nativeSha256({ binding, planVersion: plan.version, principal: plan.executionPrincipal,
+      task: { id: task.id, status: task.status, statusVersion: task.statusVersion, assigneeAgentId: task.assigneeAgentId },
+      interaction: assignment.interaction, decision: assignment.sourceDecision, reviewWitness,
+      manifestHash: manifest.hash, reviewerProfileId: qualified.profileId, maximumMinor: qualified.maximumMinor,
+      connection: { id: qualified.selection.connection.id, config: qualified.selection.connection.config,
+        updatedAt: qualified.selection.connection.updatedAt },
+      grant: { id: qualified.selection.grant.id, updatedAt: qualified.selection.grant.updatedAt,
+        refs: qualified.selection.grant.credentialSecretRefs },
+      credentialVersion: qualified.credentialVersion });
+    return { profile: qualified.profile, qualification: qualified, selection: qualified.selection,
+      credentialSha256: qualified.credentialSha256, authorityHash, actor, plan, binding, run, assignment };
+  }
+
+  /** Same-transaction preflight qualification. It issues no token and can see
+   * the Native manifest inserted earlier in this admission transaction. */
+  async function qualifyReviewInTransaction(tx: Db, input: { companyId: string; agentId: string; runId: string; issueId: string;
+    responsibleUserId: string }) {
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId)));
+    const context = readNativeReviewAssignmentContext(run?.contextSnapshot);
+    const contextIssueId = managedRecord(run?.contextSnapshot).issueId ?? managedRecord(run?.contextSnapshot).nativeIssueId;
+    if (!run || run.nativeIssueId !== null || contextIssueId !== input.issueId || !context)
+      throw forbidden("The persisted pre-Native Reviewer wake must bind this exact Task");
+    const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId)));
+    const assignment = task ? await getNativeReviewAssignment(tx, { companyId: input.companyId, issueId: input.issueId,
+      agentId: input.agentId, contextSnapshot: context, issueExecutionRunId: task.executionRunId }) : null;
+    const sourceRows = assignment ? await tx.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers,
+      plan: orchestrationPlans }).from(orchestrationWorkerAttempts).innerJoin(orchestrationWorkers, and(
+      eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId),
+      eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId))).innerJoin(orchestrationPlans, and(
+      eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
+      eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId))).where(and(
+      eq(orchestrationWorkerAttempts.companyId, input.companyId),
+      eq(orchestrationWorkerAttempts.runId, assignment.sourceRun.id),
+      eq(orchestrationWorkerAttempts.agentId, assignment.sourceRun.agentId),
+      eq(orchestrationWorkers.issueId, input.issueId))).limit(2) : [];
+    const [manifest] = await tx.select().from(agentExecutionManifests).where(and(
+      eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.agentId, input.agentId),
+      eq(agentExecutionManifests.runId, input.runId)));
+    const contract = await retainedOrchestrationContract(tx, input.companyId, input.issueId);
+    const hasPinnedContractId = run.completionContractId !== null;
+    const hasPinnedContractSha = run.completionContractSha256 !== null;
+    if (!assignment || sourceRows.length !== 1 || !manifest || !contract || run.responsibleUserId !== input.responsibleUserId ||
+      hasPinnedContractId !== hasPinnedContractSha ||
+      (hasPinnedContractId && (run.completionContractId !== contract.row.id || run.completionContractSha256 !== contract.row.canonicalSha256)))
+      throw forbidden("The current Reviewer source, manifest or retained completion contract is unavailable");
+    const source = sourceRows[0]!;
+    const [lockedPlan] = await tx.select().from(orchestrationPlans).where(and(
+      eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, source.plan.id))).for("update");
+    if (!lockedPlan || lockedPlan.version !== source.plan.version)
+      throw forbidden("The accepted plan changed during Reviewer preflight");
+    const witness = await captureNativeReviewWakeWitness(tx, { companyId: input.companyId, issueId: input.issueId,
+      reviewerRunId: run.id, reviewerAgentId: input.agentId, responsibleUserId: input.responsibleUserId,
+      reviewerCompletionContract: { id: contract.row.id, sha256: contract.row.canonicalSha256 }, assignment });
+    if (!witness) throw forbidden("The current committed Native review witness is unavailable");
+    const binding = reviewModelBindingSchema.parse({ planId: source.plan.id, issueId: input.issueId,
+      interactionId: assignment.interaction.id, decisionId: assignment.sourceDecision.id, sourceRunId: assignment.sourceRun.id,
+      sourceWorkerId: source.worker.id, sourceAgentId: source.attempt.agentId, sourceAttemptId: source.attempt.id,
+      sourceResultId: witness.sourceResultId, sourceReceiptDigest: witness.sourceReceiptDigest,
+      sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256, reviewerAgentId: input.agentId,
+      reviewerRunId: input.runId, executionManifestId: manifest.id, expectedPlanVersion: lockedPlan.version });
+    const claims = { scope: "review_model", company_id: input.companyId, sub: input.agentId, run_id: input.runId,
+      responsible_user_id: input.responsibleUserId, exp: Math.floor(Date.now() / 1000) + 60, review_model: binding } as ReviewClaims;
+    const qualified = await currentReview(tx, claims, false, input.issueId,
+      { id: contract.row.id, sha256: contract.row.canonicalSha256 });
+    if (qualified.plan.modelCostReserved + qualified.qualification.maximumMinor > qualified.plan.budgets.maxModelCostMinor!)
+      throw forbidden("The accepted plan has insufficient remaining model budget for the qualified Reviewer call");
+    return qualified;
+  }
+
   async function current(tx: Db, claims: BoundClaims) {
     const now = new Date(),
       b = claims.worker_model;
@@ -1903,7 +2133,10 @@ export function workerModelGateway(db: Db, options: Options) {
         : selected.provider === "opencode"
           ? "opencode" as const
           : (() => { throw forbidden("The installed worker model transport is required"); })();
-      return { ...qualification, providerKind };
+      return { ...qualification, providerKind, profile: p, selection,
+        credentialVersion: { secretId: credentialVersion.secret.id, versionId: credentialVersion.version.id,
+          version: credentialVersion.version.version, valueSha256: credentialVersion.version.valueSha256 },
+        credentialSha256: credentialVersion.version.valueSha256 };
   }
   return {
     runtimeCandidates: agentRuntimeCandidateService(db, options),
@@ -1920,8 +2153,14 @@ export function workerModelGateway(db: Db, options: Options) {
         maximumMinor: qualified.maximumMinor };
     },
     /** Existing capped Worker-plan admission, separate from draft conformance. */
-    qualifyManagedWorker: (tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) =>
-      qualifyWorkerTransport(tx, input, true),
+    qualifyManagedWorker: async (tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) => {
+      const qualified = await qualifyWorkerTransport(tx, input, true);
+      return { profileId: qualified.profileId, model: qualified.model, maxOutputTokens: qualified.maxOutputTokens,
+        maximumEnvelopeBytes: qualified.maximumEnvelopeBytes, maximumMinor: qualified.maximumMinor,
+        providerKind: qualified.providerKind };
+    },
+    qualifyReviewInTransaction: (tx: Db, input: { companyId: string; agentId: string; runId: string; issueId: string;
+      responsibleUserId: string }) => qualifyReviewInTransaction(tx, input),
     /** Private controller failure path. Safety fencing does not require the
      * original human still to have access or the capability still to be live. */
     async abandon(claims: RuntimeToolsTokenClaims) {
@@ -2012,6 +2251,50 @@ export function workerModelGateway(db: Db, options: Options) {
       const state = await current(db, claims as BoundClaims);
       return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound,
         maxOutputTokens: state.profile.maxOutputTokens };
+    },
+    /** Host-only issuance from the exact current assigned completion review; no review IDs come from the caller. */
+    async issueForReviewRun(input: { companyId: string; agentId: string; runId: string; responsibleUserId: string;
+      issueId?: string; preNativeBinding?: boolean }) {
+      const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.id, input.runId)));
+      const issueId = input.issueId ?? run?.nativeIssueId;
+      const context = readNativeReviewAssignmentContext(run?.contextSnapshot);
+      const contextIssueId = managedRecord(run?.contextSnapshot).issueId ?? managedRecord(run?.contextSnapshot).nativeIssueId;
+      if (!issueId || (input.preNativeBinding && (run?.nativeIssueId !== null || contextIssueId !== issueId)) ||
+        (!input.preNativeBinding && run?.nativeIssueId !== issueId))
+        throw forbidden("The persisted Native review wake must bind this exact Task");
+      const assignment = issueId && run && context ? await getNativeReviewAssignment(db, { companyId: input.companyId,
+        issueId, agentId: input.agentId, contextSnapshot: context,
+        ...(!input.preNativeBinding ? { actingRunId: run.id } : {}) }) : null;
+      const sourceRows = assignment ? await db.select({ attempt: orchestrationWorkerAttempts, worker: orchestrationWorkers, plan: orchestrationPlans })
+        .from(orchestrationWorkerAttempts).innerJoin(orchestrationWorkers, and(
+          eq(orchestrationWorkers.companyId, orchestrationWorkerAttempts.companyId), eq(orchestrationWorkers.id, orchestrationWorkerAttempts.workerId)))
+        .innerJoin(orchestrationPlans, and(eq(orchestrationPlans.companyId, orchestrationWorkerAttempts.companyId),
+          eq(orchestrationPlans.id, orchestrationWorkerAttempts.planId)))
+        .where(and(eq(orchestrationWorkerAttempts.companyId, input.companyId), eq(orchestrationWorkerAttempts.runId, assignment.sourceRun.id),
+          eq(orchestrationWorkerAttempts.agentId, assignment.sourceRun.agentId), eq(orchestrationWorkers.issueId, issueId!))).limit(2) : [];
+      const source = sourceRows.length === 1 ? sourceRows[0] : null;
+      const [manifest] = run ? await db.select().from(agentExecutionManifests).where(and(eq(agentExecutionManifests.companyId, input.companyId),
+        eq(agentExecutionManifests.agentId, input.agentId), eq(agentExecutionManifests.runId, run.id))) : [];
+      if (!run || !assignment || !source || !manifest || run.responsibleUserId !== input.responsibleUserId ||
+        assignment.sourceRun.status !== "succeeded" || assignment.sourceRun.nativePhase !== "committed" || !source.attempt.executionManifestId ||
+        !run.completionContractId || !run.completionContractSha256)
+        throw forbidden("One exact current assigned completion review and committed source are required");
+      const witness = await captureNativeReviewWakeWitness(db, { companyId: input.companyId, issueId: issueId!, reviewerRunId: run.id,
+        reviewerAgentId: input.agentId, responsibleUserId: input.responsibleUserId,
+        reviewerCompletionContract: { id: run.completionContractId, sha256: run.completionContractSha256 }, assignment });
+      if (!witness) throw forbidden("The current committed Native review witness is unavailable");
+      const binding = reviewModelBindingSchema.parse({ planId: source.plan.id, issueId: issueId!, interactionId: assignment.interaction.id,
+        decisionId: assignment.sourceDecision.id, sourceRunId: assignment.sourceRun.id, sourceWorkerId: source.worker.id, sourceResultId: witness.sourceResultId,
+        sourceAgentId: source.attempt.agentId, sourceAttemptId: source.attempt.id,
+        sourceReceiptDigest: witness.sourceReceiptDigest, sourceResultCanonicalSha256: witness.sourceResultCanonicalSha256,
+        reviewerAgentId: input.agentId, reviewerRunId: run.id, executionManifestId: manifest.id,
+        expectedPlanVersion: source.plan.version });
+      const minted = createRuntimeToolsToken({ ...input, reviewModelBinding: binding, scope: "review_model" });
+      const claims = minted && verifyRuntimeToolsToken(minted.token, "review_model");
+      if (!claims?.review_model) throw forbidden("Assigned Reviewer capability signing is unavailable");
+      const state = await currentReview(db, claims as ReviewClaims, false, input.preNativeBinding ? issueId : undefined);
+      return { ...minted!, inputTokensUpperBound: state.profile.inputTokensUpperBound, maxOutputTokens: state.profile.maxOutputTokens };
     },
     /** Private dispatch-time capability for an authenticated Native chat. It
      * may be minted before the executor records its initial input receipt;
@@ -2393,10 +2676,11 @@ export function workerModelGateway(db: Db, options: Options) {
       if (claims.scope === "provider_conformance")
         return callNativeOpenCodeConformanceMessages({ db, options, claims, raw, callerSignal });
       const bound = claims.scope === "worker_model" && claims.worker_model ? claims as BoundClaims : null;
+      const review = claims.scope === "review_model" && claims.review_model ? claims as ReviewClaims : null;
       const conversation = claims.scope === "conversation_model" && claims.conversation_model ? claims as ConversationClaims : null;
-      if (!bound && !conversation) throw forbidden("Bound managed model capability required");
-      const modelClaims: ManagedModelClaims = bound ?? conversation!;
-      const state = bound ? await current(db, bound) : await currentConversation(db, conversation!);
+      if (!bound && !review && !conversation) throw forbidden("Bound managed model capability required");
+      const modelClaims: ManagedModelClaims = bound ?? review ?? conversation!;
+      const state = bound ? await current(db, bound) : review ? await currentReview(db, review) : await currentConversation(db, conversation!);
       if (state.profile.transport !== "server-anthropic-messages-v1")
         throw forbidden("The selected worker profile is not the Messages broker profile");
       const qualifiedInput = validateAnthropicManagedMessagesRequest(raw, {
@@ -2411,10 +2695,16 @@ export function workerModelGateway(db: Db, options: Options) {
       const reservations = modelReservationService(db, {
         sourceSha: options.sourceSha,
         qualifiedTariff: async (i) =>
-          Boolean(bound) && i.purpose === "worker_model" && i.companyId === claims.company_id && i.planId === bound!.worker_model.planId
-            ? assertWorkerModelProfileCurrent(state.profile, options.sourceSha, options.protectedEvidenceOrigin).tariff
-            : null,
-        currentAuthority: async (tx) => bound ? (await current(tx, bound)).authorityHash : state.authorityHash,
+          ((bound && i.purpose === "worker_model" && i.planId === bound.worker_model.planId) ||
+            (review && i.purpose === "review_model" && i.planId === review.review_model.planId)) && i.companyId === claims.company_id
+            ? assertWorkerModelProfileCurrent(state.profile, options.sourceSha, options.protectedEvidenceOrigin).tariff : null,
+        currentAuthority: async (tx) => bound ? (await current(tx, bound)).authorityHash : review ? (await currentReview(tx, review)).authorityHash : state.authorityHash,
+        currentReviewAuthority: async (tx, actor, i) => {
+          if (!review || i.planId !== review.review_model.planId || !isDeepStrictEqual(i.binding, review.review_model))
+            throw forbidden("The review reservation binding changed");
+          const fresh = await currentReview(tx, review);
+          return { principalUserId: claims.responsible_user_id, authorityHash: fresh.authorityHash, binding: fresh.binding };
+        },
         qualifiedConversationTariff: async (i) => conversation && i.companyId === claims.company_id &&
           i.agentId === claims.sub && i.runId === claims.run_id ? state.profile.tariff : null,
         currentConversationAuthority: async (tx, actor, i) => {
@@ -2428,21 +2718,21 @@ export function workerModelGateway(db: Db, options: Options) {
         },
       });
       const reservation = bound ? await reservations.reserve(state.actor, {
-        companyId: claims.company_id,
-        planId: bound.worker_model.planId,
-        workerId: bound.worker_model.workerId,
-        workerAttemptId: bound.worker_model.workerAttemptId,
-        expectedPlanVersion: bound.worker_model.expectedPlanVersion,
-        purpose: "worker_model",
-        idempotencyKey: `worker-model-messages:${claims.run_id}:${inputHash}`,
-        inputHash,
-        authorityHash: state.authorityHash,
-        inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        companyId: claims.company_id, planId: bound.worker_model.planId, workerId: bound.worker_model.workerId,
+        workerAttemptId: bound.worker_model.workerAttemptId, expectedPlanVersion: bound.worker_model.expectedPlanVersion,
+        purpose: "worker_model", idempotencyKey: `worker-model-messages:${claims.run_id}:${inputHash}`, inputHash,
+        authorityHash: state.authorityHash, inputTokensUpperBound: state.profile.inputTokensUpperBound,
         maxOutputTokens: qualifiedInput.request.max_tokens,
       }).catch(async (error) => {
         if (bound && error instanceof Error && error.message === "Cumulative model reservation budget exhausted")
           await fence(claims.company_id, bound.worker_model.planId, "worker_model_budget_exhausted");
         throw error;
+      }) : review ? await reservations.reserve(state.actor, {
+        companyId: claims.company_id, planId: review.review_model.planId, workerId: null, workerAttemptId: null,
+        expectedPlanVersion: review.review_model.expectedPlanVersion, purpose: "review_model", reviewBinding: review.review_model,
+        idempotencyKey: `review-model-messages:${review.review_model.interactionId}:${inputHash}`, inputHash,
+        authorityHash: state.authorityHash, inputTokensUpperBound: state.profile.inputTokensUpperBound,
+        maxOutputTokens: qualifiedInput.request.max_tokens,
       }) : await reservations.reserveConversation(state.actor, {
         companyId: claims.company_id, conversationAgentId: claims.sub, conversationRunId: claims.run_id,
         conversationIssueId: conversation!.conversation_model.issueId,
@@ -2455,7 +2745,7 @@ export function workerModelGateway(db: Db, options: Options) {
       });
       if (reservation.status !== "reserved")
         throw conflict("Managed model request cannot be dispatched again");
-      if (bound) await reservations.claimForDispatch(state.actor, claims.company_id, reservation.id);
+      if (bound || review) await reservations.claimForDispatch(state.actor, claims.company_id, reservation.id);
       else await reservations.claimConversationForDispatch(state.actor, claims.company_id, reservation.id);
       const controller = new AbortController();
       // Source/wire-receipt and settlement checks retain the original fixed
@@ -2467,7 +2757,7 @@ export function workerModelGateway(db: Db, options: Options) {
       let checking: Promise<void> | null = null;
       const assertCurrent = async () => {
         controller.signal.throwIfAborted();
-        const fresh = bound ? await current(db, bound) : await currentConversation(db, conversation!);
+        const fresh = bound ? await current(db, bound) : review ? await currentReview(db, review) : await currentConversation(db, conversation!);
         controller.signal.throwIfAborted();
         if (fresh.authorityHash !== state.authorityHash)
           throw forbidden("Managed source authority changed during dispatch");
@@ -2526,7 +2816,7 @@ export function workerModelGateway(db: Db, options: Options) {
               // same order before taking its Run row lock.
               await lockAnalyticalCompany(tx as unknown as Db, claims.company_id);
               await lockMemoryPrivacy(tx as unknown as Db, claims.company_id);
-              const fresh = bound ? await current(tx, bound) : await currentConversation(tx, conversation!);
+              const fresh = bound ? await current(tx, bound) : review ? await currentReview(tx, review) : await currentConversation(tx, conversation!);
               if (fresh.authorityHash !== state.authorityHash)
                 throw forbidden("Worker source authority changed before wire dispatch");
               managedFailureStage = "wire_run_binding";
@@ -2571,7 +2861,8 @@ export function workerModelGateway(db: Db, options: Options) {
               const sourceDispatchDigest = matchingTurnDigests[0]!;
               managedFailureStage = "wire_intent_budget";
               const sourcePolicyHash = nativeSha256(sourceReceipt.data.bootstrap);
-              const intents = [...prior, { modelPurpose: bound ? "worker_model" : "conversation_model",
+              const intents = [...prior, { modelPurpose: bound ? "worker_model" : review ? "review_model" : "conversation_model",
+                ...(review ? { reviewModelBinding: review.review_model } : {}),
                 ...(conversation ? { agentId: claims.sub, conversationModelBinding: conversation.conversation_model } : {}),
                 reservationId: receipt.reservationId, callId: receipt.callId,
                 requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint,
@@ -2658,6 +2949,16 @@ export function workerModelGateway(db: Db, options: Options) {
           const providerDispatch = nativePayloadSourceInputSchema.parse(bound ? { kind: "worker_model_dispatch",
             runId: claims.run_id, reservationId: reservation.id, callId: existing.callId,
             requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash }
+            : review ? { kind: "review_model_dispatch", runId: claims.run_id, reservationId: reservation.id,
+              planId: review.review_model.planId, issueId: review.review_model.issueId,
+              interactionId: review.review_model.interactionId, decisionId: review.review_model.decisionId,
+              sourceRunId: review.review_model.sourceRunId, sourceWorkerId: review.review_model.sourceWorkerId,
+              sourceAgentId: review.review_model.sourceAgentId, sourceResultId: review.review_model.sourceResultId,
+              sourceAttemptId: review.review_model.sourceAttemptId, sourceReceiptDigest: review.review_model.sourceReceiptDigest,
+              sourceResultCanonicalSha256: review.review_model.sourceResultCanonicalSha256,
+              reviewerAgentId: review.review_model.reviewerAgentId, executionManifestId: review.review_model.executionManifestId,
+              expectedPlanVersion: review.review_model.expectedPlanVersion, callId: existing.callId,
+              requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash }
             : { kind: "conversation_model_dispatch", runId: claims.run_id, agentId: claims.sub,
               issueId: conversation!.conversation_model.issueId,
               conversationSessionGeneration: conversation!.conversation_model.conversationSessionGeneration,
@@ -2720,6 +3021,7 @@ export function workerModelGateway(db: Db, options: Options) {
           await reservations.recordOutcome(claims.company_id, reservation.id, { status: "unknown", providerResponseHash: null, usage: null }).catch(() => {});
         const reasonCode = conversation
           ? financiallySettled ? "conversation_model_result_withheld" : "conversation_model_unsettled"
+          : review ? financiallySettled ? "review_model_result_withheld" : "review_model_unsettled"
           : financiallySettled ? "worker_model_result_withheld" : "worker_model_unsettled";
         if (bound) await fence(claims.company_id, bound.worker_model.planId, reasonCode);
         throw conflict("Worker model result requires human resolution", {

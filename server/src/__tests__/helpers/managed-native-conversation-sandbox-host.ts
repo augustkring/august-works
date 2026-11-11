@@ -22,11 +22,12 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, posix, sep } from "node:path";
 import express from "express";
 import { WebSocket } from "ws";
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   activityLog, agentPresenceRuntimeBindings, connectionGrants, toolApplications, toolCatalogEntries, toolConnections, toolProfileBindings, toolProfileEntries, toolProfiles,
   chatConversations, agentProviderBindings, billingAccounts, billingAccountCompanies, billingSubscriptions, companies, createDb,
-  agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
+  agents, agentExecutionManifests, environments, environmentLeases, heartbeatRuns, heartbeatRunEvents, nativeRunFinalizations,
+  nativeRunResults, orchestrationModelReservations, issues, runtimeCapacityProfiles, runtimeCells, runtimeHosts, runtimeHostRequestNonces,
   runtimeVersionCatalog, runtimeHostCommands, runtimeSandboxBindings, runtimePolicySnapshots, runtimeOperations, sandboxQualificationRuns, orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
 } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, SANDBOX_HOST_COMMAND, runtimeRequestSigningInput, sandboxCapabilitySnapshotSchema, sandboxHostRequestSchema, sandboxHostReplySchema, type NativePayloadSourceInput, type SandboxHostRequest, type SandboxQualificationProbeFixture, type SandboxCapabilitySnapshot } from "@paperclipai/shared";
@@ -36,7 +37,11 @@ import { assertNativeWorkspaceMetadataSourcesCurrent } from "../../services/nati
 import type { NativeBootstrapSourceClosure } from "../../services/native-runtime/native-execution-input.js";
 import { environmentService } from "../../services/environments.js";
 import { readRunLeaseCleanup, verifyNativeCleanupRuntimeState } from "../../services/execution-sandbox/run-lease-cleanup.js";
+import { isNativeBootstrapPrelaunchCleanupCandidate, readNativeBootstrapPrelaunchCleanup, verifyNativeBootstrapPrelaunchRuntimeState } from "../../services/execution-sandbox/native-prelaunch-cleanup.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
+import { isRemoteRuntimeAssetLocator } from "../../services/native-runtime/runtime-asset-retention.js";
+import { NATIVE_REMOTE_WORKLOAD_STOPPED } from "../../services/remote-execution-termination.js";
+import { PROCESS_IDENTITY_RECORDED, PROCESS_START_REQUESTED } from "../../services/native-local-process-stop.js";
 import { environmentRuntimeService } from "../../services/environment-runtime.js";
 import { executionSandboxService } from "../../services/execution-sandbox/sandbox-service.js";
 import { openShellBackend } from "../../services/execution-sandbox/openshell-backend.js";
@@ -249,6 +254,8 @@ type ManagedSandboxHostInput = {
   /** Test-only revocation hook after the real signed Host start receipt is persisted. */
   afterSandboxStartReceipt?: (facts: { scope: SandboxIdentity; cleanup: SandboxAdmissionCleanup;
     attemptStop(cleanup: SandboxAdmissionCleanup): Promise<unknown> }) => Promise<void>;
+  /** Observe the real Host Stop receipt before EnvironmentRuntime publishes lease cleanup. */
+  afterManagedSandboxStopReceipt?: (facts: { scope: { companyId: string; runId: string; leaseId: string }; receipt: unknown }) => Promise<void>;
   /** Existing constructor-only controlled backend: this component performs no model dispatch. */
   controlledNativeSessionBackendFactory?: (execution: import("../../vendor/paperclip-runner/index.js").NativeExecutionInput) =>
     import("../../vendor/paperclip-runner/index.js").NativeSessionBackend;
@@ -847,7 +854,9 @@ export async function configureManagedSerialSchedulerSandboxHost(
   const stopSandboxRunLease: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["stopSandboxRunLease"] = async scope => {
     if (scope.companyId !== input.companyId) throw new Error("scheduler_software_host_cleanup_company_changed");
     const host = await currentAdmission(scope.runId, scope.leaseId);
-    return await host.stopSandboxRunLease(scope);
+    const receipt = await host.stopSandboxRunLease(scope);
+    await input.afterManagedSandboxStopReceipt?.({ scope, receipt });
+    return receipt;
   };
   const environmentRuntime = environmentRuntimeService(input.db, { executeSandboxTask, stopSandboxRunLease });
   return {
@@ -946,13 +955,6 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   let sealedExecutionInputHash: string | null = null;
   const assertOrdinaryWorker = async (runId: string) => {
     const run = await assertFixtureOrdinaryWorker(input, runId);
-    if (serialTransport) {
-      const profile = run.runnerProfileJson as Record<string, unknown> | null;
-      if (!profile?.nativeExecutionInput) throw new Error("serial_model_native_input_missing");
-      const next = nativeSha256(profile.nativeExecutionInput);
-      if (sealedExecutionInputHash !== null && sealedExecutionInputHash !== next) throw new Error("serial_model_native_input_changed");
-      sealedExecutionInputHash = next;
-    }
     return run;
   };
   if (input.ordinaryWorkerRunId) await assertOrdinaryWorker(input.ordinaryWorkerRunId);
@@ -3759,9 +3761,15 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   };
   const stopSandboxRunLease: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["stopSandboxRunLease"] = async scope => {
       if (scope.companyId !== companyId) throw new Error("sandbox_cleanup_fixture_company_changed");
-      const owner = await readRunLeaseCleanup(db, scope);
-      if (owner.session.hostId !== host.id || owner.scope.cellId !== cell.id)
-        throw new Error("sandbox_cleanup_fixture_host_scope_changed");
+      if (await isNativeBootstrapPrelaunchCleanupCandidate(db, scope)) {
+        const prelaunch = await readNativeBootstrapPrelaunchCleanup(db, scope);
+        if (prelaunch.owner.hostId !== host.id || prelaunch.owner.cellId !== cell.id)
+          throw new Error("sandbox_prelaunch_cleanup_fixture_host_scope_changed");
+      } else {
+        const owner = await readRunLeaseCleanup(db, scope);
+        if (owner.session.hostId !== host.id || owner.scope.cellId !== cell.id)
+          throw new Error("sandbox_cleanup_fixture_host_scope_changed");
+      }
       return await driveHost(runtime.stopSandboxRunLeaseForCleanup(scope));
   };
   const environmentRuntime = environmentRuntimeService(db, { executeSandboxTask, stopSandboxRunLease });
@@ -4080,7 +4088,12 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       launchModelRunnerId === launchRunnerId &&
       launchSessionDigest === launchPath.split("/").at(-3) &&
       sessionPhase === "start" && cwd === expectedTaskRoot && expectedRunId !== null);
-    const ordinaryWorkerIdentityRead = ordinaryWorkerMode && nativePreparationPurpose === null &&
+    // Native worker launches can use an authenticated chat workspace as well
+    // as an ordinary worker workspace. Observe only the exact signed launch's
+    // identity path; workspace selection does not change process ownership.
+    const launchedWorkerIdentityRead = nativeRunnerClosureWitness !== null &&
+      nativeRunnerClosureWitness.runId === expectedRunId && nativePreparationPurpose === null &&
+      managedModelOriginMatches &&
       requestLabel === "paperclip-runner-process-identity" && requestArgv.length === 5 &&
       requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
       requestArgv[2] === 'test -f "$1" && test ! -L "$1" && cat -- "$1"' &&
@@ -4090,14 +4103,15 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
       requestArgv[2] === 'test -f "$1" && test ! -L "$1" && cat -- "$1"' &&
       typeof requestArgv[4] === "string" && cwd === expectedTaskRoot &&
-      (nativePreparationPurpose === "native_harness_state" || ordinaryWorkerIdentityRead);
-    const ordinaryWorkerMonitor = ordinaryWorkerMode && nativePreparationPurpose === null &&
+      (nativePreparationPurpose === "native_harness_state" || launchedWorkerIdentityRead);
+    const launchedWorkerMonitor = nativeRunnerClosureWitness !== null &&
+      nativeRunnerClosureWitness.runId === expectedRunId && nativePreparationPurpose === null &&
       (sessionPhase === "refresh" ? managedModelOriginMatches && Boolean(request.modelBrokerCredential) :
         sessionPhase === "stop" ? exactSessionStop && !request.modelBrokerCredential && !request.brokerCredential && noCredentialEnvironment : false);
     const monitorOperation = requestLabel === "paperclip-runner-monitor" && requestArgv[0] === "sh" && requestArgv[1] === "-c" &&
       requestArgv[2] === REMOTE_RUNNER_IDENTITY_CHECK_SCRIPT && requestArgv.length === 8 &&
       typeof requestArgv[4] === "string" && cwd === expectedTaskRoot &&
-      (nativePreparationPurpose === "native_harness_state" || ordinaryWorkerMonitor);
+      (nativePreparationPurpose === "native_harness_state" || launchedWorkerMonitor);
     const identityOutput: Buffer[] = [];
     let identityOutputBytes = 0;
     let streamStarted = false;
@@ -4186,7 +4200,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             request.modelBrokerSession?.leaseId === witness.leaseId &&
             request.modelBrokerSession?.sessionDeadlineAt === witness.sessionDeadlineAt &&
             request.modelBrokerSession?.expectedCapabilityHash === witness.expectedCapabilityHash &&
-            (nativePreparationPurpose === "native_harness_state" || ordinaryWorkerMonitor);
+            (nativePreparationPurpose === "native_harness_state" || launchedWorkerMonitor);
           if (argsMatch && request.modelBrokerSession?.phase === "refresh" && result.exitCode === 0 && !result.timedOut &&
               witness.identityMatched) {
             const [run] = expectedRunId === witness.runId
@@ -4296,11 +4310,18 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     expectedRunId = runId;preparationStage="read_run";
     const [run] = await db.select({ status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
       nativeIssueId: heartbeatRuns.nativeIssueId, responsibleUserId: heartbeatRuns.responsibleUserId,
-      contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
+      contextSnapshot: heartbeatRuns.contextSnapshot, runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
       .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId))).limit(1);
     if (!run || run.status !== "running" || run.runtimeMode !== "native" ||
       run.responsibleUserId !== actor.userId || !run.nativeIssueId)
       throw new Error("conversation_software_host_native_run_binding_invalid");
+    if (serialTransport) {
+      const profile = run.runnerProfileJson as Record<string, unknown> | null;
+      if (!profile?.nativeExecutionInput) throw new Error("serial_model_native_input_missing");
+      const next = nativeSha256(profile.nativeExecutionInput);
+      if (sealedExecutionInputHash !== null && sealedExecutionInputHash !== next) throw new Error("serial_model_native_input_changed");
+      sealedExecutionInputHash = next;
+    }
     const runContext = run.contextSnapshot && typeof run.contextSnapshot === "object"
       ? run.contextSnapshot as Record<string, unknown> : {};
     const issueId = nativeConformanceMode ? run.nativeIssueId
@@ -4665,28 +4686,118 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
         eq(environmentLeases.id, leaseId), eq(environmentLeases.heartbeatRunId, expectedRunId),
         eq(environmentLeases.environmentId, environment.id))).limit(1);
-      const events = await db.select({ eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload })
+      const events = await db.select({ eventType: heartbeatRunEvents.eventType, payload: heartbeatRunEvents.payload,
+        stream: heartbeatRunEvents.stream, level: heartbeatRunEvents.level, message: heartbeatRunEvents.message,
+        sourceInstanceId: heartbeatRunEvents.sourceInstanceId, sourceEventId: heartbeatRunEvents.sourceEventId,
+        sourceSeq: heartbeatRunEvents.sourceSeq, sourcePayloadSha256: heartbeatRunEvents.sourcePayloadSha256,
+        protocolSchemaVersion: heartbeatRunEvents.protocolSchemaVersion })
         .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.runId, expectedRunId)));
+      const coordinatorRows = run?.nativeIssueId ? await db.select().from(nativeRunFinalizations).where(and(
+        eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.issueId, run.nativeIssueId),
+        eq(nativeRunFinalizations.runId, expectedRunId))).limit(2) : [];
+      const coordinator = coordinatorRows.length === 1 ? coordinatorRows[0] : null;
+      const failureDetail = coordinator?.failureDetail && typeof coordinator.failureDetail === "object" && !Array.isArray(coordinator.failureDetail)
+        ? coordinator.failureDetail as Record<string, unknown> : {};
+      const sourceAuthority = profile.nativeOpenCodeSourceAuthority && typeof profile.nativeOpenCodeSourceAuthority === "object" &&
+        !Array.isArray(profile.nativeOpenCodeSourceAuthority) ? profile.nativeOpenCodeSourceAuthority as Record<string, any> : {};
+      const artifactAuthority = sourceAuthority.artifactAuthority && typeof sourceAuthority.artifactAuthority === "object" &&
+        !Array.isArray(sourceAuthority.artifactAuthority) ? sourceAuthority.artifactAuthority as Record<string, any> : {};
+      const providerPack = artifactAuthority.providerPackManifest;
+      const opencodeArtifact = providerPack?.payload?.artifacts?.opencodeExecutable;
+      const sourceAuthorityMatches = Boolean(run && execution && sourceAuthority.version === 1 &&
+        sourceAuthority.executionInputHash === nativeSha256(profile.nativeExecutionInput) &&
+        artifactAuthority.installedPackRoot === join(providerImageHome, ".local", "share", "paperclip-runner", "provider-pack") &&
+        typeof artifactAuthority.runnerSha256 === "string" && /^[a-f0-9]{64}$/.test(artifactAuthority.runnerSha256) &&
+        providerPack?.schema === REMOTE_PROVIDER_PACK_SCHEMA && /^sha256:[a-f0-9]{64}$/.test(providerPack?.digest ?? "") &&
+        providerPack?.payload?.pins?.opencode === MANAGED_NATIVE_OPENCODE_IMAGE_PIN.version &&
+        opencodeArtifact?.path === REMOTE_PROVIDER_PACK_ARTIFACT_PATHS.opencodeExecutable &&
+        opencodeArtifact?.sha256 === `sha256:${MANAGED_NATIVE_OPENCODE_IMAGE_PIN.sha256}`);
+      const remoteLocator = profile.nativeRemoteRuntimeAssetLocator;
+      const remoteLocatorMatches = Boolean(run && lease && isRemoteRuntimeAssetLocator(remoteLocator, { companyId, runId: run.id }) &&
+        remoteLocator.environmentId === environment.id && remoteLocator.environmentLeaseId === lease.id &&
+        remoteLocator.provider === lease.provider && remoteLocator.providerLeaseId === lease.providerLeaseId &&
+        remoteLocator.runnerInstanceId === run.runnerInstanceId &&
+        remoteLocator.remoteCwdDigest === createHash("sha256").update(expectedTaskRoot).digest("hex") &&
+        execution?.session.normalizedSessionId &&
+        remoteLocator.normalizedSessionIdDigest === createHash("sha256").update(execution.session.normalizedSessionId).digest("hex"));
+      const nativeBootstrapExhausted = Boolean(run && coordinator && sourceAuthorityMatches && remoteLocatorMatches &&
+        coordinator.attempt === 3 && coordinator.phase === "terminal_failure" &&
+        coordinator.failureCode === "native_session_retry_exhausted" && coordinator.recoveryState === "blocked" &&
+        coordinator.leaseOwner === null && coordinator.leaseExpiresAt === null && coordinator.nextAttemptAt === null &&
+        coordinator.resultId === null && coordinator.assessmentId === null && coordinator.decisionId === null &&
+        failureDetail.originalFailureCode === "provider_initialize_protocol_error" &&
+        failureDetail.recoveryMode === "bootstrap_retry" && failureDetail.providerSessionEstablished === false &&
+        failureDetail.providerEventsExist === false && failureDetail.checkpointExists === false &&
+        run.status === "failed" && run.runtimeMode === "native" && run.nativeIssueId === context.issueId &&
+        run.errorCode === "provider_initialize_protocol_error" && run.nativePhase === "terminal_failure" &&
+        run.finishedAt !== null && run.nativeInputSourceProtocolVersion === 0 && run.sessionIdAfter === null);
       const safePrelaunchSpans = new Set(["heartbeat.queue", "comment.to_run_created", "question_response.to_run_created",
         "heartbeat.prepare_before_environment", "heartbeat.prepare_after_environment", "skills.prepare", "environment.acquire",
-        "environment.workspace.realize", "sandbox.lifecycle.selected", "task.prepare", "environment.startup"]);
+        "environment.workspace.realize", "sandbox.lifecycle.selected", "environment.startup"]);
+      const nativeBootstrapSpanNames = new Set(["task.prepare", "native.coordinator.claim", "native.session.execute",
+        "runner.session.startup", "runner.runtime.stage", "task.settle", "task.run.measured",
+        "runner.transport.resolve", "runner.transport.selected", "runner.transport.connect", "runner.artifact.prepare",
+        "runner.artifact.verify", "session.checkpoint.restore", "stage.asset.home", "stage.sync"]);
       const spans = events.filter(event => event.eventType === "run.performance.span");
+      const prelaunchSpanCounts = new Map<string, number>();
+      const bootstrapAdmissionEvents = events.filter(event => event.eventType === PROCESS_START_REQUESTED);
       const eventsArePrelaunchOnly = events.every(event => {
         if (event.eventType === "lifecycle" || event.eventType === "error") return true;
+        // This fixture injects failure before Native session admission: there is
+        // no process-start intent and no Native remote-workload-stopped projection.
+        if (event.eventType === PROCESS_START_REQUESTED || event.eventType === NATIVE_REMOTE_WORKLOAD_STOPPED) return false;
+        if (event.eventType === PROCESS_IDENTITY_RECORDED) return false;
         if (event.eventType !== "run.performance.span" || !event.payload || typeof event.payload !== "object" || Array.isArray(event.payload))
           return false;
         const payload = event.payload as Record<string, unknown>;
-        return payload.schema === "paperclip.run-performance-span.v1" && typeof payload.span === "string" &&
-          safePrelaunchSpans.has(payload.span);
-      }) && spans.length <= safePrelaunchSpans.size &&
-        new Set(spans.map(event => event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
-          ? (event.payload as Record<string, unknown>).span : null)).size === spans.length;
-      const hostExecutions = await db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+        if (payload.schema !== "paperclip.run-performance-span.v1" || typeof payload.span !== "string" ||
+            typeof payload.durationMs !== "number" || !Number.isFinite(payload.durationMs) || payload.durationMs < 0 ||
+            !(payload.outcome === "ok" || payload.outcome === "failed" || payload.outcome === "cancelled")) return false;
+        const bootstrapSpan = nativeBootstrapSpanNames.has(payload.span);
+        if (!bootstrapSpan && !safePrelaunchSpans.has(payload.span)) return false;
+        const count = (prelaunchSpanCounts.get(payload.span) ?? 0) + 1;
+        prelaunchSpanCounts.set(payload.span, count);
+        // Retry reconstructs preparation and input-latency spans as well as
+        // Native startup spans; each remains bounded by the actual attempts.
+        return count <= (nativeBootstrapExhausted ? coordinator!.attempt : 1);
+      }) && (nativeBootstrapExhausted
+        ? bootstrapAdmissionEvents.length === 0 &&
+          spans.length <= (safePrelaunchSpans.size + nativeBootstrapSpanNames.size) * coordinator!.attempt
+        : bootstrapAdmissionEvents.length === 0 && spans.length === prelaunchSpanCounts.size);
+      const hostExecutions = await db.select({ id: runtimeHostCommands.id, idempotencyKey: runtimeHostCommands.idempotencyKey,
+        status: runtimeHostCommands.status, completedAt: runtimeHostCommands.completedAt,
+        payload: runtimeHostCommands.payload, safeResult: runtimeHostCommands.safeResult }).from(runtimeHostCommands).where(and(
         eq(runtimeHostCommands.companyId, companyId), eq(runtimeHostCommands.commandType, "sandbox_exec"),
         sql`${runtimeHostCommands.payload}->>'runId' = ${expectedRunId}`));
+      const allowedPrelaunchPurposes = new Set(["provider_artifact", "native_workspace_prepare", "native_runtime_context_prepare",
+        "native_harness_state", "native_attachment_stage", "native_attachment_cleanup"]);
+      const noPaidOrLaunchHostCommand = hostExecutions.every(command => {
+        const payload = command.payload && typeof command.payload === "object" && !Array.isArray(command.payload)
+          ? command.payload as Record<string, unknown> : {};
+        const safeResult = command.safeResult && typeof command.safeResult === "object" && !Array.isArray(command.safeResult)
+          ? command.safeResult as Record<string, unknown> : {};
+        const admission = setupAdmissionOwner;
+        return !!admission && command.status === "SUCCEEDED" && !!command.completedAt && payload.kind === "sandbox_exec_v1" &&
+          payload.requestId === command.idempotencyKey && payload.runId === expectedRunId && payload.leaseId === leaseId &&
+          payload.bindingId === admission.bindingId && payload.cellId === admission.cellId &&
+          payload.generation === admission.generation && payload.hostId === admission.hostId &&
+          payload.hostEpoch === admission.hostEpoch && payload.manifestId === admission.manifestId &&
+          payload.manifestHash === admission.manifestHash && payload.policySnapshotId === admission.policySnapshotId &&
+          payload.policyHash === admission.policyHash && typeof payload.commandDigest === "string" &&
+          /^[a-f0-9]{64}$/.test(payload.commandDigest) &&
+          typeof payload.nativePreparationPurpose === "string" && allowedPrelaunchPurposes.has(payload.nativePreparationPurpose) &&
+          Number.isSafeInteger(safeResult.exitCode) && safeResult.timedOut === false;
+      });
+      const preparedSdkWorkspace = hostExecutions.some(command => command.payload && typeof command.payload === "object" &&
+        !Array.isArray(command.payload) && (command.payload as Record<string, unknown>).nativePreparationPurpose === "native_workspace_prepare");
       const modelReservations = await db.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations)
-        .where(and(eq(orchestrationModelReservations.companyId, companyId),
-          eq(orchestrationModelReservations.conversationRunId, expectedRunId)));
+        .where(and(eq(orchestrationModelReservations.companyId, companyId), or(
+          eq(orchestrationModelReservations.conversationRunId, expectedRunId),
+          inArray(orchestrationModelReservations.workerAttemptId, db.select({ id: orchestrationWorkerAttempts.id })
+            .from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId),
+              eq(orchestrationWorkerAttempts.runId, expectedRunId)))))));
+      const nativeResults = await db.select({ id: nativeRunResults.id }).from(nativeRunResults).where(and(
+        eq(nativeRunResults.companyId, companyId), eq(nativeRunResults.runId, expectedRunId))).limit(1);
       const dispatchIntents = profile.nativeModelInputDispatchIntents;
       const noDispatchReceipt = run?.nativeInputSourceProtocolVersion === 0 &&
         (dispatchIntents === undefined || Array.isArray(dispatchIntents) && dispatchIntents.length === 0) &&
@@ -4698,20 +4809,59 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         execution.binding.agentId === agentId && execution.binding.issueId === run.nativeIssueId &&
         execution.session.normalizedSessionId && execution.session.normalizedSessionId === run.nativeSessionId &&
         typeof run.runnerInstanceId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(run.runnerInstanceId));
-      const noProcessIdentity = run && run.nativePhase === "observed" && run.nativePhaseUpdatedAt !== null &&
+      const noProcessIdentity = run && run.nativePhaseUpdatedAt !== null &&
         run.processPid === null && run.processGroupId === null && run.processStartedAt === null &&
-        run.sessionIdAfter === null && run.nativeProcessCleanupPending !== true;
+        run.sessionIdAfter === null && ((run.nativePhase === "observed" && run.nativeProcessCleanupPending !== true) ||
+          (nativeBootstrapExhausted && run.nativePhase === "terminal_failure"));
+      const observedBootstrapFailure = run?.nativePhase === "observed" &&
+        recoveryFacts.kind === "bootstrap" && recoveryFacts.providerWorkStarted === false;
       const noLaunchEvidence = run?.status === "failed" && run.runtimeMode === "native" && run.nativeIssueId === context.issueId &&
         run.finishedAt !== null && logicalIdentityMatches && noProcessIdentity && noDispatchReceipt &&
-        recoveryFacts.kind === "bootstrap" && recoveryFacts.providerWorkStarted === false && eventsArePrelaunchOnly &&
-        hostExecutions.length === 0 && modelReservations.length === 0;
+        (observedBootstrapFailure || nativeBootstrapExhausted) && eventsArePrelaunchOnly &&
+        modelReservations.length === 0 && nativeResults.length === 0 &&
+        (nativeBootstrapExhausted ? noPaidOrLaunchHostCommand && preparedSdkWorkspace
+          : hostExecutions.length === 0);
       const leaseOutcomeMatches = nativeConformanceMode
         ? lease?.status === (run?.status === "cancelled" && lease?.leasePolicy !== "reuse_by_environment" ? "expired" : "released") && !lease.failureReason
         : lease?.leasePolicy === "reuse_by_environment"
           ? lease.status === "released" && !lease.failureReason
           : lease?.status === "expired" && lease.failureReason === "paperclip_runner_destroy_after_turn";
-      if (!noLaunchEvidence || !lease || !leaseOutcomeMatches || lease.cleanupStatus !== "success" || !lease.releasedAt)
+      if (!noLaunchEvidence || !lease || !leaseOutcomeMatches || lease.cleanupStatus !== "success" || !lease.releasedAt) {
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+          console.warn("native_prelaunch_closure_diagnostic", { nativeBootstrapExhausted,
+            sourceAuthorityMatches, remoteLocatorMatches, logicalIdentityMatches, noProcessIdentity, noDispatchReceipt,
+            eventsArePrelaunchOnly, noPaidOrLaunchHostCommand, preparedSdkWorkspace,
+            modelReservationCount: modelReservations.length, nativeResultCount: nativeResults.length,
+            spans: [...prelaunchSpanCounts], eventTypes: [...new Set(events.map(event => event.eventType))],
+            hostExecutionCount: hostExecutions.length, hostFactCount: execFacts.length,
+            hostCommandOutcomes: hostExecutions.map(command => ({ status: command.status,
+              purpose: (command.payload as Record<string, unknown> | null)?.nativePreparationPurpose,
+              exitCode: (command.safeResult as Record<string, unknown> | null)?.exitCode })),
+            leaseOutcomeMatches, leaseStatus: lease?.status, leasePolicy: lease?.leasePolicy,
+            cleanupStatus: lease?.cleanupStatus, leaseReleased: !!lease?.releasedAt });
         throw new Error("scheduler_unlaunched_native_run_database_proof_incomplete");
+      }
+      if (nativeBootstrapExhausted) {
+        // The actual hook fails before session admission. Verify the distinct
+        // setup-container owner and signed Stop/Inspect receipt; never create a
+        // synthetic Native process-stop record or weaken started-session proof.
+        if (!remoteLocatorMatches || !lease.metadata?.remoteExecutionTermination)
+          throw new Error("scheduler_native_bootstrap_prelaunch_stop_missing");
+        const proof = await verifyNativeBootstrapPrelaunchRuntimeState(db,
+          { companyId, runId: expectedRunId, leaseId }, lease.metadata.remoteExecutionTermination);
+        const stopped = proof.prelaunchStop;
+        if (stopped.owner.runId !== expectedRunId || stopped.owner.leaseId !== leaseId ||
+            typeof stopped.runtimeOperationId !== "string" || !stopped.runtimeOperationId || bootstrapAdmissionEvents.length !== 0)
+          throw new Error("scheduler_native_bootstrap_prelaunch_runtime_owner_missing");
+        const [settledRun] = await db.select().from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.id, expectedRunId))).limit(1);
+        const nativeStopEvents = await db.select({ id: heartbeatRunEvents.id }).from(heartbeatRunEvents).where(and(
+          eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.runId, expectedRunId),
+          inArray(heartbeatRunEvents.eventType, [PROCESS_START_REQUESTED, NATIVE_REMOTE_WORKLOAD_STOPPED, PROCESS_IDENTITY_RECORDED])));
+        if (!settledRun || settledRun.nativeProcessCleanupPending === true || nativeStopEvents.length !== 0)
+          throw new Error("scheduler_native_bootstrap_prelaunch_created_native_lifecycle_evidence");
+        return;
+      }
       const storedTermination = lease.metadata?.remoteExecutionTermination as Record<string, unknown> | undefined;
       const storedSandboxStop = storedTermination?.sandboxStop as Record<string, unknown> | undefined;
       if (nativeConformanceMode || !setupAdmissionOwner || storedSandboxStop?.runtimeOperationId)
@@ -4881,8 +5031,21 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
           nativeRunnerClosureWitness.runId !== expectedRunId || nativeRunnerClosureWitness.leaseId !== leaseId ||
           !["stop_observed", "gone_verified"].includes(nativeRunnerClosureWitness.phase) || !nativeRunnerClosureWitness.stopReceiptMatched ||
           !nativeRunnerClosureWitness.identityMatched || !nativeRunnerClosureWitness.runPidStartedAtMatched ||
-          !nativeRunnerClosureWitness.pid || !nativeRunnerClosureWitness.processGroupId || !nativeRunnerClosureWitness.processSessionId)
+          !nativeRunnerClosureWitness.pid || !nativeRunnerClosureWitness.processGroupId || !nativeRunnerClosureWitness.processSessionId) {
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1") {
+          console.info("native_previous_host_closure_facts", JSON.stringify({
+            ...safeNativeRunnerClosureObservation(),
+            runMatches: nativeRunnerClosureWitness.runId === expectedRunId,
+            leaseMatches: nativeRunnerClosureWitness.leaseId === leaseId,
+            activeHostExecStreams, activeModelRequests,
+            attachedSessionProviderCount: attachedSessionProviders.size,
+            pidPresent: Boolean(nativeRunnerClosureWitness.pid),
+            processGroupPresent: Boolean(nativeRunnerClosureWitness.processGroupId),
+            processSessionPresent: Boolean(nativeRunnerClosureWitness.processSessionId),
+          }));
+        }
         throw new Error("scheduler_previous_host_not_closed");
+      }
       const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
         eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.id, expectedRunId))).limit(1);
       const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),

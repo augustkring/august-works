@@ -1,4 +1,7 @@
 import { readRunLeaseCleanup, verifyRunLeaseCleanupReceipt, verifyNativeCleanupRuntimeState } from "./run-lease-cleanup.js";
+import { assertNativeBootstrapPrelaunchStopClaim, nativeBootstrapPrelaunchStopClaimKey,
+  readNativeBootstrapPrelaunchCleanup, verifyNativeBootstrapPrelaunchStopReceipt,
+  verifyNativeBootstrapPrelaunchRuntimeState, type NativeBootstrapPrelaunchCleanupOwner } from "./native-prelaunch-cleanup.js";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { SandboxQualificationCredentialClaim } from "../../agent-auth-jwt.js";
@@ -78,7 +81,7 @@ export function executionSandboxService(db: Db, options: {
   backendFor?: (binding: Binding, actor: AuthorizationActor, conformance?: NativeOpenCodeConformanceHostAuthority) => ExecutionSandboxBackend | undefined;
   nativeOperation?: (companyId: string, cellId: string, userId: string, action: "stop" | "delete", idempotencyKey: string) => Promise<{ id: string }>;
   assertRuntimeStartAdmission?: (tx: Db, input: { actor: AuthorizationActor; companyId: string; cellId: string; userId: string }) => Promise<unknown>;
-  recordRuntimeWorkloadState?: (tx: Db, input: { action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string; hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string; executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string; nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string } }) => Promise<unknown>;
+  recordRuntimeWorkloadState?: (tx: Db, input: { action: "start" | "stop"; companyId: string; cellId: string; bindingId: string; generation: string; hostCommandId: string; claimKey: string; policySnapshotId: string; executionManifestId: string; executionManifestHash: string; policyHash: string; userId: string; idempotencyKey?: string; nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string }; nativePrelaunchCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; owner: NativeBootstrapPrelaunchCleanupOwner } }) => Promise<unknown>;
 } = {}) {
   async function access(tx: Db, actor: AuthorizationActor, companyId: string, mutate = false) {
     if (mutate) await assertConfiguredOperatorAuthentication(tx, actor, options.operatorUserIds ?? []);
@@ -558,17 +561,18 @@ export function executionSandboxService(db: Db, options: {
   async function finishStop(actor: AuthorizationActor | null, companyId: string, id: string,
     initial: { claimKey: string; policySnapshotId: string; executionManifestId: unknown; executionManifestHash: unknown; policyHash: unknown },
     scope: ReturnType<typeof identity>, operationId: string, idempotencyKey: string,
-    nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string }) {
+    nativeCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; originalRequesterUserId: string },
+    nativePrelaunchCleanup?: { companyId: string; runId: string; leaseId: string; receipt: unknown; owner: NativeBootstrapPrelaunchCleanupOwner }) {
     return withV7ActivityTransaction(db, async (tx, publications) => {
           await tx.select({ id: runtimeCells.id }).from(runtimeCells).where(and(eq(runtimeCells.companyId, companyId), eq(runtimeCells.id, scope.cellId))).for("update");
           const [current] = await tx.select().from(runtimeSandboxBindings).where(and(
             eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
             eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration),
-            inArray(runtimeSandboxBindings.status, nativeCleanup ? ["admitting", "running", "stopping", "quarantined", "stopped"] : ["admitting", "running", "stopping", "quarantined"]),
+            inArray(runtimeSandboxBindings.status, nativeCleanup || nativePrelaunchCleanup ? ["admitting", "running", "stopping", "quarantined", "stopped"] : ["admitting", "running", "stopping", "quarantined"]),
           )).for("update");
           if (!current) throw conflict("Sandbox changed while Stop was completing");
           if (actor) await assertV7Authorization(tx, actor, companyId, "runtime:manage");
-          else if (!nativeCleanup) throw conflict("Native cleanup completion requires its exact signed receipt");
+          else if (!nativeCleanup && !nativePrelaunchCleanup) throw conflict("Native cleanup completion requires its exact signed receipt");
           if (nativeCleanup) {
             const physical = await verifyRunLeaseCleanupReceipt(tx, nativeCleanup, nativeCleanup.receipt);
             // Recheck under the same cell/binding locks after a competing Stop
@@ -580,18 +584,35 @@ export function executionSandboxService(db: Db, options: {
             if (completed) return { binding: current, receipt: await verifyNativeCleanupRuntimeState(tx, nativeCleanup,
               { ...physical, sandboxStop: { ...physical.sandboxStop, runtimeOperationId: completed.id } }) };
           }
+          if (nativePrelaunchCleanup) {
+            const owner = await readNativeBootstrapPrelaunchCleanup(tx, nativePrelaunchCleanup, nativePrelaunchCleanup.owner);
+            await assertNativeBootstrapPrelaunchStopClaim(tx, owner.owner);
+            const physical = await verifyNativeBootstrapPrelaunchStopReceipt(tx, nativePrelaunchCleanup, nativePrelaunchCleanup.receipt);
+            if (owner.owner.bindingId !== id || owner.owner.cellId !== scope.cellId || owner.owner.generation !== scope.cellGeneration ||
+                physical.prelaunchStop.stopCommandId !== operationId)
+              throw conflict("Native prelaunch cleanup lost its exact setup admission scope");
+            const [completed] = await tx.select({ id: runtimeOperations.id }).from(runtimeOperations).where(and(
+              eq(runtimeOperations.companyId, companyId), eq(runtimeOperations.runtimeCellId, scope.cellId),
+              eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.idempotencyKey, idempotencyKey),
+            )).limit(1);
+            if (completed) return { binding: current, receipt: await verifyNativeBootstrapPrelaunchRuntimeState(tx,
+              nativePrelaunchCleanup, { ...physical, prelaunchStop: { ...physical.prelaunchStop, runtimeOperationId: completed.id } }) };
+            if (current.status !== "stopping" || current.version !== owner.owner.claimVersion + 2)
+              throw conflict("Native prelaunch Stop was not claimed before physical dispatch");
+          }
           let stopping = current;
-          if (nativeCleanup && current.status !== "stopping") {
+          if ((nativeCleanup || nativePrelaunchCleanup) && current.status !== "stopping") {
             const [claimed] = await tx.update(runtimeSandboxBindings).set({ status: "stopping", version: current.version + 1, updatedAt: new Date() }).where(and(
               eq(runtimeSandboxBindings.companyId, companyId), eq(runtimeSandboxBindings.id, id),
               eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration), eq(runtimeSandboxBindings.version, current.version),
             )).returning();
             if (!claimed) throw conflict("Sandbox changed before its cleanup Stop claim was recorded");
             stopping = claimed;
-            await logActivity(tx, { companyId, actorType: "system", actorId: "native-run-cleanup",
+            await logActivity(tx, { companyId, actorType: "system", actorId: nativePrelaunchCleanup ? "native-bootstrap-cleanup" : "native-run-cleanup",
               action: "sandbox.workload_stop_claimed", entityType: "runtime_sandbox", entityId: id,
               details: { generation: scope.cellGeneration, policySnapshotId: initial.policySnapshotId,
-                claimKey: initial.claimKey, idempotencyKey, originalRequesterUserId: nativeCleanup.originalRequesterUserId } }, publications);
+                claimKey: initial.claimKey, idempotencyKey, ...(nativeCleanup ? { originalRequesterUserId: nativeCleanup.originalRequesterUserId } : {}),
+                ...(nativePrelaunchCleanup ? { originalRequesterUserId: nativePrelaunchCleanup.owner.requesterUserId } : {}) } }, publications);
           }
           if (!options.recordRuntimeWorkloadState || typeof initial.executionManifestId !== "string" || typeof initial.executionManifestHash !== "string" || typeof initial.policyHash !== "string")
             throw conflict("Original runtime state owner or exact admission claim is unavailable");
@@ -601,8 +622,8 @@ export function executionSandboxService(db: Db, options: {
             claimKey: initial.claimKey, policySnapshotId: initial.policySnapshotId,
             executionManifestId: initial.executionManifestId,
             executionManifestHash: initial.executionManifestHash,
-            policyHash: initial.policyHash, userId: actor ? v7HumanActorId(actor) : nativeCleanup!.originalRequesterUserId,
-            ...(nativeCleanup ? { nativeCleanup } : {}),
+            policyHash: initial.policyHash, userId: actor ? v7HumanActorId(actor) : nativeCleanup?.originalRequesterUserId ?? nativePrelaunchCleanup!.owner.requesterUserId,
+            ...(nativeCleanup ? { nativeCleanup } : {}), ...(nativePrelaunchCleanup ? { nativePrelaunchCleanup } : {}),
             idempotencyKey,
           });
           const [updated] = await tx.update(runtimeSandboxBindings).set({ status: "stopped", version: stopping.version + 1, updatedAt: new Date() }).where(and(
@@ -614,10 +635,11 @@ export function executionSandboxService(db: Db, options: {
             inArray(runtimePolicySnapshots.status, ["draft", "qualified"]),
           ));
           await logActivity(tx, {
-            companyId, actorType: actor ? "user" : "system", actorId: actor ? v7HumanActorId(actor) : "native-run-cleanup",
+            companyId, actorType: actor ? "user" : "system", actorId: actor ? v7HumanActorId(actor) : nativePrelaunchCleanup ? "native-bootstrap-cleanup" : "native-run-cleanup",
             action: "sandbox.workload_stopped", entityType: "runtime_sandbox", entityId: id,
             details: { cellId: scope.cellId, generation: scope.cellGeneration, policySnapshotId: initial.policySnapshotId, claimKey: initial.claimKey, idempotencyKey, operationId, stopConfirmed: true,
-              ...(nativeCleanup ? { originalRequesterUserId: nativeCleanup.originalRequesterUserId } : {}) },
+              ...(nativeCleanup ? { originalRequesterUserId: nativeCleanup.originalRequesterUserId } : {}),
+              ...(nativePrelaunchCleanup ? { runId: nativePrelaunchCleanup.runId, leaseId: nativePrelaunchCleanup.leaseId } : {}) },
           }, publications);
           if (nativeCleanup) {
             const id = stateReceipt && typeof stateReceipt === "object" && "id" in stateReceipt ? stateReceipt.id : null;
@@ -627,10 +649,56 @@ export function executionSandboxService(db: Db, options: {
               { ...physical, sandboxStop: { ...physical.sandboxStop, runtimeOperationId: id } });
             return { binding: updated!, receipt };
           }
+          if (nativePrelaunchCleanup) {
+            const id = stateReceipt && typeof stateReceipt === "object" && "id" in stateReceipt ? stateReceipt.id : null;
+            if (typeof id !== "string") throw conflict("Native prelaunch runtime owner returned no receipt");
+            const physical = await verifyNativeBootstrapPrelaunchStopReceipt(tx, nativePrelaunchCleanup, nativePrelaunchCleanup.receipt);
+            return { binding: updated!, receipt: await verifyNativeBootstrapPrelaunchRuntimeState(tx,
+              nativePrelaunchCleanup, { ...physical, prelaunchStop: { ...physical.prelaunchStop, runtimeOperationId: id } }) };
+          }
           return { binding: updated!, receipt: undefined };
     });
   }
   const service = {
+    async claimNativeBootstrapPrelaunchStop(input: { companyId: string; runId: string; leaseId: string }) {
+      const discovered = await readNativeBootstrapPrelaunchCleanup(db, input);
+      const owner = discovered.owner;
+      const stopClaimKey = nativeBootstrapPrelaunchStopClaimKey(owner);
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        const [cell] = await tx.select().from(runtimeCells).where(and(
+          eq(runtimeCells.companyId, owner.companyId), eq(runtimeCells.id, owner.cellId),
+          eq(runtimeCells.generation, BigInt(owner.generation)), isNull(runtimeCells.deletedAt),
+        )).for("update");
+        const [binding] = await tx.select().from(runtimeSandboxBindings).where(and(
+          eq(runtimeSandboxBindings.companyId, owner.companyId), eq(runtimeSandboxBindings.id, owner.bindingId),
+          eq(runtimeSandboxBindings.runtimeCellId, owner.cellId), eq(runtimeSandboxBindings.cellGeneration, owner.generation),
+        )).for("update");
+        const current = await readNativeBootstrapPrelaunchCleanup(tx, input, owner);
+        if (!cell || cell.runtimeHostId !== owner.hostId || !binding ||
+            !["HEALTHY", "STOPPED"].includes(cell.status))
+          throw conflict("Native prelaunch Stop lost its locked cell or binding owner");
+        const expectedStoppingVersion = owner.claimVersion + 2;
+        if ((binding.status === "admitting" && binding.version === owner.claimVersion) ||
+            (binding.status === "running" && binding.version === owner.claimVersion + 1)) {
+          const [stopping] = await tx.update(runtimeSandboxBindings).set({
+            status: "stopping", version: expectedStoppingVersion, updatedAt: new Date(),
+          }).where(and(eq(runtimeSandboxBindings.companyId, owner.companyId),
+            eq(runtimeSandboxBindings.id, owner.bindingId), eq(runtimeSandboxBindings.cellGeneration, owner.generation),
+            eq(runtimeSandboxBindings.status, binding.status), eq(runtimeSandboxBindings.version, binding.version))).returning();
+          if (!stopping) throw conflict("Native prelaunch Stop claim lost its binding version");
+          await logActivity(tx, { companyId: owner.companyId, actorType: "system", actorId: "native-bootstrap-cleanup",
+            action: "sandbox.workload_stop_claimed", entityType: "runtime_sandbox", entityId: owner.bindingId,
+            details: { generation: owner.generation, policySnapshotId: owner.policySnapshotId,
+              claimKey: owner.claimKey, stopClaimKey, idempotencyKey: stopClaimKey,
+              originalRequesterUserId: owner.requesterUserId, runId: owner.runId, leaseId: owner.leaseId } }, publications);
+        } else if (!((binding.status === "stopping" && binding.version === expectedStoppingVersion) ||
+            (binding.status === "stopped" && binding.version === expectedStoppingVersion + 1))) {
+          throw conflict("Native prelaunch Stop is already owned by another binding transition");
+        }
+        await assertNativeBootstrapPrelaunchStopClaim(tx, current.owner);
+        return { owner: current.owner, stopClaimKey };
+      });
+    },
     async recordNativeCleanupStop(input: { companyId: string; runId: string; leaseId: string }, physicalReceipt: unknown) {
       const owner = await readRunLeaseCleanup(db, input);
       const physical = await verifyRunLeaseCleanupReceipt(db, input, physicalReceipt);
@@ -649,6 +717,23 @@ export function executionSandboxService(db: Db, options: {
       key,
       { companyId: input.companyId, runId: input.runId, leaseId: input.leaseId,
         receipt: physical, originalRequesterUserId: owner.startRequest.requesterUserId! });
+      return result.receipt!;
+    },
+    async recordNativeBootstrapPrelaunchStop(input: { companyId: string; runId: string; leaseId: string }, physicalReceipt: unknown) {
+      const owner = await readNativeBootstrapPrelaunchCleanup(db, input);
+      const physical = await verifyNativeBootstrapPrelaunchStopReceipt(db, input, physicalReceipt);
+      const key = `native-bootstrap-cleanup:${input.runId}:${input.leaseId}:${physical.prelaunchStop.stopCommandId}`;
+      const [completed] = await db.select({ id: runtimeOperations.id }).from(runtimeOperations).where(and(
+        eq(runtimeOperations.companyId, input.companyId), eq(runtimeOperations.runtimeCellId, owner.owner.cellId),
+        eq(runtimeOperations.operationType, "stop"), eq(runtimeOperations.idempotencyKey, key))).limit(1);
+      if (completed) return await verifyNativeBootstrapPrelaunchRuntimeState(db, input,
+        { ...physical, prelaunchStop: { ...physical.prelaunchStop, runtimeOperationId: completed.id } });
+      const result = await finishStop(null, input.companyId, owner.owner.bindingId, {
+        claimKey: owner.owner.claimKey, policySnapshotId: owner.owner.policySnapshotId,
+        executionManifestId: owner.owner.manifestId, executionManifestHash: owner.owner.manifestHash,
+        policyHash: owner.owner.policyHash,
+      }, owner.scope, physical.prelaunchStop.stopCommandId, key,
+      undefined, { ...input, receipt: physicalReceipt, owner: owner.owner });
       return result.receipt!;
     },
     assertTaskExecutionContext,

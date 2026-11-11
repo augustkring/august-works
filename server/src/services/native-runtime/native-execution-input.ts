@@ -7,6 +7,8 @@ import { isDeepStrictEqual } from "node:util";
 import { nativeContinuationMessageHash, nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import type { NativeTaskContinuationCapture } from "../execution-continuation.js";
 import { buildNativeContinuationPrompt } from "./native-continuation.js";
+import { buildNativeReviewRequest } from "./native-review-prompt.js";
+import type { NativeReviewAssignment, NativeReviewWakeWitness } from "./native-review-participant.js";
 import type {
   NativeAcpxAgent,
   NativeAcpxPermissionMode,
@@ -48,6 +50,11 @@ export type NativeRenderedSourceReference = {
   filename?: string;
   contentType?: string;
   byteSize?: number;
+} | {
+  /** Exact server-rendered review prompt is bound to its assignment witness in
+   * the same aggregated native_task_wake source. */
+  kind: "native_review_request_context";
+  id: string;
 } | {
   /** Server-rendered external-chat guidance is bound to the exact captured
    * wake source, which carries its provider and initial-guidance hash. */
@@ -131,7 +138,7 @@ export type NativeModelOutputCapture = {
   sourceSet: NativePayloadSourceSet;
   /** Exact receipt components that compose the source set consumed by this request. */
   consumedSourceComponents?: NativeConsumedSourceComponent[];
-  dispatch: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" | "conversation_model_dispatch" }>;
+  dispatch: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" | "conversation_model_dispatch" | "review_model_dispatch" }>;
   /** Present only when the output came from the pinned managed OpenCode tool boundary. */
   managedOpenCodeToolUse?: { callId: string; toolName: string; argumentsHash: string; responseContentHash: string };
 };
@@ -872,6 +879,7 @@ export function captureNativeTaskWakeSource(input: {
   /** Both values come from the loaded canonical chat conversation and the exact Native input. */
   canonicalInitialGuidance?: string | null;
   nativeInitialGuidance?: string | null;
+  nativeReviewWitness?: NativeReviewWakeWitness | null;
   agentId?: string; responsibleUserId?: string | null; wakeupRequestId?: string | null;
   continuationCapture?: NativeTaskContinuationCapture | null;
   ordinaryPlanRead?: NativeOrdinaryPlanReadCapture | null;
@@ -897,7 +905,7 @@ export function captureNativeTaskWakeSource(input: {
   commentSources?: readonly Extract<NativePayloadSourceInput, { kind: "comment" }>[];
   onDiagnostic?: (reason: "identity_invalid" | "payload_shape" | "payload_keys" | "task_projection" |
     "wake_fields_invalid" | "comment_count_invalid" | "comment_shape_invalid" | "comment_source_invalid" |
-    "comment_hash_mismatch" | "comment_window_invalid", fields?: readonly string[]) => void;
+    "comment_hash_mismatch" | "comment_window_invalid" | "review_witness_invalid", fields?: readonly string[]) => void;
   payload: unknown;
 }): Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> | null {
   const reject = (reason: Parameters<NonNullable<typeof input.onDiagnostic>>[0], fields?: readonly string[]) => {
@@ -910,6 +918,11 @@ export function captureNativeTaskWakeSource(input: {
   if (!input.payload || typeof input.payload !== "object" || Array.isArray(input.payload)) return reject("payload_shape");
   if (input.canonicalInitialGuidance !== input.nativeInitialGuidance ||
     Boolean(input.nativeInitialGuidance) && !input.externalChatProvider) return reject("wake_fields_invalid", ["initialGuidance"]);
+  const reviewWitness = input.nativeReviewWitness ?? null;
+  if (reviewWitness && (reviewWitness.version !== 1 || reviewWitness.companyId !== input.companyId ||
+    reviewWitness.issueId !== input.issueId || reviewWitness.reviewerRunId !== input.runId ||
+    reviewWitness.reviewerAgentId !== input.agentId || reviewWitness.responsibleUserId !== input.responsibleUserId))
+    return reject("review_witness_invalid");
   const payload = input.payload as Record<string, unknown>;
   const keys = ["reason", "executionContinuation", "attachmentOmissions", "externalChatProvider", "recovery", "issue",
     "agentMessage", "childIssueSummaries", "childIssueSummaryTruncated", "dispositionRepair", "livenessContinuation",
@@ -1102,10 +1115,10 @@ export function captureNativeTaskWakeSource(input: {
       : { wake: sourcePayload, manualQueueAdoption })
     : coordination ? { wake: sourcePayload, workspaceCoordination: coordination } : sourcePayload;
   const initialGuidanceHash = input.nativeInitialGuidance ? nativeSha256(input.nativeInitialGuidance) : undefined;
-  return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId,
-    sourceVersion: input.sourceVersion, contentHash: nativeSha256(content),
-    ...(input.externalChatProvider ? { externalChatProvider: input.externalChatProvider } : {}),
-    ...(initialGuidanceHash ? { initialGuidanceHash } : {}) };
+  const aggregatedContent = reviewWitness ? { wake: content, nativeReview: reviewWitness } : content;
+  return { kind: "native_task_wake", runId: input.runId, issueId: input.issueId, sourceVersion: input.sourceVersion,
+    contentHash: nativeSha256(aggregatedContent), ...(input.externalChatProvider ? { externalChatProvider: input.externalChatProvider } : {}),
+    ...(initialGuidanceHash ? { initialGuidanceHash } : {}), ...(reviewWitness ? { nativeReview: reviewWitness } : {}) };
 }
 
 export function nativeTaskWakeGuidanceSourceMatches(
@@ -1230,6 +1243,18 @@ export function buildNativeBootstrapSourceSet(input: {
       policy[key] = [...new Set([...policy[key], ...incoming[key]])].sort();
   };
   for (const reference of input.references) {
+    if (reference.kind === "native_review_request_context") {
+      const wakeSources = (input.additionalInputs ?? []).filter(source => source.kind === "native_task_wake" &&
+        source.runId === input.runId && source.issueId === input.issueId);
+      const parsed = wakeSources.length === 1 ? nativePayloadSourceInputSchema.safeParse(wakeSources[0]) : null;
+      if (!parsed?.success || parsed.data.kind !== "native_task_wake" || !parsed.data.nativeReview ||
+        parsed.data.nativeReview.interactionId !== reference.id || parsed.data.nativeReview.reviewerRunId !== input.runId ||
+        parsed.data.nativeReview.reviewerAgentId !== input.agentId || parsed.data.nativeReview.issueId !== input.issueId)
+        return reject("reference_source_mismatch");
+      append(parsed.data);
+      policy.runIds = [...new Set([...policy.runIds, parsed.data.nativeReview.sourceRunId])].sort();
+      continue;
+    }
     if (reference.kind === "external_chat_context") {
       const wakeSources = (input.additionalInputs ?? []).filter(source => source.kind === "native_task_wake" &&
         source.runId === input.runId && source.issueId === input.issueId);
@@ -1395,6 +1420,22 @@ export function prepareNativeTurnWithContext<T extends { message: { role: string
 }
 
 /** Closed constructor: callers cannot spread legacy context or environment data. */
+/** Canonical structured fields; external messages retain their raw Task source
+ * in the prompt and closed wake rather than repeating it as a turn instruction. */
+export function nativeTaskFields(issue: {
+  id: string; identifier: string | null; title: string; description: string | null;
+  workMode: string;
+}, wakePayload: unknown, nativeReview?: NativeReviewAssignment | null) {
+  if (nativeReview) return { identifier: issue.identifier ?? issue.id, title: `Review: ${issue.title}`,
+    description: buildNativeReviewRequest({ title: nativeReview.interaction.title, summary: nativeReview.interaction.summary,
+      payload: nativeReview.interaction.payload }), workMode: issue.workMode };
+  const externalChatTurn = isPaperclipExternalChatContractTurn(wakePayload) ||
+    isPaperclipExternalChatQuestionResponseTurn(wakePayload);
+  return { identifier: issue.identifier ?? issue.id,
+    title: externalChatTurn ? "External chat follow-up" : issue.title,
+    description: externalChatTurn ? null : issue.description, workMode: issue.workMode };
+}
+
 export function buildNativeExecutionInput(input: {
   companyId: string;
   runId: string;
@@ -1420,6 +1461,7 @@ export function buildNativeExecutionInput(input: {
    * that legacy adapters place in their provider prompt.
    */
   wakePayload?: unknown;
+  nativeReviewAssignment?: NativeReviewAssignment | null;
   resumedSession?: boolean;
   previousTurn?: { runId: string; task: { title: string; description: string | null } } | null;
   conversationMode?: boolean;
@@ -1567,19 +1609,7 @@ export function buildNativeExecutionInput(input: {
       agentId: input.agentId,
       executionWorkspaceId: input.workspace.id,
     },
-    task: {
-      identifier: input.issue.identifier ?? input.issue.id,
-      // The issue title is durable background context and may itself contain an
-      // exact-output instruction from the thread's first message. Repeating it
-      // as the native turn title can override a newer provider message in small
-      // models. Keep the canonical title and description in task.prompt as
-      // explicitly labeled background, but give authenticated external-chat
-      // turns neutral structured fields.
-      title: externalChatTurn ? "External chat follow-up" : input.issue.title,
-      description: externalChatTurn ? null : input.issue.description,
-      prompt: taskPrompt,
-      workMode: input.issue.workMode,
-    },
+    task: { ...nativeTaskFields(input.issue, wakePayload, input.nativeReviewAssignment), prompt: taskPrompt },
     workspace: {
       cwd: input.workspace.cwd,
       repoUrl: input.workspace.repoUrl,

@@ -139,6 +139,7 @@ export async function runManagedNativeConversationFrame(input: {
   }) => Promise<{
     sandboxExec?: NonNullable<Parameters<typeof heartbeatService>[1]>["sandboxExec"];
     environmentRuntime?: NonNullable<Parameters<typeof heartbeatService>[1]>["environmentRuntime"];
+    beforeNativeRuntimeSelection?: NonNullable<Parameters<typeof heartbeatService>[1]>["beforeNativeRuntimeSelection"];
     beforeNativeExecution?: (args: Parameters<NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testNativeRunnerEnvironment"]>>[0]) => Promise<Record<string, string>>;
     close?: () => Promise<void>;
     facts?: () => Record<string, unknown>;
@@ -526,6 +527,7 @@ export async function runManagedNativeConversationFrame(input: {
     brokerOrigin: origin, brokerProxyOrigin, certBundlePath, assignedToolGatewayHttpRequest: input.assignedToolGatewayHttpRequest, observeModelOriginDenials: input.observeModelOriginDenials, setBrokerToken: token => { activeToken = token; } });
   const heartbeat = heartbeatService(db, { sandboxExec: sandboxHeartbeat?.sandboxExec,
     environmentRuntime: sandboxHeartbeat?.environmentRuntime,
+    beforeNativeRuntimeSelection: sandboxHeartbeat?.beforeNativeRuntimeSelection,
     testNativeRunnerEnvironment: async ({ execution, runId, issueId,
     agentId: currentAgentId, responsibleUserId }) => {
     if (execution.provider.kind !== "opencode" || !responsibleUserId)

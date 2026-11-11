@@ -1029,10 +1029,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "c1f8beb88fc3a43e615909270634c6dfc3b3aafa2b0220b5f6fc0f359ca57cd9",
+      "sourceSha256": "1adfdb69d421a919db106ab65eada0b5abb661b799bdcf92478ce41587b3c4d6",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
-      "decision": "updated",
-      "rationale": "The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "Reviewed complete English/Danish article against the separate review_model reservation lane. The changed plan-reservation path retains bounded Human authority and actual quotes; it does not change Support Assistant company-purpose funding, approved package/provider, read-only excerpts, consent, or no-fallback behavior."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -1341,10 +1341,10 @@
     {
       "source": "server/src/services/orchestration/model-reservations.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "c1f8beb88fc3a43e615909270634c6dfc3b3aafa2b0220b5f6fc0f359ca57cd9",
+      "sourceSha256": "1adfdb69d421a919db106ab65eada0b5abb661b799bdcf92478ce41587b3c4d6",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
-      "decision": "updated",
-      "rationale": "Danish counterpart checked against the same source behavior. The paired article adds the reviewed Support-to-Task handoff and pending managed-file deletion explanation, alongside existing coverage/security and status guidance. This linked source is unchanged; its documented source access and owner controls remain intact."
+      "decision": "no_change",
+      "rationale": "Reviewed complete English/Danish article against the separate review_model reservation lane. The changed plan-reservation path retains bounded Human authority and actual quotes; it does not change Support Assistant company-purpose funding, approved package/provider, read-only excerpts, consent, or no-fallback behavior."
     },
     {
       "source": "server/src/services/orchestration/read-only-model-transport.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
+      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed the exact per-turn same-Run lease reattachment against the complete English recovery guide. The existing coordinator retains its bounded retries and current authority, and reuses only its original active unexpired lease. Original-task recovery, displayed actions, pending Stop and unknown-outcome guidance remain accurate; no customer configuration step is added."
+      "rationale": "Reviewed complete English/Danish article against exact failed-chat retry authority, original Human/comment Source revalidation, explicit operator interruption and cleanup-gated pending-comment promotion. The existing original-Task/current-status/current-requirements/stop-pending guidance remains accurate; no silent replacement or replay is promised. New SDK journeys remain unqualified until actual tests pass."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
+      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Gennemg\u00e5et den pr\u00e6cise genbrug af den oprindelige aktive lease ved et automatisk genfors\u00f8g p\u00e5 samme per-turn-k\u00f8rsel mod hele den danske vejledning. De eksisterende afgr\u00e6nsede genfors\u00f8g og aktuelle rettigheder bevares. Vejledningen om den oprindelige opgave, viste handlinger, afventende Stop og ukendt resultat er fortsat korrekt; ingen teknisk ops\u00e6tning tilf\u00f8jes for kunden."
+      "rationale": "Reviewed complete English/Danish article against exact failed-chat retry authority, original Human/comment Source revalidation, explicit operator interruption and cleanup-gated pending-comment promotion. The existing original-Task/current-status/current-requirements/stop-pending guidance remains accurate; no silent replacement or replay is promised. New SDK journeys remain unqualified until actual tests pass."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
+      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Reviewed the exact lease recovery change against the complete English export/deletion guide. No Native stop projection or erasure receipt is fabricated or cleared; reattachment neither extends lease expiry nor establishes completed storage removal. Existing verified-stop, pending cleanup, retention, receipt and external-provider limits remain accurate."
+      "rationale": "Reviewed complete English/Danish article against typed prelaunch container Stop and derived occupancy settlement. Resource settlement never writes a Native process-stop projection and does not assert provider erasure or storage removal; existing pending process/storage and Memory/provider limits remain accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "27ee5cb8f6505a0d8f274daa95a46f78b2dfe6da30ad5c54ece4616ce1f974d3",
+      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Gennemg\u00e5et den pr\u00e6cise \u00e6ndring i lease-genoprettelsen mod hele den danske eksport- og slettevejledning. Ingen Native-stoptilstand eller slettekvittering opfindes eller nulstilles. Genbrug forl\u00e6nger ikke leasens udl\u00f8bstid og beviser ikke filfjernelse. Vejledningen om verificeret Stop, afventende oprydning, opbevaring, kvitteringer og udbyderdata er fortsat korrekt."
+      "rationale": "Reviewed complete English/Danish article against typed prelaunch container Stop and derived occupancy settlement. Resource settlement never writes a Native process-stop projection and does not assert provider erasure or storage removal; existing pending process/storage and Memory/provider limits remain accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

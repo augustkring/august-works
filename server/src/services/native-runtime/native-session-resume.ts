@@ -7,7 +7,7 @@ import type {
   PersistedNativeSession,
 } from "../../vendor/paperclip-runner/index.js";
 import { parseNativeExecutionInput } from "../../vendor/paperclip-runner/index.js";
-import { nativePayloadSourceInputSchema, nativeRunInputSourceReceiptSchema,
+import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativeRunInputSourceReceiptSchema, reviewModelBindingSchema,
   type NativePayloadSourceInput } from "@paperclipai/shared";
 import { nativeSha256 } from "./canonical.js";
 
@@ -26,7 +26,7 @@ export function nativeToolContractFingerprintForTarget(
   return `sha256:${createHash("sha256")
     .update(
       JSON.stringify({
-        schema: "paperclip.native-tool-contract.v13",
+        schema: "paperclip.native-tool-contract.v14",
         executionTargetKind,
         advertisementPolicy: {
           // Direct provider threads retain declarations from thread/start.
@@ -40,6 +40,7 @@ export function nativeToolContractFingerprintForTarget(
           structuredHumanInput:
             "always_advertised_run_issue_agent_binding_gated_current_task_description.v2",
           semanticCompletion: "finish_accessible_deliverable_evidence.v4",
+          nativeCompletionReview: "exact_assigned_review_resolve_review.v1",
           connectorTools: "assigned_resources_and_pinned_skill_bundle.v1",
           ...(executionTargetKind === "remote"
             ? { assignedMcpTools: "codex_server_gateway_prp_relay.v1" }
@@ -311,21 +312,88 @@ export function nativeRetainedRunResumeWitness(input: {
     return null;
   const intents = rawIntents.map(record);
   const dispatches = parsedReceipt.data.dispatches;
-  if (dispatches.length !== intents.length || intents.some(intent => typeof intent.turnId !== "string" ||
-    !/^[\x21-\x7e]{1,240}$/.test(intent.turnId) || intent.responsibleUserId !== previous.responsibleUserId ||
-    typeof intent.turnInputDigest !== "string" || !/^[0-9a-f]{64}$/.test(intent.turnInputDigest)) ||
-    new Set(intents.map(intent => intent.turnInputDigest)).size !== intents.length ||
-    dispatches.some(dispatch => !intents.some(intent => intent.turnInputDigest === dispatch.executionInputDigest &&
-      intent.responsibleUserId === dispatch.responsibleUserId))) return null;
   const retainedArray = (key: string, max: number): unknown[] | null => {
     const value = profile[key];
     return value === undefined ? [] : Array.isArray(value) && value.length <= max ? value : null;
   };
   const toolAssociations = retainedArray("nativeToolCallDispatchAssociations", 512);
   const toolResultCaptures = retainedArray("nativeToolResultSourceCaptures", 256);
-  const wireIntents = retainedArray("nativeAwModelWireIntents", 256);
+  const wireIntents = retainedArray("nativeAwModelWireIntents", 256)?.map(record) ?? null;
   if (!toolAssociations || !toolResultCaptures || !wireIntents ||
-    Buffer.byteLength(JSON.stringify({ intents, toolAssociations, toolResultCaptures, wireIntents })) > 2 * 1024 * 1024) return null;
+    Buffer.byteLength(JSON.stringify({ intents, toolAssociations, toolResultCaptures, wireIntents })) > 2 * 1024 * 1024 ||
+    intents.some(intent => typeof intent.turnId !== "string" ||
+      !/^[\x21-\x7e]{1,240}$/.test(intent.turnId) || intent.responsibleUserId !== previous.responsibleUserId ||
+      typeof intent.turnInputDigest !== "string" || !/^[0-9a-f]{64}$/.test(intent.turnInputDigest)) ||
+    new Set(intents.map(intent => intent.turnInputDigest)).size !== intents.length ||
+    dispatches.some(dispatch => !intents.some(intent => intent.turnInputDigest === dispatch.executionInputDigest &&
+      intent.responsibleUserId === dispatch.responsibleUserId))) return null;
+  // Native acknowledgement appends the original source set first. Gateway
+  // responses append a consumed source prefix and one new final marker later.
+  // The original set itself can contain an older marker, so entry kind alone
+  // does not identify admission; bind it to the persisted prompt source hash.
+  const promptBindings = record(profile.nativeOpenCodeSourceAuthority).promptSourceBindings;
+  const promptSourceHashes = Array.isArray(promptBindings) && promptBindings.length > 0 && promptBindings.length <= 64 &&
+    promptBindings.every(binding => typeof record(binding).promptHash === "string" &&
+      /^[0-9a-f]{64}$/.test(record(binding).promptHash as string) && typeof record(binding).sourceSetHash === "string" &&
+      /^[0-9a-f]{64}$/.test(record(binding).sourceSetHash as string))
+    ? promptBindings.map(record).map(binding => binding.sourceSetHash as string) : [];
+  const registeredGatewayDispatch = (dispatch: typeof dispatches[number], admission?: typeof dispatches[number]): boolean => {
+    const marker = dispatch.inputs.at(-1);
+    if (!marker || marker.kind !== "worker_model_dispatch" && marker.kind !== "conversation_model_dispatch" && marker.kind !== "review_model_dispatch") return false;
+    return wireIntents.filter(intent => {
+      const consumed = record(intent.consumedSourceSet);
+      const inputs = nativePayloadSourceInputSchema.array().max(256).safeParse(consumed.inputs);
+      const policy = nativePayloadSourcePolicySchema.safeParse(consumed.policy);
+      return typeof intent.responseContentHash === "string" && /^[0-9a-f]{64}$/.test(intent.responseContentHash) &&
+        intent.sourcePolicyHash === nativeSha256(parsedReceipt.data.bootstrap) &&
+        intent.sourceDispatchDigest === dispatch.executionInputDigest && typeof intent.sourceSetHash === "string" &&
+        /^[0-9a-f]{64}$/.test(intent.sourceSetHash) && promptSourceHashes.includes(intent.sourceSetHash) &&
+        (!admission || intent.sourceSetHash === nativeSha256({ policy: admission.policy, inputs: admission.inputs })) &&
+        intent.consumedSourceSetHash === nativeSha256({ policy: consumed.policy, inputs: consumed.inputs }) &&
+        inputs.success && policy.success && Array.isArray(intent.consumedSourceComponents) &&
+        intent.consumedSourceComponents.length > 0 && intent.consumedSourceComponents.length <= 64 &&
+        isDeepStrictEqual(dispatch.policy, policy.data) &&
+        marker.runId === previous.id && marker.reservationId === intent.reservationId &&
+        marker.callId === intent.callId && marker.requestHash === intent.requestHash &&
+        marker.wireBodyHash === intent.wireBodyHash &&
+        (marker.kind === "worker_model_dispatch" ? intent.modelPurpose === "worker_model" :
+          marker.kind === "conversation_model_dispatch" ? intent.modelPurpose === "conversation_model" && marker.agentId === intent.agentId &&
+            marker.issueId === record(intent.conversationModelBinding).issueId &&
+            marker.conversationSessionGeneration === record(intent.conversationModelBinding).conversationSessionGeneration &&
+            marker.executionManifestId === record(intent.conversationModelBinding).executionManifestId &&
+            marker.executionManifestHash === record(intent.conversationModelBinding).executionManifestHash :
+            intent.modelPurpose === "review_model" && (() => {
+              const binding = reviewModelBindingSchema.safeParse(intent.reviewModelBinding);
+              return binding.success && marker.planId === binding.data.planId && marker.issueId === binding.data.issueId &&
+                marker.interactionId === binding.data.interactionId && marker.decisionId === binding.data.decisionId &&
+                marker.sourceRunId === binding.data.sourceRunId && marker.sourceWorkerId === binding.data.sourceWorkerId &&
+                marker.sourceAgentId === binding.data.sourceAgentId && marker.sourceResultId === binding.data.sourceResultId &&
+                marker.sourceAttemptId === binding.data.sourceAttemptId && marker.sourceReceiptDigest === binding.data.sourceReceiptDigest &&
+                marker.sourceResultCanonicalSha256 === binding.data.sourceResultCanonicalSha256 &&
+                marker.reviewerAgentId === binding.data.reviewerAgentId && marker.runId === binding.data.reviewerRunId &&
+                marker.executionManifestId === binding.data.executionManifestId && marker.expectedPlanVersion === binding.data.expectedPlanVersion;
+            })()) &&
+        dispatch.inputs.length === inputs.data.length + 1 &&
+        isDeepStrictEqual(dispatch.inputs.slice(0, -1), inputs.data) &&
+        isDeepStrictEqual(dispatch.inputs.at(-1), marker);
+    }).length === 1;
+  };
+  const dispatchesByDigest = new Map<string, typeof dispatches>();
+  for (const dispatch of dispatches) {
+    const group = dispatchesByDigest.get(dispatch.executionInputDigest) ?? [];
+    group.push(dispatch);
+    dispatchesByDigest.set(dispatch.executionInputDigest, group);
+  }
+  if (intents.some(intent => {
+    const group = dispatchesByDigest.get(intent.turnInputDigest as string) ?? [];
+    if (group.length < 1 || registeredGatewayDispatch(group[0]!)) return true;
+    const matchingWireIntents = wireIntents.filter(wire => wire.sourceDispatchDigest === intent.turnInputDigest);
+    const sourceHashes = [...new Set(matchingWireIntents.map(wire => wire.sourceSetHash))];
+    if (sourceHashes.length > 1 || sourceHashes.length === 1 &&
+      (sourceHashes[0] !== nativeSha256({ policy: group[0]!.policy, inputs: group[0]!.inputs }) ||
+        typeof sourceHashes[0] !== "string" || !promptSourceHashes.includes(sourceHashes[0]))) return true;
+    return group.slice(1).some(dispatch => !registeredGatewayDispatch(dispatch, group[0]!));
+  })) return null;
   const components: import("./native-execution-input.js").NativeConsumedSourceComponent[] = [
     { kind: "bootstrap" },
     ...dispatches.map(dispatch => ({ kind: "dispatch" as const, executionInputDigest: dispatch.executionInputDigest,

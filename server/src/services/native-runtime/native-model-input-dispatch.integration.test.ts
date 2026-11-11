@@ -37,7 +37,7 @@ import {
   projectWorkspaces,
   projects,
 } from "@paperclipai/db";
-import type { ContextAuthorityDecision, NativePayloadSourceInput, NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { nativeRunInputSourceReceiptSchema, type ContextAuthorityDecision, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
@@ -49,9 +49,8 @@ import { captureNativeProjectToolResult } from "./paperclip-runner-tool-authorit
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
-import { buildNativeModelEnvelope, NATIVE_EXECUTION_INPUT_SCHEMA_V2, parseNativeExecutionInput } from "@paperclipai/paperclip-runner";
-import { buildNativeExecutionInput, buildNativeBootstrapSourceSet, prepareNativeTurnWithContext,
-  type NativePreparedSourceCandidate } from "./native-execution-input.js";
+import { buildNativeModelEnvelope } from "@paperclipai/paperclip-runner";
+import { buildNativeExecutionInput, buildNativeBootstrapSourceSet, prepareNativeTurnWithContext } from "./native-execution-input.js";
 import { buildRetainedNativeRuntimeContext, type NativeRuntimeAuthoredSourceCapture } from "./runtime-context.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { issueService } from "../issues.js";
@@ -76,12 +75,11 @@ import { configureSaasStorageService } from "../../storage/index.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
 import type { StorageService } from "../../storage/types.js";
-import { executePaperclipNativeSession } from "./native-session-executor.js";
-import type { NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
-import { CONTROL_PLANE_CONFORMANCE_RESULT, CONTROL_PLANE_CONFORMANCE_TERMINAL } from "../../vendor/paperclip-runner/testing.js";
 import { renderNativeRunnerStagedAttachmentPrompt } from "./native-runner-file-handoff.js";
 import { createManagedNativeProjectOutput } from "../native-project-output.js";
 import type { NativeModelOutputCapture } from "./native-execution-input.js";
+import { runManagedNativeConversationFrame, makeConversationFixtureTreeWritable } from "../../__tests__/helpers/managed-native-conversation-frame.js";
+import { qualifiedOpenCodeBinary } from "../../__tests__/helpers/managed-native-opencode-e2e-fixture.js";
 
 describe("native model input dispatch intent", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -226,175 +224,89 @@ describe("native model input dispatch intent", () => {
     return JSON.stringify(value) ?? "null";
   }
 
-  async function executeVerifiedAttachmentCase(mode: "positive" | "byte_mismatch" | "withdrawn" | "historical") {
-    const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
-    await db.insert(authUsers).values({ id: userId, name: "Attachment source Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member" });
-    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
-      expiresAt: new Date(now.getTime() + 3_600_000) });
-    const actor = { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [companyId],
-      memberships: [{ companyId, membershipRole: "member", status: "active" as const }] };
-    const createdIssue = await issueService(db).create(companyId, { title: `Verified attachment ${mode}`,
-      description: "Inspect the exact attachment from this Task.", createdByUserId: userId }, db, undefined, { manualInputActor: actor });
-    const seeded = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId, attempt: 1 });
-    const runnerInstanceId = randomUUID();
-    const normalizedSessionId = randomUUID();
-    await db.update(heartbeatRuns).set({ runnerInstanceId, nativeSessionId: normalizedSessionId })
-      .where(eq(heartbeatRuns.id, seeded.runId));
-    await db.update(issues).set({ status: "in_progress", assigneeAgentId: agentId, executionRunId: seeded.runId })
-      .where(and(eq(issues.companyId, companyId), eq(issues.id, createdIssue.id)));
-    const comment = await issueService(db).addComment(createdIssue.id, "Inspect the attached source.", { userId }, { manualInputActor: actor });
-    const [commentSourceRow] = await db.select({ issueId: issueComments.issueId, id: issueComments.id,
-      sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`, body: issueComments.body,
-      presentation: issueComments.presentation, metadata: issueComments.metadata,
-      payloadSourceSnapshot: issueComments.payloadSourceSnapshot }).from(issueComments)
-      .where(eq(issueComments.id, comment.id));
-    if (!commentSourceRow?.payloadSourceSnapshot) throw new Error("The wake Comment owner snapshot is unavailable");
-    const commentSource = { kind: "comment" as const, issueId: commentSourceRow.issueId, commentId: commentSourceRow.id,
-      sourceVersion: commentSourceRow.sourceVersion,
-      contentHash: createHash("sha256").update(JSON.stringify({ body: commentSourceRow.body,
-        presentation: commentSourceRow.presentation, metadata: commentSourceRow.metadata }), "utf8").digest("hex") };
+  async function executeManagedVerifiedAttachmentCase(mode: "positive" | "byte_mismatch" | "withdrawn" | "historical") {
     const bytes = Buffer.from("Verified attachment bytes.\n", "utf8");
-    const stored = await storage.putFile({ companyId, namespace: `issues/${createdIssue.id}`, originalFilename: "brief.txt",
-      contentType: "text/plain", body: bytes });
-    const attachment = await issueService(db).createAttachment({ issueId: createdIssue.id, issueCommentId: comment.id,
-      provider: stored.provider, objectKey: stored.objectKey, contentType: stored.contentType, byteSize: stored.byteSize,
-      sha256: stored.sha256, originalFilename: stored.originalFilename, createdByUserId: userId }, { actor, bytes });
-    const wakeComment = { id: comment.id, body: comment.body, attachments: [{ id: attachment.id, filename: "brief.txt",
-      contentType: "text/plain", byteSize: bytes.length, contentPath: `/api/attachments/${attachment.id}/content` }] };
-    await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: createdIssue.id,
-      paperclipWake: { comments: [wakeComment] } } }).where(eq(heartbeatRuns.id, seeded.runId));
-    const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
-    const selectedTask = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
-    const taskCapture = taskCaptureHolder.value;
-    if (!selectedTask || !taskCapture?.payloadSourceSnapshot) throw new Error("The Task owner snapshot is unavailable");
-    const renderedReferences: NativeRenderedSourceReference[] = [];
-    const renderedMarkdown = buildPaperclipTaskMarkdown({
-      issue: { id: createdIssue.id, identifier: selectedTask.identifier, title: selectedTask.title,
-        description: selectedTask.description, workMode: "standard" },
-      wakeComments: [{ id: comment.id, body: comment.body, attachments: wakeComment.attachments }],
-    }, { onRenderedSource: source => renderedReferences.push(source) });
-    const workspace = { id: seeded.runId, cwd: join(storageRoot, `workspace-${seeded.runId}`), repoUrl: null, repoRef: null, branchName: null };
-    await mkdir(workspace.cwd, { recursive: true });
-    const completion = await ensureNativeCompletionContract({ db, companyId,
-      issue: { id: createdIssue.id, title: selectedTask.title, description: selectedTask.description }, actorId: agentId });
-    await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
-      completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, seeded.runId));
-    const builtExecution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
-      issue: { id: createdIssue.id, identifier: selectedTask.identifier, title: selectedTask.title,
-        description: selectedTask.description, workMode: "standard" }, taskPrompt: renderedMarkdown!, workspace,
-      normalizedSessionId, provider: "codex", model: "codex-test",
-      completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
-        schemaVersion: completion.row.schemaVersion, contract: completion.contract }, runtimeContext: nativeRuntimeContextFixture() });
-    const execution = parseNativeExecutionInput({
-      schema: NATIVE_EXECUTION_INPUT_SCHEMA_V2,
-      binding: builtExecution.binding,
-      task: builtExecution.task,
-      workspace: builtExecution.workspace,
-      session: builtExecution.session,
-      provider: builtExecution.provider.kind === "codex"
-        ? { kind: "codex", model: builtExecution.provider.model }
-        : builtExecution.provider,
-      completionContract: builtExecution.completionContract,
-      interactionResponses: builtExecution.interactionResponses,
-      credentialBindings: builtExecution.credentialBindings,
-      executionMode: builtExecution.executionMode,
-      planningContext: builtExecution.planningContext,
-    });
-    const priorStage = { eventSeq: 3, attempt: 1, responsibleUserId: userId, sourceCaptures: [{ input: {
-      kind: "attachment", issueId: createdIssue.id, attachmentId: randomUUID(), commentId: comment.id,
-      assetId: randomUUID(), sha256: "e".repeat(64), byteSize: bytes.length, disposition: "delivered",
-    }, payloadSourceSnapshot: null }] };
-    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution,
-      ...(mode === "historical" ? { nativeAttachmentStageSources: [priorStage] } : {}) } }).where(eq(heartbeatRuns.id, seeded.runId));
-    const baseInputs: NativePreparedSourceCandidate[] = [
-      { kind: "task", id: createdIssue.id, input: taskCapture.input, payloadSourceSnapshot: taskCapture.payloadSourceSnapshot },
-      { kind: "comment", id: comment.id, input: commentSource, payloadSourceSnapshot: commentSourceRow.payloadSourceSnapshot },
-    ];
-    const workspaceInput = { kind: "workspace_metadata" as const, runId: seeded.runId, executionWorkspaceId: seeded.runId,
-      origin: "task_session" as const, sourceVersion: `task-session:${seeded.runId}`,
-      contentHash: createHash("sha256").update(JSON.stringify({ cwd: execution.workspace.cwd, repoUrl: execution.workspace.repoUrl,
-        repoRef: execution.workspace.repoRef, branchName: execution.workspace.branchName }), "utf8").digest("hex") };
-    const buildSet = (attachmentCandidates: NativePreparedSourceCandidate[] = []) => buildNativeBootstrapSourceSet({ companyId, runId: seeded.runId, agentId,
-      issueId: createdIssue.id, renderedMarkdown: renderedMarkdown!,
-      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown!, "utf8").digest("hex"), references: renderedReferences,
-      candidates: [...baseInputs, ...attachmentCandidates], runtimeInputs: [], contextManifestIds: [],
-      governedContextMarkdown: "", contextWitnessMarkdown: "", contextWitness: null, rolePackInputs: [],
-      additionalInputs: [{ kind: "completion_contract", issueId: createdIssue.id, contractId: completion.row.id,
-        revision: String(completion.row.revision), contentHash: completion.row.canonicalSha256 }, workspaceInput], unsupportedInputPresent: false });
     let withdrawn = false;
-    if (mode === "byte_mismatch" || mode === "withdrawn") {
-      const original = storage;
-      const hooked: StorageService = { ...original, async getObject(company, key, options) {
-        const result = await original.getObject(company, key, options);
-        if (mode === "byte_mismatch") {
-          const wrong = Buffer.from(bytes);
-          wrong[0] = wrong[0] === 0x56 ? 0x57 : 0x56;
-          return { ...result, stream: Readable.from([wrong]) };
-        }
-        if (!withdrawn) {
-          withdrawn = true;
-          await db.update(assets).set({ sha256: "f".repeat(64) }).where(eq(assets.id, attachment.assetId));
-        }
-        return result;
-      } };
-      configureSaasStorageService(hooked);
-    } else configureSaasStorageService(storage);
-    const turnId = `attachment-provider-turn-${seeded.runId}`;
+    let storageMutationObserved = false;
     let providerFrame = "";
-    let releaseTerminal!: () => void;
-    let signalStart!: () => void;
-    const terminal = new Promise<void>(resolve => { releaseTerminal = resolve; });
-    const started = new Promise<void>(resolve => { signalStart = resolve; });
-    const backend: NativeSessionBackend = {
-      async descriptor() { return { kind: "mock", name: "verified-attachment-pg", version: "1",
-        capabilities: { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true } }; },
-      async openSession(openInput) {
-        return { identity: () => openInput.identity,
-          async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },
-          async *events() { await started; yield { schema: "paperclip.prp.event.v1" as const,
-            sourceEventId: `${runnerInstanceId}:${seeded.runId}:1`, sourceSeq: 1,
-            sourceInstanceId: runnerInstanceId, sourceKind: "runner" as const,
-            runId: seeded.runId, normalizedSessionId: openInput.identity.sessionId, turnId, eventType: "turn.completed" as const,
-            schemaVersion: 1 as const, priority: 0 as const, emittedAt: new Date().toISOString(), payload: {} }; },
-          async startTurn(input) { providerFrame = input.message.text; signalStart(); return { turnId }; },
-          async result() { const result = structuredClone(CONTROL_PLANE_CONFORMANCE_RESULT);
-            return { result, terminal: { ...CONTROL_PLANE_CONFORMANCE_TERMINAL, reportedWorkDisposition: result.reportedWorkDisposition }, turnId }; },
-          async snapshot() { return { backendKind: "mock", sessionId: openInput.identity.sessionId, identity: openInput.identity,
-            providerSessionId: turnId } as never; },
-          async close() { signalStart(); releaseTerminal(); },
-        };
-      },
-    };
+    const original = storage;
+    const hooked: StorageService = { ...original, async getObject(company, key, options) {
+      const result = await original.getObject(company, key, options);
+      if (mode === "byte_mismatch") {
+        storageMutationObserved = true;
+        const wrong = Buffer.from(bytes);
+        wrong[0] = wrong[0] === 0x56 ? 0x57 : 0x56;
+        return { ...result, stream: Readable.from([wrong]) };
+      }
+      if (mode === "withdrawn" && !withdrawn) {
+        withdrawn = true;
+        await db.update(assets).set({ sha256: "f".repeat(64) }).where(and(
+          eq(assets.companyId, company), eq(assets.objectKey, key)));
+      }
+      return result;
+    } };
     try {
-      await executePaperclipNativeSession({ db, execution, nativeBootstrapExecutionInputHash: nativeSha256(execution),
-        bootstrapSourceClosure: null, prepareBootstrapSourceClosure: ({ execution: stagedExecution, attachmentStage }) => {
-          const references = renderedReferences.filter((reference): reference is Exclude<NativeRenderedSourceReference, { kind: "task_wake_interaction_state" }> & { kind: "attachment" } =>
-            reference.kind === "attachment");
-          if (attachmentStage.sourceCaptures.length !== references.length || attachmentStage.attachments.length !== references.length) return null;
-          const candidates: NativePreparedSourceCandidate[] = [];
-          for (const reference of references) {
-            const capture = attachmentStage.sourceCaptures.find(item => item.input.attachmentId === reference.id && item.input.commentId === reference.commentId);
-            const descriptor = attachmentStage.attachments.find(item => item.id === reference.id);
-            if (!capture || !descriptor || capture.input.kind !== "attachment" || capture.input.disposition !== "delivered" ||
-              descriptor.unavailableReason || !descriptor.workspaceRelativePath || capture.input.byteSize !== reference.byteSize ||
-              descriptor.filename !== reference.filename || descriptor.contentType !== reference.contentType || descriptor.byteSize !== reference.byteSize ||
-              !capture.payloadSourceSnapshot) return null;
-            candidates.push({ kind: "attachment", id: capture.input.attachmentId, input: capture.input,
-              payloadSourceSnapshot: capture.payloadSourceSnapshot });
-          }
-          const prompt = renderNativeRunnerStagedAttachmentPrompt(attachmentStage.attachments);
-          if (!prompt || !stagedExecution.task.prompt.endsWith(`\n\n${prompt}`)) return null;
-          const sourceSet = buildSet(candidates);
-          return sourceSet ? { sourceSet, taskEnvelopeDigest: nativeSha256(stagedExecution.task) } : null;
-        }, backend, runnerInstanceId, useRunnerd: true,
-        leaseOwner: seeded.leaseOwner });
+      const result = await runManagedNativeConversationFrame({ db, root: storageRoot,
+        opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 180,
+        conversationPrompt: "Inspect the attached source and respond briefly.",
+        firstCommentAttachment: { filename: "brief.txt", contentType: "text/plain", bytes },
+        configureHeartbeat: async context => {
+          const { configureManagedConversationSandboxHost } = await import("../../__tests__/helpers/managed-native-conversation-sandbox-host.js");
+          const host = await configureManagedConversationSandboxHost({ ...context, root: context.runHome });
+          return { ...host, beforeNativeRuntimeSelection: async runId => {
+            if (mode === "byte_mismatch" || mode === "withdrawn") configureSaasStorageService(hooked);
+            if (mode === "historical") {
+              const [run] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson,
+                companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId, status: heartbeatRuns.status,
+                nativeIssueId: heartbeatRuns.nativeIssueId,
+                contextSnapshot: heartbeatRuns.contextSnapshot, responsibleUserId: heartbeatRuns.responsibleUserId }).from(heartbeatRuns)
+                .where(eq(heartbeatRuns.id, runId)).limit(1);
+              const actorUserId = context.actor.userId;
+              const snapshot = run?.contextSnapshot && typeof run.contextSnapshot === "object" && !Array.isArray(run.contextSnapshot)
+                ? run.contextSnapshot as Record<string, unknown> : {};
+              const issueId = typeof snapshot.issueId === "string" ? snapshot.issueId : null;
+              const wakeCommentId = typeof snapshot.wakeCommentId === "string" ? snapshot.wakeCommentId : null;
+              if (!run || run.companyId !== context.companyId || run.agentId !== context.agentId || run.status !== "running" ||
+                !actorUserId || run.responsibleUserId !== actorUserId || !issueId || !wakeCommentId ||
+                (run.nativeIssueId && run.nativeIssueId !== issueId))
+                throw new Error("managed_attachment_historical_run_binding_changed");
+              const priorAttachments = await db.select().from(issueAttachments).where(and(
+                eq(issueAttachments.companyId, context.companyId), eq(issueAttachments.issueId, issueId),
+                eq(issueAttachments.issueCommentId, wakeCommentId))).limit(2);
+              if (priorAttachments.length !== 1 || priorAttachments[0]!.payloadSourceProtocolVersion !== 1 ||
+                !priorAttachments[0]!.payloadSourceSnapshot || priorAttachments[0]!.payloadSourceSnapshotInvalidated)
+                throw new Error("managed_attachment_historical_source_missing");
+              const priorAttachment = priorAttachments[0]!;
+              const [priorAsset] = await db.select().from(assets).where(and(
+                eq(assets.companyId, context.companyId), eq(assets.id, priorAttachment.assetId),
+                eq(assets.createdByUserId, actorUserId))).limit(1);
+              if (!priorAsset) throw new Error("managed_attachment_historical_asset_owner_changed");
+              const profile = run.runnerProfileJson && typeof run.runnerProfileJson === "object" && !Array.isArray(run.runnerProfileJson)
+                ? run.runnerProfileJson as Record<string, unknown> : {};
+              await db.update(heartbeatRuns).set({ runnerProfileJson: { ...profile,
+                nativeAttachmentStageSources: [{ eventSeq: 3, attempt: 1, responsibleUserId: run.responsibleUserId,
+                  sourceCaptures: [{ input: { kind: "attachment", issueId,
+                    attachmentId: priorAttachment.id, commentId: priorAttachment.issueCommentId,
+                    assetId: priorAttachment.assetId, sha256: priorAsset.sha256, byteSize: priorAsset.byteSize,
+                    disposition: "delivered" }, payloadSourceSnapshot: priorAttachment.payloadSourceSnapshot }] }] } })
+                .where(eq(heartbeatRuns.id, runId));
+            }
+          } };
+        },
+        beforeProviderResponse: async ({ request: providerRequest }) => {
+          providerFrame = JSON.stringify(providerRequest.body);
+        },
+      });
+      const [attachment] = await db.select().from(issueAttachments)
+        .where(eq(issueAttachments.issueId, result.issueId)).limit(1);
+      if (!result.run || !attachment) throw new Error("managed_attachment_run_or_row_missing");
+      return { attachment, run: result.run, withdrawn, storageMutationObserved, providerFrame, providerCallCount: result.providerCallCount,
+        sourceReceipt: result.nativeInputSourceReceipt, providerHookInvoked: result.providerHookInvoked,
+        brokerRequestFacts: result.brokerRequestFacts, runStatus: result.runStatus };
     } finally {
-      releaseTerminal();
-      configureSaasStorageService(storage);
+      configureSaasStorageService(original);
+      await makeConversationFixtureTreeWritable(storageRoot);
     }
-    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
-    return { seeded, attachment, run: run!, withdrawn, providerFrame };
   }
 
   it("retains the exact document read before later revision edits without inventing source history", async () => {
@@ -1397,9 +1309,22 @@ describe("native model input dispatch intent", () => {
       attachmentId: attachmentRows[index % 2]!.id, stageNonce: randomUUID() }))))).toBe(false);
   });
 
-  it("qualifies only the current PG attachment bytes staged by executor admission", async () => {
-    const positive = await executeVerifiedAttachmentCase("positive");
+  function expectManagedSourceGateDenied(result: Awaited<ReturnType<typeof executeManagedVerifiedAttachmentCase>>) {
+    expect(result.runStatus).toBe("failed");
+    expect(result.providerCallCount).toBe(0);
+    expect(result.providerHookInvoked).toBe(false);
+    expect(result.sourceReceipt).toBeNull();
+    // Source closure can be refused before the model broker is contacted.
+    expect(result.brokerRequestFacts.every(fact => fact.status >= 400)).toBe(true);
+  }
+
+  it("qualifies current PG attachment bytes through admitted OpenCode transport", async () => {
+    const positive = await executeManagedVerifiedAttachmentCase("positive");
     expect(positive.run.nativeInputSourceProtocolVersion).toBe(1);
+    expect(positive.attachment.issueCommentId).toBeTruthy();
+    expect(positive.attachment.payloadSourceProtocolVersion).toBe(1);
+    expect(positive.attachment.payloadSourceSnapshot).toBeTruthy();
+    expect(positive.attachment.payloadSourceSnapshotInvalidated).toBe(false);
     expect(positive.run.runnerProfileJson).toMatchObject({
       nativeAttachmentStageSources: [{ sourceCaptures: [{ input: {
         kind: "attachment", attachmentId: positive.attachment.id, disposition: "delivered",
@@ -1408,54 +1333,69 @@ describe("native model input dispatch intent", () => {
       nativeInputSourceReceipt: { bootstrap: { inputs: expect.arrayContaining([
         expect.objectContaining({ kind: "attachment", attachmentId: positive.attachment.id,
           disposition: "delivered", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }),
-      ]) }, dispatches: [expect.objectContaining({ inputs: expect.arrayContaining([
+      ]) }, dispatches: expect.arrayContaining([expect.objectContaining({ inputs: expect.arrayContaining([
         expect.objectContaining({ kind: "attachment", attachmentId: positive.attachment.id, disposition: "delivered" }),
-      ]) })] },
+      ]) })]) },
     });
     expect(positive.providerFrame).toContain("brief.txt");
     expect(positive.providerFrame).toContain(".paperclip-inbound");
-    const positiveProfile = positive.run.runnerProfileJson as Record<string, unknown>;
-    const positiveStage = (positiveProfile.nativeAttachmentStageSources as Array<Record<string, unknown>>)[0]!;
-    const acknowledged = (positiveProfile.nativeModelInputDispatchIntents as Array<Record<string, unknown>>)
-      .filter(dispatch => dispatch.turnId === `attachment-provider-turn-${positive.seeded.runId}`);
-    expect(acknowledged).toHaveLength(1);
-    expect(positiveStage.eventSeq).toBe(acknowledged[0]!.eventSeq);
-    expect(positiveStage.attempt).toBe(acknowledged[0]!.attempt);
-    expect(JSON.stringify(positiveStage)).not.toContain(storageRoot);
-    expect(JSON.stringify(positive.run.runnerProfileJson)).not.toContain(".paperclip-inbound");
+    expect(positive.providerCallCount).toBe(1);
+    const receipt = nativeRunInputSourceReceiptSchema.parse(positive.sourceReceipt);
+    // Native admission and its actual provider request each retain the same source.
+    expect(receipt.dispatches).toHaveLength(2);
+    expect(receipt.dispatches.every(dispatch => dispatch.inputs.some(source => source.kind === "attachment" &&
+      source.attachmentId === positive.attachment.id && source.disposition === "delivered"))).toBe(true);
+    expect(receipt.dispatches.filter(dispatch => dispatch.inputs.some(source =>
+      source.kind === "conversation_model_dispatch" && source.runId === positive.run.id))).toHaveLength(1);
+    expect(positive.sourceReceipt).toMatchObject({ bootstrap: { inputs: expect.arrayContaining([
+      expect.objectContaining({ kind: "attachment", attachmentId: positive.attachment.id, disposition: "delivered" }),
+    ]) } });
+    const profile = positive.run.runnerProfileJson as Record<string, unknown>;
+    const stage = (profile.nativeAttachmentStageSources as Array<Record<string, unknown>>)[0]!;
+    const dispatches = (profile.nativeModelInputDispatchIntents as Array<Record<string, unknown>>)
+      .filter(dispatch => dispatch.eventSeq === stage.eventSeq && dispatch.attempt === stage.attempt);
+    expect(dispatches).toHaveLength(1);
+    expect(JSON.stringify(stage)).not.toContain(storageRoot);
+    expect(JSON.stringify(stage)).not.toContain(".paperclip-inbound");
+    expect(JSON.stringify(receipt)).not.toContain(".paperclip-inbound");
+    // Only the private, Run-bound cleanup intent retains its exact remote path.
+    const intents = profile.nativeAttachmentStageIntents as Array<Record<string, unknown>>;
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({ companyId: positive.run.companyId, runId: positive.run.id,
+      attachmentId: positive.attachment.id, stageNonce: expect.stringMatching(/^[0-9a-f-]{36}$/) });
+    expect(intents[0]!.relativePath).toBe(`.paperclip-inbound/${positive.run.id}/${intents[0]!.stageNonce}/payload`);
+  }, 240_000);
 
-    const mismatch = await executeVerifiedAttachmentCase("byte_mismatch");
+  it("withholds provider dispatch when staged attachment bytes mismatch PG", async () => {
+    const mismatch = await executeManagedVerifiedAttachmentCase("byte_mismatch");
     expect(mismatch.run.nativeInputSourceProtocolVersion).toBe(0);
     expect(mismatch.run.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
-    expect(mismatch.run.runnerProfileJson).toMatchObject({ nativeAttachmentStageSources: [{ sourceCaptures: [{ input: {
-      attachmentId: mismatch.attachment.id, disposition: "attachment_staging_failed",
-    } }] }] });
-    expect(mismatch.providerFrame).toContain("brief.txt");
-    expect((mismatch.run.runnerProfileJson!.nativeModelInputDispatchIntents as Array<Record<string, unknown>>)
-      .some(dispatch => dispatch.turnId === `attachment-provider-turn-${mismatch.seeded.runId}`)).toBe(true);
+    expect(mismatch.storageMutationObserved).toBe(true);
+    expect(mismatch.run.error).toBe("native_attachment_source_closure_unavailable");
+    expect(mismatch.run.runnerProfileJson).not.toHaveProperty("nativeAttachmentStageSources");
+    expectManagedSourceGateDenied(mismatch);
+  }, 240_000);
 
-    const withdrawn = await executeVerifiedAttachmentCase("withdrawn");
+  it("withholds provider dispatch when the PG attachment owner changes after storage read", async () => {
+    const withdrawn = await executeManagedVerifiedAttachmentCase("withdrawn");
     expect(withdrawn.withdrawn).toBe(true);
     expect(withdrawn.run.nativeInputSourceProtocolVersion).toBe(0);
     expect(withdrawn.run.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
-    expect(withdrawn.run.runnerProfileJson).toMatchObject({ nativeAttachmentStageSources: [{ sourceCaptures: [{ input: {
-      attachmentId: withdrawn.attachment.id, disposition: "delivered",
-    } }] }] });
-    expect(withdrawn.providerFrame).toContain("brief.txt");
-    expect((withdrawn.run.runnerProfileJson!.nativeModelInputDispatchIntents as Array<Record<string, unknown>>)
-      .some(dispatch => dispatch.turnId === `attachment-provider-turn-${withdrawn.seeded.runId}`)).toBe(true);
+    expect(withdrawn.run.error).toBe("native_attachment_source_closure_unavailable");
+    expect(withdrawn.run.runnerProfileJson).not.toHaveProperty("nativeAttachmentStageSources");
+    expectManagedSourceGateDenied(withdrawn);
+  }, 240_000);
 
-    const historical = await executeVerifiedAttachmentCase("historical");
+  it("withholds provider dispatch when only historical attachment staging exists", async () => {
+    const historical = await executeManagedVerifiedAttachmentCase("historical");
     expect(historical.run.nativeInputSourceProtocolVersion).toBe(0);
     expect(historical.run.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
     const historicalStages = historical.run.runnerProfileJson!.nativeAttachmentStageSources as Array<Record<string, unknown>>;
     expect(historicalStages).toHaveLength(2);
     expect(historicalStages[0]).toMatchObject({ eventSeq: 3, attempt: 1 });
     expect(historicalStages[1]).toMatchObject({ eventSeq: expect.any(Number), stageHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
-    expect(historical.providerFrame).toContain("brief.txt");
-    expect((historical.run.runnerProfileJson!.nativeModelInputDispatchIntents as Array<Record<string, unknown>>)
-      .some(dispatch => dispatch.turnId === `attachment-provider-turn-${historical.seeded.runId}`)).toBe(true);
-  });
+    expectManagedSourceGateDenied(historical);
+  }, 240_000);
 
   it("merges legacy and current result histories, deduplicating only exact facts", async () => {
     const legacyOnly = { callId: "legacy-read", source: null, responsibleUserId: "legacy-human" };

@@ -82,6 +82,7 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
     markDiagnosticStage?: (stage: string) => void,
   ) => Promise<void>;
   readonly #onDuplicateEvent?: (event: PrpEvent) => Promise<void>;
+  readonly #testAfterPersistedSessionCheckpoint?: (snapshot: PersistedNativeSession) => Promise<void>;
   readonly #serializeTransaction: <T>(operation: () => Promise<T>) => Promise<T>;
 
   constructor(
@@ -94,12 +95,14 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
         markDiagnosticStage?: (stage: string) => void,
       ) => Promise<void>;
       onDuplicateEvent?: (event: PrpEvent) => Promise<void>;
+      testAfterPersistedSessionCheckpoint?: (snapshot: PersistedNativeSession) => Promise<void>;
     } = {},
   ) {
     this.#db = db;
     this.#binding = structuredClone(binding);
     this.#onCommittedEvent = options.onCommittedEvent;
     this.#onDuplicateEvent = options.onDuplicateEvent;
+    this.#testAfterPersistedSessionCheckpoint = options.testAfterPersistedSessionCheckpoint;
     this.#serializeTransaction = options.serializeTransaction ?? (operation => operation());
   }
 
@@ -190,6 +193,9 @@ export class PaperclipControlPlanePort implements ControlPlanePort {
         updatedAt: new Date(),
       }).where(eq(heartbeatRuns.id, this.#binding.runId));
     });
+    // A test observer may pause only after the canonical transaction committed.
+    // It receives the actual provider snapshot and cannot replace or write it.
+    await this.#testAfterPersistedSessionCheckpoint?.(structuredClone(snapshot));
   }
 
   async appendEvent(value: NativeRunEvent | PrpEvent) {

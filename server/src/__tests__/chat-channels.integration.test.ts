@@ -4055,7 +4055,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const task = async (conversation: typeof chatConversations.$inferSelect | null) => conversation
       ? db.select().from(issues).where(eq(issues.id, conversation.issueId)).then(rows => rows[0] ?? null) : null;
 
-    const linked = await configuredSlackEndpoint(fixture, { allowUnlinkedPeople: false });
+    const linked = await configuredSlackEndpoint(fixture, { allowUnlinkedPeople: true, wakeup: vi.fn() });
     await addLinkedPrincipal("U-SOURCE-HUMAN", linked.endpoint.id);
     const linkedConversation = await send(linked, "U-SOURCE-HUMAN");
     const linkedTask = await task(linkedConversation);
@@ -4064,6 +4064,38 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const [linkedComment] = await db.select().from(issueComments).where(eq(issueComments.issueId, linkedConversation!.issueId));
     expect(linkedComment?.payloadSourceSnapshot).toMatchObject({ version: 1,
       owner: { kind: "comment", companyId: fixture.companyId, id: linkedComment!.id } });
+
+    // An unlinked followup quarantines the existing task's current Human source.
+    const followupId = randomUUID();
+    const followupThread = makeThread({
+      channelId: linkedConversation!.externalConversationId,
+      id: linkedConversation!.externalThreadId,
+      name: "source",
+    });
+    const linkedBeforeFollowup = await task(linkedConversation);
+    const wakeup = linked.wakeup;
+    wakeup.mockClear();
+    await deliverMessage({ callbacks: linked.callbacks, endpointId: linked.endpoint.id, thread: followupThread.thread,
+      message: makeMessage({ id: followupId, text: "@maya guest followup", mentioned: true, userId: "U-SOURCE-GUEST-FOLLOWUP" }),
+      trigger: "mention" });
+    const linkedAfterFollowup = await task(linkedConversation);
+    expect(linkedBeforeFollowup?.payloadSourceSnapshot).toMatchObject({ version: 1 });
+    expect(linkedAfterFollowup).toMatchObject({
+      payloadSourceProtocolVersion: 1,
+      payloadSourceSnapshot: null,
+      payloadSourceSnapshotInvalidated: true,
+      sourceTrust: { preset: "low_trust_review", disposition: "quarantined", sourceIssueId: linkedConversation!.issueId },
+      executionPolicy: { authorizationPolicy: { trustPreset: "low_trust_review" } },
+    });
+    const followupComment = await db.select().from(issueComments).where(eq(issueComments.issueId, linkedConversation!.issueId))
+      .then(rows => rows.find(row => row.body === "@maya guest followup") ?? null);
+    expect(followupComment).toMatchObject({ payloadSourceProtocolVersion: 0, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false });
+    expect(followupComment?.sourceTrust).toMatchObject({ preset: "low_trust_review", disposition: "quarantined" });
+    // A queued guest request retains system attribution and no Human source seal.
+    expect(wakeup).toHaveBeenCalledTimes(1);
+    expect(wakeup.mock.calls[0]?.[1]).toMatchObject({ requestedByActorType: "system",
+      contextSnapshot: { wakeCommentId: followupComment!.id } });
+    expect(wakeup.mock.calls[0]?.[1]?.requestedByActorId).not.toBe("owner-user");
 
     const sponsored = await configuredSlackEndpoint(fixture, { allowUnlinkedPeople: true });
     const sponsoredConversation = await send(sponsored, "U-SOURCE-GUEST");
@@ -48137,6 +48169,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           control,
           controlInvocation,
           duringConfirmation,
+          freshMessage,
           admitMessage,
           bindRun,
         };
@@ -48667,16 +48700,44 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         async (mode) => {
           const f = await reopenedFixture();
           try {
-            if (mode === "edited")
-              await db
-                .update(issueComments)
-                .set({ body: "Edited source", updatedAt: new Date() })
-                .where(eq(issueComments.id, f.fresh.context.wakeCommentId));
+            if (mode === "edited") {
+              const editedAt = new Date(Date.now() + 1_000);
+              await f.callbacks.onMessageUpdated!({
+                endpointId: f.endpoint.id,
+                provider: "discord",
+                thread: makeThread({
+                  id: f.conversation.externalThreadId,
+                  channelId: f.conversation.externalConversationId,
+                  name: "reopened",
+                }).thread,
+                message: {
+                  ...f.freshMessage,
+                  text: "Edited source",
+                  metadata: { ...f.freshMessage.metadata, edited: true, editedAt },
+                } as Message,
+                previousMessage: f.freshMessage,
+              });
+              const [editDelivery] = await db
+                .select({ id: chatDeliveries.id })
+                .from(chatDeliveries)
+                .where(
+                  and(
+                    eq(chatDeliveries.endpointId, f.endpoint.id),
+                    eq(chatDeliveries.eventKind, "message_updated"),
+                    sql`${chatDeliveries.normalizedEvent}->'message'->>'targetProviderEventId' = ${f.delivery.providerEventId}`,
+                  ),
+                )
+                .orderBy(desc(chatDeliveries.createdAt))
+                .limit(1);
+              if (!editDelivery)
+                throw new Error("Expected lifecycle receipt for fresh source edit");
+              await f.service.processPendingDeliveries(25, editDelivery.id);
+            }
             if (mode === "deleted")
-              await db
-                .update(issueComments)
-                .set({ deletedAt: new Date() })
-                .where(eq(issueComments.id, f.fresh.context.wakeCommentId));
+              await issueService(db).tombstoneComment(
+                f.fresh.context.wakeCommentId,
+                { actorType: "user", userId: "owner-user" },
+              );
             if (mode === "pending_lifecycle")
               await db.insert(chatDeliveries).values({
                 companyId: f.fixture.companyId,
@@ -56557,7 +56618,41 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       externalActorId,
       linkedOriginalActor,
       githubUnavailableFile,
+      linkedOriginalActor ? "ORIGINAL task, not the failed request" : undefined,
     );
+    let retrySourceMessageId = context.messageId;
+    if (linkedOriginalActor) {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const fraction = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+      const messageId = `${timestamp}.${fraction}`;
+      retrySourceMessageId = messageId;
+      const callbacks = context.runtime.configurations.get(context.endpoint.id)!.callbacks;
+      await deliverMessage({
+        callbacks,
+        endpointId: context.endpoint.id,
+        provider,
+        thread: context.thread.thread,
+        message: makeMessage({
+          id: messageId,
+          text: "@maya separate request for failed-run retry recovery",
+          mentioned: true,
+          userId: externalActorId,
+        }),
+        trigger: "mention",
+      });
+      const [requestDelivery] = await db
+        .select({ id: chatDeliveries.id })
+        .from(chatDeliveries)
+        .where(
+          and(
+            eq(chatDeliveries.endpointId, context.endpoint.id),
+            sql`${chatDeliveries.normalizedEvent}->'message'->>'providerMessageId' = ${messageId}`,
+          ),
+        );
+      if (!requestDelivery)
+        throw new Error("Expected separate failed request delivery");
+      await context.service.processPendingDeliveries(25, requestDelivery.id);
+    }
     const [issue] = await db
       .select()
       .from(issues)
@@ -56570,7 +56665,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           eq(chatActions.conversationId, context.conversation.id),
           eq(chatActions.kind, "inbound_wakeup"),
         ),
-      );
+      )
+      .orderBy(desc(chatActions.createdAt), desc(chatActions.id))
+      .limit(1);
     const [receipt] = await db
       .select()
       .from(agentWakeupRequests)
@@ -56596,15 +56693,14 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       .update(agentWakeupRequests)
       .set({ status: "failed", runId })
       .where(eq(agentWakeupRequests.id, receipt.id));
-    await db
-      .update(issues)
-      .set({
-        description: "ORIGINAL task, not the failed request",
-        status: "blocked",
-        executionRunId: null,
-      })
-      .where(eq(issues.id, issue.id));
-    return { ...context, issue, action, receipt, runId };
+    await issueService(db).update(issue.id, {
+      ...(linkedOriginalActor
+        ? {}
+        : { description: "ORIGINAL task, not the failed request" }),
+      status: "blocked",
+      executionRunId: null,
+    });
+    return { ...context, messageId: retrySourceMessageId, issue, action, receipt, runId };
   }
 
   it.each([
@@ -58607,6 +58703,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     externalActorId?: string,
     linkedOriginalActor = false,
     githubUnavailableFile = false,
+    sourceText?: string,
   ) {
     const fixture = await seedCompany();
     const configured =
@@ -58703,9 +58800,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     const sourceMessage = makeMessage({
       id: messageId,
       mentioned: !thread.thread.isDM,
-      text: thread.thread.isDM
+      text: sourceText ?? (thread.thread.isDM
         ? "Show safe progress"
-        : "@maya show safe progress",
+        : "@maya show safe progress"),
       userId:
         externalActorId ??
         (provider === "telegram" ? telegramChatId : "U-SAFE-PROGRESS"),

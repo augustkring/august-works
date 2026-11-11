@@ -1,6 +1,10 @@
 import {
   agents,
   heartbeatRuns,
+  nativeRunFinalizations,
+  statusDecisionEffects,
+  nativeRunResults,
+  workAssessments,
   issueThreadInteractions,
   issues,
   statusDecisions,
@@ -9,6 +13,9 @@ import {
 import { and, eq, isNull, or } from "drizzle-orm";
 import { evaluateAgentInvokabilityFromDb } from "../agent-invokability.js";
 import { canonicalizeStoredResolverPolicy } from "../issue-thread-interaction-resolution.js";
+import { nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { nativeSha256 } from "./canonical.js";
+import { buildNativeReviewRequest } from "./native-review-prompt.js";
 
 export type NativeReviewAssignmentContext = {
   nativeReviewInteractionId: string;
@@ -213,6 +220,135 @@ export async function getNativeReviewAssignment(
     allowResolvedByRunId: input.allowResolvedByRunId,
   });
   return valid ? { interaction, sourceDecision: decision, sourceRun } : null;
+}
+
+/** Resolve an already-captured review's immutable owner rows without applying
+ * live admission policy (current assignee or reviewer invokability). Callers
+ * must still recheck source ACLs, receipt, committed result and current owners. */
+export async function getNativeReviewSourceAssignment(db: Db, input: {
+  companyId: string; issueId: string; reviewerAgentId: string; contextSnapshot: unknown;
+}): Promise<NativeReviewAssignment | null> {
+  const context = readNativeReviewAssignmentContext(input.contextSnapshot);
+  if (!context) return null;
+  const [interaction] = await db.select().from(issueThreadInteractions).where(and(
+    eq(issueThreadInteractions.id, context.nativeReviewInteractionId), eq(issueThreadInteractions.companyId, input.companyId),
+    eq(issueThreadInteractions.issueId, input.issueId))).limit(1);
+  const [decision] = await db.select().from(statusDecisions).where(and(
+    eq(statusDecisions.id, context.nativeReviewDecisionId), eq(statusDecisions.companyId, input.companyId),
+    eq(statusDecisions.issueId, input.issueId))).limit(1);
+  if (!interaction || !decision || decision.applicationState !== "applied" ||
+      interaction.sourceRunId !== decision.runId || interaction.addresseeAgentId !== input.reviewerAgentId ||
+      interaction.addresseeUserId || decision.assessmentId === null) return null;
+  const [sourceRun] = await db.select().from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.id, decision.runId), eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.nativeIssueId, input.issueId))).limit(1);
+  if (!sourceRun || sourceRun.agentId === input.reviewerAgentId) return null;
+  return { interaction, sourceDecision: decision, sourceRun };
+}
+
+export type NativeReviewWakeWitness = NonNullable<Extract<NativePayloadSourceInput, { kind: "native_task_wake" }>["nativeReview"]>;
+
+/** Bind review prompt bytes to the exact committed Native result that created
+ * the assigned review. The current wake source rederives this witness; it is
+ * not accepted as a saved permission or a caller-selected review label. */
+export async function captureNativeReviewWakeWitness(db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0], input: {
+  companyId: string; issueId: string; reviewerRunId: string; reviewerAgentId: string; responsibleUserId: string;
+  reviewerCompletionContract: { id: string; sha256: string };
+  assignment: NativeReviewAssignment;
+}): Promise<NativeReviewWakeWitness | null> {
+  const assignment = input.assignment;
+  const interaction = assignment.interaction;
+  const decision = assignment.sourceDecision;
+  const sourceRun = assignment.sourceRun;
+  const [reviewerRun] = await db.select({ id: heartbeatRuns.id, companyId: heartbeatRuns.companyId,
+    agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId, createdAt: heartbeatRuns.createdAt })
+    .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.reviewerRunId), eq(heartbeatRuns.agentId, input.reviewerAgentId))).limit(1);
+  if (!reviewerRun || reviewerRun.responsibleUserId !== input.responsibleUserId ||
+      sourceRun.id === reviewerRun.id || sourceRun.createdAt >= reviewerRun.createdAt ||
+      interaction.createdAt > reviewerRun.createdAt) return null;
+  if (interaction.kind !== "request_confirmation" || interaction.addresseeAgentId !== input.reviewerAgentId ||
+      interaction.addresseeUserId !== null || interaction.companyId !== input.companyId || interaction.issueId !== input.issueId ||
+      decision.companyId !== input.companyId || decision.issueId !== input.issueId ||
+      sourceRun.companyId !== input.companyId || sourceRun.nativeIssueId !== input.issueId ||
+      interaction.sourceRunId !== sourceRun.id || decision.runId !== sourceRun.id ||
+      decision.applicationState !== "applied" || !decision.appliedAt ||
+      !sourceRun.responsibleUserId || !sourceRun.completionContractId || !sourceRun.completionContractSha256 ||
+      !input.responsibleUserId || !input.reviewerCompletionContract.id || !input.reviewerCompletionContract.sha256 ||
+      sourceRun.status !== "succeeded" || sourceRun.nativePhase !== "committed" || sourceRun.nativeProcessCleanupPending !== false ||
+      sourceRun.nativeInputSourceProtocolVersion !== 1) return null;
+  const profile = sourceRun.runnerProfileJson && typeof sourceRun.runnerProfileJson === "object" && !Array.isArray(sourceRun.runnerProfileJson)
+    ? sourceRun.runnerProfileJson as Record<string, unknown> : {};
+  const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+  if (!receipt.success || receipt.data.binding.companyId !== input.companyId || receipt.data.binding.runId !== sourceRun.id ||
+      receipt.data.binding.agentId !== sourceRun.agentId || receipt.data.binding.issueId !== input.issueId ||
+      receipt.data.binding.responsibleUserId !== sourceRun.responsibleUserId) return null;
+  const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.issueId, input.issueId),
+    eq(nativeRunFinalizations.runId, sourceRun.id), eq(nativeRunFinalizations.phase, "committed"),
+    isNull(nativeRunFinalizations.leaseOwner))).limit(1);
+  if (!coordinator?.resultId || !coordinator.assessmentId || coordinator.decisionId !== decision.id ||
+      coordinator.failureCode || coordinator.nextAttemptAt) return null;
+  const [accepted] = await db.select().from(nativeRunResults).where(and(
+    eq(nativeRunResults.companyId, input.companyId), eq(nativeRunResults.issueId, input.issueId),
+    eq(nativeRunResults.runId, sourceRun.id), eq(nativeRunResults.id, coordinator.resultId),
+    eq(nativeRunResults.schemaStatus, "accepted"))).limit(1);
+  const [assessment] = await db.select().from(workAssessments).where(and(
+    eq(workAssessments.companyId, input.companyId), eq(workAssessments.issueId, input.issueId),
+    eq(workAssessments.runId, sourceRun.id), eq(workAssessments.id, coordinator.assessmentId),
+    eq(workAssessments.resultId, coordinator.resultId))).limit(1);
+  if (!accepted || !assessment || decision.assessmentId !== assessment.id || decision.runId !== sourceRun.id ||
+      accepted.completionContractId !== sourceRun.completionContractId) return null;
+  const runResult = sourceRun.resultJson && typeof sourceRun.resultJson === "object" && !Array.isArray(sourceRun.resultJson)
+    ? sourceRun.resultJson as Record<string, unknown> : {};
+  if (runResult.finalizationPhase !== "committed" || runResult.assessmentId !== assessment.id || runResult.decisionId !== decision.id)
+    return null;
+  const { acceptedResponseDigestMatches } = await import("./native-run-finalizer.js");
+  if (!await acceptedResponseDigestMatches(db, sourceRun, accepted)) return null;
+  const decisionRecord = decision.decisionJson && typeof decision.decisionJson === "object" && !Array.isArray(decision.decisionJson)
+    ? decision.decisionJson as Record<string, unknown> : {};
+  const effects = Array.isArray(decisionRecord.effects) ? decisionRecord.effects : [];
+  const payload = interaction.payload && typeof interaction.payload === "object" && !Array.isArray(interaction.payload)
+    ? interaction.payload as unknown as Record<string, unknown> : {};
+  const effectOwners = await db.select().from(statusDecisionEffects).where(and(
+    eq(statusDecisionEffects.companyId, input.companyId), eq(statusDecisionEffects.issueId, input.issueId),
+    eq(statusDecisionEffects.decisionId, decision.id), eq(statusDecisionEffects.effectKind, "bind_reviewer"),
+    eq(statusDecisionEffects.targetType, "issue_thread_interaction"), eq(statusDecisionEffects.targetId, interaction.id),
+    eq(statusDecisionEffects.deliveryState, "delivered"))).limit(2);
+  const effectOwner = effectOwners.length === 1 ? effectOwners[0] : null;
+  const candidateEffects = effects.filter(value => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const candidate = value as Record<string, unknown>;
+    if (candidate.kind !== "bind_reviewer" || candidate.ownerAgentId !== input.reviewerAgentId ||
+        (candidate.ownerUserId !== null && candidate.ownerUserId !== undefined)) return false;
+    const suffix = typeof candidate.requestKey === "string" && candidate.requestKey.length > 0 ? `:${candidate.requestKey}` : "";
+    return interaction.idempotencyKey === `native-review:${decision.id}${suffix}` &&
+      candidate.prompt === interaction.summary && (candidate.detailsMarkdown ?? null) === (payload.detailsMarkdown ?? null);
+  });
+  const effect = candidateEffects[0] && typeof candidateEffects[0] === "object" ? candidateEffects[0] as Record<string, unknown> : null;
+  const target = payload.target && typeof payload.target === "object" && !Array.isArray(payload.target)
+    ? payload.target as Record<string, unknown> : null;
+  if (!effectOwner || !effect || candidateEffects.length !== 1 || effectOwner.payload.interactionId !== interaction.id ||
+      effectOwner.payload.interactionKind !== "request_confirmation" || effectOwner.payload.ownerAgentId !== input.reviewerAgentId ||
+      (effectOwner.payload.ownerUserId !== null && effectOwner.payload.ownerUserId !== undefined) || interaction.title !== "Review requested" ||
+      typeof effect.prompt !== "string" || interaction.summary !== effect.prompt || payload.prompt !== effect.prompt ||
+      (payload.detailsMarkdown ?? null) !== (effect.detailsMarkdown ?? null) || !target || target.type !== "custom" ||
+      target.key !== "native_completion_review" || target.revisionId !== decision.id ||
+      !/^[0-9a-f]{64}$/.test(decision.decisionDigest)) return null;
+  const requestEvidence = { title: interaction.title, summary: interaction.summary, payload: interaction.payload };
+  const renderedRequest = buildNativeReviewRequest(requestEvidence);
+  return {
+    version: 1, companyId: input.companyId, issueId: input.issueId, reviewerRunId: input.reviewerRunId,
+    reviewerAgentId: input.reviewerAgentId, responsibleUserId: input.responsibleUserId,
+    interactionId: interaction.id, decisionId: decision.id, interactionCreatedAt: interaction.createdAt.toISOString(),
+    sourceRunCreatedAt: sourceRun.createdAt.toISOString(), reviewerRunCreatedAt: reviewerRun.createdAt.toISOString(),
+    interactionRequestHash: nativeSha256(requestEvidence), renderedRequestHash: nativeSha256(renderedRequest),
+    decisionDigest: decision.decisionDigest, sourceRunId: sourceRun.id, sourceAgentId: sourceRun.agentId,
+    sourceResponsibleUserId: sourceRun.responsibleUserId, sourceReceiptDigest: receipt.data.digest, sourceResultId: accepted.id, sourceResultCanonicalSha256: accepted.canonicalSha256,
+    sourceCompletionContractId: sourceRun.completionContractId, sourceCompletionContractSha256: sourceRun.completionContractSha256,
+    reviewerCompletionContractId: input.reviewerCompletionContract.id,
+    reviewerCompletionContractSha256: input.reviewerCompletionContract.sha256,
+  };
 }
 
 

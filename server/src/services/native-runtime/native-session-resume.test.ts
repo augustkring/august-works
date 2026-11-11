@@ -73,6 +73,7 @@ import {
   selectNativeSessionResumeRun,
 } from "./native-session-resume.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+import { nativeSha256 } from "./canonical.js";
 
 const companyId = "10000000-0000-4000-8000-000000000001";
 const issueId = "20000000-0000-4000-8000-000000000002";
@@ -423,7 +424,7 @@ it("seals an acknowledged retained session to its checkpoint, Human, and generat
     bootstrap: { executionInputDigest: digest,
       policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] },
     dispatches: [{ executionInputDigest: digest, responsibleUserId,
-      policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [marker] }],
+      policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] }],
     additionalInputs: [], digest };
   const prior = { ...previousRun({ nativeToolContractFingerprint: NATIVE_TOOL_CONTRACT_FINGERPRINT,
     nativeExecutionInput: execution(previousRunId), nativeInputSourceReceipt: receipt,
@@ -440,6 +441,44 @@ it("seals an acknowledged retained session to its checkpoint, Human, and generat
   const witness = build(prior);
   expect(witness?.source).toMatchObject({ kind: "retained_run", runId: previousRunId });
   expect(witness?.components).toHaveLength(2);
+  const secondMarker = { ...marker, reservationId: "70000000-0000-4000-8000-000000000011",
+    callId: "provider-call-2" };
+  const priorResponseMarker = { ...marker, reservationId: "70000000-0000-4000-8000-000000000010",
+    callId: "provider-call-prior" };
+  const repeatedConsumedInputs = [priorResponseMarker];
+  const repeatedReceipt = { ...receipt, dispatches: [{ ...receipt.dispatches[0]!, inputs: repeatedConsumedInputs }, {
+    executionInputDigest: digest, responsibleUserId,
+    policy: receipt.bootstrap.policy, inputs: [...repeatedConsumedInputs, secondMarker],
+  }] };
+  const repeatedProfile = prior.runnerProfileJson;
+  const admissionHash = nativeSha256({ policy: receipt.bootstrap.policy, inputs: repeatedConsumedInputs });
+  const repeatedRun = { ...prior, runnerProfileJson: { ...repeatedProfile,
+    nativeOpenCodeSourceAuthority: { promptSourceBindings: [{ promptHash: digest, sourceSetHash: admissionHash }] },
+    nativeInputSourceReceipt: repeatedReceipt,
+    nativeAwModelWireIntents: [{ modelPurpose: "worker_model", reservationId: secondMarker.reservationId,
+      callId: secondMarker.callId, requestHash: secondMarker.requestHash, wireBodyHash: secondMarker.wireBodyHash,
+      sourceDispatchDigest: digest, sourceSetHash: admissionHash, sourcePolicyHash: nativeSha256(receipt.bootstrap),
+      consumedSourceSet: { policy: receipt.bootstrap.policy, inputs: repeatedConsumedInputs },
+      consumedSourceSetHash: nativeSha256({ policy: receipt.bootstrap.policy, inputs: repeatedConsumedInputs }),
+      consumedSourceComponents: [{ kind: "dispatch", executionInputDigest: digest,
+        policy: receipt.bootstrap.policy, inputs: repeatedConsumedInputs }], responseContentHash: digest }],
+  } };
+  expect(build(repeatedRun)).not.toBeNull();
+  const orphanRun = structuredClone(prior);
+  (orphanRun.runnerProfileJson as Record<string, any>).nativeModelInputDispatchIntents.push({
+    dispatchId: "80000000-0000-4000-8000-000000000012", eventSeq: 2, attempt: 1,
+    responsibleUserId, turnInputDigest: "b".repeat(64), turnId: "turn-2" });
+  expect(build(orphanRun)).toBeNull();
+  const gatewayOnlyRun = structuredClone(repeatedRun);
+  (gatewayOnlyRun.runnerProfileJson as Record<string, any>).nativeInputSourceReceipt.dispatches =
+    [gatewayOnlyRun.runnerProfileJson.nativeInputSourceReceipt.dispatches[1]];
+  expect(build(gatewayOnlyRun)).toBeNull();
+  const unregisteredOnlyRun = structuredClone(gatewayOnlyRun);
+  unregisteredOnlyRun.runnerProfileJson.nativeInputSourceReceipt.dispatches[0]!.inputs.at(-1)!.callId = "unregistered";
+  expect(build(unregisteredOnlyRun)).toBeNull();
+  const unregisteredRun = structuredClone(repeatedRun);
+  (unregisteredRun.runnerProfileJson as Record<string, any>).nativeInputSourceReceipt.dispatches[1].inputs.at(-1).callId = "unregistered";
+  expect(build(unregisteredRun)).toBeNull();
   expect(build(prior, "90000000-0000-4000-8000-000000000010")).toBeNull();
   expect(build(prior, responsibleUserId, 5)).toBeNull();
   const changedCheckpoint = structuredClone(prior);

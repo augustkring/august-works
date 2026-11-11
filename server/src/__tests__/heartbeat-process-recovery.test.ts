@@ -4,13 +4,16 @@ import * as controllerLeases from "../services/legacy-controller-lease.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
+import { DEFAULT_OPENCODE_RUNNER_MODEL } from "../services/native-runtime/provider-profile.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
 import { documentService } from "../services/documents.js";
 import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
 import { REDACTED_EVENT_VALUE } from "../redaction.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
-import { adapterExecutionControls, createAdapterExecutionControl } from "../services/adapter-execution-control.js";
+import { adapterExecutionControls, createAdapterExecutionControl, classifyAdapterExecutionOutcome,
+  processRunCancellationSettlements, failedProcessRunCancellations, finishProcessRunCancellationExecution,
+  type RunSessionOutcome } from "../services/adapter-execution-control.js";
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -121,6 +124,14 @@ import {
   commitNativeStatusDecision,
   NativeStatusRaceError,
 } from "../services/native-runtime/status-decision-committer.js";
+// These negative setup cases must reach the original value-free/pre-dispatch
+// owner. A supported Native candidate is not a completed managed qualification:
+// missing bindings/workspace/provider readiness must prevent all execution.
+const nativePreflightCandidate = {
+  adapterType: "paperclip_runner" as const,
+  adapterConfig: { provider: "opencode", model: DEFAULT_OPENCODE_RUNNER_MODEL },
+};
+
 const mockTelemetryClient = vi.hoisted(() => ({
   track: vi.fn(),
   hashPrivateRef: vi.fn(() => "test-private-reference"),
@@ -232,6 +243,7 @@ import {
   INTERACTION_CONTINUATION_INFRA_RETRY_REASON,
   INTERACTION_CONTINUATION_INFRA_WAKE_REASON,
   heartbeatService,
+  persistHeartbeatRunProcessMetadata,
   parseSandboxProviderPluginNotReadyFailureMessage,
   redactDetectedSuccessfulRunProgressSummaryForBoard,
   redactSuccessfulRunHandoffEvidence,
@@ -3547,47 +3559,19 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
   });
 
-  it("persists codex_local spawn identity before hot restart and never loses the live run for missing metadata", async () => {
-    let releaseAdapter: (() => void) | null = null;
+  it("adopts a historical codex_local utility after public spawn-identity persistence without losing the live run", async () => {
+    const actualProcess = await vi.importActual<
+      typeof import("../adapters/process/execute.js")
+    >("../adapters/process/execute.js");
     let spawnedPid: number | null = null;
-    const adapterStarted = new Promise<void>((resolve) => {
-      mockAdapterExecute.mockImplementationOnce(async (rawInput?: unknown) => {
-        const input = rawInput as {
-          onSpawn?: (meta: {
-            pid: number;
-            processGroupId: number | null;
-            startedAt: string;
-          }) => Promise<void>;
-        };
-        const child = spawnAliveProcess();
-        childProcesses.add(child);
-        if (!child.pid)
-          throw new Error("Test codex_local child did not expose a pid");
-        spawnedPid = child.pid;
-        await input.onSpawn?.({
-          pid: child.pid,
-          processGroupId: null,
-          startedAt: new Date("2026-07-30T07:00:00.000Z").toISOString(),
-        });
-        resolve();
-        await new Promise<void>((release) => {
-          releaseAdapter = release;
-        });
-        return {
-          exitCode: 0,
-          signal: null,
-          timedOut: false,
-          errorMessage: null,
-          summary: "Codex run completed after hot restart adoption.",
-          provider: "test",
-          model: "test-model",
-        };
-      });
-    });
-    const { runId } = await seedRunFixture({
+    let spawnedGroup: number | null = null;
+    let reportSpawn!: () => void;
+    const adapterStarted = new Promise<void>((resolve) => { reportSpawn = resolve; });
+    const { runId, agentId } = await seedRunFixture({
       adapterType: "codex_local",
-      agentStatus: "idle",
-      runStatus: "queued",
+      agentStatus: "running",
+      runStatus: "running",
+      runtimeMode: "legacy",
       processPid: null,
       processGroupId: null,
       contextSnapshot: {
@@ -3597,87 +3581,145 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       includeIssue: false,
     });
     const heartbeat = heartbeatService(db);
-    await heartbeat.resumeQueuedRuns();
-    await Promise.race([
-      adapterStarted,
-      new Promise<never>((_, reject) => {
-        setTimeout(
-          () =>
-            reject(
-              new Error("Timed out waiting for codex_local spawn identity"),
-            ),
-          3_000,
-        );
-      }),
-    ]);
-
-    const running = await waitForValue(async () =>
-      db
-        .select()
-        .from(heartbeatRuns)
-        .where(eq(heartbeatRuns.id, runId))
-        .then((rows) => {
-          const row = rows[0] ?? null;
-          return row?.status === "running" && row.processPid ? row : null;
+    // Restore a historical controller owning a fixed non-model utility, not a
+    // new paid Codex dispatch. Its real child must exit before success is written.
+    await db.update(heartbeatRuns).set(controllerLeases.legacyControllerClaim("legacy"))
+      .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running")));
+    const [historicalRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    const [utilityAgent] = await db.select().from(agents).where(eq(agents.id, agentId));
+    if (!historicalRun || !utilityAgent) throw new Error("historical_utility_owner_missing");
+    expect(await controllerLeases.renewLegacyControllerLease(db, historicalRun, "dispatching")).toBe(true);
+    const gateDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-hot-restart-utility-"));
+    const releasePath = path.join(gateDirectory, "release");
+    const utilityControl = createAdapterExecutionControl();
+    let spawnWrite: Promise<void> = Promise.resolve();
+    let componentFailed = false, componentFailure: unknown;
+    const componentExecution = (async () => {
+      try {
+        const result = await actualProcess.execute({ runId, agent: utilityAgent,
+          runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+          config: { command: process.execPath, args: ["-e",
+            "const fs = require('node:fs'); const timer = setInterval(() => { if (fs.existsSync(process.argv[1])) { clearInterval(timer); process.exit(0); } }, 20);",
+            releasePath], graceSec: 1, timeoutSec: 30 }, context: {}, onLog: async () => {},
+          onSpawn: meta => {
+            spawnWrite = (async () => {
+              await persistHeartbeatRunProcessMetadata(db, runId, meta);
+              spawnedPid = meta.pid;
+              spawnedGroup = meta.processGroupId;
+              reportSpawn();
+            })();
+            return spawnWrite;
+          },
+        });
+        await spawnWrite;
+        const cancellation = processRunCancellationSettlements.get(runId) ?? failedProcessRunCancellations.get(runId);
+        await cancellation?.settled;
+        const current = await heartbeat.getRun(runId);
+        const outcome = classifyAdapterExecutionOutcome(current, utilityControl, result, cancellation,
+          (value): value is RunSessionOutcome => value === "succeeded" || value === "failed" ||
+            value === "cancelled" || value === "interrupted" || value === "timed_out");
+        await terminalizeLegacyExecution({ db, run: historicalRun, status: outcome, fromStatuses: ["running"],
+          patch: { finishedAt: new Date(), exitCode: result.exitCode, signal: result.signal,
+            errorCode: outcome === "failed" ? "adapter_failed" : null,
+            error: outcome === "failed" ? (result.errorMessage ?? "Utility execution failed") : null } });
+      } finally {
+        finishProcessRunCancellationExecution(runId);
+        utilityControl.finish();
+      }
+    })().catch(error => { componentFailed = true; componentFailure = error; });
+    try {
+      await Promise.race([
+        adapterStarted,
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error("Timed out waiting for codex_local spawn identity"),
+              ),
+            3_000,
+          );
         }),
-    );
-    const observedProcessStartedAt = await readProcessStartedAt(spawnedPid!);
-    expect(observedProcessStartedAt).not.toBeNull();
-    expect(running).toMatchObject({
-      id: runId,
-      status: "running",
-      processPid: spawnedPid,
-      processGroupId: null,
-      processStartedAt: new Date(observedProcessStartedAt!),
-    });
+      ]);
 
-    await withTempPaperclipHome(async (home) => {
-      await writeHotRestartIntent({
-        previousServerPid: process.pid,
-        previousServerVersion: "old-version",
-        requestedAt: new Date("2026-07-30T07:01:00.000Z"),
-      });
-      await heartbeat.prepareHotRestartShutdown(
-        "SIGTERM",
-        new Date("2026-07-30T07:02:00.000Z"),
-      );
-
-      const adoption = await heartbeat.reconcileHotRestartAdoption(
-        new Date("2026-07-30T07:03:00.000Z"),
-      );
-      expect(adoption).toMatchObject({
-        mode: "reported",
-        adoptedRunIds: [runId],
-        finalizedWhileDownRunIds: [],
-        lostRunIds: [],
-      });
-      const report = JSON.parse(
-        await fs.readFile(resolveHotRestartReportPath(home), "utf8"),
-      ) as { runs?: Array<Record<string, unknown>> };
-      expect(report.runs).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            runId,
-            classification: "adopted",
-            reason: "process_pid_alive",
+      const running = await waitForValue(async () =>
+        db
+          .select()
+          .from(heartbeatRuns)
+          .where(eq(heartbeatRuns.id, runId))
+          .then((rows) => {
+            const row = rows[0] ?? null;
+            return row?.status === "running" && row.processPid ? row : null;
           }),
-        ]),
       );
-      expect(report.runs).not.toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            runId,
-            reason: "missing_process_metadata",
-          }),
-        ]),
-      );
-    });
+      const observedProcessStartedAt = await readProcessStartedAt(spawnedPid!);
+      expect(observedProcessStartedAt).not.toBeNull();
+      expect(running).toMatchObject({
+        id: runId,
+        status: "running",
+        processPid: spawnedPid,
+        processGroupId: spawnedGroup,
+        processStartedAt: new Date(observedProcessStartedAt!),
+      });
 
-    if (!releaseAdapter)
-      throw new Error("Adapter release handle was not captured");
-    releaseAdapter();
-    const settled = await waitForRunToSettle(heartbeat, runId, 5_000);
-    expect(settled?.status).toBe("succeeded");
+      await withTempPaperclipHome(async (home) => {
+        await writeHotRestartIntent({
+          previousServerPid: process.pid,
+          previousServerVersion: "old-version",
+          requestedAt: new Date("2026-07-30T07:01:00.000Z"),
+        });
+        await heartbeat.prepareHotRestartShutdown(
+          "SIGTERM",
+          new Date("2026-07-30T07:02:00.000Z"),
+        );
+
+        const adoption = await heartbeat.reconcileHotRestartAdoption(
+          new Date("2026-07-30T07:03:00.000Z"),
+        );
+        expect(adoption).toMatchObject({
+          mode: "reported",
+          adoptedRunIds: [runId],
+          finalizedWhileDownRunIds: [],
+          lostRunIds: [],
+        });
+        const report = JSON.parse(
+          await fs.readFile(resolveHotRestartReportPath(home), "utf8"),
+        ) as { runs?: Array<Record<string, unknown>> };
+        expect(report.runs).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              runId,
+              classification: "adopted",
+              reason: "process_pid_alive",
+            }),
+          ]),
+        );
+        expect(report.runs).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              runId,
+              reason: "missing_process_metadata",
+            }),
+          ]),
+        );
+      });
+
+      await fs.writeFile(releasePath, "release", { flag: "wx" });
+      await componentExecution;
+      if (componentFailed) throw componentFailure;
+      const settled = await waitForRunToSettle(heartbeat, runId, 5_000);
+      expect(settled?.status).toBe("succeeded");
+      expect(settled?.exitCode).toBe(0);
+      expect(settled?.signal).toBeNull();
+      expect(isPidAlive(spawnedPid)).toBe(false);
+      expect(runningProcesses.has(runId)).toBe(false);
+    } finally {
+      // This file is only utility input; it never stands in for a Stop receipt.
+      // Releasing it also lets failed assertion paths join the actual child.
+      await fs.writeFile(releasePath, "release");
+      await componentExecution;
+      await fs.rm(gateDirectory, { recursive: true, force: true });
+      if (componentFailed) throw componentFailure;
+    }
   });
 
   it("reports adopted hot-restart runs before startup reap can mark them process_lost", async () => {
@@ -4560,7 +4602,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
     await db
       .update(agents)
-      .set({ defaultEnvironmentId: environmentId })
+      .set({ ...nativePreflightCandidate, defaultEnvironmentId: environmentId })
       .where(eq(agents.id, agentId));
 
     await db.insert(issueThreadInteractions).values({
@@ -4620,6 +4662,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       .set({ status: "in_progress" })
       .where(eq(issues.id, issueId));
 
+    await seedNativePasskeySession(db, "responsible-user");
     const heartbeat = heartbeatService(db, {
       pluginWorkerManager: {
         isRunning: () => false,
@@ -4661,6 +4704,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
 
     // The lease never succeeded, so the adapter was never dispatched.
     expect(mockAdapterExecute).not.toHaveBeenCalled();
+    expect(mockExecutePaperclipNativeSession).not.toHaveBeenCalled();
 
     const issue = await db
       .select({ status: issues.status, executionRunId: issues.executionRunId })
@@ -4773,15 +4817,17 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
     await db
       .update(agents)
-      .set({ defaultEnvironmentId: environmentId })
+      .set({ ...nativePreflightCandidate, defaultEnvironmentId: environmentId })
       .where(eq(agents.id, agentId));
 
+    await seedNativePasskeySession(db, "responsible-user");
     const heartbeat = heartbeatService(db);
     await heartbeat.resumeQueuedRuns();
     await waitForRunToSettle(heartbeat, runId, 5_000);
 
     // The lease never succeeded, so the adapter was never dispatched.
     expect(mockAdapterExecute).not.toHaveBeenCalled();
+    expect(mockExecutePaperclipNativeSession).not.toHaveBeenCalled();
 
     const failedRun = await db
       .select()
@@ -5450,7 +5496,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await db
       .update(agents)
       .set({
+        ...nativePreflightCandidate,
         adapterConfig: {
+          ...nativePreflightCandidate.adapterConfig,
           env: {
             UNBOUND_API_KEY: {
               type: "secret_ref",
@@ -5462,11 +5510,13 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       })
       .where(eq(agents.id, agentId));
 
+    await seedNativePasskeySession(db, "responsible-user");
     const heartbeat = heartbeatService(db);
     await heartbeat.resumeQueuedRuns();
     await waitForRunToSettle(heartbeat, runId, 5_000);
 
     expect(mockAdapterExecute).not.toHaveBeenCalled();
+    expect(mockExecutePaperclipNativeSession).not.toHaveBeenCalled();
 
     const failedRun = await db
       .select()
@@ -7591,152 +7641,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     },
   );
 
-  it.each(["single Stop", "agent pause"] as const)(
-    "fences adapter registration while an earlier no-owner %s waits to commit",
-    async (operation) => {
-      let context!: {
-        onCancellationReady?: () => Promise<void>;
-        signal?: AbortSignal;
-      };
-      let releaseRegistration!: () => void;
-      const registrationGate = new Promise<void>((resolve) => {
-        releaseRegistration = resolve;
-      });
-      let releaseAdapter!: () => void;
-      const adapterGate = new Promise<void>((resolve) => {
-        releaseAdapter = resolve;
-      });
-      let registered = false;
-      let registrationAttempted = false;
-      let providerStarts = 0;
-      mockAdapterExecute.mockImplementationOnce(async (input) => {
-        context = input as typeof context;
-        await registrationGate;
-        registrationAttempted = true;
-        await context.onCancellationReady?.();
-        registered = true;
-        // This is the real engine's next permission check, before buildRuntime.
-        if (!context.signal?.aborted) providerStarts += 1;
-        await adapterGate;
-        return {
-          exitCode: 0,
-          signal: null,
-          timedOut: false,
-          errorMessage: null,
-          summary: "Stopped before provider startup",
-          provider: "test",
-          model: "test-model",
-          ...(context.signal?.aborted
-            ? {
-                executionRecovery: {
-                  kind: "bootstrap",
-                  providerWorkStarted: false,
-                },
-                resultJson: {
-                  executionCancellation: { state: "acknowledged", forced: false },
-                },
-              }
-            : {}),
-        };
-      });
-      const { runId, agentId } = await seedRunFixture({
-        runtimeMode: "legacy",
-        agentStatus: "idle",
-        runStatus: "queued",
-        includeIssue: false,
-      });
-      const heartbeat = heartbeatService(db);
-      await heartbeat.resumeQueuedRuns();
-      await waitForValue(async () => context);
-      expect(adapterExecutionControls.has(runId)).toBe(false);
-      let releaseRow!: () => void;
-      const rowGate = new Promise<void>((resolve) => {
-        releaseRow = resolve;
-      });
-      let reportRow!: (pid: number) => void;
-      const rowReady = new Promise<number>((resolve) => {
-        reportRow = resolve;
-      });
-      const lock = db.transaction(async (tx) => {
-        await tx
-          .select({ id: heartbeatRuns.id })
-          .from(heartbeatRuns)
-          .where(eq(heartbeatRuns.id, runId))
-          .for("update");
-        const [row] = await tx.execute<{ pid: number }>(
-          sql`select pg_backend_pid() as pid`,
-        );
-        reportRow(row!.pid);
-        await rowGate;
-      });
-      const pid = await rowReady;
-      let stopReturned = false;
-      const requestStop =
-        operation === "single Stop"
-          ? heartbeat.cancelRun(runId)
-          : heartbeat
-              .cancelActiveForAgent(agentId)
-              .then(() => heartbeat.getRun(runId));
-      const stopping = requestStop.then(
-        (run) => {
-          stopReturned = true;
-          return { run, error: null };
-        },
-        (error: unknown) => {
-          stopReturned = true;
-          return { run: null, error };
-        },
-      );
-      try {
-        await vi.waitFor(async () => {
-          const [row] = await db.execute<{ count: number }>(sql`
-          select count(*)::int as count from pg_stat_activity
-          where datname = current_database() and ${pid} = any(pg_blocking_pids(pid))
-            and query ilike '%update%heartbeat_runs%'
-        `);
-          expect(row!.count).toBeGreaterThan(0);
-        });
-        releaseRegistration();
-        await vi.waitFor(() => expect(registrationAttempted).toBe(true));
-        // Readiness must remain behind the earlier Stop, without publishing a
-        // joinable owner that would deadlock a duplicate Stop on this barrier.
-        expect(adapterExecutionControls.has(runId)).toBe(false);
-        expect(registered).toBe(false);
-        expect(providerStarts).toBe(0);
-        expect(stopReturned).toBe(false);
-        releaseRow();
-        await lock;
-        const result = await stopping;
-        expect(result.error).toBeNull();
-        expect(result.run).toMatchObject({ status: "cancelled" });
-        await vi.waitFor(() => expect(registered).toBe(true));
-        expect(context.signal?.aborted).toBe(true);
-        expect(providerStarts).toBe(0);
-        releaseAdapter();
-        await heartbeat.drainActiveRunExecutions();
-        const settledRun = await heartbeat.getRun(runId);
-        expect({
-          status: settledRun?.status,
-          errorCode: settledRun?.errorCode,
-          resultJson: settledRun?.resultJson,
-          finishedAt: settledRun?.finishedAt,
-        }).toEqual({
-          status: result.run!.status,
-          errorCode: result.run!.errorCode,
-          resultJson: result.run!.resultJson,
-          finishedAt: result.run!.finishedAt,
-        });
-      } finally {
-        releaseRow();
-        releaseRegistration();
-        releaseAdapter();
-        await lock;
-        await stopping;
-        await heartbeat.drainActiveRunExecutions();
-      }
-    },
-  );
-
+  // Fresh legacy dispatch is denied by heartbeat-legacy-paid-admission.
+  // Stop/pause versus startup selection runs through the supported Native
+  // route in heartbeat-managed-native-selection-fence.integration.test.ts.
   it("signals an embedded adapter and waits for its cleanup before returning Stop", async () => {
     const { runId } = await seedRunFixture({ runtimeMode: "legacy", includeIssue: false });
     const control = createAdapterExecutionControl();
@@ -7867,6 +7774,10 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       const resultRelease = new Promise<void>((resolve) => {
         releaseResult = resolve;
       });
+      // Historical/component coverage: restore a running legacy controller
+      // for a fixed non-model Node utility. No fresh heartbeat paid dispatch
+      // or arbitrary provider/adapter callback is admitted by this fixture.
+      let originalCancellation: (typeof processRunCancellationSettlements extends Map<string, infer T> ? T : never) | undefined;
       let observedResult:
         Awaited<ReturnType<typeof actualProcess.execute>> | undefined;
       let reportReady!: () => void;
@@ -7882,6 +7793,11 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
             if (text.includes("stop ready")) reportReady();
           },
         });
+        // Retain the SAME original Stop owner seen when this actual child
+        // closes, including a result held beyond the cancellation write fault.
+        // The registry may release it before this exact executor settles.
+        originalCancellation = processRunCancellationSettlements.get(context.runId) ??
+          failedProcessRunCancellations.get(context.runId);
         if (mode === "adapter exception")
           throw new Error(
             "process adapter reported its signal as an exception",
@@ -7899,8 +7815,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       });
       const { runId, agentId } = await seedRunFixture({
         adapterType,
-        agentStatus: "idle",
-        runStatus: "queued",
+        agentStatus: "running",
+        runStatus: "running",
+        runtimeMode: "legacy",
         includeIssue: false,
       });
       await db
@@ -7918,12 +7835,66 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         })
         .where(eq(agents.id, agentId));
       const heartbeat = heartbeatService(db);
-      await heartbeat.resumeQueuedRuns();
+      await db.update(heartbeatRuns).set(controllerLeases.legacyControllerClaim("legacy"))
+        .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running")));
+      const [historicalRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+      const [utilityAgent] = await db.select().from(agents).where(eq(agents.id, agentId));
+      if (!historicalRun || !utilityAgent) throw new Error("historical_utility_owner_missing");
+      expect(await controllerLeases.renewLegacyControllerLease(db, historicalRun, "dispatching")).toBe(true);
+      const utilityConfig = utilityAgent.adapterConfig as { command: string; args: string[]; graceSec: number };
+      const utilityControl = createAdapterExecutionControl();
+      let processMetadataPersisted = false;
+      let componentFailed = false, componentFailure: unknown;
+      const componentExecution = (async () => {
+        try {
+          let result: Awaited<ReturnType<typeof actualProcess.execute>> | undefined;
+          let utilityFailed = false, utilityFailure: unknown;
+          try {
+          // Invoke only the fixture's fixed actualProcess.execute wrapper. The
+          // mocked server adapter registry and heartbeat.resumeQueuedRuns are
+          // deliberately not entered. No API token, runtime tools or key env.
+          result = await mockAdapterExecute({
+            runId, agent: utilityAgent,
+            runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+            config: { command: utilityConfig.command, args: utilityConfig.args, graceSec: utilityConfig.graceSec },
+            context: {}, onLog: async () => {},
+            onSpawn: async (meta: Parameters<typeof persistHeartbeatRunProcessMetadata>[2]) => {
+              await persistHeartbeatRunProcessMetadata(db, runId, meta);
+              processMetadataPersisted = true;
+            },
+          });
+          } catch (error) { utilityFailed = true; utilityFailure = error; }
+          const cancellation = originalCancellation ?? processRunCancellationSettlements.get(runId) ?? failedProcessRunCancellations.get(runId);
+          await cancellation?.settled;
+          if (utilityFailed) {
+            // Original failure CAS cannot overwrite the already cancelled row.
+            await terminalizeLegacyExecution({ db, run: historicalRun, status: "failed", fromStatuses: ["running"],
+              patch: { finishedAt: new Date(), errorCode: "adapter_failed",
+                error: utilityFailure instanceof Error ? utilityFailure.message : "Utility execution failed" } });
+            return;
+          }
+          if (!result) throw new Error("historical_utility_result_missing");
+          const current = await heartbeat.getRun(runId);
+          const outcome = classifyAdapterExecutionOutcome(current, utilityControl, result, cancellation,
+            (status): status is RunSessionOutcome => status === "succeeded" || status === "failed" ||
+              status === "cancelled" || status === "interrupted" || status === "timed_out");
+          // Original terminal CAS owns the write; a successful Stop's existing
+          // cancelled row cannot be overwritten by a late signal/utility result.
+          await terminalizeLegacyExecution({ db, run: historicalRun, status: outcome, fromStatuses: ["running"],
+            patch: { finishedAt: new Date(), exitCode: result.exitCode, signal: result.signal,
+              errorCode: outcome === "failed" ? "adapter_failed" : null,
+              error: outcome === "failed" ? (result.errorMessage ?? "Utility execution failed") : null } });
+        } finally {
+          finishProcessRunCancellationExecution(runId);
+          utilityControl.finish();
+        }
+      })().catch(error => { componentFailed = true; componentFailure = error; });
       const running = await waitForValue(async () =>
         runningProcesses.get(runId),
       );
       expect(running?.child.pid).toBeTruthy();
       await ready;
+      expect(await waitForValue(async () => processMetadataPersisted)).toBe(true);
       const cancellation = heartbeat
         .cancelRun(runId, "Stopped by test operator")
         .then(
@@ -7974,6 +7945,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         writeSpy?.mockRestore();
         releaseResult();
       }
+      await componentExecution;
+      if (componentFailed) throw componentFailure;
       if (failure) {
         expect(first.error?.message).toContain(
           failure === "write"
@@ -8024,14 +7997,11 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       const actualProcess = await vi.importActual<
         typeof import("../adapters/process/execute.js")
       >("../adapters/process/execute.js");
-      mockAdapterExecute.mockImplementationOnce((async (input: unknown) =>
-        actualProcess.execute(
-          input as Parameters<typeof actualProcess.execute>[0],
-        )) as typeof mockAdapterExecute);
       const { runId, agentId } = await seedRunFixture({
         adapterType: "process",
-        agentStatus: "idle",
-        runStatus: "queued",
+        agentStatus: "running",
+        runStatus: "running",
+        runtimeMode: "legacy",
         includeIssue: false,
       });
       await db
@@ -8041,7 +8011,36 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         })
         .where(eq(agents.id, agentId));
       const heartbeat = heartbeatService(db);
-      await heartbeat.resumeQueuedRuns();
+      // Same historical/component boundary as the verified Stop matrix: this
+      // is a fixed uncredentialed Node utility, never a paid adapter dispatch.
+      await db.update(heartbeatRuns).set(controllerLeases.legacyControllerClaim("legacy"))
+        .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running")));
+      const [historicalRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+      const [utilityAgent] = await db.select().from(agents).where(eq(agents.id, agentId));
+      if (!historicalRun || !utilityAgent) throw new Error("historical_utility_owner_missing");
+      expect(await controllerLeases.renewLegacyControllerLease(db, historicalRun, "dispatching")).toBe(true);
+      const utilityControl = createAdapterExecutionControl();
+      let spawnWrite: Promise<unknown> | undefined;
+      try {
+        const result = await actualProcess.execute({ runId, agent: utilityAgent,
+          runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+          config: { command: process.execPath, args: ["-e", script], timeoutSec: 5, graceSec: 1 }, context: {}, onLog: async () => {},
+          onSpawn: async meta => { spawnWrite = persistHeartbeatRunProcessMetadata(db, runId, meta); await spawnWrite; },
+        });
+        if (!spawnWrite) throw new Error("historical_utility_spawn_writer_not_called");
+        await spawnWrite;
+        const current = await heartbeat.getRun(runId);
+        const outcome = classifyAdapterExecutionOutcome(current, utilityControl, result, undefined,
+          (value): value is RunSessionOutcome => value === "succeeded" || value === "failed" ||
+            value === "cancelled" || value === "interrupted" || value === "timed_out");
+        await terminalizeLegacyExecution({ db, run: historicalRun, status: outcome, fromStatuses: ["running"],
+          patch: { finishedAt: new Date(), exitCode: result.exitCode, signal: result.signal,
+            errorCode: outcome === "failed" ? "adapter_failed" : null,
+            error: outcome === "failed" ? (result.errorMessage ?? "Utility execution failed") : null } });
+      } finally {
+        finishProcessRunCancellationExecution(runId);
+        utilityControl.finish();
+      }
       const finished = await waitForRunToSettle(heartbeat, runId, 5_000);
       expect(finished?.status).toBe(status);
       expect(mockTerminateLocalService).not.toHaveBeenCalled();
@@ -8069,20 +8068,11 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const ready = new Promise<void>((resolve) => {
       reportReady = resolve;
     });
-    mockAdapterExecute.mockImplementationOnce((async (input: unknown) => {
-      const context = input as Parameters<typeof actualProcess.execute>[0];
-      return actualProcess.execute({
-        ...context,
-        onLog: async (stream, text) => {
-          await context.onLog(stream, text);
-          if (text.includes("retry stop ready")) reportReady();
-        },
-      });
-    }) as typeof mockAdapterExecute);
     const { runId, agentId } = await seedRunFixture({
       adapterType: "process",
-      agentStatus: "idle",
-      runStatus: "queued",
+      agentStatus: "running",
+      runStatus: "running",
+      runtimeMode: "legacy",
       includeIssue: false,
     });
     await db
@@ -8100,8 +8090,45 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       })
       .where(eq(agents.id, agentId));
     const heartbeat = heartbeatService(db);
-    await heartbeat.resumeQueuedRuns();
+    // Restore only the historical legacy controller for the same fixed Node
+    // utility; no fresh paid callback, embedded control or Native grant.
+    await db.update(heartbeatRuns).set(controllerLeases.legacyControllerClaim("legacy"))
+      .where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.status, "running")));
+    const [historicalRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    const [utilityAgent] = await db.select().from(agents).where(eq(agents.id, agentId));
+    if (!historicalRun || !utilityAgent) throw new Error("historical_utility_owner_missing");
+    expect(await controllerLeases.renewLegacyControllerLease(db, historicalRun, "dispatching")).toBe(true);
+    const config = utilityAgent.adapterConfig as { command: string; args: string[]; graceSec: number };
+    const utilityControl = createAdapterExecutionControl();
+    let metadataPersisted = false, componentFailed = false, componentFailure: unknown;
+    const componentExecution = (async () => {
+      try {
+        const result = await actualProcess.execute({ runId, agent: utilityAgent,
+          runtime: { sessionId: null, sessionParams: null, sessionDisplayId: null, taskKey: null },
+          config: { command: config.command, args: config.args, graceSec: config.graceSec }, context: {},
+          onLog: async (_stream, text) => { if (text.includes("retry stop ready")) reportReady(); },
+          onSpawn: async meta => { await persistHeartbeatRunProcessMetadata(db, runId, meta); metadataPersisted = true; },
+        });
+        // The first failed Stop leaves the real utility alive, so no executor
+        // result is classified then. Join the NEW original owner captured at
+        // actual child close after retry; never borrow the settled failed one.
+        const cancellation = processRunCancellationSettlements.get(runId) ?? failedProcessRunCancellations.get(runId);
+        await cancellation?.settled;
+        const current = await heartbeat.getRun(runId);
+        const outcome = classifyAdapterExecutionOutcome(current, utilityControl, result, cancellation,
+          (value): value is RunSessionOutcome => value === "succeeded" || value === "failed" ||
+            value === "cancelled" || value === "interrupted" || value === "timed_out");
+        await terminalizeLegacyExecution({ db, run: historicalRun, status: outcome, fromStatuses: ["running"],
+          patch: { finishedAt: new Date(), exitCode: result.exitCode, signal: result.signal,
+            errorCode: outcome === "failed" ? "adapter_failed" : null,
+            error: outcome === "failed" ? (result.errorMessage ?? "Utility execution failed") : null } });
+      } finally {
+        finishProcessRunCancellationExecution(runId);
+        utilityControl.finish();
+      }
+    })().catch(error => { componentFailed = true; componentFailure = error; });
     await ready;
+    expect(await waitForValue(async () => metadataPersisted)).toBe(true);
     const owned = runningProcesses.get(runId);
     expect(owned?.child.pid).toBeTruthy();
     mockTerminateLocalService.mockRejectedValueOnce(
@@ -8130,6 +8157,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         actualSupervisor.terminateLocalService,
       );
       await heartbeat.cancelRun(runId).catch(() => undefined);
+      await componentExecution;
+      if (componentFailed) throw componentFailure;
     }
   });
 
@@ -12673,7 +12702,10 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     ).toBe("in_progress");
   });
 
-  it.each(["claim", "dispatch", "queued_comments"] as const)(
+  // The dispatch, unresolved-ancestry, and inherited-identity cases use a
+  // genuinely completed managed Native source in the separate SDK suite:
+  // heartbeat-managed-chat-dispatch-boundaries.integration.test.ts.
+  it.each(["claim", "queued_comments"] as const)(
     "honors close committed at the %s boundary without a provider call",
     async (boundary) => {
       const source = await seedCommittedChatControlStop();
@@ -12685,7 +12717,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       const heartbeat = heartbeatService(db, {
         beforeChatControlRecoveryCheck: async ({ stage, runId }) => {
           if (
-            stage !== (boundary === "dispatch" ? "dispatch" : "claim") ||
+            stage !== "claim" ||
             checked
           )
             return;
@@ -12833,103 +12865,6 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     },
   );
 
-  it("defers unresolved automatic ancestry at claim and records a distinct nonretrying failure after claim", async () => {
-    const source = await seedCommittedChatControlStop();
-    await db
-      .update(chatPublications)
-      .set({ state: "pending" })
-      .where(eq(chatPublications.id, source.publicationId));
-    const child = await seedChatAutomaticChild(source);
-    await db
-      .update(heartbeatRuns)
-      .set({ retryOfRunId: child.runId })
-      .where(eq(heartbeatRuns.id, child.runId));
-    const heartbeat = heartbeatService(db);
-    await heartbeat.resumeQueuedRuns();
-    expect(
-      (
-        await db
-          .select()
-          .from(heartbeatRuns)
-          .where(eq(heartbeatRuns.id, child.runId))
-      )[0],
-    ).toMatchObject({ status: "queued", startedAt: null });
-    await db
-      .update(heartbeatRuns)
-      .set({ retryOfRunId: source.runId })
-      .where(eq(heartbeatRuns.id, child.runId));
-    const finalHeartbeat = heartbeatService(db, {
-      beforeChatControlRecoveryCheck: async ({ stage, runId }) => {
-        if (stage === "dispatch")
-          await db
-            .update(heartbeatRuns)
-            .set({ retryOfRunId: runId })
-            .where(eq(heartbeatRuns.id, runId));
-      },
-    });
-    await finalHeartbeat.resumeQueuedRuns();
-    await finalHeartbeat.drainActiveRunExecutions();
-    expect(
-      (
-        await db
-          .select()
-          .from(heartbeatRuns)
-          .where(eq(heartbeatRuns.id, child.runId))
-      )[0],
-    ).toMatchObject({
-      status: "failed",
-      errorCode: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE,
-    });
-    expect(
-      (await finalHeartbeat.reconcileStrandedAssignedIssues())
-        .continuationRequeued,
-    ).toBe(0);
-    expect(mockAdapterExecute).not.toHaveBeenCalled();
-  });
-
-  it("does not confuse inherited warm-runner metadata with dispatch of the new child", async () => {
-    const source = await seedCommittedChatControlStop();
-    await db
-      .update(chatPublications)
-      .set({ state: "pending" })
-      .where(eq(chatPublications.id, source.publicationId));
-    const child = await seedChatAutomaticChild(source);
-    const heartbeat = heartbeatService(db, {
-      beforeChatControlRecoveryCheck: async ({ stage, runId }) => {
-        if (stage !== "dispatch") return;
-        // Native warm preparation copies these fields before executeSession.
-        // They describe a retained runner, not a provider turn of this child.
-        await db
-          .update(heartbeatRuns)
-          .set({
-            processPid: 2_000_000_000,
-            processGroupId: 2_000_000_000,
-            processStartedAt: source.closedAt,
-          })
-          .where(eq(heartbeatRuns.id, runId));
-        await db
-          .update(chatPublications)
-          .set({ state: "published" })
-          .where(eq(chatPublications.id, source.publicationId));
-      },
-    });
-    await heartbeat.resumeQueuedRuns();
-    await heartbeat.drainActiveRunExecutions();
-    expect(
-      (
-        await db
-          .select()
-          .from(heartbeatRuns)
-          .where(eq(heartbeatRuns.id, child.runId))
-      )[0],
-    ).toMatchObject({
-      status: "cancelled",
-      errorCode: CHAT_CONTROL_RECOVERY_STOP_CODE,
-    });
-    expect(mockAdapterExecute).not.toHaveBeenCalled();
-    expect(mockExecutePaperclipNativeSession).not.toHaveBeenCalled();
-    expect(runningProcesses.size).toBe(0);
-  });
 
   async function seedPreparedChatRecovery(
     admission: "required" | "admitted" | "historical",

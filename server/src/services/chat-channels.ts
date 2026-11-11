@@ -13430,6 +13430,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
           issueId: source.issueId,
           taskKey: source.taskKey,
           source: `chat:${source.provider}`,
+          conversationSessionGeneration: source.sessionGeneration,
           wakeCommentId: source.commentIds.at(-1)!,
           wakeCommentIds: source.commentIds,
           retryOfRunId: source.failedRunId,
@@ -13447,6 +13448,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
           source: "on_demand",
           triggerDetail: "manual",
           reason: "retry_failed_run",
+          failedRunId: source.failedRunId,
           payload: context,
           contextSnapshot: context,
           allowRunCoalescing: false,
@@ -16151,7 +16153,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             "Could not bind external conversation to a Paperclip task",
           );
 
-        const issue =
+        let issue =
           existingIssue?.id === conversation.issueId
             ? existingIssue
             : await taskTx
@@ -16167,9 +16169,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
               version: LOW_TRUST_REVIEW_PRESET_VERSION,
               rawOutputDisposition: LOW_TRUST_REVIEW_RAW_OUTPUT_DISPOSITION,
             } as const;
-            await taskTx
-              .update(issues)
-              .set({
+            const updatedIssue = await issuesSvc.update(
+              issue.id,
+              {
                 sourceTrust: {
                   preset: LOW_TRUST_REVIEW_PRESET,
                   disposition: "quarantined",
@@ -16200,14 +16202,13 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                     },
                   },
                 },
-                updatedAt: new Date(),
-              })
-              .where(
-                and(
-                  eq(issues.id, issue.id),
-                  eq(issues.companyId, endpoint.companyId),
-                ),
-              );
+                payloadSourceSnapshot: issue.payloadSourceSnapshot ? null : undefined,
+                companyGuard: taskEndpoint.companyId,
+              },
+              taskTx,
+            );
+            if (!updatedIssue) throw notFound("Bound task not found");
+            issue = updatedIssue;
           }
 
         if (issue.status === "done" || issue.status === "cancelled") {

@@ -79,6 +79,13 @@ export function isPreparedNativeDraftBackend(
 
 /** Read-only original controller qualification before a canonical Task exists.
  * The private gateway still owns current provider, credential and tariff checks. */
+/** Verify a persisted exact Native completion-review wake without creating or borrowing a worker attempt. */
+export async function qualifyNativeReviewRun(rootDb: Db, tx: Db, input: { companyId: string; agentId: string; runId: string; issueId: string; responsibleUserId: string }) {
+  const gateway = installed.get(rootDb);
+  if (!gateway) throw conflict("The installed managed model controller is required for assigned reviews");
+  return gateway.qualifyReviewInTransaction(tx, input);
+}
+
 export async function qualifyNativeDraftPresence(
   rootDb: Db, tx: Db, companyId: string, agentId: string, responsibleUserId: string,
 ) {

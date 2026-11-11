@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 575,
-    "latestOfficialMigration": "0575_native_attachment_stage_remote_receipt_contract",
+    "last": 577,
+    "latestOfficialMigration": "0577_native_prelaunch_container_occupancy",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -243,7 +243,8 @@
         538,
         539,
         547,
-        553
+        553,
+        576
       ],
       "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding.",
       "authority": "Budget/reservation owner and durable provider receipts are authoritative before dispatch; plugin lifecycle rows control admitted runtime state; Memory share publication is explicit and scoped.",
@@ -267,7 +268,8 @@
         "packages/db/src/migrations/0531_regular_bug.sql",
         "packages/db/src/migrations/0535_giant_adam_warlock.sql",
         "packages/db/src/migrations/0536_yellow_nemesis.sql",
-        "packages/db/src/migrations/0539_jev_decision_settings.sql"
+        "packages/db/src/migrations/0539_jev_decision_settings.sql",
+        "packages/db/src/migrations/0576_native_review_model_reservations.sql"
       ],
       "tests": [
         "server/src/__tests__/resource-governance.integration.test.ts",
@@ -390,16 +392,18 @@
       "migrations": [
         564,
         569,
-        574
+        574,
+        577
       ],
-      "purpose": "Native process cleanup pending marker and bounded lease lookup index for crash/restart cleanup reconciliation. 0569 extends only the original event projection to confirmed remote workload stop events; no historical rewrite. Migration 0574 records installed in-process controller admission as pending and only its exact settled close as complete; latest admission sequence and outstanding OS-process ownership remain guarded. No process stop is fabricated.",
+      "purpose": "Native process cleanup pending marker and bounded lease lookup index for crash/restart cleanup reconciliation. 0569 extends only the original event projection to confirmed remote workload stop events; no historical rewrite. Migration 0574 records installed in-process controller admission as pending and only its exact settled close as complete; latest admission sequence and outstanding OS-process ownership remain guarded. No process stop is fabricated. Migration 0577 records prelaunch setup-container occupancy settlement as a resource cleanup fact; it is distinct from Native process-stop projection and never fabricates process-stop evidence.",
       "authority": "heartbeat_runs native run owner is authoritative for pending cleanup; heartbeat_run_events and environment_leases are reconciled by the native cleanup worker.",
       "durableState": [
         "heartbeat_runs.native_process_cleanup_pending",
         "heartbeat_run_events stop evidence",
-        "environment_leases cleanup status/provider receipt"
+        "environment_leases cleanup status/provider receipt",
+        "prelaunch setup-container occupancy and typed settlement receipt"
       ],
-      "compatibility": "NULL legacy marker is interpreted only through the explicit native-mode/lease/event fallback. Unknown or contradictory cleanup state stays pending and blocks unsafe reuse; no forced success is synthesized. Generic provider receipts or copied/imported events cannot manufacture original stop evidence; old local stop behavior remains its original owner.",
+      "compatibility": "NULL legacy marker is interpreted only through the explicit native-mode/lease/event fallback. Unknown or contradictory cleanup state stays pending and blocks unsafe reuse; no forced success is synthesized. Generic provider receipts or copied/imported events cannot manufacture original stop evidence; old local stop behavior remains its original owner. Setup-container settlement does not imply Native process termination, provider erasure, or storage removal.",
       "owners": [
         "packages/db/src/migrations/0564_broken_guardian.sql",
         "server/src/services/native-runtime/native-session-executor.ts",
@@ -407,7 +411,8 @@
         "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
         "server/src/__tests__/resource-governance.integration.test.ts",
         "packages/db/src/migrations/0569_native_remote_workload_stop_projection.sql",
-        "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql"
+        "packages/db/src/migrations/0574_native_in_process_backend_lifecycle.sql",
+        "packages/db/src/migrations/0577_native_prelaunch_container_occupancy.sql"
       ],
       "tests": [
         "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
@@ -1100,7 +1105,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "45bb579c1ca68df6973c82f1f08dcfd9fc569016b1caa13c52cb781bc7a1e16c"
+      "sha256": "a882181c85245684e90e60f62a5943726553af4b988d543884306e2aa00f0647"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1144,7 +1149,7 @@
     },
     {
       "path": "packages/shared/src/validators/native-payload-source-snapshot.ts",
-      "sha256": "356d7db6c29d23f9ea66bbe4bfc370a1cfa87dc6d38bfe596ad805760c5e5b92"
+      "sha256": "026a2e29fd1bbb5f32aeedf77399ef3279e285ba2bc69376826b30f147ca3f1f"
     },
     {
       "path": "scripts/check-v10-169-migration-phase-register.mjs",
@@ -1384,7 +1389,7 @@
     },
     {
       "path": "server/src/services/execution-sandbox/sandbox-service.ts",
-      "sha256": "668c6c3dff4f457bfb4483f971cb4e7aa152056a68cb28404e970005b7918608"
+      "sha256": "f39a18bf3eead17b2443647b432c9e6b1f4db97d6a571d094376e8a699b8b407"
     },
     {
       "path": "server/src/services/experience/company-responsibility-attention.ts",
@@ -1432,11 +1437,11 @@
     },
     {
       "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
-      "sha256": "91b166ca68f8f6912c7eb0aa9e21d5b086801554087ec38d37b85cbafdf9ab74"
+      "sha256": "786638259e35762a0a50244069421299cc3e33c645f3df80448bfcd1e1397931"
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "c6f4b148fe69653985b26a8068d02bcf8958e406c9400b1766966bbc2c4e2945"
+      "sha256": "8d328bd0fab550847536aed2c5dcc38af016d46fe9f55d6ded9654ed6d91f07a"
     },
     {
       "path": "server/src/services/native-stage-task-body-source.test.ts",
@@ -1473,6 +1478,14 @@
     {
       "path": "ui/src/pages/CompanySettingsRenameHint.test.tsx",
       "sha256": "0357a097b6d40c7b938f46eb3867d7d25797b71c22475b205feafb6900bacd4e"
+    },
+    {
+      "path": "packages/db/src/migrations/0576_native_review_model_reservations.sql",
+      "sha256": "246602b9f25bd002975125cd48257d723fc5021667048fb2f480b1f3566fa6f8"
+    },
+    {
+      "path": "packages/db/src/migrations/0577_native_prelaunch_container_occupancy.sql",
+      "sha256": "19d4619718d00f73d91d0de0f59985a557f6f2559ecf54a0827d7dd7772aa7b4"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1486,10 +1499,10 @@
   },
   "sourcePinFinality": "INTERIM PRIVATE COMPOSED INVENTORY: two approved code/test source pins and two own-documentation pins are recorded individually. The exact 28-file source manifest identifies the current code. Prior b1 checks remain historical exact-input receipts; current composed consistency requires its own capture. Runtime/SDK, fleet compatibility, rollback/restore and operator/physical/provider/Human qualification remain separately gated.",
   "latestMigrationPublication": {
-    "migration": "0575_native_attachment_stage_remote_receipt_contract",
+    "migration": "0577_native_prelaunch_container_occupancy",
     "sourceCommit": null,
-    "sourceState": "Current branch source; inventory updated before the next commit. Historical migration files are unchanged.",
-    "qualificationScope": "Controlled PostgreSQL/API evidence is software evidence only. Remote provider, production Host, rollback, restore, and Human/customer operation qualification remain separate."
+    "sourceState": "Current uncommitted source snapshot; inventory candidate includes official migrations 0576 and 0577. Publication is pending Root review, staging, and official derived graph generation.",
+    "qualificationScope": "Source inventory only. Reported software receipts do not establish Native process-stop, physical Host, paid provider, external storage removal, production deployment, rollback, restore, merge readiness, or overall V10 acceptance."
   },
   "affectedMigrationReasons": {
     "0502": "Extends auth_security_events action contract with board_api_key_id, owner/user and company-null constraints, and expiry index; board-key audit rows use the existing user-auth event writer.",
@@ -1504,7 +1517,9 @@
     "0572": "Preserve all19 protected-host qualification and current stopped-cell controls; permit only exact zero-tool hidden Native OpenCode conformance policies with current Human, manifest, Plan, Run, lease and private workspace bindings.",
     "0573": "Exact current Human conversation upload roots can transition atomically to their first comment after complete original upload/audit and current comment binding checks. No snapshot clearing, invalidation reset or legacy input promotion.",
     "0574": "Append-only original-event projection for the exact installed AWText in-process admission/settled lifecycle. Settlement requires latest exact admission and cannot clear a live OS-process start or identity hold.",
-    "0575": "Bounded, unique remote attachment-stage receipts must match currently delivered attachment inputs, their immutable source captures, and the exact Native dispatch intent. Invalid or mismatched receipts never qualify a remote stage."
+    "0575": "Bounded, unique remote attachment-stage receipts must match currently delivered attachment inputs, their immutable source captures, and the exact Native dispatch intent. Invalid or mismatched receipts never qualify a remote stage.",
+    "0576": "Adds durable Native review-model reservation identity and bounded reservation state for the plan review dispatch lane; does not change existing Support Assistant funding or provider qualification.",
+    "0577": "Adds typed prelaunch setup-container occupancy settlement and receipt reconciliation. This is resource cleanup evidence only; it is distinct from Native process-stop projection and makes no claim of process termination, provider erasure, or storage removal."
   },
   "revisionDate": "2026-11-03",
   "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

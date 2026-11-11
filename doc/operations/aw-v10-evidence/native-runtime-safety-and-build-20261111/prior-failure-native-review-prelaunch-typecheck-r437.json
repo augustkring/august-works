@@ -1,0 +1,26 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 4.0421848370169755,
+      "filesAdvised": 619452,
+      "memoryAfter": 6044426240,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "../node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "--singleThreaded"
+      ],
+      "exit": 1,
+      "seconds": 22.103830620006192,
+      "peakGroupRssBytes": 3406745600,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

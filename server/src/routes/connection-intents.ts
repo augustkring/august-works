@@ -71,6 +71,7 @@ export function runtimeConnectionIntentRoutes(db: Db, workerModels?: ReturnType<
       throw forbidden("Managed model calls require runtime authentication");
     const token = bearer(req);
     const claims = verifyRuntimeToolsToken(token, "worker_model") ??
+      verifyRuntimeToolsToken(token, "review_model") ??
       verifyRuntimeToolsToken(token, "conversation_model") ??
       verifyRuntimeToolsToken(token, "provider_conformance");
     if (!claims) throw unauthorized("Invalid managed model capability");

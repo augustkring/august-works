@@ -16,7 +16,7 @@ import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from ".
 import { assertNativeAnalyticalRunPayloadAccess } from "./analytical-context-authority.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
 import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
-import type { ExecutionReconciliation, NativePayloadSourceInput, NativePayloadSourcePolicy } from "@paperclipai/shared";
+import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, type ExecutionReconciliation, type NativePayloadSourceInput, type NativePayloadSourcePolicy } from "@paperclipai/shared";
 import { externalConversationStateSql, nonIdleSlackIssueCondition } from "./slack-conversation-state.js";
 import { settleSlackConversation } from "./slack-conversation-lifecycle.js";
 import { publicChatTaskUrl } from "./chat-task-url.js";
@@ -42,6 +42,7 @@ import { recordExecutionWait } from "./execution-wait.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-runtime/native-review-participant.js";
 import { claimQueuedNativeReviewRun } from "./native-runtime/native-review-dispatch.js";
 import { buildNativeReviewRequest } from "./native-runtime/native-review-prompt.js";
+import { captureNativeReviewWakeWitness } from "./native-runtime/native-review-participant.js";
 import {
   legacyExecutionNeedsReconciliation,
   terminalizeLegacyExecution,
@@ -300,6 +301,7 @@ import {
 } from "./native-runtime/native-run-trace.js";
 import {
   drainRetainedRunnerdMaintenanceOperations,
+  buildNativeModelEnvelope,
   parseNativeExecutionInput,
   type NativeExecutionInput,
   type NativeSessionGoalControl,
@@ -679,6 +681,44 @@ import {
 } from "./effective-run-config-fingerprints.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
 import { serverVersion } from "../version.js";
+
+function readNativeBootstrapSourceClosureCache(value: unknown, input: {
+  companyId: string; runId: string; agentId: string; issueId: string; executionWorkspaceId: string;
+  executionInputHash: string; taskEnvelopeDigest: string;
+}): import("./native-runtime/native-execution-input.js").NativeBootstrapSourceClosure | null {
+  const cache = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  const closure = cache?.closure && typeof cache.closure === "object" && !Array.isArray(cache.closure)
+    ? cache.closure as Record<string, unknown> : null;
+  const sourceSet = closure?.sourceSet && typeof closure.sourceSet === "object" && !Array.isArray(closure.sourceSet)
+    ? closure.sourceSet as Record<string, unknown> : null;
+  const binding = cache?.binding && typeof cache.binding === "object" && !Array.isArray(cache.binding)
+    ? cache.binding as Record<string, unknown> : null;
+  if (!cache || Object.keys(cache).sort().join(",") !== "binding,closure,executionInputHash,version" ||
+    Object.keys(binding ?? {}).sort().join(",") !== "agentId,companyId,executionWorkspaceId,issueId,runId" ||
+    !closure || Object.keys(closure).sort().join(",") !== "sourceSet,taskEnvelopeDigest" ||
+    !sourceSet || Object.keys(sourceSet).sort().join(",") !== "inputs,policy" ||
+    cache.version !== 1 || cache.executionInputHash !== input.executionInputHash ||
+    binding!.companyId !== input.companyId || binding!.runId !== input.runId || binding!.agentId !== input.agentId ||
+    binding!.issueId !== input.issueId || binding!.executionWorkspaceId !== input.executionWorkspaceId ||
+    closure.taskEnvelopeDigest !== input.taskEnvelopeDigest || !Array.isArray(sourceSet.inputs) ||
+    typeof closure.taskEnvelopeDigest !== "string" || !/^[0-9a-f]{64}$/.test(closure.taskEnvelopeDigest)) return null;
+  const policy = nativePayloadSourcePolicySchema.safeParse(sourceSet.policy);
+  if (!policy.success || sourceSet.inputs.length > 256) return null;
+  const inputs: NativePayloadSourceInput[] = [];
+  for (const raw of sourceSet.inputs) {
+    const parsed = nativePayloadSourceInputSchema.safeParse(raw);
+    if (!parsed.success) return null;
+    inputs.push(parsed.data);
+  }
+  const count = inputs.length + Object.values(policy.data).reduce((sum, ids) => sum + ids.length, 0);
+  if (count > 256) return null;
+  const workspace = inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
+    source.kind === "workspace_metadata" && source.runId === input.runId &&
+      source.executionWorkspaceId === input.executionWorkspaceId);
+  const allWorkspace = inputs.filter(source => source.kind === "workspace_metadata");
+  if (workspace.length !== 1 || allWorkspace.length !== 1) return null;
+  return { sourceSet: { policy: policy.data, inputs }, taskEnvelopeDigest: closure.taskEnvelopeDigest };
+}
 
 const MAX_LIVE_LOG_CHUNK_BYTES = 8 * 1024;
 const MAX_PERSISTED_LOG_CHUNK_CHARS = 64 * 1024;
@@ -7512,6 +7552,8 @@ export async function resolveExternalChatWakeProvider(input: {
   runId?: string | null;
   issueId: string | null;
   contextSnapshot: Record<string, unknown>;
+  /** Reconstruct an already-recorded source identity; grants no execution permission. */
+  purpose?: "source_read";
 }): Promise<ChatProvider | null> {
   if (input.contextSnapshot.source === "issue.interaction.respond") {
     if (!input.runId || !input.agentId || !input.issueId) return null;
@@ -7573,10 +7615,10 @@ export async function resolveExternalChatWakeProvider(input: {
         eq(chatMessageLinks.direction, "inbound"),
         inArray(chatMessageLinks.commentId, commentIds),
         eq(chatConversations.issueId, input.issueId),
-        inArray(chatConversations.state, ["active", "waiting"]),
+        input.purpose === "source_read" ? undefined : inArray(chatConversations.state, ["active", "waiting"]),
         eq(chatEndpoints.provider, provider),
-        eq(chatEndpoints.assignedAgentId, input.agentId),
-        inArray(chatEndpoints.status, ["active", "verifying"]),
+        input.purpose === "source_read" ? undefined : eq(chatEndpoints.assignedAgentId, input.agentId),
+        input.purpose === "source_read" ? undefined : inArray(chatEndpoints.status, ["active", "verifying"]),
       ),
     );
   const linkedCommentIds = new Set(links.map((link) => link.commentId));
@@ -9555,6 +9597,10 @@ export interface HeartbeatServiceOptions {
   nativeSessionBackendFactory?: (
     execution: NativeExecutionInput,
   ) => NativeSessionBackend;
+  /** Test-only bootstrap fault after native source/lease binding, before provider state or process creation. */
+  testBeforeNativeRunnerSpawn?: (runId: string) => Promise<void>;
+  /** Test-only observer after the canonical DB checkpoint write commits. */
+  testAfterPersistedNativeSessionCheckpoint?: (input: { runId: string; snapshot: import("../vendor/paperclip-runner/index.js").PersistedNativeSession }) => Promise<void>;
   /** Test-only, run-bound environment additions used by managed provider boundary fixtures. */
   testNativeRunnerEnvironment?: (input: {
     execution: NativeExecutionInput;
@@ -19773,7 +19819,6 @@ export function heartbeatService(
           sql`${agentWakeupRequests.payload} #>> '{_paperclipWakeContext,wakeReason}' = 'issue_comment_mentioned'`)))
       .innerJoin(companies, and(eq(companies.id, issues.companyId), eq(companies.status, "active")))
       .where(and(eq(agentWakeupRequests.status, "deferred_issue_execution"),
-        isNull(issues.executionRunId),
         or(and(
           sql`jsonb_typeof(${agentWakeupRequests.payload} #> '{_paperclipWakeContext,wakeCommentIds}') = 'array'`,
           sql`${agentWakeupRequests.payload} #> '{_paperclipWakeContext,wakeCommentIds}' <> '[]'::jsonb`,
@@ -20337,10 +20382,20 @@ export function heartbeatService(
     const delayMs = Math.max(0, nextAttemptAt.getTime() - Date.now());
     const timer = setTimeout(() => {
       if (nativeSessionResumeDispatchTimers.get(runId) !== timer) return;
+      // Timers may fire before their wall-clock deadline. Keep the durable
+      // due-time guard and rearm rather than losing this retry on an empty claim.
+      if (Date.now() < nextAttemptAt.getTime()) {
+        scheduleNativeSessionResumeDispatch(runId, nextAttemptAt);
+        return;
+      }
       nativeSessionResumeDispatchTimers.delete(runId);
       void (async () => {
-        if ((await getSchedulingSuppression()).suppressed) return;
-        await dispatchNativeSessionResumptions({
+        const suppressed = (await getSchedulingSuppression()).suppressed;
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+          console.warn("native_session_resume_dispatch_diagnostic", { runId, suppressed,
+            nextAttemptAt: nextAttemptAt.toISOString(), firedAt: new Date().toISOString() });
+        if (suppressed) return;
+        const claims = await dispatchNativeSessionResumptions({
           db,
           runnerInstanceId:
             runtimeEnv.PAPERCLIP_INSTANCE_ID?.trim() || "paperclip-heartbeat",
@@ -20360,6 +20415,8 @@ export function heartbeatService(
             );
           },
         });
+        if (process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS === "1")
+          console.warn("native_session_resume_claim_diagnostic", { runId, claimCount: claims.length });
       })().catch((error) => {
         logger.error(
           { err: error, runId },
@@ -21077,7 +21134,7 @@ export function heartbeatService(
           }
         : null;
       let continuationSummarySource: import("./documents.js").DocumentRevisionSourceCapture | null = null;
-      const continuationSummary = issueRef && !isConversation(issueContext)
+      const continuationSummary = issueRef && !isConversation(issueContext) && !isFailedChatRunRetry
         ? await getIssueContinuationSummaryDocument(db, issueRef.id, { onSourceCapture: capture => { continuationSummarySource = capture; } })
         : null;
       const exposeLowTrustRaw = trustPreset.kind === "low_trust_review";
@@ -21150,7 +21207,7 @@ export function heartbeatService(
       const nativeTaskContinuationCapture: { value: import("./execution-continuation.js").NativeTaskContinuationCapture | null } = { value: null };
       const nativeStageContinuationTrigger: { value: import("./execution-continuation.js").NativeStageTaskContinuationTrigger | null } = { value: null };
       const executionContinuation =
-        issueRef && !isConversation(issueContext) && issueContext?.assigneeAgentId === agent.id
+        issueRef && !isConversation(issueContext) && !isFailedChatRunRetry && issueContext?.assigneeAgentId === agent.id
           ? await buildExecutionContinuation({
               db,
               companyId: agent.companyId,
@@ -23858,6 +23915,17 @@ export function heartbeatService(
           if (!issueRef) {
             throw new Error("native_runtime_ineligible: issue is required");
           }
+          if (run.invocationSource === "automation" && run.runtimeMode === "legacy" &&
+              !run.runtimeModeResolvedAt && !runOptions.nativeLeaseOwner && !runOptions.nativeRestartRecovery) {
+            // A fresh automatic replacement has no provider authority yet.
+            // Honor a completed chat control before reconstructing inherited
+            // Native session input: stale checkpoint/guidance must not mask
+            // the original Task's Stop with an unrelated bootstrap failure.
+            // The final dispatch gate and all source checks still run below
+            // when this read permits preparation to continue.
+            await controllerLease.assertOwned("dispatching");
+            if (!await withChatControlRecoveryGate(run, "dispatch", async () => run)) return;
+          }
           const originalCoordinationCapture = nativeWorkspaceCoordinationCapture ??
             (persistedNativeExecutionInput ? exactNativeWorkspaceCoordination(
               parseObject(run.runnerProfileJson).nativeWorkspaceCoordinationCapture,
@@ -24123,6 +24191,19 @@ export function heartbeatService(
               throw new Error(
                 "native_execution_input_persisted_binding_mismatch",
               );
+            // Reuse only the exact source closure captured with this immutable
+            // execution input. Canonical dispatch rechecks current source owners in
+            // its receipt-writing transaction before any provider request;
+            // missing historical closure remains unknown and fails closed.
+            const cachedBootstrapClosure = readNativeBootstrapSourceClosureCache(
+              persistedProfile.nativePreparedBootstrapSourceClosure, {
+                companyId: agent.companyId, runId: run.id, agentId: agent.id, issueId: issueRef.id,
+                executionWorkspaceId: nativeExecution.binding.executionWorkspaceId,
+                executionInputHash: nativeSha256(nativeExecution), taskEnvelopeDigest: nativeSha256(buildNativeModelEnvelope(nativeExecution).task),
+              });
+            if (persistedProfile.nativePreparedBootstrapSourceClosure != null && !cachedBootstrapClosure)
+              throw new Error("native_bootstrap_source_closure_cache_invalid");
+            if (cachedBootstrapClosure) nativeBootstrapSourceClosure = cachedBootstrapClosure;
             // Recover only the originally admitted request. A stored idle
             // checkpoint can precede an already-started provider turn, so even
             // apparent idleness is not authority to rewrite its contract.
@@ -24328,7 +24409,13 @@ export function heartbeatService(
             const selectedNativeTaskBasePrompt = nativeReviewRequest ?? readNonEmptyString(
               selectPaperclipTaskMarkdown(context, { resumedSession: false, includeCommunicationGuidance: false }),
             ) ?? `# ${issueRef.identifier ?? issueRef.id}: ${issueRef.title}`;
-            const coordinatedBaseMap = originalCoordinationCapture
+            const nativeReviewTaskMap = nativeReviewRequest && nativeReviewContext ? {
+              version: 1 as const, renderedMarkdownDigest: createHash("sha256").update(selectedNativeTaskBasePrompt, "utf8").digest("hex"),
+              renderedMarkdownLength: selectedNativeTaskBasePrompt.length,
+              references: [{ kind: "task" as const, id: issueRef.id },
+                { kind: "native_review_request_context" as const, id: nativeReviewContext.nativeReviewInteractionId }],
+            } : null;
+            const coordinatedBaseMap = nativeReviewRequest ? nativeReviewTaskMap : originalCoordinationCapture
               ? composeNativeWorkspaceCoordinationMap({ companyId: agent.companyId, runId: run.id, agentId: agent.id,
                 issueId: issueRef.id, capture: originalCoordinationCapture, baseMap: nativeBootstrapTaskMarkdownSourceMap,
                 renderedMarkdown: selectedNativeTaskBasePrompt }) : nativeBootstrapTaskMarkdownSourceMap;
@@ -24375,7 +24462,8 @@ export function heartbeatService(
                   buildNativeExecutionInput({
                     companyId: agent.companyId,
                     runId: run.id,
-                    issue: nativeReviewRequest ? { ...issueRef, title: `Review: ${issueRef.title}`, description: nativeReviewRequest } : issueRef,
+                    issue: issueRef,
+                    nativeReviewAssignment: nativeReview,
                     taskPrompt: selectedNativeTaskPrompt,
                     governedContextMarkdown,
                     initialCommunicationGuidance: nativeReviewRequest ? null : readNonEmptyString(context.paperclipTaskCommunicationGuidance),
@@ -24524,6 +24612,11 @@ export function heartbeatService(
                   ...(closedTaskContinuation?.commentSources.map(capture => capture.input) ?? [])] }) : null;
             const treeHoldRootCapture = treeHoldInteractionSource?.rootSource
               ? ancestorSourceCaptures.find(capture => isDeepStrictEqual(capture.input, treeHoldInteractionSource.rootSource)) : null;
+            const nativeReviewWakeWitness = nativeReview && completionContract && run.responsibleUserId
+              ? await captureNativeReviewWakeWitness(db, { companyId: agent.companyId, issueId: issueRef.id,
+                  reviewerRunId: run.id, reviewerAgentId: agent.id, responsibleUserId: run.responsibleUserId,
+                  reviewerCompletionContract: { id: completionContract.row.id, sha256: completionContract.row.canonicalSha256 },
+                  assignment: nativeReview }) : null;
             const nativeTaskWakeCapture: Parameters<typeof captureNativeTaskWakeSource>[0] | null =
               capturedTaskSource?.input.kind === "task" && issueRef ? {
                 companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
@@ -24535,7 +24628,7 @@ export function heartbeatService(
                 workspaceCapture: { execution: nativeWorkspaceExecution, source: nativeBootstrapWorkspaceSource },
                 workspaceCoordinationCapture: originalCoordinationCapture, blockedHumanInteraction, treeHoldInteractionSource,
                 responsibleUserId: run.responsibleUserId, wakeupRequestId: run.wakeupRequestId,
-                continuationCapture: closedTaskContinuation, ordinaryPlanRead,
+                nativeReviewWitness: nativeReviewWakeWitness, continuationCapture: closedTaskContinuation, ordinaryPlanRead,
                 persistedWakeReason: readNonEmptyString(parseObject(run.contextSnapshot).wakeReason),
                 checkoutRunId: issueContext?.checkoutRunId ?? null,
                 task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
@@ -24580,7 +24673,7 @@ export function heartbeatService(
             // onto a compact or otherwise substituted prompt.
             const selectedMarkdown = selectedNativeTaskSourceMap ? selectedNativeTaskPrompt : "";
             const nativeBootstrapUnsupported = {
-              review: Boolean(nativeReviewRequest), directPrompt: Boolean(directAgentPrompt),
+              review: Boolean(nativeReviewRequest && (!nativeReviewWakeWitness || !nativeTaskWakeSource || !selectedNativeTaskSourceMap)), directPrompt: Boolean(directAgentPrompt),
               previousRun: Boolean(previousNativeRun && nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
               persistedInput: Boolean(persistedNativeExecutionInput),
               resume: Boolean(nativeResumeCheckpoint && !nativeBootstrapRetainedRunSource),
@@ -24618,6 +24711,8 @@ export function heartbeatService(
               ?.flatMap(capture => [capture.projection.interactionSourceRunId, capture.projection.owner.sourceRunId]) ?? [])];
             const reviewWithdrawalRunPolicy: NativePayloadSourcePolicy | null = reviewWithdrawalSourceRunIds.length
               ? { issueIds: [], projectIds: [], runIds: reviewWithdrawalSourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
+            const assignedReviewRunPolicy: NativePayloadSourcePolicy | null = nativeReviewWakeWitness
+              ? { issueIds: [], projectIds: [], runIds: [nativeReviewWakeWitness.sourceRunId], memoryIds: [], foundationRevisionIds: [] } : null;
             const withdrawalPresentationSourceRunIds = closedTaskContinuation?.humanReviewWithdrawals?.length
               ? closedTaskContinuation.commentSources.flatMap(source => source.acceptedPresentationOwner
                 ? [source.acceptedPresentationOwner.acceptedSummaryOwner.sourceRunId] : []) : [];
@@ -24634,7 +24729,7 @@ export function heartbeatService(
             const presentationRunPolicy: NativePayloadSourcePolicy | null = presentationSourceRunIds.length
               ? { issueIds: [], projectIds: [], runIds: presentationSourceRunIds, memoryIds: [], foundationRevisionIds: [] } : null;
             const additionalPolicyParts = [retainedRunPolicy, nativeProjectAdditionalPolicy, questionRunPolicy,
-              administrativeExpiryRunPolicy, reviewWithdrawalRunPolicy, presentationRunPolicy]
+              administrativeExpiryRunPolicy, reviewWithdrawalRunPolicy, assignedReviewRunPolicy, presentationRunPolicy]
               .filter((part): part is NativePayloadSourcePolicy => part !== null);
             const additionalPolicy: NativePayloadSourcePolicy | null = additionalPolicyParts.length ? {
               issueIds: [...new Set(additionalPolicyParts.flatMap(part => part.issueIds))].sort(),
@@ -24754,12 +24849,12 @@ export function heartbeatService(
                 if (!stagedPrompt || !execution.task.prompt.endsWith(`\n\n${stagedPrompt}`)) return null;
                 const sourceSet = buildNativeBootstrapSet(attachmentCandidates);
                 return sourceSet ? { sourceSet,
-                  taskEnvelopeDigest: nativeSha256(execution.task) } : null;
+                  taskEnvelopeDigest: nativeSha256(buildNativeModelEnvelope(execution).task) } : null;
               };
             }
             nativeBootstrapSourceClosure = nativeBootstrapSourceSet
               ? { sourceSet: nativeBootstrapSourceSet,
-                  taskEnvelopeDigest: nativeSha256(nativeExecution.task) }
+                  taskEnvelopeDigest: nativeSha256(buildNativeModelEnvelope(nativeExecution).task) }
               : null;
             if (
               nativeSessionId !==
@@ -24807,6 +24902,7 @@ export function heartbeatService(
                     "destroy_after_turn"
                   ? "destroy"
                   : undefined;
+          const nativeExecutionForPersistence = nativeExecution;
           await options.beforeNativeRuntimeSelection?.(run.id);
           const nativeSelected = await db.transaction(async (tx) => {
             const lockedRun = await lockNativeRuntimeSelectionRows(tx as unknown as Db, {
@@ -24906,6 +25002,10 @@ export function heartbeatService(
                     nativeBootstrapStageTrigger: nativeStageContinuationTrigger.value ?? null,
                     nativeBootstrapStageActionSources: nativeBootstrapContinuationCapture?.stageActions ?? null,
                     nativeBootstrapContinuationSummaryDocument: nativeBootstrapContinuationCapture?.summary ?? null }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativePreparedBootstrapSourceClosure:
+                    nativeBootstrapSourceClosure ? { version: 1, binding: { companyId: agent.companyId, runId: run.id,
+                      agentId: agent.id, issueId: issueRef.id, executionWorkspaceId: nativeExecutionForPersistence.binding.executionWorkspaceId },
+                      executionInputHash: nativeSha256(nativeExecutionForPersistence), closure: nativeBootstrapSourceClosure } : null }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:
@@ -25570,6 +25670,12 @@ export function heartbeatService(
                       }
                     },
                     enqueueWakeup,
+                    ...(options.testBeforeNativeRunnerSpawn ? {
+                      testBeforeRunnerProcessSpawn: () => options.testBeforeNativeRunnerSpawn!(run.id),
+                    } : {}),
+                    ...(options.testAfterPersistedNativeSessionCheckpoint ? {
+                      testAfterPersistedSessionCheckpoint: snapshot => options.testAfterPersistedNativeSessionCheckpoint!({ runId: run.id, snapshot }),
+                    } : {}),
                     onSpawn: async (meta) => {
                       markDispatchStarted();
                       await persistRunProcessMetadata(run.id, meta);
@@ -27468,6 +27574,15 @@ export function heartbeatService(
         if (latestRun) await resumeRemoteStopComments(latestRun).catch(err => {
           logger.warn({ err, runId: run.id }, "failed to resume user messages after remote Stop");
         });
+        if (latestRun?.runtimeMode === "native" && latestRun.status === "succeeded" &&
+            nativeDispatchStarted && !nativeSessionResumeScheduled && !nativeWorkspaceFinalizeScheduled &&
+            !nativeOwnershipHeld && !shutdownInProgress) {
+          // The shared release transaction retains issue ownership while cleanup
+          // is pending and verifies exact Native receipts before deferred handoff.
+          await releaseIssueExecutionAndPromote(latestRun, { suppressImmediateRecovery: true }).catch(err => {
+            logger.error({ err, runId: run.id }, "failed to promote deferred Human input after Native completion");
+          });
+        }
         if (latestRun && isHeartbeatRunTerminalStatus(latestRun.status)) {
           await toolActionDeliveryService(db, { wakeup: trackWakeup })
             .deliverForRun({ companyId: run.companyId, runId: run.id })
@@ -27596,6 +27711,19 @@ export function heartbeatService(
       }
     }
 
+    const durableRequest = opts.durableChatRequest;
+    if (durableRequest) {
+      assertDurableChatWakeupRequest(durableRequest, {
+        agentId,
+        companyId: agent.companyId,
+        issueId,
+        commentId: wakeCommentId ?? null,
+        requestedByActorType: opts.requestedByActorType,
+        requestedByActorId: opts.requestedByActorId,
+      });
+      opts = { ...opts, idempotencyKey: durableRequest.idempotencyKey };
+    }
+
     if (opts.failedRunId) {
       const failed = await getRun(opts.failedRunId);
       if (opts.requestedByActorType !== "user" || !opts.requestedByActorId ||
@@ -27610,24 +27738,13 @@ export function heartbeatService(
           companyId: failed.companyId, runId: failed.id, actorId: opts.requestedByActorId,
         } });
       }
-      if (isConversationAdapter(agent.adapterType) || agent.adapterType === "paperclip_runner") {
+      if (!durableRequest?.failedRunRetry &&
+          (isConversationAdapter(agent.adapterType) || agent.adapterType === "paperclip_runner")) {
         enrichedContextSnapshot.previousRunId = failed.id;
         enrichedContextSnapshot.forceFreshSession = true;
       }
     }
 
-    const durableRequest = opts.durableChatRequest;
-    if (durableRequest) {
-      assertDurableChatWakeupRequest(durableRequest, {
-        agentId,
-        companyId: agent.companyId,
-        issueId,
-        commentId: wakeCommentId ?? null,
-        requestedByActorType: opts.requestedByActorType,
-        requestedByActorId: opts.requestedByActorId,
-      });
-      opts = { ...opts, idempotencyKey: durableRequest.idempotencyKey };
-    }
     if (
       Object.hasOwn(enrichedContextSnapshot, "chatFailedRunRetry") &&
       !durableRequest?.failedRunRetry
@@ -29467,7 +29584,7 @@ export function heartbeatService(
             queuedCommentRequestId: opts.queuedCommentRequestId,
           });
           if (!explicitContinuation && executionBlocker) return deferBlockedExecution(executionBlocker);
-          if (explicitContinuation) {
+          if (explicitContinuation && !failedChatRetry) {
             enrichedContextSnapshot.forceFreshSession = true;
             enrichedContextSnapshot.previousRunId = explicitContinuation.previousRunId;
             enrichedContextSnapshot.explicitUserContinuation = explicitContinuation;
