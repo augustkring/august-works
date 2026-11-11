@@ -373,6 +373,10 @@
       "sha256": "b7eb730a3c54924864884acafffffafa9c8048e361c17e65a3133d70199b0d3b"
     },
     {
+      "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
+      "sha256": "16372a94a1458a5117a4c758d142ec72f9988f6833fe1a5e1a2b676eb090ab7b"
+    },
+    {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
       "sha256": "7f11ad2e25e35f374ac6b9c092e998b6885d5b356e0b4d472f23297e4b80dba0"
     },
@@ -760,6 +764,7 @@
       "lifecycle": "active_compatibility",
       "repositoryConsumerPaths": [
         "server/src/services/agent-native-operation-manifest.ts",
+        "server/src/services/native-runtime/managed-native-browser.fixture.ts",
         "server/src/services/tool-gateway.ts"
       ]
     },
@@ -1199,6 +1204,7 @@
     "server/src/services/context/context-engine-integration.test.ts",
     "server/src/services/memory/memory-privacy.ts",
     "server/src/services/native-direct-input.ts",
+    "server/src/services/native-runtime/managed-native-browser.fixture.ts",
     "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
     "server/src/services/native-runtime/native-session-executor.ts",
     "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",

@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,7 +80,7 @@ describe("sw.js offline fallback", () => {
     expect(response!.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(response!.headers.get("cache-control")).toBe("no-store");
     const body = await response!.text();
-    expect(body).toContain("Paperclip is offline");
+    expect(body).toContain(`${PRODUCT_IDENTITY.productName} is offline`);
     expect(body).toContain("Reload page");
     expect(body).not.toContain("<html>app shell</html>");
   });
@@ -101,7 +102,7 @@ describe("sw.js offline fallback", () => {
     expect(response!.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(response!.headers.get("cache-control")).toBe("no-store");
     const body = await response!.text();
-    expect(body).toContain("Paperclip is offline");
+    expect(body).toContain(`${PRODUCT_IDENTITY.productName} is offline`);
     expect(body).toContain("Reload page");
     expect(body).not.toContain("<html>app shell</html>");
   });

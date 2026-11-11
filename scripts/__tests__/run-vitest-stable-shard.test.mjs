@@ -363,6 +363,7 @@ const managedNativeSuitePaths = [
   "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-workspace-root.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-native-selection-fence.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
@@ -376,6 +377,11 @@ const managedNativeSuitePaths = [
   "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
   "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-governed-handoffs.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-history-workflows.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-repository.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-sidebar-tool.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-browser-source-invalid.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
@@ -613,6 +619,11 @@ test("AWV4 server jobs share the qualified Native observer installer", () => {
   };
   assert.match(job("tests"), /if: startsWith\(matrix\.partition, 'server-'\)[\s\S]*?run: bash scripts\/ci-install-managed-native-test-observers\.sh/);
   assert.match(job("security-regressions"), /if: contains\(needs\.security-regression-plan\.outputs\.selected_files_json, 'server\/'\)[\s\S]*?run: bash scripts\/ci-install-managed-native-test-observers\.sh/);
+  const browserPredicate = /startsWith\("server\/src\/services\/native-runtime\/native-opencode-managed-browser"\) && value\.endsWith\("\.integration\.test\.ts"\)/;
+  assert.match(job("tests"), /Select installed Chrome for managed browser fixtures[\s\S]*?selectedGeneralServerSuites[\s\S]*?PAPERCLIP_PLAYWRIGHT_EXECUTABLE/);
+  assert.ok(browserPredicate.test(job("tests")), "AWV4 server shards select Chrome for every managed browser cohort");
+  assert.match(job("security-regressions"), /Select installed Chrome for managed browser fixtures[\s\S]*?SELECTED_FILES_JSON[\s\S]*?PAPERCLIP_PLAYWRIGHT_EXECUTABLE/);
+  assert.ok(browserPredicate.test(job("security-regressions")), "AWV4 security shards select Chrome for every managed browser cohort");
 
   const sessionQualification = helper.lastIndexOf("scripts/fixtures/native-session-handle-observer-check.mjs");
   const sessionFlag = helper.indexOf("PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1");

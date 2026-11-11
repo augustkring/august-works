@@ -1,0 +1,64 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 3.8351014660147484,
+      "filesAdvised": 622441,
+      "memoryAfter": 6132727808,
+      "contentChanged": false
+    }
+  ],
+  "steps": [
+    {
+      "command": [
+        "node",
+        "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.43509032600559294,
+      "peakGroupRssBytes": 125419520,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "scripts/__tests__/e2e-shard.test.mjs"
+      ],
+      "exit": 0,
+      "seconds": 27.401522618019953,
+      "peakGroupRssBytes": 144805888,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "scripts/check-token-gates.mjs"
+      ],
+      "exit": 0,
+      "seconds": 0.885351104021538,
+      "peakGroupRssBytes": 44789760,
+      "stopped": null
+    },
+    {
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "/workspace/blentera-v10/ui/vitest.config.ts",
+        "--root",
+        "ui",
+        "--maxWorkers=1",
+        "src/pages/Orchestration.test.tsx",
+        "src/lib/sw-offline-fallback.test.ts"
+      ],
+      "exit": 0,
+      "seconds": 5.111413856007857,
+      "peakGroupRssBytes": 759500800,
+      "stopped": null
+    }
+  ],
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n"
+}

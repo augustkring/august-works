@@ -8986,7 +8986,7 @@ export function buildPaperclipTaskMarkdown(input: {
         lines.push(
           "",
           "Accepted chat plan directive:",
-          "The user has approved the plan for handoff. Perform that handoff now: select or create a suitable project, then create the ordinary assigned execution tasks with the relevant approved plan in initialPlan before execution starts. Do not stop at acknowledging approval or ask for another confirmation. Keep the original plan here, link the created tasks, and leave this conversation available for discussion. Do not implement here or create subtasks of this conversation.",
+          "The user approved this chat-plan revision for task handoff. Complete the handoff now without asking for another chat-plan confirmation: select or create a suitable project, then create ordinary assigned Tasks in Backlog with the relevant approved plan in each initialPlan. Do not move them to To do or start execution. Keep the original chat plan here and link the Tasks; this approval does not create or start their separate V10 execution plans. Tell the Human the draft Tasks are ready in Backlog, point to the existing Orchestration page in the sidebar, and explain that they must review each Task scope, output, action/risk and model/tool/time limits, save and start its bounded plan, then move the Task to To do when they are ready to queue work. Leave this conversation available for discussion. Do not implement here or create subtasks of this conversation.",
         );
       }
     } else if (issue.workMode === "ask") {

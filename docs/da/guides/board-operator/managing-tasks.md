@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: da
-last_verified_at: 2026-10-29
-review_trigger: Ændringer i oprettelse af opgaver, fordeling, status, kommentarer eller kørselsdetaljer
+last_verified_at: 2026-11-11
+review_trigger: Ændringer i oprettelse af opgaver, fordeling, chatplan-overdragelse, afgrænsede Orchestration-planer, status, kommentarer eller kørselsdetaljer
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/ExperienceWork.tsx, ui/src/pages/IssueDetail.tsx]
+linked_source_files: [ui/src/pages/ExperienceWork.tsx, ui/src/pages/IssueDetail.tsx, server/src/services/agent-conversations.ts, server/src/services/heartbeat.ts, ui/src/pages/Orchestration.tsx, ui/src/i18n/experience/da.json]
 ---
 
 Opgaver er virksomhedens arbejdsemner. Åbn **Work** for at finde de opgaver, du har adgang til, eller åbn en opgave for at se beskrivelse, ejer, status, kommentarer og aktivitet.
@@ -28,6 +28,14 @@ Hvis en Co-worker stiller et spørgsmål eller viser et bekræftelseskort, kan d
 Skriv det ønskede resultat i titlen, og tilføj derefter den sammenhæng og de acceptkriterier, som den ansvarlige skal bruge. Vælg et projekt eller en overordnet opgave, hvis arbejdet hører til en eksisterende indsats. Vælg først en ejer, når du har kontrolleret, at personen eller Co-worker er passende til opgaven.
 
 En opgave, du opretter under en eksisterende overordnet opgave eller et projekt, beholder arbejdets adgangsbegrænsninger. Skriv de instruktioner, den nye opgave har brug for. En opgave fra chatten kan bruge et eksisterende projekt uden at oprette et nyt.
+
+## Gennemgå overdragelsen fra en godkendt chatplan
+
+Når du godkender en plan i en Co-worker-chat, godkender du kun overdragelsen. Co-worker opretter almindelige tildelte opgaver i **Backlog** med den relevante del af den godkendte plan i hver opgaves plandokument. Opgaverne startes ikke, og godkendelsen godkender eller starter ikke den separate udførelsesplan for hver opgave. Den oprindelige chat forbliver tilgængelig til dialog.
+
+Før arbejdet sættes i kø, skal du åbne hver opgave og gennemgå omfang, krævet resultat, tilsigtet handling og risiko samt grænser for model, værktøjer og tid. I **Orchestration** skal du angive den maksimale modelpris i mindste valutaenheder (0–1.000.000) og derefter gemme og starte den afgrænsede plan. En opgave i **Backlog** forbliver inaktiv. Flyt den til **Klar til start** (**To do**) først, når planen er klar til at sætte den tildelte Co-worker i kø.
+
+Når en kørsel lykkes, skal du kontrollere det faktiske resultat mod den ønskede leverance og gennemføre eventuel påkrævet godkendelse. En vellykket kørsel beviser ikke i sig selv, at resultatet er fuldført. Lad en opgave blive i **Til gennemgang** (**In review**), mens din gennemgang afventer. Hvis det godkendte omfang ændres, skal du indhente en aktuel godkendelse, før det ændrede arbejde overdrages.
 
 Opgavesiden viser den aktuelle status. En tildeling eller statusændring beviser ikke i sig selv, at en Co-worker er begyndt, eller at resultatet er færdigt. Læs opgavens aktivitet og output, før du lukker den.
 

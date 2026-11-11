@@ -744,6 +744,22 @@ export const managedSerialSchedulerFixtureControls = Object.freeze({
 export async function configureManagedSerialSchedulerSandboxHost(
   input: Omit<ManagedSandboxHostInput, "ordinaryWorker" | "ordinaryWorkerRunId">,
 ) {
+  return configureManagedRunSandboxHost(input, "serial");
+}
+
+/** Exact per-Run Hosts for controlled concurrency tests. Unlike the serial
+ * owner, each Run gets its own signed Host/lease/session closure, while the
+ * existing serial owner retains its physical Stop-before-successor check. */
+export async function configureManagedConcurrentSchedulerSandboxHost(
+  input: Omit<ManagedSandboxHostInput, "ordinaryWorker" | "ordinaryWorkerRunId">,
+) {
+  return configureManagedRunSandboxHost(input, "concurrent");
+}
+
+async function configureManagedRunSandboxHost(
+  input: Omit<ManagedSandboxHostInput, "ordinaryWorker" | "ordinaryWorkerRunId">,
+  admissionMode: "serial" | "concurrent",
+) {
   // A Project tuple is checked for each actual Run by configureManagedSandboxRun;
   // serial admission still binds exact Run/lease and retires the predecessor Host.
   if (input.nativeOpenCodeConformance && (!input.preparedRegistration || input.ordinaryWorkerProject))
@@ -789,14 +805,16 @@ export async function configureManagedSerialSchedulerSandboxHost(
         throw new Error("scheduler_software_host_current_run_lease_required");
       }
       await infrastructure.assertInstalledProfileCurrent();
-      for (const [previousRunId, previous] of priorAdmissions) {
-        if (previousRunId === runId || previous.closed) continue;
-        const prior = await previous.promise;
-        // This observes real terminal/lease/Stop/FD owners. It does not mark a
-        // Run stopped or release an unfinished lease to admit a successor.
-        await prior.assertSerialSuccessorReady(previous.leaseId);
-        await prior.close();
-        previous.closed = true;
+      if (admissionMode === "serial") {
+        for (const [previousRunId, previous] of priorAdmissions) {
+          if (previousRunId === runId || previous.closed) continue;
+          const prior = await previous.promise;
+          // This observes real terminal/lease/Stop/FD owners. It does not mark a
+          // Run stopped or release an unfinished lease to admit a successor.
+          await prior.assertSerialSuccessorReady(previous.leaseId);
+          await prior.close();
+          previous.closed = true;
+        }
       }
       const context = run?.contextSnapshot && typeof run.contextSnapshot === "object"
         ? run.contextSnapshot as Record<string, unknown> : {};
@@ -914,7 +932,7 @@ export async function configureManagedSerialSchedulerSandboxHost(
       await host.close();
       entry.closed = true;
     },
-    facts: () => ({ mode: "controlled_signed_host_relay_serial", hostId: infrastructure.host.id, cellId: infrastructure.cell.id,
+    facts: () => ({ mode: `controlled_signed_host_relay_${admissionMode}`, hostId: infrastructure.host.id, cellId: infrastructure.cell.id,
       environmentId: infrastructure.environment.id, runs: [...hostAdmissionByRun].map(([runId, entry]) =>
         ({ runId, leaseId: entry.leaseId, retired: entry.closed })) }),
     close: async () => {

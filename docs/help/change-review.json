@@ -582,15 +582,15 @@
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
-      "articleSha256": "5c4dde46713577d2d4c410bec33495fa21c770ecea3d931931c5d26275948521",
+      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "updated",
-      "rationale": "The paired Task guidance includes first-message attachments, current chat confirmations and the access restrictions retained when a Human creates related work under an existing parent or Project."
+      "rationale": "The Task article now covers approved chat-plan handoff into Backlog, separate Human review and activation of each bounded plan, and moving Tasks to To do to queue work, alongside existing chat-confirmation and access guidance."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work",
       "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
-      "articleSha256": "5c4dde46713577d2d4c410bec33495fa21c770ecea3d931931c5d26275948521",
+      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "no_change",
       "rationale": "The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
     },
@@ -598,15 +598,15 @@
       "source": "ui/src/pages/ExperienceWork.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
-      "articleSha256": "2c194388e5ded4b8a285bbbcd8955ebcd437e8bfad81a2d124d47e402565f014",
+      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "updated",
-      "rationale": "The paired Task guidance includes first-message attachments, current chat confirmations and the access restrictions retained when a Human creates related work under an existing parent or Project."
+      "rationale": "Artiklen beskriver nu overdragelse fra godkendt chatplan til Backlog, separat Human-gennemgang og aktivering af hver afgr\u00e6nset plan samt flytning til Klar til start for at s\u00e6tte arbejdet i k\u00f8. Den eksisterende vejledning om chatbekr\u00e6ftelser og adgang er bevaret."
     },
     {
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "create-and-track-work-da",
       "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
-      "articleSha256": "2c194388e5ded4b8a285bbbcd8955ebcd437e8bfad81a2d124d47e402565f014",
+      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "no_change",
       "rationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
     },
@@ -949,10 +949,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "c53a42f29a3370f5722f6911709a304e9f5be9b7613a16fcb0005522c1e4bcff",
+      "sourceSha256": "5c9f0310541d6d7fcd1becf34f4a33253d695b1cdb8e6d60447757137d9f26fc",
       "articleSha256": "bec6b2b830586252df7700cc8b8f23018da446ede36284d98e53f8db2b049a1b",
       "decision": "no_change",
-      "rationale": "Reviewed the exact regenerated English and Danish company-guide search bodies. Only product wording and the Danish extra specification link change; indexed Help identities, search access, ranking inputs, support routes and this English Help guidance remain accurate."
+      "rationale": "The generated Help search index now reflects the updated Task handoff article terms. The paired Help and Human Support article itself did not change, so its user guidance remains accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1261,10 +1261,10 @@
     {
       "source": "server/src/services/company-search-help.generated.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "c53a42f29a3370f5722f6911709a304e9f5be9b7613a16fcb0005522c1e4bcff",
+      "sourceSha256": "5c9f0310541d6d7fcd1becf34f4a33253d695b1cdb8e6d60447757137d9f26fc",
       "articleSha256": "2c92acfc98fc458e84cf4bf6fc421119816d6f471922dceee726e311804bf6b5",
       "decision": "no_change",
-      "rationale": "Gennemg\u00e5et de pr\u00e6cist regenererede s\u00f8getekster fra virksomhedsvejledningerne. Kun produktnavnet og den danske ekstra specifikationshenvisning \u00e6ndres; Help-id\u2019er, s\u00f8geadgang, supportveje og den danske vejledning er fortsat korrekte."
+      "rationale": "The generated Help search index now reflects the updated Task handoff article terms. The paired Help and Human Support article itself did not change, so its user guidance remains accurate."
     },
     {
       "source": "server/src/services/company-search.ts",
@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Root reviewed the complete English and Danish export/delete guidance. Confirmed storage cleanup behavior is unchanged; setup-container occupancy settlement does not claim Native process stop, provider erasure, or storage removal. Existing user instructions remain accurate."
+      "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Root reviewed the complete English and Danish export/delete guidance. Confirmed storage cleanup behavior is unchanged; setup-container occupancy settlement does not claim Native process stop, provider erasure, or storage removal. Existing user instructions remain accurate."
+      "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2737,6 +2737,70 @@
       "articleSha256": "20cf1df756249a80879da9812f1f0f277687b2f321221883d03ae477aaf14eab",
       "decision": "updated",
       "rationale": "Adgangskontrollen for administrerede modelkald kan afvise en gemt runtime, selv n\u00e5r installation eller forbindelsesopdagelse lykkes. Artiklen henviser operat\u00f8ren til runtimebeskeden og en runtime, der aktuelt er tilg\u00e6ngelig."
+    },
+    {
+      "source": "server/src/services/agent-conversations.ts",
+      "articleId": "create-and-track-work",
+      "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "decision": "updated",
+      "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+    },
+    {
+      "source": "server/src/services/agent-conversations.ts",
+      "articleId": "create-and-track-work-da",
+      "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "decision": "updated",
+      "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "create-and-track-work",
+      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "decision": "updated",
+      "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "create-and-track-work-da",
+      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "decision": "updated",
+      "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+    },
+    {
+      "source": "ui/src/pages/Orchestration.tsx",
+      "articleId": "create-and-track-work",
+      "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
+      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "decision": "updated",
+      "rationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
+    },
+    {
+      "source": "ui/src/pages/Orchestration.tsx",
+      "articleId": "create-and-track-work-da",
+      "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
+      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "decision": "updated",
+      "rationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
+    },
+    {
+      "source": "ui/src/i18n/experience/en.json",
+      "articleId": "create-and-track-work",
+      "sourceSha256": "488e65ca4d31eda48f5a8d721aafa38cbeeae42164f77853fd1e38f1cc563820",
+      "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+      "decision": "updated",
+      "rationale": "The English UI labels expose the maximum model-cost limit and Backlog-to-To do queueing guidance; the paired article documents the Human review and activation steps."
+    },
+    {
+      "source": "ui/src/i18n/experience/da.json",
+      "articleId": "create-and-track-work-da",
+      "sourceSha256": "5b51f265b1320ff6acb44c5445d9b44094bc962efff3194d4cee2c5598b10489",
+      "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+      "decision": "updated",
+      "rationale": "De danske UI-tekster viser modelprisgr\u00e6nsen og vejledningen fra Backlog til Klar til start; den danske artikel beskriver de tilsvarende Human-gennemgangstrin."
     }
   ]
 }

@@ -366,12 +366,13 @@ const support = await getEmbeddedPostgresTestSupport();
       conversationTariff?: ModelTariffCeiling,
       afterRunSettledBeforeTeardown?: (facts: ConversationAfterRunFacts) => Promise<void>,
       prepareNativeRuntimeContext?: Parameters<typeof runManagedNativeConversationFrame>[0]["prepareNativeRuntimeContext"],
+      configureHeartbeat?: Parameters<typeof runManagedNativeConversationFrame>[0]["configureHeartbeat"],
     ) {
       const opencodeBinary = conversationBinary();
       if (!opencodeBinary) throw new Error("qualified_opencode_binary_unavailable");
       const result = await runManagedNativeConversationFrame({ db, diagnosticDb, root: os.tmpdir(), opencodeBinary,
         budgetMonthlyCents, ...(conversationTariff ? { tariff: conversationTariff } : {}), beforeProviderResponse,
-        afterRunSettledBeforeTeardown, prepareNativeRuntimeContext });
+        afterRunSettledBeforeTeardown, prepareNativeRuntimeContext, configureHeartbeat });
       if (result.providerCallCount < 1) throw new Error(`conversation_provider_request_missing:${JSON.stringify({
         runStatus: result.runStatus,
         issuerFactCount: result.issuerFacts.length,
@@ -935,9 +936,13 @@ const support = await getEmbeddedPostgresTestSupport();
           const sourceWireIntents = Array.isArray(runnerProfile.nativeAwModelWireIntents)
             ? runnerProfile.nativeAwModelWireIntents : [];
           expect(sourceWireIntents).toContainEqual(expect.objectContaining({
-            reservationId: reservation.id, requestHash: reservation.requestHash, callId: retainedWire?.callId,
+            reservationId: reservation.id, requestHash: reservation.inputHash, callId: retainedWire?.callId,
             endpoint: retainedWire?.endpoint, method: retainedWire?.method, wireBodyHash: retainedWire?.bodySha256,
           }));
+          expect(retainedWire).toMatchObject({
+            reservationId: reservation.id, requestHash: reservation.requestHash, callId: retainedWire?.callId,
+            endpoint: retainedWire?.endpoint, method: retainedWire?.method, bodySha256: retainedWire?.bodySha256,
+          });
           const nativeInput = runnerProfile.nativeExecutionInput && typeof runnerProfile.nativeExecutionInput === "object"
             ? runnerProfile.nativeExecutionInput as Record<string, unknown> : {};
           const runtimeContext = nativeInput.runtimeContext && typeof nativeInput.runtimeContext === "object"
@@ -1133,6 +1138,13 @@ const support = await getEmbeddedPostgresTestSupport();
     }, conversationFrameTestTimeoutMs);
     itNativeConversation("retains an actual unknown conversation hold and blocks canonical company purge", async () => {
       let purgeWasBlockedAfterRuntimeErasure = false;
+      let eraseRemoteNativeRuntimeAsset: NonNullable<Parameters<typeof memoryJobService>[1]>["eraseRemoteNativeRuntimeAsset"];
+      const configureHeartbeat = async (context: Parameters<NonNullable<Parameters<typeof runManagedNativeConversationFrame>[0]["configureHeartbeat"]>>[0]) => {
+        const { configureManagedConversationSandboxHost } = await import("./helpers/managed-native-conversation-sandbox-host.js");
+        const host = await configureManagedConversationSandboxHost({ ...context, root: context.runHome });
+        eraseRemoteNativeRuntimeAsset = host.eraseRemoteNativeRuntimeAsset;
+        return host;
+      };
       const result = await conversationReservationFixture(async () => {
         throw new Error("fixture_transport_lost_after_actual_dispatch");
       }, 2000, undefined, async facts => {
@@ -1144,10 +1156,19 @@ const support = await getEmbeddedPostgresTestSupport();
         const { operation } = await startConversationOffboarding(facts, "conversation-unknown-purge");
         const runIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operation.id);
         expect(runIds).toContain(facts.run.id);
-        await memoryJobService(db).tick({ limit: 32, companyId: facts.companyId });
+        if (!eraseRemoteNativeRuntimeAsset) throw new Error("conversation_runtime_asset_host_erasure_owner_missing");
+        await memoryJobService(db, { eraseRemoteNativeRuntimeAsset }).tick({ limit: 32, companyId: facts.companyId });
         const [runtimeJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, facts.companyId),
           eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`))).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
-        expect(runtimeJob?.status).toBe("succeeded");
+        expect(runtimeJob?.status, JSON.stringify({
+          status: runtimeJob?.status ?? null,
+          errorCode: typeof runtimeJob?.errorCode === "string" && /^[a-z0-9_:-]{1,80}$/i.test(runtimeJob.errorCode)
+            ? runtimeJob.errorCode : null,
+          attemptNumber: Number.isSafeInteger(runtimeJob?.attemptNumber) ? runtimeJob!.attemptNumber : null,
+          sourceKind: runtimeJob?.sourceRefJson?.kind === "runtime_asset_erasure" ? "runtime_asset_erasure" : "other",
+          resultKeys: runtimeJob?.resultJson && typeof runtimeJob.resultJson === "object"
+            ? Object.keys(runtimeJob.resultJson).filter(key => /^[A-Za-z0-9_]{1,64}$/.test(key)).slice(0, 16) : [],
+        })).toBe("succeeded");
         await expect(purgeCompanyContent(db, facts.companyId, { operationId: operation.id })).rejects.toMatchObject({ status: 409 });
         expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.id, facts.reservation!.id)))[0]?.status)
           .toBe("unknown");
@@ -1155,7 +1176,7 @@ const support = await getEmbeddedPostgresTestSupport();
         expect((await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id)))[0]?.evidence)
           .not.toHaveProperty("nativeConversationModelFunding");
         purgeWasBlockedAfterRuntimeErasure = true;
-      });
+      }, undefined, undefined, configureHeartbeat);
       expect(purgeWasBlockedAfterRuntimeErasure).toBe(true);
       expect(result.success).toBe(false);
       expect(result.providerCallCount).toBeGreaterThan(0);

@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "@/lib/router";
+import { useTranslation } from "@/i18n";
 import { READINESS_ACTIONS, type ReadinessAction, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 
 function OrchestrationContent() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation("experience");
   const { principalId, orchestrationApi, workflowsApi, issuesApi } = useV7AccountScope();
   const { selectedCompanyId: companyId } = useCompany(), { setBreadcrumbs } = useBreadcrumbs();
   const [selected, setSelected] = useState(""), [taskId, setTaskId] = useState(""), [objective, setObjective] = useState(""), [output, setOutput] = useState("result"), [invariant, setInvariant] = useState(""), [rationale, setRationale] = useState("");
@@ -21,11 +23,11 @@ function OrchestrationContent() {
   const [failureLimit,setFailureLimit] = useState(3), [checkLimit,setCheckLimit] = useState(100), [noProgressLimit,setNoProgressLimit] = useState(0);
   const [assessmentLimit,setAssessmentLimit] = useState(1);
   const [parallelism, setParallelism] = useState(1);
-  const [retries, setRetries] = useState(1), [seconds, setSeconds] = useState(900), [toolActions, setToolActions] = useState(100);
+  const [retries, setRetries] = useState(1), [seconds, setSeconds] = useState(900), [toolActions, setToolActions] = useState(100), [modelCostMinor, setModelCostMinor] = useState("");
   useEffect(() => setBreadcrumbs([{ label: "Orchestration" }]), [setBreadcrumbs]);
-  useEffect(() => { setSelected(""); setTaskId(""); setObjective(""); setInvariant(""); setRationale(""); setRuntimeOutcome(""); setWorkers([]); setDecompositionId(""); setWorkflowId(""); setWorkload("semantic"); setActionClass("internal_draft"); setRisk("C0"); setReceiptTool(""); setReceiptArgumentsHash(""); }, [companyId]);
+  useEffect(() => { setSelected(""); setTaskId(""); setObjective(""); setInvariant(""); setRationale(""); setRuntimeOutcome(""); setWorkers([]); setDecompositionId(""); setWorkflowId(""); setWorkload("semantic"); setActionClass("internal_draft"); setRisk("C0"); setReceiptTool(""); setReceiptArgumentsHash(""); setModelCostMinor(""); }, [companyId]);
   const plans = useQuery({ queryKey: ["orchestration-plans", companyId, principalId], queryFn: () => orchestrationApi.list(companyId!), enabled: Boolean(companyId) });
-  const tasks = useQuery({ queryKey: ["orchestration-tasks", companyId, principalId], queryFn: () => issuesApi.list(companyId!, { status: "todo,in_progress,in_review,blocked" }), enabled: Boolean(companyId) });
+  const tasks = useQuery({ queryKey: ["orchestration-tasks", companyId, principalId], queryFn: () => issuesApi.list(companyId!, { status: "backlog,todo,in_progress,in_review,blocked" }), enabled: Boolean(companyId) });
   const decompositions = useQuery({ queryKey: ["orchestration-decompositions", companyId, principalId, taskId], queryFn: () => issuesApi.listAcceptedPlanDecompositions(taskId), enabled: Boolean(companyId && taskId && workload === "decomposable") });
   const workflows = useQuery({ queryKey: ["orchestration-workflows", companyId, principalId], queryFn: () => workflowsApi.list(companyId!), enabled: Boolean(companyId && workload === "deterministic") });
   const detail = useQuery({ queryKey: ["orchestration-plan", companyId, principalId, selected], queryFn: () => orchestrationApi.get(companyId!, selected), enabled: Boolean(companyId && selected), refetchInterval: selected ? 10000 : false });
@@ -40,6 +42,7 @@ function OrchestrationContent() {
   const refresh = () => { void plans.refetch(); void detail.refetch(); if (selected) void supervision.refetch(); };
   const create = useMutation({ mutationFn: () => {
     const task = tasks.data?.find(item => item.id === taskId); if (!task) throw new Error("Select a current canonical Task.");
+    const modelCost = Number(modelCostMinor); if (!modelCostMinor || !Number.isInteger(modelCost) || modelCost < 0 || modelCost > 1000000) throw new Error(t("orchestrationHandoff.invalidModelCost"));
     const accepted = decompositions.data?.find(row => row.id === decompositionId);
     if (workload === "decomposable" && !accepted) throw new Error("Select an already accepted Task decomposition.");
     const draft: CreateOrchestrationPlanInput = {
@@ -47,7 +50,7 @@ function OrchestrationContent() {
       acceptedPlanRevisionId: accepted?.acceptedPlanRevisionId ?? null,
       completionContract: { objective, requiredOutputs: [{ key: output }], businessInvariants: [invariant], requiredPostconditions: actionClass === "internal_draft" ? [] : [{ kind: "tool_receipt", toolName: receiptTool, argumentsHash: receiptArgumentsHash, requireApproval: true }] },
       supervisionPolicy: { repeatedFailureThreshold: failureLimit, maxSupervisorChecks: checkLimit, noProgressSeconds: noProgressLimit || null, maxVerifierCalls: assessmentLimit },
-      budgets: { maxWorkerCount: workload === "decomposable" ? workers.length : 1, maxParallelWorkers: workload === "decomposable" ? parallelism : 1, maxDelegationDepth: workload === "decomposable" ? 1 : 0, maxRetries: retries, maxWallClockSeconds: seconds, maxToolActions: toolActions },
+      budgets: { maxWorkerCount: workload === "decomposable" ? workers.length : 1, maxParallelWorkers: workload === "decomposable" ? parallelism : 1, maxDelegationDepth: workload === "decomposable" ? 1 : 0, maxRetries: retries, maxWallClockSeconds: seconds, maxModelCostMinor: modelCost, maxToolActions: toolActions },
       workers: workload === "decomposable" ? workers.map(worker => ({ key: worker.key, issueId: worker.issueId, dependsOn: worker.dependsOn, completionContract: { objective: worker.objective, requiredOutputs: [{ key: worker.output }], businessInvariants: [invariant] } })) : [{ key: "worker", issueId: task.id }],
     };
     return orchestrationApi.create(companyId!, draft);
@@ -63,6 +66,7 @@ function OrchestrationContent() {
     {errors.map((error, index) => <p key={index} role="alert" className="text-sm text-destructive">{error instanceof Error ? error.message : "Request failed"}</p>)}
     <section className="space-y-3 rounded-lg border border-border p-4">
       <h2 className="font-medium">New plan</h2>
+      <p className="text-sm text-muted-foreground">{t("orchestrationHandoff.backlogHelp")}</p>
       <label className="block text-sm">Task<select value={taskId} onChange={event => { setTaskId(event.target.value); setWorkers([]); setDecompositionId(""); }} className="block w-full rounded-md border border-input bg-background p-2"><option value="">Select an assigned Task</option>{tasks.data?.map(task => <option key={task.id} value={task.id}>{task.identifier}: {task.title}</option>)}</select></label>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-sm">Work shape<select value={workload} onChange={event => setWorkload(event.target.value as typeof workload)} className="block w-full rounded-md border border-input bg-background p-2"><option value="semantic">Single worker</option><option value="long_running">Supervised worker</option><option value="decomposable">Accepted parallel plan</option><option value="deterministic">Published Workflow</option></select></label>
@@ -80,10 +84,10 @@ function OrchestrationContent() {
         {workers.map((worker, index) => <div key={worker.issueId} className="space-y-2 rounded-md border border-border p-3"><Link to={`/issues/${worker.issueId}`}>{worker.key}: open Task</Link><label className="block text-sm">Worker objective<Input value={worker.objective} onChange={event => setWorkers(rows => rows.map((row, at) => at === index ? { ...row, objective: event.target.value } : row))} /></label><label className="block text-sm">Required output document<Input value={worker.output} onChange={event => setWorkers(rows => rows.map((row, at) => at === index ? { ...row, output: event.target.value } : row))} /></label><p className="text-sm">Start after these workers complete:</p>{workers.filter(peer => peer.key !== worker.key).map(peer => <label key={peer.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={worker.dependsOn.includes(peer.key)} onChange={event => setWorkers(rows => rows.map((row, at) => at === index ? { ...row, dependsOn: event.target.checked ? [...row.dependsOn, peer.key] : row.dependsOn.filter(key => key !== peer.key) } : row))} />{peer.key}</label>)}</div>)}
         <label className="block text-sm">Simultaneous workers<Input type="number" min={1} max={Math.min(16, workers.length || 1)} value={parallelism} onChange={event => setParallelism(Number(event.target.value))} /></label>
       </div>}
-      <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm">Total retries<Input type="number" min={0} max={20} value={retries} onChange={event => setRetries(Number(event.target.value))} /></label><label className="text-sm">Time limit (seconds)<Input type="number" min={30} max={86400} value={seconds} onChange={event => setSeconds(Number(event.target.value))} /></label><label className="text-sm">Platform tool actions<Input type="number" min={0} max={10000} value={toolActions} onChange={event => setToolActions(Number(event.target.value))} /></label></div>
+      <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm">{t("orchestrationHandoff.maximumModelCostMinor")}<Input type="number" min={0} max={1000000} value={modelCostMinor} onChange={event => setModelCostMinor(event.target.value)} /></label><label className="text-sm">Total retries<Input type="number" min={0} max={20} value={retries} onChange={event => setRetries(Number(event.target.value))} /></label><label className="text-sm">Time limit (seconds)<Input type="number" min={30} max={86400} value={seconds} onChange={event => setSeconds(Number(event.target.value))} /></label><label className="text-sm">Platform tool actions<Input type="number" min={0} max={10000} value={toolActions} onChange={event => setToolActions(Number(event.target.value))} /></label></div>
       <div className="grid gap-3 sm:grid-cols-3"><label className="text-sm">Repeated failure threshold<Input type="number" min={2} max={20} value={failureLimit} onChange={event => setFailureLimit(Number(event.target.value))} /></label><label className="text-sm">Supervision check limit<Input type="number" min={1} max={10000} value={checkLimit} onChange={event => setCheckLimit(Number(event.target.value))} /></label><label className="text-sm">No-progress limit (seconds, 0 disables)<Input type="number" min={0} max={86400} value={noProgressLimit} onChange={event => setNoProgressLimit(Number(event.target.value))} /></label></div>
       <label className="block text-sm">Independent assessment call limit<Input type="number" min={0} max={10} value={assessmentLimit} onChange={event => setAssessmentLimit(Number(event.target.value))} /><span className="text-muted-foreground">Shared by qualified trajectory and result assessments. Model assessments still require human review for completion.</span></label>
-      <div className="flex items-center justify-between"><Button variant="outline" onClick={() => { setTaskId(""); setWorkers([]); setDecompositionId(""); }}>Cancel</Button><Button disabled={!taskId || create.isPending} onClick={() => create.mutate()}>Save plan</Button></div>
+      <div className="flex items-center justify-between"><Button variant="outline" onClick={() => { setTaskId(""); setWorkers([]); setDecompositionId(""); }}>Cancel</Button><Button disabled={!taskId || !modelCostMinor || create.isPending} onClick={() => create.mutate()}>Save plan</Button></div>
     </section>
     <section className="space-y-2"><h2 className="font-medium">Saved plans</h2>{plans.isPending ? <p role="status">Loading…</p> : plans.data?.length === 0 ? <p className="text-sm text-muted-foreground">No plans yet.</p> : plans.data?.map(plan => <Button key={plan.id} variant={selected === plan.id ? "secondary" : "outline"} onClick={() => { setSelected(plan.id); setRationale(""); setRuntimeOutcome(""); }}>{plan.mode} · {plan.riskClass} · {plan.status}</Button>)}</section>
     {detail.data && !detail.error && <section className="space-y-3 rounded-lg border border-border p-4"><div className="flex items-center gap-2"><h2 className="font-medium">{detail.data.completionContract?.objective ?? "Source content is unavailable"}</h2><Badge variant="outline">{detail.data.status}</Badge></div>

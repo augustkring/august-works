@@ -44,6 +44,6 @@ if (checkOnly) {
   if (!fs.existsSync(target) || fs.readFileSync(target, "utf8") !== output) {
     throw new Error("Generated Help search catalog is stale; run `pnpm --filter @paperclipai/server generate:company-search-help`");
   }
-} else {
+} else if (!fs.existsSync(target) || fs.readFileSync(target, "utf8") !== output) {
   fs.writeFileSync(target, output);
 }

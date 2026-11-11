@@ -4968,5 +4968,545 @@
       "sourceHashRefreshIsNotQualification": true
     },
     "evidenceRoot": "doc/operations/aw-v10-evidence/native-human-repositories-and-recovery-20261111"
+  },
+  "nativeManagedBrowserHandoffCheckpoint79a1b95": {
+    "sourceHead": "79a1b95c13208aa7c754bf42253f2fa7018536b1",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "R80 browser/Task-handoff checkpoint: 30 dirty paths (22 tracked modifications and 8 untracked candidates) are exact-hash guarded. Root-reported r499/r500/r501/r502 facts are recorded in rootReportedCheckpointFacts; r500 overall remains an integrity-guard failure, not green. Full pnpm test:run and actual SDK qualification remain pending; final evidence/staging recount is separate. Root staged all 30 source/Help paths and 37 evidence files after protected r502 checks; all source candidates are staged.",
+    "changes": [
+      {
+        "path": ".github/workflows/aw-v4-verification.yml",
+        "sha256": "3252209667fcebf3ba9cb0453ec7fa85313c0b280d25b57487eaf5c839a9baec",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "2a7c0e01ab839055d3143b90301032839239b51394e772dfe463e06bb774c503"
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": ".github/workflows/pr-trusted.yml",
+        "sha256": "b9c5f6308604b24561aeaf45336f5d7e577b7e811de57fd8f05a705bfdd4fc8b",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "e0d67c4f76056bef0a6162a3a157ebe1f6f9d362a2ba2207fe6f5b324a53cc15"
+        },
+        "ownerGroups": [
+          "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
+        ]
+      },
+      {
+        "path": "docs/da/guides/board-operator/managing-tasks.md",
+        "sha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": []
+      },
+      {
+        "path": "docs/guides/board-operator/managing-tasks.md",
+        "sha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "c9bac1dc67ad412e15e9c0d942add378fbe3b91cae9915f8d403fa4f6100a1dd"
+        },
+        "ownerGroups": []
+      },
+      {
+        "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "sha256": "7a1aab07e43defbc3243b6a27a6e51cc9bad4b6c76951d8dfe2c7278bd5ff6b6",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "6056ed89191c7533521fc68ba67a041aa55b59f20ba5b9738412ad1c318600ba"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "scripts/run-vitest-stable.mjs",
+        "sha256": "482627aea2780f48904b609ae7114e45d3e71eec0c07019192449424e849a531",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "645adcb1db63b03b4ed1ac2e371bccca80b6684430a22abba1f987c23678ab5b"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "server/scripts/generate-company-search-help.mjs",
+        "sha256": "bb1bfbafa53388807b26c9940d7a9a6b876b49a0e4348200ab6fe0f7ea641730",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/agent-conversations.test.ts",
+        "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "d3a6aa3641d1bdcf770c6044ad8134ad203eea6838073cfc06aeb35bd06d4e2e"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
+        "sha256": "b05d9292adcce37d013d684cda2de109ae869c9c9927ed3f5dc841ddc691b3ae",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+        "sha256": "5fdda8fb5bef6c0d96e8d46a3a134fb6aa8231fac311e1fdbd8cf824869eee15",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "sha256": "166a72d32bf8d1468338cc5e13993dbe0b7c30559aa18cc4cb79ea68266407c3",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+        "sha256": "b600cc33222353c87eb2f99e07b5cce88d9a8876e4d8e9c71a345cd17bcfc518",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/v7-model-reservations.integration.test.ts",
+        "sha256": "0bbfc35bed3d4da672646f90aa9e9d5cf7bd79a7f504920488fb6d352a78d0bc",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "be13e6f713a74e1cca01cda6c6fcb8d063774f1d910bbf54c0e37e687a0a7a2b"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/agent-conversations.ts",
+        "sha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "024ce08ba86de65ccf416f5b4bd734a535bd677c22e43aa9b7ea0dfe9afefed4"
+        },
+        "ownerGroups": [
+          "SCR-V10-CUSTOMER-EXPERIENCE",
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+          "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
+        ]
+      },
+      {
+        "path": "server/src/services/company-search-help.generated.ts",
+        "sha256": "5c9f0310541d6d7fcd1becf34f4a33253d695b1cdb8e6d60447757137d9f26fc",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/services/heartbeat.ts",
+        "sha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "24769d49ec221f329c6b069041ce85a957cc2e3267cdeda370e6e737ba01c9f9"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07",
+          "SCR-V10-HOTSPOT-08",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
+        "sha256": "6c18e1c20974b89666b1926276f17d42c37e6e446f4affe6f3ec2f810fdbe106",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/managed-native-browser-cases.ts",
+        "sha256": "a92eabfd1d62a104cac9a1389bf233f046359d6c3ac4e83c9018ad77310fd43c",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
+        "sha256": "16372a94a1458a5117a4c758d142ec72f9988f6833fe1a5e1a2b676eb090ab7b",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-browser-governed-handoffs.integration.test.ts",
+        "sha256": "0808d511f08a49a45a10f5c25db5fc58e3cf4cfd9ad65cfbe3166526e73662ae",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-browser-history-workflows.integration.test.ts",
+        "sha256": "64d07c52fef119f544bc9ea8914058c2d00a11c6c246f8c9a0f6ef3f8bf17a3b",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-browser-repository.integration.test.ts",
+        "sha256": "fc3bcc01db11cab6506e4cdc804285af99ac16d5bf69c2eb74891e60818f64ea",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-browser-sidebar-tool.integration.test.ts",
+        "sha256": "0218f0ed8420d8ff4734cc89f5d10a6c42220acea4705240a56ec110edee58ca",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-browser-source-invalid.integration.test.ts",
+        "sha256": "366e7b57658b3e77328c164f4924ffc5262cf01f1df0688608855ee2a1c01ef6",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+        "sha256": "a11e13b3de6032252917d0cf90a0fff1e5cef797e7414cd6b560417f87b8daac",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "ui/src/i18n/experience/da.json",
+        "sha256": "5b51f265b1320ff6acb44c5445d9b44094bc962efff3194d4cee2c5598b10489",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "a20f22cd7cbe6ab358c45054afd64e5e3fe0a97a3e1264c1b4ae9f87079b5c75"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "ui/src/i18n/experience/en.json",
+        "sha256": "488e65ca4d31eda48f5a8d721aafa38cbeeae42164f77853fd1e38f1cc563820",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "e8feaf03da9b22a11fcb430d123615ba16d28237aec2fa4be75c14b16f72b77f"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "ui/src/lib/sw-offline-fallback.test.ts",
+        "sha256": "d6430e3f174f87eca170f3d82006503d37b9abca4e4933d41cab3249ab7f53f8",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "7a07de88ebcdf2dd49d52e1fdf56571d25bbbffa0a208c272484d6f3e01d809b"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "ui/src/pages/Orchestration.test.tsx",
+        "sha256": "021afe296bc98eaf787f289d37911fcb5c99c6ecd86c5f75dbc5abb0b310cf04",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "d1fd58ed8baa68bad6052ec31e4e981bd7cd902f76ffb4dc5d658d7788d3e234"
+        },
+        "ownerGroups": [
+          "SCR-V10-COST-RESOURCE-ACCOUNTING",
+          "SCR-V10-CUSTOMER-EXPERIENCE"
+        ]
+      },
+      {
+        "path": "ui/src/pages/Orchestration.tsx",
+        "sha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "b0930d4eb0c39e73507381f3080877699c47ed0ec3ea57f2a4930887ed6b9851"
+        },
+        "ownerGroups": [
+          "SCR-V10-COST-RESOURCE-ACCOUNTING",
+          "SCR-V10-CUSTOMER-EXPERIENCE"
+        ]
+      }
+    ],
+    "inventory": {
+      "previousSourceDeltaPathCount": 2043,
+      "currentSourceDeltaPathCount": 2055,
+      "deletedSourcePathCount": 41,
+      "fullDiffPathCount": 14645,
+      "untrackedSourceCandidateCount": 0,
+      "stagedPublicationPathCountAssumingAllCurrentUntrackedStaged": 14645,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "newSourceGroupAssignments": {
+        "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/scripts/generate-company-search-help.mjs": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "server/src/services/native-runtime/managed-native-browser-cases.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/src/services/native-runtime/managed-native-browser.fixture.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/src/services/native-runtime/native-opencode-managed-browser-governed-handoffs.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/src/services/native-runtime/native-opencode-managed-browser-history-workflows.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/src/services/native-runtime/native-opencode-managed-browser-repository.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/src/services/native-runtime/native-opencode-managed-browser-sidebar-tool.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/src/services/native-runtime/native-opencode-managed-browser-source-invalid.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "ui/src/lib/sw-offline-fallback.test.ts": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ],
+        "ui/src/pages/Orchestration.test.tsx": [
+          "SCR-V10-CUSTOMER-EXPERIENCE",
+          "SCR-V10-COST-RESOURCE-ACCOUNTING"
+        ],
+        "ui/src/pages/Orchestration.tsx": [
+          "SCR-V10-CUSTOMER-EXPERIENCE",
+          "SCR-V10-COST-RESOURCE-ACCOUNTING"
+        ]
+      },
+      "additionalExistingPathOwnerGroups": {
+        "server/src/services/agent-conversations.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+          "SCR-V10-CUSTOMER-EXPERIENCE"
+        ]
+      },
+      "sourceGraphExcludesHelpMarkdown": true
+    },
+    "metadataPinRefresh": {
+      "phasePinsRefreshed": [],
+      "aliasPinsAdded": [
+        "server/src/services/native-runtime/managed-native-browser.fixture.ts"
+      ],
+      "aliasInventorySha256": "8a23ee7f1adcb1968f483dbf23c24614d4a9758bdaae0868d1073c0269dd22e5",
+      "aliasConsumerPathCount": 21,
+      "aliasSourcePinCount": 135,
+      "reason": "The official consumer scan found the extracted browser fixture as a new literal paperclip-self:create_project consumer. Refresh its per-alias/global consumer paths and source pin. Preserve all 38 active aliases, lifecycle, immutable Skill v3 and operation mappings. No current source change intersects the migration-phase source pins."
+    },
+    "rootReviewedHelpPairs": [
+      {
+        "source": "server/src/services/agent-conversations.ts",
+        "articleId": "create-and-track-work",
+        "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+        "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "decision": "updated",
+        "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+      },
+      {
+        "source": "server/src/services/agent-conversations.ts",
+        "articleId": "create-and-track-work-da",
+        "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+        "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "decision": "updated",
+        "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "create-and-track-work",
+        "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+        "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "decision": "updated",
+        "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "create-and-track-work-da",
+        "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+        "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "decision": "updated",
+        "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+      },
+      {
+        "source": "ui/src/pages/Orchestration.tsx",
+        "articleId": "create-and-track-work",
+        "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
+        "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "decision": "updated",
+        "rationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
+      },
+      {
+        "source": "ui/src/pages/Orchestration.tsx",
+        "articleId": "create-and-track-work-da",
+        "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
+        "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "decision": "updated",
+        "rationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
+      },
+      {
+        "source": "ui/src/i18n/experience/en.json",
+        "articleId": "create-and-track-work",
+        "sourceSha256": "488e65ca4d31eda48f5a8d721aafa38cbeeae42164f77853fd1e38f1cc563820",
+        "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "decision": "updated",
+        "rationale": "The English UI labels expose the maximum model-cost limit and Backlog-to-To do queueing guidance; the paired article documents the Human review and activation steps."
+      },
+      {
+        "source": "ui/src/i18n/experience/da.json",
+        "articleId": "create-and-track-work-da",
+        "sourceSha256": "5b51f265b1320ff6acb44c5445d9b44094bc962efff3194d4cee2c5598b10489",
+        "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "decision": "updated",
+        "rationale": "De danske UI-tekster viser modelprisgr\u00e6nsen og vejledningen fra Backlog til Klar til start; den danske artikel beskriver de tilsvarende Human-gennemgangstrin."
+      }
+    ],
+    "existingHelpReviewRowsUpdated": {
+      "currentHeartbeatSourceHash": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "companySearchGeneratedHash": "5c9f0310541d6d7fcd1becf34f4a33253d695b1cdb8e6d60447757137d9f26fc",
+      "articleHashes": {
+        "create-and-track-work": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "create-and-track-work-da": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f"
+      }
+    },
+    "rootReportedCheckpointFacts": {
+      "r492": "PASS: OXC syntax, 46 Node routing tests, token gates and 6 UI/offline tests. Earlier frozen source snapshot; exact receipts identify its bytes.",
+      "r494": "PASS: 7 selected handoff prompt/cohort checks, 46 unselected; 26.027s. No actual SDK/browser or PostgreSQL instance qualification.",
+      "r497": "PASS: syntax transform, 46 Node routing tests, token gate and whitespace after the R12 28-lane routing.",
+      "r499": "PASS: full server TypeScript, 122.112s; stable source hashes/mtimes and no OOM.",
+      "r500": "FAILED: recursive workspace typecheck and build commands exit 0 (287.409s/190.193s), but final integrity check detected changed mtimes for two unchanged-content source files; not qualified.",
+      "r501": "PASS: official Help search generator twice followed by --check preserved both content and mtime after idempotent writer correction.",
+      "r502": "PASS: recursive workspace typecheck 283.909s and root build 184.517s; exact source hashes/mtimes unchanged, no OOM or bound stop, temporary read-only source modes restored after compiler exit.",
+      "pending": "Full pnpm test:run and actual managed SDK/browser qualification remain pending; no final V10 acceptance, merge, deploy or paid-provider claim.",
+      "r503": "PASS: source graph, migration phase register, complete alias consumer scan, Help metadata, generated Help search, whitespace and UI token gates. Software metadata checks only."
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "historical169RequirementStatusesPreserved": true,
+      "existingPhaseStatusesPreserved": true,
+      "sourceHashRefreshIsNotQualification": true
+    },
+    "qualificationBoundary": "No V10-wide, production, paid-provider, physical Host, GA, merge-readiness or overall acceptance claim.",
+    "evidenceRoot": "doc/operations/aw-v10-evidence/managed-browser-handoff-and-cleanup-20261111"
   }
 }

@@ -206,6 +206,28 @@ jobs:
         if: startsWith(matrix.partition, 'server-')
         run: bash scripts/ci-install-native-sandbox.sh
 
+      - name: Select installed Chrome for managed browser fixtures
+        if: startsWith(matrix.partition, 'server-')
+        shell: bash
+        run: |
+          selection="$RUNNER_TEMP/aw-v4-managed-native-selected-suites.json"
+          node scripts/run-vitest-stable.mjs ${{ matrix.args }} --dry-run > "$selection"
+          browser_selected=$(node --input-type=module - "$selection" <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const selected = JSON.parse(readFileSync(process.argv[2], "utf8")).selectedGeneralServerSuites;
+          assert.ok(Array.isArray(selected) && selected.every(value => typeof value === "string"));
+          process.stdout.write(String(selected.some(value => value.startsWith("server/src/services/native-runtime/native-opencode-managed-browser") && value.endsWith(".integration.test.ts"))));
+          NODE
+          )
+          if [[ "$browser_selected" == true ]]; then
+            google-chrome --version
+            chrome="$(dirname "$(readlink -f "$(command -v google-chrome)")")/chrome"
+            test -x "$chrome"
+            "$chrome" --version
+            echo "PAPERCLIP_PLAYWRIGHT_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
+          fi
+
       - name: Run stable test suite
         run: pnpm test:run ${{ matrix.args }}
 
@@ -347,6 +369,27 @@ jobs:
       - name: Install generated-code sandbox
         if: contains(needs.security-regression-plan.outputs.selected_files_json, 'server/')
         run: bash scripts/ci-install-native-sandbox.sh
+
+      - name: Select installed Chrome for managed browser fixtures
+        if: contains(needs.security-regression-plan.outputs.selected_files_json, 'server/')
+        shell: bash
+        env:
+          SELECTED_FILES_JSON: ${{ needs.security-regression-plan.outputs.selected_files_json }}
+        run: |
+          browser_selected=$(node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          const selected = JSON.parse(process.env.SELECTED_FILES_JSON);
+          assert.ok(Array.isArray(selected) && selected.every(value => typeof value === "string"));
+          process.stdout.write(String(selected.some(value => value.startsWith("server/src/services/native-runtime/native-opencode-managed-browser") && value.endsWith(".integration.test.ts"))));
+          NODE
+          )
+          if [[ "$browser_selected" == true ]]; then
+            google-chrome --version
+            chrome="$(dirname "$(readlink -f "$(command -v google-chrome)")")/chrome"
+            test -x "$chrome"
+            "$chrome" --version
+            echo "PAPERCLIP_PLAYWRIGHT_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
+          fi
 
       - name: Run one serial Vitest shard with default and JSON reporters
         id: run-shard

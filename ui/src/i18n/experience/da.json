@@ -2577,6 +2577,11 @@
     "refresh": "Opdatér status",
     "checked": "Sidst kontrolleret: {{time}}"
   },
+  "orchestrationHandoff": {
+    "backlogHelp": "Planlagte opgaver forbliver inaktive. Gem og start planen, og flyt derefter hver opgave til Klar til start for at sætte dens tildelte agent i kø.",
+    "maximumModelCostMinor": "Maksimal modelpris (mindste valutaenheder)",
+    "invalidModelCost": "Angiv en grænse for modelpris fra 0 til 1.000.000 mindste valutaenheder."
+  },
   "orchestrationControl": {
     "heading": "Pause eller stop arbejde",
     "back": "Tilbage til koordinering",

@@ -115,7 +115,7 @@ type VerifiedModelRunScope = (runId: string, work: () => ReturnType<ReturnType<t
 export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInput,
   "providerReply" | "createConversationApp" | "driveConversation" | "configureHeartbeat"> & {
   /** Explicit opt-in. The default retains the original one-Run Host. */
-  schedulerMode?: "serial";
+  schedulerMode?: "serial" | "concurrent";
   /** Actual prepared project tuple for the existing per-Run serial Host owner. */
   ordinaryWorkerProject?: () => ManagedNativeProjectWorkspaceScope;
   /** Explicit two-presence opt-in for real Executor→Reviewer issue journeys. */
@@ -204,7 +204,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   const authenticatedHostModelRequest = new AsyncLocalStorage<boolean>();
   input = { ...input, sandboxRelay: true,
     configureHeartbeat: input.configureHeartbeat ?? (async context => {
-      const { configureManagedConversationSandboxHost, configureManagedSerialSchedulerSandboxHost } =
+      const { configureManagedConversationSandboxHost, configureManagedSerialSchedulerSandboxHost,
+        configureManagedConcurrentSchedulerSandboxHost } =
         await import("./managed-native-conversation-sandbox-host.js");
       if (input.schedulerMode === "serial") return configureManagedSerialSchedulerSandboxHost({ ...context, root: context.runHome,
         preparedRegistration: registrationsByAgent.get(context.agentId),
@@ -214,6 +215,14 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory,
         ...(input.ordinaryWorkerProject ? { ordinaryWorkerProject: input.ordinaryWorkerProject() } : {}),
         withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work) });
+      if (input.schedulerMode === "concurrent") {
+        return configureManagedConcurrentSchedulerSandboxHost({ ...context, root: context.runHome,
+          preparedRegistration: registrationsByAgent.get(context.agentId),
+          ...(input.afterManagedSandboxStopReceipt ? { afterManagedSandboxStopReceipt: input.afterManagedSandboxStopReceipt } : {}),
+          observeAssignedToolGateway: (owner, kind) => assignedGatewayObserver?.observe(owner, kind),
+          controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory,
+          withVerifiedModelRun: (runId, work) => verifiedModelRun.run(runId, work) });
+      }
       return configureManagedConversationSandboxHost({ ...context, root: context.runHome, ordinaryWorker: true,
         observeAssignedToolGateway: (owner, kind) => assignedGatewayObserver?.observe(owner, kind),
         controlledNativeSessionBackendFactory: input.controlledNativeSessionBackendFactory });
@@ -404,11 +413,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const wireBody = String(init.body);
       const body = JSON.parse(wireBody) as Record<string, unknown>;
       const scopedRunId = verifiedModelRun.getStore();
-      const runId = input.schedulerMode === "serial" ? scopedRunId : activeRunId;
+      const runId = input.schedulerMode ? scopedRunId : activeRunId;
       const scoped = runId ? executionsByRun.get(runId) : undefined;
-      let execution = input.schedulerMode === "serial" ? scoped?.execution : activeExecution;
-      let issueId = input.schedulerMode === "serial" ? scoped?.issueId : activeIssueId;
-      let runAgentId = input.schedulerMode === "serial" ? scoped?.agentId : agentId;
+      let execution = input.schedulerMode ? scoped?.execution : activeExecution;
+      let issueId = input.schedulerMode ? scoped?.issueId : activeIssueId;
+      let runAgentId = input.schedulerMode ? scoped?.agentId : agentId;
       if (input.managedOpenCodeConformance && runId) {
         const [run] = await db.select({ agentId: heartbeatRuns.agentId, nativeIssueId: heartbeatRuns.nativeIssueId,
           runnerProfileJson: heartbeatRuns.runnerProfileJson, status: heartbeatRuns.status })
@@ -424,7 +433,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         issueId = run.nativeIssueId;
         runAgentId = run.agentId;
       }
-      if (!runId || !runAgentId || (input.schedulerMode === "serial" && !scoped && !input.managedOpenCodeConformance))
+      if (!runId || !runAgentId || (input.schedulerMode && !scoped && !input.managedOpenCodeConformance))
         throw new Error("scheduler_fixture_verified_model_run_missing");
       const expectedApiKey = apiKeysByAgent.get(runAgentId);
       if (!expectedApiKey) throw new Error("scheduler_fixture_run_agent_profile_missing");
@@ -470,7 +479,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       // and yields to the next Human message; it does not need a Worker
       // paperclip_finish result.
       const usage = { input_tokens: 100, output_tokens: 32 };
-      const callIndex = input.schedulerMode === "serial"
+      const callIndex = input.schedulerMode
         ? providerCalls.filter(call => call.runId === runId).length : providerCalls.length;
       let reply: ReturnType<typeof input.providerReply>;
       try {
@@ -606,7 +615,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     next();
   });
   brokerApp.use(async (req, _res, next) => {
-    if (input.schedulerMode !== "serial" || req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") {
+    if (!input.schedulerMode || req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") {
       next(); return;
     }
     try {
@@ -625,11 +634,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     const controller = new AbortController();
     const cancel = () => { if (!res.writableEnded) controller.abort(); };
     req.once("aborted", cancel); res.once("close", cancel);
-    if (input.schedulerMode === "serial" && (req.headers.origin || req.headers.cookie || req.headers["sec-fetch-site"])) {
+    if (input.schedulerMode && (req.headers.origin || req.headers.cookie || req.headers["sec-fetch-site"])) {
       req.off("aborted", cancel); res.off("close", cancel);
       next(new Error("scheduler_fixture_model_runtime_authentication_required")); return;
     }
-    const call = input.schedulerMode === "serial"
+    const call = input.schedulerMode
       ? sandboxHeartbeat.modelRequestAuthenticated?.(req.body, controller.signal, req.header("authorization"))
       : sandboxHeartbeat.modelRequest(req.body, controller.signal);
     if (!call) { req.off("aborted", cancel); res.off("close", cancel);
@@ -718,7 +727,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       }
       brokerProxyTunnelCount++;
       void (async () => {
-        const observed = input.schedulerMode === "serial" && client instanceof Socket && sandboxHeartbeat?.attestModelProxyClient
+        const observed = input.schedulerMode && client instanceof Socket && sandboxHeartbeat?.attestModelProxyClient
           ? await sandboxHeartbeat.attestModelProxyClient(client) : null;
         if (client.destroyed) { observed?.close(); return; }
         const upstream = createConnection(address.port, "127.0.0.1");
@@ -1082,11 +1091,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     if (execution.provider.kind !== "opencode" || !responsibleUserId)
       throw new Error("conversation_fixture_provider_or_human_missing");
     const existing = executionsByRun.get(runId);
-    if (input.schedulerMode === "serial" && existing &&
+    if (input.schedulerMode && existing &&
         (existing.issueId !== issueId || nativeSha256(existing.execution) !== nativeSha256(execution)))
       throw new Error("scheduler_fixture_execution_changed_for_run");
     executionsByRun.set(runId, { execution: structuredClone(execution), issueId, agentId: currentAgentId });
-    if (input.schedulerMode !== "serial") {
+    if (!input.schedulerMode) {
       activeExecution = execution;
       activeRunId = runId;
       activeIssueId = issueId;
@@ -1251,7 +1260,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     return await input.driveScheduler({ db, actor: human, companyId, agentId, managedAgentIds,
       closeManagedAgentHostForRun, humanApi, managedSignoff, gateway, heartbeat,
       facts: () => ({ providerCallCount: providerCalls.length, providerCredentialFacts: { requestCount: providerCalls.length, everyRequestMatchedConfiguredApiKey: providerCalls.every(call => call.keyMatches) }, issuerFacts: structuredClone(issuerFacts),
-        sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.facts?.(),
+        sandboxRuntimeFacts: input.schedulerMode ? { ...sandboxHeartbeat?.facts?.(),
           originHttpDenials: Object.fromEntries(originHttpDenials), authenticatedModelTunnels, appliedModelProfileInjections: structuredClone(appliedModelProfileInjections) }
           : sandboxHeartbeat?.facts?.() ?? null }),
       factsForRun: runId => {
@@ -1260,7 +1269,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
         return { providerCallCount: runProviderCalls.length,
           providerCredentialFacts: { requestCount: runProviderCalls.length, everyRequestMatchedConfiguredApiKey: runProviderCalls.every(call => call.keyMatches) },
           issuerFacts: structuredClone(issuerFacts.filter(fact => fact.runId === runId)),
-          sandboxRuntimeFacts: input.schedulerMode === "serial" ? { ...sandboxHeartbeat?.factsForRun?.(runId),
+          sandboxRuntimeFacts: input.schedulerMode ? { ...sandboxHeartbeat?.factsForRun?.(runId),
             originHttpDenials: originHttpDenials.get(runId) ?? null,
             appliedModelProfileInjections: structuredClone(appliedModelProfileInjections.filter(entry => entry.runId === runId)) }
             : runId === activeRunId ? sandboxHeartbeat?.facts?.() ?? null : null };

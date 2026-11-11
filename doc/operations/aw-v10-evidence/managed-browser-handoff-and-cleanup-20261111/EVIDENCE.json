@@ -1,0 +1,236 @@
+{
+  "schema": "blentera.software-evidence.v1",
+  "preparedAtUtc": "2026-11-11T12:12:27.106269+00:00",
+  "sourceParent": "79a1b95c13208aa7c754bf42253f2fa7018536b1",
+  "sourceBase": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "runs": [
+    {
+      "label": "native-browser-handoff-static-and-ui-r492",
+      "scope": "Syntax transform, 46 Node routing checks, token gates and six UI/offline checks at their recorded earlier source snapshot.",
+      "exit": 0,
+      "steps": [
+        {
+          "command": [
+            "node",
+            "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+          ],
+          "exit": 0,
+          "seconds": 0.43509032600559294,
+          "peakGroupRssBytes": 125419520,
+          "stopped": null
+        },
+        {
+          "command": [
+            "node",
+            "--test",
+            "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+            "scripts/__tests__/e2e-shard.test.mjs"
+          ],
+          "exit": 0,
+          "seconds": 27.401522618019953,
+          "peakGroupRssBytes": 144805888,
+          "stopped": null
+        },
+        {
+          "command": [
+            "node",
+            "scripts/check-token-gates.mjs"
+          ],
+          "exit": 0,
+          "seconds": 0.885351104021538,
+          "peakGroupRssBytes": 44789760,
+          "stopped": null
+        },
+        {
+          "command": [
+            "node",
+            "node_modules/vitest/vitest.mjs",
+            "run",
+            "--config",
+            "/workspace/blentera-v10/ui/vitest.config.ts",
+            "--root",
+            "ui",
+            "--maxWorkers=1",
+            "src/pages/Orchestration.test.tsx",
+            "src/lib/sw-offline-fallback.test.ts"
+          ],
+          "exit": 0,
+          "seconds": 5.111413856007857,
+          "peakGroupRssBytes": 759500800,
+          "stopped": null
+        }
+      ]
+    },
+    {
+      "label": "native-browser-handoff-ui-typecheck-r495",
+      "scope": "UI TypeScript at the recorded earlier snapshot.",
+      "exit": 0,
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "--filter",
+            "@paperclipai/ui",
+            "typecheck"
+          ],
+          "exit": 0,
+          "seconds": 15.668561230006162,
+          "peakGroupRssBytes": 4312051712,
+          "stopped": null
+        }
+      ]
+    },
+    {
+      "label": "native-browser-and-cleanup-syntax-r496",
+      "scope": "Syntax transform and whitespace only; no runtime qualification.",
+      "exit": 0,
+      "steps": [
+        {
+          "command": [
+            "node",
+            "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+          ],
+          "exit": 0,
+          "seconds": 0.4385560560040176,
+          "peakGroupRssBytes": 110243840,
+          "stopped": null
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--check"
+          ],
+          "exit": 0,
+          "seconds": 0.22645024201483466,
+          "peakGroupRssBytes": 9302016,
+          "stopped": null
+        }
+      ]
+    },
+    {
+      "label": "native-browser-and-retry-routing-r497",
+      "scope": "Syntax transform, 46 Node routing checks for 28 managed lanes, token gates and whitespace.",
+      "exit": 0,
+      "steps": [
+        {
+          "command": [
+            "node",
+            "/workspace/v10-preparation/combined-source-20261109/parse-browser-handoff-r491.mjs"
+          ],
+          "exit": 0,
+          "seconds": 0.442926288000308,
+          "peakGroupRssBytes": 70782976,
+          "stopped": null
+        },
+        {
+          "command": [
+            "node",
+            "--test",
+            "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+            "scripts/__tests__/e2e-shard.test.mjs"
+          ],
+          "exit": 0,
+          "seconds": 27.870940699998755,
+          "peakGroupRssBytes": 151633920,
+          "stopped": null
+        },
+        {
+          "command": [
+            "node",
+            "scripts/check-token-gates.mjs"
+          ],
+          "exit": 0,
+          "seconds": 0.6556684989773203,
+          "peakGroupRssBytes": 40669184,
+          "stopped": null
+        },
+        {
+          "command": [
+            "git",
+            "diff",
+            "--check"
+          ],
+          "exit": 0,
+          "seconds": 0.23246387299150229,
+          "peakGroupRssBytes": 9252864,
+          "stopped": null
+        }
+      ]
+    },
+    {
+      "label": "native-browser-handoff-server-typecheck-r499",
+      "scope": "Full server TypeScript after correcting actual document-column, non-null and chat-path fixture errors.",
+      "exit": 0,
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "--filter",
+            "@paperclipai/server",
+            "typecheck"
+          ],
+          "exit": 0,
+          "seconds": 122.11193819498294,
+          "peakGroupRssBytes": 6342406144,
+          "stopped": null
+        }
+      ]
+    },
+    {
+      "label": "workspace-browser-handoff-protected-typecheck-and-build-r502",
+      "scope": "Required recursive workspace typecheck and root build with temporary read-only protection; exact final source hashes and mtimes preserved.",
+      "exit": 0,
+      "steps": [
+        {
+          "command": [
+            "pnpm",
+            "--workspace-concurrency=1",
+            "-r",
+            "typecheck"
+          ],
+          "exit": 0,
+          "seconds": 283.90924155700486,
+          "peakGroupRssBytes": 6286307328,
+          "stopped": null
+        },
+        {
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "exit": 0,
+          "seconds": 184.51672259400948,
+          "peakGroupRssBytes": 6374862848,
+          "stopped": null
+        }
+      ]
+    },
+    {
+      "label": "native-browser-cohort-and-handoff-prompt-r494",
+      "exit": 0,
+      "seconds": 26.026613572001224,
+      "scope": "Seven selected source/prompt/cohort checks only."
+    },
+    {
+      "label": "native-browser-handoff-static-and-ui-r491",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Syntax passed; Node routing failed because the new governed-handoff file was absent from the canonical dispatcher and its expected inventory was not sorted. Corrected before r492/r497."
+    },
+    {
+      "label": "workspace-browser-handoff-typecheck-and-build-r498",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Workspace TypeScript failed on 15 fixture/helper type errors. The build command was not started. Corrected before r499/r502."
+    },
+    {
+      "label": "workspace-browser-handoff-typecheck-and-build-r500",
+      "scope": "Earlier unsuccessful iteration; not qualification.",
+      "reason": "Both commands exited zero, but the overall integrity check failed because two unchanged-content source files had changed mtimes. Not qualification. The Help generator idempotence fix and protected r502 check are recorded separately."
+    },
+    {
+      "label": "native-browser-cohort-and-handoff-prompt-r493",
+      "scope": "Earlier failed prompt iteration: three failures due to the directive changing the exact task/Task phrase. Four passed and 46 unselected. Original phrase restored before r494; the passing subset is not qualification."
+    }
+  ],
+  "boundary": "These receipts qualify only their exact recorded software source snapshots. Full pnpm test:run, actual managed Native SDK/browser execution, physical Host enforcement, paid-provider behavior, representative Human outcomes and full V10 acceptance remain pending. No requirement or migration-phase status, release, deployment or merge is promoted."
+}

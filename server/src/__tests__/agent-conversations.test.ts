@@ -1307,6 +1307,10 @@ describe("chat prompt policy", () => {
     expect(AGENT_CHAT_DIRECTIVE).toContain('payload.target to { type: "issue_document", key: "plan", revisionId: latestRevisionId }');
     expect(AGENT_CHAT_DIRECTIVE).toContain("ordinary conversation replies and draft planning do not need confirmation");
     expect(AGENT_CHAT_DIRECTIVE).toContain("In Ask mode, discuss the plan without creating or revising documents or approval cards");
+    expect(AGENT_CHAT_DIRECTIVE).toContain('status: "backlog"');
+    expect(AGENT_CHAT_DIRECTIVE).toContain("this chat-plan approval does not create or start a V10 execution plan");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("The Human must review each Task's scope, output, intended action, risk, and model/tool/time limits");
+    expect(AGENT_CHAT_DIRECTIVE).toContain("then move the Task to To do when ready to queue the assigned Agent");
   });
 
   it.each([true, false])("preserves rejected-plan changes in task markdown (includeDescription=%s)", (includeDescription) => {

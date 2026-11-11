@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { agentWakeupRequests, agents, createDb, environmentLeases, heartbeatRuns, issueComments, issues, nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationWorkerAttempts, runtimeSandboxBindings } from "@paperclipai/db";
+import { agentWakeupRequests, agents, createDb, environmentLeases, heartbeatRuns, issueComments, issueDocuments, issues, nativeRunFinalizations, nativeRunResults, orchestrationModelReservations, orchestrationWorkerAttempts, runtimeSandboxBindings } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { enableV5ForTest } from "../../__tests__/helpers/v5-fixtures.js";
 import { withManagedNativeHeartbeatFixture } from "../../__tests__/helpers/managed-native-heartbeat-fixture.js";
@@ -136,7 +137,7 @@ it("retains late Human comments across Native cleanup failure and promotes after
         expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
         completionContract: { objective: "Finish the Task and deliver the saved Human comments to a successor",
           requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["No accepted Human input is lost"] },
-        budgets: { maxModelCostMinor: 20, maxToolActions: 8 }, workers: [{ key: "writer", issueId: task.id }] });
+        budgets: { maxModelCostMinor: 20, maxToolActions: 8, maxRetries: 1 }, workers: [{ key: "writer", issueId: task.id }] });
       await planService.decide(actor, companyId, plan.id, { expectedVersion: plan.version,
         action: "start", rationale: "Current Human authorizes bounded Native handoff" });
       const firstWake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
@@ -177,8 +178,11 @@ it("retains late Human comments across Native cleanup failure and promotes after
         acceptedIds.push(response.body.id as string);
       }
       expect(acceptedIds.every(Boolean)).toBe(true);
-      const [reopenedByHumanComment] = await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id));
-      expect(reopenedByHumanComment?.status).toBe("todo");
+      const [taskAfterHumanComment] = await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id));
+      // This Task remains active under its original current-Human plan. A
+      // comment is continuation input; it does not imply the separate Todo
+      // transition that the board route requires an explicit move-to-Todo for.
+      expect(taskAfterHumanComment?.status).toBe("in_progress");
       const deferred = await waitFor(async () => db.select().from(agentWakeupRequests).where(and(
         eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
         eq(agentWakeupRequests.status, "deferred_issue_execution"),
@@ -227,6 +231,232 @@ it("retains late Human comments across Native cleanup failure and promotes after
       } finally {
         releaseFirstResponse();
         if (!settled) await bounded(heartbeat.drainActiveRunExecutions(), "failure_cleanup_drain", 180_000).catch(() => undefined);
+      }
+    },
+  });
+}, 300_000);
+
+it("holds a same-Task wake during real Native cleanup while admitting an unrelated Task", async () => {
+  let predecessorRunId = "", predecessorIssueId = "", unrelatedIssueId = "";
+  let releaseFirstResponse!: () => void, firstResponseStarted!: () => void;
+  const firstResponseGate = new Promise<void>(resolve => { releaseFirstResponse = resolve; });
+  const firstResponseStartedGate = new Promise<void>(resolve => { firstResponseStarted = resolve; });
+  let releaseFinalizer!: () => void, actualStopReached!: () => void;
+  const finalizerGate = new Promise<void>(resolve => { releaseFinalizer = resolve; });
+  const actualStopGate = new Promise<void>(resolve => { actualStopReached = resolve; });
+  let unrelatedProviderStarted!: () => void;
+  const unrelatedProviderGate = new Promise<void>(resolve => { unrelatedProviderStarted = resolve; });
+  let heldFirstResponse = false, heldFinalizer = false, successorCommentSeen = false;
+  let sameTaskCommentId = "", sameTaskCommentBody = "", successorRunId = "";
+  let successorProviderFinished!: () => void;
+  const successorProviderFinishedGate = new Promise<void>(resolve => { successorProviderFinished = resolve; });
+
+  await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    schedulerMode: "concurrent",
+    afterManagedSandboxStopReceipt: async ({ scope, receipt }) => {
+      if (scope.runId !== predecessorRunId || heldFinalizer) return;
+      heldFinalizer = true;
+      const [runAtStop] = await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, scope.companyId), eq(heartbeatRuns.id, scope.runId)));
+      expect(runAtStop).toMatchObject({ runtimeMode: "native", status: "succeeded", nativePhase: "committed" });
+      const [leaseAtStop] = await db.select().from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, scope.companyId), eq(environmentLeases.id, scope.leaseId),
+        eq(environmentLeases.heartbeatRunId, scope.runId)));
+      expect(leaseAtStop).toBeTruthy();
+      expect(leaseAtStop?.releasedAt).toBeNull();
+      expect(await verifyNativeCleanupRuntimeState(db, scope, receipt)).toMatchObject({
+        state: "stopped", runId: scope.runId, leaseId: scope.leaseId,
+      });
+      actualStopReached();
+      // Keep the real executor inside finalization after the signed Host Stop;
+      // no persisted run or cleanup receipt is manufactured by the fixture.
+      await bounded(finalizerGate, "predecessor_finalizer_hold", 180_000);
+    },
+    providerReply: ({ body, callIndex, execution, issueId, runId }) => {
+      if (issueId === unrelatedIssueId && callIndex === 1) unrelatedProviderStarted();
+      const sameTaskSuccessor = issueId === predecessorIssueId && runId !== predecessorRunId && heldFinalizer;
+      const id = sameTaskSuccessor ? "same-task-successor" : issueId === predecessorIssueId ? "predecessor" : "unrelated";
+      if (sameTaskSuccessor && callIndex === 1) {
+        successorRunId = runId;
+        expect(JSON.stringify(body)).toContain(sameTaskCommentBody);
+        successorCommentSeen = true;
+        return finish(body, execution, "cleanup-successor-finish");
+      }
+      if (sameTaskSuccessor && callIndex === 2) {
+        successorProviderFinished();
+        return { stop_reason: "end_turn", content: [{ type: "text", text: "Finished." }] };
+      }
+      if (callIndex === 1) return toolUse(body, "write_document", `${id}-output`, {
+        idempotencyKey: randomUUID(), key: "result", title: `${id} actual Native result`,
+        body: `Actual managed Native result for ${id} Task.`, baseRevisionId: null });
+      if (callIndex === 2) return finish(body, execution, `${id}-finish`);
+      if (callIndex === 3) return { stop_reason: "end_turn", content: [{ type: "text", text: "Finished." }] };
+      throw new Error(`managed_native_cleanup_admission_unexpected_call_${id}_${callIndex}`);
+    },
+    beforeProviderResponse: async ({ run, issueId }) => {
+      if (issueId !== predecessorIssueId || heldFirstResponse) return;
+      predecessorRunId = run.id;
+      heldFirstResponse = true;
+      firstResponseStarted();
+      await bounded(firstResponseGate, "predecessor_provider_response", 180_000);
+    },
+    driveScheduler: async ({ actor, companyId, agentId, heartbeat, humanApi, closeManagedAgentHostForRun }) => {
+      if (!actor.userId) throw new Error("managed_native_cleanup_admission_current_human_missing");
+      await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
+        heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 2 } } }).where(eq(agents.id, agentId));
+      const orchestration = orchestrationService(db);
+      const createPlannedTask = async (title: string) => {
+        const task = await issueService(db).create(companyId, { title,
+          description: "Verify issue-scoped Native cleanup admission with a real bounded Task.", status: "todo",
+          responsibleUserId: actor.userId!, createdByUserId: actor.userId!, assigneeAgentId: agentId }, db, undefined,
+          { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+        const plan = await orchestration.create(actor, companyId, { issueId: task.id,
+          expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+          completionContract: { objective: `Complete ${title} with a bounded saved result`,
+            requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["No cross-Task ownership"] },
+          budgets: { maxModelCostMinor: 20, maxToolActions: 8, maxRetries: 1 }, workers: [{ key: "writer", issueId: task.id }] });
+        await orchestration.decide(actor, companyId, plan.id, { expectedVersion: plan.version,
+          action: "start", rationale: "Current Human authorizes this independent bounded Task" });
+        return { task, plan };
+      };
+      let settled = false;
+      try {
+      const predecessorSetup = await createPlannedTask("Native cleanup predecessor");
+      const predecessor = predecessorSetup.task;
+      predecessorIssueId = predecessor.id;
+      const predecessorWake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: actor.userId,
+        payload: { issueId: predecessor.id }, contextSnapshot: { issueId: predecessor.id } });
+      if (!predecessorWake) throw new Error("managed_native_cleanup_admission_predecessor_wake_missing");
+      await bounded(firstResponseStartedGate, "predecessor_dispatch");
+      releaseFirstResponse();
+      await bounded(actualStopGate, "predecessor_actual_signed_stop", 180_000);
+      const [predecessorLease] = await db.select().from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, predecessorWake.id)));
+      expect(predecessorLease).toBeTruthy();
+      const cleanupOwner = await readRunLeaseCleanup(db, { companyId, runId: predecessorWake.id, leaseId: predecessorLease!.id });
+      expect(await verifyNativeCleanupRuntimeState(db,
+        { companyId, runId: predecessorWake.id, leaseId: predecessorLease!.id },
+        predecessorLease!.metadata?.remoteExecutionTermination)).toMatchObject({
+          state: "stopped", runId: predecessorWake.id, leaseId: predecessorLease!.id,
+        });
+      expect(cleanupOwner).toMatchObject({ runId: predecessorWake.id, leaseId: predecessorLease!.id });
+      const [committedPredecessor] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, predecessorWake.id));
+      expect(committedPredecessor).toMatchObject({ runtimeMode: "native", status: "succeeded", nativePhase: "committed" });
+      const [predecessorResult] = await db.select({ id: issueDocuments.id }).from(issueDocuments).where(and(
+        eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, predecessor.id), eq(issueDocuments.key, "result")));
+      expect(predecessorResult).toBeTruthy();
+      const [stillOwned] = await db.select({ executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, predecessor.id));
+      expect(stillOwned?.executionRunId).toBe(predecessorWake.id);
+      sameTaskCommentBody = "Keep this accepted input for the same Task after cleanup.";
+      const humanComment = await request(humanApi.app).post(`/api/issues/${predecessor.id}/comments`)
+        .set("cookie", humanApi.humanCookie).set("Origin", "http://localhost")
+        .send({ body: sameTaskCommentBody, clientRequestId: randomUUID() });
+      expect(humanComment.status).toBe(201);
+      sameTaskCommentId = humanComment.body.id as string;
+      const [issueAfterComment] = await db.select({ status: issues.status }).from(issues).where(eq(issues.id, predecessor.id));
+      expect(issueAfterComment?.status).toBe("in_review");
+      const deferred = await waitFor(async () => db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+        eq(agentWakeupRequests.status, "deferred_issue_execution"),
+      )).then(rows => rows.find(wake => wake.payload?.issueId === predecessor.id) ?? null), "same_task_wake_deferred_during_cleanup");
+      expect((deferred.payload?._paperclipWakeContext as Record<string, unknown> | undefined)?.wakeCommentIds)
+        .toContain(sameTaskCommentId);
+      await heartbeat.resumeQueuedRuns();
+      const [stillDeferred] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, deferred.id));
+      expect(stillDeferred).toMatchObject({ status: "deferred_issue_execution", runId: null });
+      const predecessorRunsDuringCleanup = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.nativeIssueId, predecessor.id)));
+      expect(predecessorRunsDuringCleanup.map(run => run.id)).toEqual([predecessorWake.id]);
+
+      const unrelatedSetup = await createPlannedTask("Native cleanup unrelated Task");
+      const unrelated = unrelatedSetup.task;
+      unrelatedIssueId = unrelated.id;
+      const unrelatedWake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: actor.userId,
+        payload: { issueId: unrelated.id }, contextSnapshot: { issueId: unrelated.id } });
+      if (!unrelatedWake) throw new Error("managed_native_cleanup_admission_unrelated_wake_missing");
+      await bounded(unrelatedProviderGate, "unrelated_actual_provider_dispatch", 180_000);
+      const [unrelatedRun] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, unrelatedWake.id));
+      expect(unrelatedRun).toMatchObject({ runtimeMode: "native", nativeIssueId: unrelated.id, agentId });
+      const [unrelatedLease] = await db.select({ id: environmentLeases.id, heartbeatRunId: environmentLeases.heartbeatRunId })
+        .from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+          eq(environmentLeases.heartbeatRunId, unrelatedWake.id)));
+      expect(unrelatedLease).toMatchObject({ heartbeatRunId: unrelatedWake.id });
+      expect(unrelatedLease?.id).not.toBe(predecessorLease!.id);
+      const [predecessorStillOwned] = await db.select({ executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, predecessor.id));
+      expect(predecessorStillOwned?.executionRunId).toBe(predecessorWake.id);
+      expect(unrelatedRun?.id).not.toBe(predecessorWake.id);
+
+      releaseFinalizer();
+      const [predecessorAfter] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, predecessorWake.id));
+      expect(predecessorAfter).toMatchObject({ status: "succeeded", nativePhase: "committed" });
+      const predecessorLeaseAfter = await waitFor(async () => db.select().from(environmentLeases)
+        .where(eq(environmentLeases.id, predecessorLease!.id)).then(rows => rows[0]?.releasedAt ? rows[0] : null),
+        "predecessor_exact_lease_released");
+      expect(predecessorLeaseAfter).toMatchObject({ status: "released", cleanupStatus: "success", releasedAt: expect.any(Date) });
+      expect(await verifyNativeCleanupRuntimeState(db,
+        { companyId, runId: predecessorWake.id, leaseId: predecessorLease!.id },
+        predecessorLeaseAfter.metadata?.remoteExecutionTermination)).toMatchObject({
+          state: "stopped", runId: predecessorWake.id, leaseId: predecessorLease!.id,
+        });
+      const [predecessorFinalizationAfter] = await db.select().from(nativeRunFinalizations)
+        .where(eq(nativeRunFinalizations.runId, predecessorWake.id));
+      expect(predecessorFinalizationAfter).toMatchObject({ phase: "committed", leaseOwner: null });
+      const promotedWake = await waitFor(async () => db.select().from(agentWakeupRequests)
+        .where(eq(agentWakeupRequests.id, deferred.id)).then(rows => rows[0]?.runId ? rows[0] : null),
+        "same_task_comment_promoted_by_native_release");
+      expect(promotedWake.status).not.toBe("deferred_issue_execution");
+      expect(promotedWake.runId).not.toBe(predecessorWake.id);
+      expect((promotedWake.payload?._paperclipWakeContext as Record<string, unknown> | undefined)?.wakeCommentIds)
+        .toContain(sameTaskCommentId);
+      const successorRunIdFromWake = promotedWake.runId!;
+      const [ownerAtSuccessorAdmission] = await db.select({ executionRunId: issues.executionRunId })
+        .from(issues).where(eq(issues.id, predecessor.id));
+      expect(ownerAtSuccessorAdmission?.executionRunId).toBe(successorRunIdFromWake);
+      const successorRun = await waitFor(async () => {
+        const run = await heartbeat.getRun(successorRunIdFromWake);
+        if (run?.status === "failed") throw new Error(`cleanup_successor_preselection_failed:${run.errorCode ?? "unknown"}`);
+        return run?.runtimeMode === "native" && ["queued", "running", "succeeded"].includes(run.status) ? run : null;
+      }, "same_task_comment_successor_run");
+      expect(successorRun).toMatchObject({ runtimeMode: "native", nativeIssueId: predecessor.id });
+      await bounded(successorProviderFinishedGate, "same_task_successor_provider_consumed_comment", 90_000);
+      expect(successorRunId).toBe(successorRunIdFromWake);
+      expect(successorCommentSeen).toBe(true);
+      await bounded(heartbeat.drainActiveRunExecutions(), "predecessor_unrelated_and_same_task_successor_settled", 180_000);
+      const [successorAfter] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, successorRunIdFromWake));
+      const [unrelatedAfter] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, unrelatedWake.id));
+      expect(successorAfter).toMatchObject({ runtimeMode: "native", status: "succeeded", nativePhase: "committed" });
+      expect(unrelatedAfter).toMatchObject({ status: "succeeded", nativePhase: "committed" });
+      const successorProfile = successorAfter!.runnerProfileJson as Record<string, unknown>;
+      const successorReceipt = nativeRunInputSourceReceiptSchema.parse(successorProfile.nativeInputSourceReceipt);
+      const successorCommentSource = successorReceipt.bootstrap.inputs.find((source): source is Extract<NativePayloadSourceInput,
+        { kind: "comment" }> => source.kind === "comment" && source.commentId === sameTaskCommentId);
+      expect(successorCommentSource).toMatchObject({ kind: "comment", issueId: predecessor.id, commentId: sameTaskCommentId });
+      const [issueAfterSuccessor] = await db.select({ status: issues.status, executionRunId: issues.executionRunId })
+        .from(issues).where(eq(issues.id, predecessor.id));
+      expect(issueAfterSuccessor).toMatchObject({ status: "in_review", executionRunId: null });
+      const persistedPlan = await orchestration.get(actor, companyId, predecessorSetup.plan.id);
+      expect(persistedPlan).toMatchObject({ status: "running", retriesUsed: 1 });
+      const samePlanAttempts = persistedPlan.attempts.filter(attempt => attempt.workerId === persistedPlan.workers[0]?.id);
+      expect(samePlanAttempts.map(attempt => attempt.runId).sort()).toEqual([predecessorWake.id, successorRunIdFromWake].sort());
+      expect(samePlanAttempts).toHaveLength(2);
+      const [predecessorAttempt] = samePlanAttempts.filter(attempt => attempt.runId === predecessorWake.id);
+      const [successorAttempt] = samePlanAttempts.filter(attempt => attempt.runId === successorRunIdFromWake);
+      expect(predecessorAttempt?.status).toBe("succeeded");
+      expect(successorAttempt?.status).toBe("running");
+      const [unrelatedFinalIssueOwner] = await db.select({ executionRunId: issues.executionRunId })
+        .from(issues).where(eq(issues.id, unrelated.id));
+      expect(unrelatedFinalIssueOwner?.executionRunId).not.toBe(unrelatedWake.id);
+      await closeManagedAgentHostForRun(predecessorWake.id);
+      await closeManagedAgentHostForRun(unrelatedWake.id);
+      await closeManagedAgentHostForRun(successorRunIdFromWake);
+      settled = true;
+      } finally {
+        releaseFirstResponse();
+        releaseFinalizer();
+        if (!settled)
+          await bounded(heartbeat.drainActiveRunExecutions(), "cleanup_admission_failure_drain", 180_000).catch(() => undefined);
       }
     },
   });
@@ -313,6 +543,16 @@ it("delivers an accepted comment after explicit live Native operator interruptio
           return cancellation && typeof cancellation === "object" && "requestedAt" in cancellation &&
             typeof cancellation.requestedAt === "string" ? run : null;
         }), "durable_operator_interrupt_stop_intent");
+        const nativeStopAcknowledgement = await waitFor(async () => heartbeat.getRun(firstWake.id).then(run => {
+          const cancellation = run?.resultJson?.nativeCancellation;
+          return cancellation && typeof cancellation === "object" &&
+            (cancellation as Record<string, unknown>).scope === "run" &&
+            (cancellation as Record<string, unknown>).dispatchState === "acknowledged" &&
+            (cancellation as Record<string, unknown>).dispatched === true ? run : null;
+        }), "actual_native_session_interrupt_acknowledged", 90_000);
+        expect(nativeStopAcknowledgement.resultJson?.nativeCancellation).toMatchObject({
+          scope: "run", dispatchState: "acknowledged", dispatched: true,
+        });
         releasePreDispatch();
         const response = await bounded(interruptRequest, "actual_issue_comment_interrupt_route", 180_000);
         expect(response.status).toBe(200);
