@@ -16,6 +16,7 @@ import { authorizationService, issueReadSqlCondition, type AuthorizationActor } 
 import { handoffPlanContext } from "./handoff-plan-context.js";
 import { callCreateSkillTool } from "../skill-tools.js";
 import { callProjectTool } from "../project-tools.js";
+import { listManagedNativeProjectRepositories, type NativeProjectRepositoriesToolResultCapture } from "../native-project-output.js";
 import { createManagedNativeProjectOutput, managedNativeProjectArgumentsSchema, managedNativeProjectApiCallSchema,
   type NativeProjectCreateReceipt } from "../native-project-output.js";
 import { isConnectorTool, executeConnectorTool, type ConnectorAssignment } from "../connector-runtime.js";
@@ -559,6 +560,7 @@ export class PaperclipRunnerToolAuthority {
   }, options: {
     onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
     onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
+    onProjectRepositoriesToolResult?: (capture: NativeProjectRepositoriesToolResultCapture) => Promise<void>;
     onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
     onManagedProjectCreateToolResult?: (capture: NativeManagedProjectCreateCapture) => Promise<void>;
     onManagedStageCommentToolResult?: (capture: NativeManagedStageCommentCapture) => Promise<void>;
@@ -577,8 +579,10 @@ export class PaperclipRunnerToolAuthority {
     if (this.binding.nativeModelOutputCapture) {
       const capture = this.binding.nativeModelOutputCapture.value;
       const use = capture?.managedOpenCodeToolUse;
-      if (["write_document", "create_task", "create_project", "report_progress", MANAGED_NATIVE_REMEMBER_TOOL].includes(call.tool) && !use)
+      if (["write_document", "create_task", "create_project", "report_progress", "request_human_input", MANAGED_NATIVE_REMEMBER_TOOL].includes(call.tool) && !use)
         throw forbidden("Managed OpenCode output effect has no settled provider tool-use capture");
+      if (call.tool === "list_project_repositories" && !use)
+        throw forbidden("Managed repository discovery has no exact provider tool-use capture");
       const captureToolName = call.tool === MANAGED_NATIVE_REMEMBER_TOOL
         ? MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL : call.tool;
       if (use && (use.callId !== call.callId || use.toolName !== captureToolName ||
@@ -593,10 +597,13 @@ export class PaperclipRunnerToolAuthority {
       const nativeInputSource: { value: { sourceSet: NativePayloadSourceSet | null;
         observedSourceInputs: NativePayloadSourceInput[] } | null } = { value: null };
       const managedProjectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
+      const managedProjectRepositoriesCapture: { value: NativeProjectRepositoriesToolResultCapture | null } = { value: null };
       const managedStageCommentCapture: { value: NativeManagedStageCommentCapture | null } = { value: null };
       const result = await withOrchestrationNativeTool(this.db, this.binding, call,
         () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult,
-          source => { nativeInputSource.value = source; }, capture => { managedProjectCreateCapture.value = capture; }, capture => { managedStageCommentCapture.value = capture; }),
+          source => { nativeInputSource.value = source; }, capture => { managedProjectCreateCapture.value = capture; },
+          capture => { managedStageCommentCapture.value = capture; }, boundNativeCall,
+          capture => { managedProjectRepositoriesCapture.value = capture; }),
         call.tool === MANAGED_NATIVE_REMEMBER_TOOL ||
           (call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false)));
       if (call.tool === "read_document") {
@@ -664,6 +671,11 @@ export class PaperclipRunnerToolAuthority {
         await options.onManagedStageCommentToolResult(managedStageCommentCapture.value);
       if (managedProjectCreateCapture.value && options.onManagedProjectCreateToolResult)
         await options.onManagedProjectCreateToolResult(managedProjectCreateCapture.value);
+      if (call.tool === "list_project_repositories" && this.binding.nativeModelOutputCapture) {
+        if (!boundNativeCall || !managedProjectRepositoriesCapture.value || !options.onProjectRepositoriesToolResult)
+          throw forbidden("Managed repository listing has no exact result source capture owner");
+        await options.onProjectRepositoriesToolResult(managedProjectRepositoriesCapture.value);
+      }
       if (call.tool === "report_progress" && options.onManagedProgressCommentToolResult) {
         const capture = this.binding.nativeModelOutputCapture?.value;
         if (!capture || !boundNativeCall || !capture.managedOpenCodeToolUse ||
@@ -699,7 +711,9 @@ export class PaperclipRunnerToolAuthority {
     onNativeInputSource?: (source: { sourceSet: NativePayloadSourceSet | null;
       observedSourceInputs: NativePayloadSourceInput[] }) => void,
     onManagedProjectCreateCapture?: (capture: NativeManagedProjectCreateCapture) => void,
-    onManagedStageCommentCapture?: (capture: NativeManagedStageCommentCapture) => void): Promise<unknown> {
+    onManagedStageCommentCapture?: (capture: NativeManagedStageCommentCapture) => void,
+    nativeToolCall?: NativeBackendToolCallIdentity | null,
+    onManagedProjectRepositoriesCapture?: (capture: NativeProjectRepositoriesToolResultCapture) => void): Promise<unknown> {
     if (this.binding.nativeReview) {
       if (call.tool === "resolve_review") return this.#resolveReview(call.arguments, call.callId);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
@@ -861,8 +875,26 @@ export class PaperclipRunnerToolAuthority {
         if (!apiUrl || !token) throw new Error("Skill tool authentication is unavailable");
         return callCreateSkillTool({ arguments: input, apiUrl, token, companyId: this.binding.companyId });
       }
+      case "list_project_repositories": {
+        if (!this.binding.nativeModelOutputCapture) {
+          const apiUrl = this.binding.apiUrl ?? process.env.PAPERCLIP_API_URL;
+          const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId, context.actor.adapterType,
+            this.binding.runId, context.run.responsibleUserId);
+          if (!apiUrl || !token) throw new Error("Project tool authentication is unavailable");
+          return callProjectTool({ name: call.tool, arguments: input, apiUrl, token,
+            companyId: this.binding.companyId, issueId: this.binding.issueId, agentId: this.binding.agentId,
+            conversation: Boolean(context.issue.conversationAgentId) });
+        }
+        if (!nativeToolCall || nativeToolCall.tool !== call.tool || nativeToolCall.callId !== call.callId ||
+          !nativeToolCall.turnId || !onManagedProjectRepositoriesCapture)
+          throw forbidden("Managed repository discovery requires an exact provider tool-use capture");
+        const listed = await listManagedNativeProjectRepositories({ db: this.db, actor: reader,
+          companyId: this.binding.companyId, callId: call.callId, turnId: nativeToolCall.turnId,
+          arguments: input });
+        onManagedProjectRepositoriesCapture(listed.capture);
+        return listed.result;
+      }
       case "create_project":
-      case "list_project_repositories":
       case "list_projects": {
         // Managed OpenCode advertises this operation only when the exact
         // provider response capture is installed. Never silently fall back to
@@ -2865,6 +2897,61 @@ export class PaperclipRunnerToolAuthority {
     return { ...context, plan: bounded?.plan ?? null };
   }
 
+  async #assertQuestionHumanCurrent(tx: Db, context: { run: typeof heartbeatRuns.$inferSelect }): Promise<void> {
+    const responsibleUserId = context.run.responsibleUserId;
+    if (!responsibleUserId) throw forbidden("A task question requires its current responsible Human");
+    const [membership] = await tx.select({ principalId: companyMemberships.principalId })
+      .from(companyMemberships).where(and(eq(companyMemberships.companyId, this.binding.companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, responsibleUserId),
+        eq(companyMemberships.status, "active"))).limit(1).for("share", { noWait: true });
+    const [erasing] = await tx.select({ id: accountDeletionOperations.id }).from(accountDeletionOperations)
+      .where(eq(accountDeletionOperations.userId, responsibleUserId)).limit(1);
+    if (!membership || erasing) throw forbidden("The current responsible Human is no longer authorized");
+  }
+
+  async #assertManagedQuestionOutputCurrent(tx: Db, context: { run: typeof heartbeatRuns.$inferSelect; issue: typeof issues.$inferSelect },
+    input: Record<string, unknown>): Promise<void> {
+    const capture = this.binding.nativeModelOutputCapture?.value;
+    if (!this.binding.nativeModelOutputCapture) return;
+    const use = capture?.managedOpenCodeToolUse;
+    const callId = nativeBackendToolCallIdentity.getStore()?.callId;
+    if (!capture || !use || typeof callId !== "string" || use.callId !== callId ||
+      use.toolName !== "request_human_input" || use.argumentsHash !== nativeSha256(input) ||
+      capture.runId !== context.run.id || capture.dispatch.runId !== context.run.id ||
+      !["worker_model_dispatch", "conversation_model_dispatch"].includes(capture.dispatch.kind) ||
+      !capture.sourceSet.policy.runIds.includes(context.run.id))
+      throw forbidden("Managed Human question has no exact settled provider tool-use capture");
+    if (capture.dispatch.kind === "conversation_model_dispatch") {
+      if (capture.dispatch.issueId !== this.binding.issueId || capture.dispatch.agentId !== this.binding.agentId ||
+        capture.dispatch.conversationSessionGeneration !== context.issue.conversationSessionGeneration)
+        throw forbidden("Managed conversation question is outside its bound session generation");
+      const rows = await tx.select().from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, this.binding.companyId), eq(toolInvocations.runId, this.binding.runId),
+        eq(toolInvocations.issueId, this.binding.issueId), eq(toolInvocations.agentId, this.binding.agentId),
+        eq(toolInvocations.idempotencyKey, `aw-native-tool:${this.binding.runId}:${callId}`),
+        eq(toolInvocations.toolName, "request_human_input")));
+      if (rows.length) {
+        if (rows.length !== 1 || rows[0]!.status !== "executing" || rows[0]!.argumentsHash !== nativeSha256(input) ||
+          !await assertNativeToolPlanCurrent(tx, this.binding, true))
+          throw forbidden("Managed planned conversation question has no exact budgeted tool invocation");
+      } else {
+        await assertNativeConversationToolNoPlanScope(tx, this.binding);
+      }
+    } else {
+      const rows = await tx.select().from(toolInvocations).where(and(
+        eq(toolInvocations.companyId, this.binding.companyId), eq(toolInvocations.runId, this.binding.runId),
+        eq(toolInvocations.issueId, this.binding.issueId), eq(toolInvocations.agentId, this.binding.agentId),
+        eq(toolInvocations.idempotencyKey, `aw-native-tool:${this.binding.runId}:${callId}`),
+        eq(toolInvocations.toolName, "request_human_input")));
+      if (rows.length !== 1 || rows[0]!.status !== "executing" || rows[0]!.argumentsHash !== nativeSha256(input) ||
+        !await assertNativeToolPlanCurrent(tx, this.binding, true))
+        throw forbidden("Managed worker question has no exact budgeted tool invocation");
+    }
+    await assertNativeModelOutputCaptureCurrent(tx, this.binding.companyId, this.binding.issueId, capture,
+      "request_human_input", { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+        agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId ?? undefined });
+  }
+
   async #requestHumanInput(input: Record<string, unknown>, identityContextId: string | null): Promise<unknown> {
     if (input.resolverPolicy !== undefined && input.resolverPolicy !== "human_only")
       throw new Error("paperclip_runner_interaction_resolver_policy_invalid");
@@ -2888,6 +2975,8 @@ export class PaperclipRunnerToolAuthority {
       idempotencyKey,
       input,
       async (tx, context) => {
+        await this.#assertQuestionHumanCurrent(tx as unknown as Db, context);
+        await this.#assertManagedQuestionOutputCurrent(tx as unknown as Db, context, input);
         const suppliedPayload = record(input.payload);
         const targetRevisionId = nullableProviderId(input.targetRevisionId);
         const suppliedTarget = record(suppliedPayload.target);
@@ -2959,6 +3048,10 @@ export class PaperclipRunnerToolAuthority {
         publication = activity.publication;
         return { interaction, disposition: "applied" };
       },
+      { beforeReceiptReplay: async (tx, context) => {
+        await this.#assertQuestionHumanCurrent(tx, context);
+        await this.#assertManagedQuestionOutputCurrent(tx, context, input);
+      } },
     );
     if (publication) publishActivity(publication);
     return result;

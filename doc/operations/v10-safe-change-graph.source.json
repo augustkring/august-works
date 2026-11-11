@@ -21,14 +21,14 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2040,
+    "sourceDeltaPathCount": 2043,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14532,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys."
+    "fullDiffPathCount": 14597,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81."
   },
   "requirementsCrosswalk": [
     {
@@ -16813,6 +16813,12 @@
           "sha256": "70d691d3b68528c3af6fdc0f41143d557ca72a81eb26c3ad7c4a7de79c4a1527"
         },
         {
+          "path": "packages/paperclip-runner/spec/paperclip-agent-operation-groups.md",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "480b61712fa1cb48301095f97d220f2ba897e78c612e24a6a7719661a54b89d1"
+        },
+        {
           "path": "packages/paperclip-runner/src/backends/codex-native-backend.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -17395,6 +17401,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/services/native-owner-release.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/services/native-runtime-selection-lock.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -17531,6 +17543,12 @@
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "1b7dad29b6825741f0280df3c6e028fa6d276fb186c35807c018e120b334898a"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-managed-question-owner.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
         },
         {
           "path": "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
@@ -17910,6 +17928,7 @@
         "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
+        "packages/paperclip-runner/spec/paperclip-agent-operation-groups.md",
         "packages/paperclip-runner/src/backends/codex-native-backend.ts",
         "packages/paperclip-runner/src/backends/native-backend-factory.test.ts",
         "packages/paperclip-runner/src/backends/native-backend-factory.ts",
@@ -18007,6 +18026,7 @@
         "server/src/services/legacy-execution-recovery.ts",
         "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
         "server/src/services/native-opencode-conformance.ts",
+        "server/src/services/native-owner-release.ts",
         "server/src/services/native-runtime-selection-lock.ts",
         "server/src/services/native-runtime/accepted-plan-review-source.ts",
         "server/src/services/native-runtime/aw-text-draft-backend.ts",
@@ -18030,6 +18050,7 @@
         "server/src/services/native-runtime/native-finalization-error-diagnostic.ts",
         "server/src/services/native-runtime/native-finalization-reconciler.ts",
         "server/src/services/native-runtime/native-interaction-bridge.ts",
+        "server/src/services/native-runtime/native-managed-question-owner.integration.test.ts",
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
         "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
@@ -18124,6 +18145,7 @@
         "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
+        "packages/paperclip-runner/spec/paperclip-agent-operation-groups.md",
         "packages/paperclip-runner/src/backends/codex-native-backend.ts",
         "packages/paperclip-runner/src/backends/native-backend-factory.test.ts",
         "packages/paperclip-runner/src/backends/native-backend-factory.ts",
@@ -18221,6 +18243,7 @@
         "server/src/services/legacy-execution-recovery.ts",
         "server/src/services/native-opencode-conformance-bootstrap-order.test.ts",
         "server/src/services/native-opencode-conformance.ts",
+        "server/src/services/native-owner-release.ts",
         "server/src/services/native-runtime-selection-lock.ts",
         "server/src/services/native-runtime/accepted-plan-review-source.ts",
         "server/src/services/native-runtime/aw-text-draft-backend.ts",
@@ -18244,6 +18267,7 @@
         "server/src/services/native-runtime/native-finalization-error-diagnostic.ts",
         "server/src/services/native-runtime/native-finalization-reconciler.ts",
         "server/src/services/native-runtime/native-interaction-bridge.ts",
+        "server/src/services/native-runtime/native-managed-question-owner.integration.test.ts",
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
         "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
@@ -25725,7 +25749,7 @@
       "sourceReviewBoundary": "Candidate source inventory derived from branch diff and V10 register paths. It is not a behavior audit, test receipt, phase approval, or release claim."
     }
   ],
-  "sourceAfterGeneration": "Complete staged source inventory against base81, including the 28 frozen source paths and their recorded software-evidence checkpoint; source hashes do not promote historical requirement or migration-phase qualification.",
+  "sourceAfterGeneration": "Complete staged source inventory against base81, including 24 frozen source paths for this checkpoint and their bounded software-evidence receipts; source hashes do not promote historical requirement or migration-phase qualification.",
   "crosswalkLinkageBasis": "Only currentAssessment.sourceOwners, currentAssessment.scopedEvidence[*].paths, and explicit sourcePath fields are treated as requirement-to-source links. Nested generic path fields, review pins, and human reference strings are excluded. Links remain traceability only and do not close acceptance.",
   "currentSourceRecovery": {
     "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

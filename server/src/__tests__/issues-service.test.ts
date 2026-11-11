@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { projectService } from "../services/projects.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
@@ -18,9 +19,11 @@ import {
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   documentRevisions,
   documents,
+  environmentLeases,
   environments,
   executionWorkspaces,
   goals,
+  heartbeatRunEvents,
   heartbeatRuns,
   instanceSettings,
   issueComments,
@@ -51,6 +54,7 @@ import {
   deriveIssueCommentRunLogAttribution,
   ISSUE_LIST_MAX_LIMIT,
   issueService,
+  runWorkspaceIsFinalized,
   type NativeTaskSourceCapture,
 } from "../services/issues.ts";
 import {
@@ -60,7 +64,8 @@ import {
 } from "../services/execution-workspace-policy.ts";
 import { buildAgentMentionHref, buildProjectMentionHref, MAX_ISSUE_REQUEST_DEPTH, type IssueWorkMode } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
-import { getIssueExecutionContext } from "../services/heartbeat.js";
+import { getIssueExecutionContext, persistHeartbeatRunProcessMetadata } from "../services/heartbeat.js";
+import { recordNativeLocalProcessStopAfterExit } from "../services/native-local-process-stop.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -6997,11 +7002,14 @@ describeEmbeddedPostgres("issueService.assertCheckoutOwner stale checkout adopti
   }, 20_000);
 
   afterEach(async () => {
+    await db.delete(workspaceOperations);
+    await db.delete(environmentLeases);
     await db.delete(issueComments);
     await db.delete(issueRelations);
     await db.delete(issueInboxArchives);
     await db.delete(activityLog);
     await db.delete(issues);
+    await db.delete(heartbeatRunEvents);
     await db.delete(heartbeatRuns);
     await db.delete(executionWorkspaces);
     await db.delete(projectWorkspaces);
@@ -7015,6 +7023,32 @@ describeEmbeddedPostgres("issueService.assertCheckoutOwner stale checkout adopti
   afterAll(async () => {
     await tempDb?.cleanup();
   });
+
+
+  async function recordSettledNativeLocalOwner(runId: string, companyId: string) {
+    const child = spawn(process.execPath, ["-e", "setTimeout(() => process.exit(0), 100)"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    if (!child.pid) throw new Error("Native owner proof child did not expose a PID");
+    const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, runId, {
+      pid: child.pid,
+      processGroupId: child.pid,
+      startedAt: new Date().toISOString(),
+    });
+    await db.insert(environmentLeases).values({
+      companyId,
+      heartbeatRunId: runId,
+      provider: "local",
+      status: "active",
+      leasePolicy: "ephemeral",
+    });
+    await closed;
+    await db.update(environmentLeases).set({ status: "released", releasedAt: new Date(), cleanupStatus: "success" })
+      .where(eq(environmentLeases.heartbeatRunId, runId));
+    expect(await recordNativeLocalProcessStopAfterExit(db, companyId, runId)).toBe(true);
+  }
 
   async function seedOwnershipIssue(params: {
     checkoutStatus: "running" | "failed" | "timed_out";
@@ -7207,6 +7241,47 @@ describeEmbeddedPostgres("issueService.assertCheckoutOwner stale checkout adopti
       checkoutRunId: seeded.actorRunId,
       executionRunId: seeded.actorRunId,
     });
+  });
+
+
+
+  it("does not adopt a terminal Native checkout while its physical cleanup is unknown", async () => {
+    const seeded = await seedOwnershipIssue({ checkoutStatus: "failed" });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: seeded.issueId,
+      contextSnapshot: { issueId: seeded.issueId }, nativeProcessCleanupPending: null })
+      .where(eq(heartbeatRuns.id, seeded.staleRunId));
+
+    await expect(svc.assertCheckoutOwner(seeded.issueId, seeded.actorAgentId, seeded.actorRunId))
+      .rejects.toMatchObject({ status: 409 });
+    expect((await db.select({ checkoutRunId: issues.checkoutRunId, executionRunId: issues.executionRunId })
+      .from(issues).where(eq(issues.id, seeded.issueId)))[0])
+      .toMatchObject({ checkoutRunId: seeded.staleRunId, executionRunId: seeded.staleRunId });
+
+    await recordSettledNativeLocalOwner(seeded.staleRunId, (await db.select({ companyId: issues.companyId })
+      .from(issues).where(eq(issues.id, seeded.issueId)))[0]!.companyId);
+    const adopted = await svc.assertCheckoutOwner(seeded.issueId, seeded.actorAgentId, seeded.actorRunId);
+    expect(adopted.checkoutRunId).toBe(seeded.actorRunId);
+    expect(adopted.executionRunId).toBe(seeded.actorRunId);
+  });
+
+  it("keeps Native workspace finalize in flight until canonical local Stop proof exists", async () => {
+    const seeded = await seedOwnershipIssue({ checkoutStatus: "failed" });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: seeded.issueId,
+      contextSnapshot: { issueId: seeded.issueId }, nativeProcessCleanupPending: null })
+      .where(eq(heartbeatRuns.id, seeded.staleRunId));
+    const projectId = randomUUID();
+    const executionWorkspaceId = randomUUID();
+    const companyId = (await db.select({ companyId: issues.companyId }).from(issues)
+      .where(eq(issues.id, seeded.issueId)))[0]!.companyId;
+    await db.insert(projects).values({ id: projectId, companyId, name: "Owner proof", visibility: "private" });
+    await db.insert(executionWorkspaces).values({ id: executionWorkspaceId, companyId, projectId,
+      sourceIssueId: seeded.issueId, mode: "task", strategyType: "branch", name: "Owner proof" });
+    await db.insert(workspaceOperations).values({ companyId, executionWorkspaceId, heartbeatRunId: seeded.staleRunId,
+      issueId: seeded.issueId, phase: "workspace_finalize", status: "running" });
+
+    expect(await runWorkspaceIsFinalized(db, companyId, executionWorkspaceId, seeded.staleRunId)).toBe(false);
+    await recordSettledNativeLocalOwner(seeded.staleRunId, companyId);
+    expect(await runWorkspaceIsFinalized(db, companyId, executionWorkspaceId, seeded.staleRunId)).toBe(true);
   });
 
 });

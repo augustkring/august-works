@@ -1,6 +1,7 @@
 import { assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet, captureNativeBlockedHumanInteraction,
   NATIVE_BLOCKED_INTERACTION_READ_TOOLS } from "../native-direct-input.js";
 import { assertNativeConversationToolNoPlanScope } from "../orchestration/native-tool-boundary.js";
+import { runnerApiOperation } from "./runner-api-catalog.js";
 import { nativeStageCommentApiCallSchema, nativeStageCommentApiEligible, nativeStageCommentApiDecisionCurrent, nativeStageCommentApiToolDefinition, readNativeManagedStageCommentCapture, type NativeManagedStageCommentCapture } from "../native-stage-comment-api.js";
 import { configuredNativeProviderPackInstallRoot, NATIVE_FIXED_ARTIFACT_CHECKSUM_SCRIPT, NATIVE_SELECTED_PROVIDER_PACK_DISCOVERY_SCRIPT } from "./native-artifact-preparation.js";
 import { REMOTE_PROVIDER_PACK_SCHEMA, REMOTE_PROVIDER_PACK_PINS, REMOTE_PROVIDER_PACK_PROFILE_DIGESTS, REMOTE_PROVIDER_PACK_ARTIFACT_PATHS } from "./native-artifact-preparation.js";
@@ -122,6 +123,7 @@ import {
   type RunnerProcessHandle,
   type RunnerProcessLaunchSpec,
   type NativeSessionGoalControl,
+  paperclipSemanticAction,
 } from "../../vendor/paperclip-runner/index.js";
 import type { AdapterExecutionTarget } from "@paperclipai/adapter-utils/execution-target";
 import { createNativeSshCommandRunner } from "./native-ssh-command-runner.js";
@@ -181,7 +183,8 @@ import { assembleNativeContextRead, assertNativeContextReadSourceSetCurrent, ass
 import { canActorReadIssuePrivacy, type AuthorizationActor } from "../authorization.js";
 import { assertNativeManagedProjectCreateReceiptCurrentInTransaction, managedNativeProjectArgumentsJsonSchema,
   managedNativeProjectArgumentsSchema, managedNativeProjectApiBodyJsonSchema, managedNativeProjectApiCallSchema,
-  type NativeProjectCreateReceipt } from "../native-project-output.js";
+  assertManagedNativeProjectRepositoriesAuthorizationCurrent, revalidateManagedNativeProjectRepositoriesCredentialReach,
+  type NativeProjectRepositoriesToolResultCapture, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity, type NativeDocumentToolResultSource,
   type NativeInputToolResultSource, type NativeProjectToolResultSource,
   type NativeManagedProjectCreateCapture } from "./paperclip-runner-tool-authority.js";
@@ -1559,7 +1562,8 @@ class SessionToolAuthorityEpoch {
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
     private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
-    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture } }) => Promise<void>,
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "request_human_input" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric" | "list_project_repositories"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectRepositories?: NativeProjectRepositoriesToolResultCapture; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture } }) => Promise<void>,
+
     private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null },
     private readonly serializeManagedOperation?: <T>(operation: () => Promise<T>) => Promise<T>) {
     this.runId = runId;
@@ -1636,7 +1640,8 @@ class SessionToolAuthorityEpoch {
           managedResultCallbackPresent: typeof this.onManagedOpenCodeToolResult === "function",
         }));
       const argumentsHash = nativeSha256(call.arguments);
-      if (this.onManagedOpenCodeToolResult && (call.tool === "call_api" || call.tool === "create_project" || call.tool === "report_progress" || call.tool === "get_task_context" ||
+      if (this.onManagedOpenCodeToolResult && (call.tool === "call_api" || call.tool === "create_project" || call.tool === "report_progress" || call.tool === "request_human_input" || call.tool === "list_project_repositories" || call.tool === "get_task_context" ||
+
         call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric") && !call.turnId)
         throw new Error("managed_opencode_tool_call_source_binding_invalid");
       if (call.turnId) {
@@ -1650,6 +1655,7 @@ class SessionToolAuthorityEpoch {
       }
       markPhase("dispatch_binding");
       const projectReadCapture: { value: NativeProjectToolResultSource | null } = { value: null };
+      const projectRepositoriesCapture: { value: NativeProjectRepositoriesToolResultCapture | null } = { value: null };
       const projectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
       const stageCommentCapture: { value: NativeManagedStageCommentCapture | null } = { value: null };
       const progressCommentCapture: { value: { callId: string; argumentsHash: string; resultDigest: string;
@@ -1662,6 +1668,7 @@ class SessionToolAuthorityEpoch {
             projectReadCapture.value = source;
             await this.onProjectToolResult?.(source);
           },
+          onProjectRepositoriesToolResult: async capture => { projectRepositoriesCapture.value = capture; },
           onNativeInputToolResult: this.onNativeInputToolResult,
           onManagedProjectCreateToolResult: async capture => { projectCreateCapture.value = capture; },
           onManagedStageCommentToolResult: async capture => { stageCommentCapture.value = capture; },
@@ -1675,14 +1682,16 @@ class SessionToolAuthorityEpoch {
       }
       markPhase("authority_effect");
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" || call.tool === "report_progress" ||
-        call.tool === "create_task" || call.tool === "self_remember" || call.tool === "read_context" ||
+        call.tool === "create_task" || call.tool === "self_remember" || call.tool === "request_human_input" || call.tool === "read_context" || call.tool === "list_project_repositories" ||
+
         call.tool === "get_task_context" || call.tool === "get_task_history" || call.tool === "read_chat_attachment" || call.tool === "query_business_metric")) {
         if (toolResultDiagnostics && call.tool === "create_task")
           console.error("managed_create_task_result_callback_invoked", JSON.stringify({ turnIdPresent: true }));
         try {
           await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash, result,
             ...(call.tool === "read_context" && this.managedContextReadCapture?.value ? { contextRead: this.managedContextReadCapture.value } : {}),
-            ...(progressCommentCapture.value ? { progressComment: progressCommentCapture.value } : {}) });
+            ...(progressCommentCapture.value ? { progressComment: progressCommentCapture.value } : {}),
+            ...(projectRepositoriesCapture.value ? { projectRepositories: projectRepositoriesCapture.value } : {}) });
         } catch (error) {
           reportContextToolFailure("managed_get_task_context_result_capture_failure_test_facts", error);
           reportCreateTaskFailure("managed_create_task_result_callback_failure_test_facts", error);
@@ -8471,10 +8480,12 @@ export async function recordNativeToolCallDispatchAssociation(input: Parameters<
 
 async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; turnId: string; callId: string; argumentsHash: string;
-  tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "read_context" | "call_api" |
-    "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; result: unknown;
+  tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "request_human_input" | "read_context" | "call_api" |
+    "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric" | "list_project_repositories"; result: unknown;
+
   contextRead?: NativeContextReadBinding;
   projectRead?: NativeProjectToolResultSource;
+  projectRepositories?: NativeProjectRepositoriesToolResultCapture;
   stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture;
   progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string;
     outputCapture: NativeModelOutputCapture };
@@ -8494,7 +8505,14 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
     }
     diagnosticPhase = next;
   };
+  const questionOutputCapture = input.tool === "request_human_input" ? input.outputCapture ?? null : null;
+  if (input.tool === "request_human_input" && (!questionOutputCapture ||
+    questionOutputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
+    questionOutputCapture.managedOpenCodeToolUse.toolName !== "request_human_input" ||
+    questionOutputCapture.managedOpenCodeToolUse.argumentsHash !== input.argumentsHash))
+    throw new Error("managed_opencode_tool_result_binding_invalid");
   const projectRead = input.tool === "call_api" ? input.projectRead : undefined;
+  const projectRepositories = input.tool === "list_project_repositories" ? input.projectRepositories : undefined;
   const stageComment = input.tool === "call_api" ? input.stageComment : undefined;
   const progressComment = input.tool === "report_progress" ? input.progressComment : undefined;
   if (stageComment && (input.projectRead || input.projectCreate || stageComment.callId !== input.callId ||
@@ -8529,6 +8547,18 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
   const digest = stageComment?.resultDigest ?? projectRead?.resultDigest ?? (projectCreate && input.tool === "call_api"
     ? nativeSha256({ ok: true, operationId: "call_api", callId: input.callId, result: input.result })
     : nativeSha256(input.result));
+  if (input.tool === "list_project_repositories") {
+    const use = input.outputCapture?.managedOpenCodeToolUse;
+    if (!projectRepositories || projectRepositories.callId !== input.callId || projectRepositories.turnId !== input.turnId ||
+      projectRepositories.argumentsHash !== input.argumentsHash || projectRepositories.resultDigest !== digest ||
+      !/^[0-9a-f]{64}$/.test(projectRepositories.resultDigest) ||
+      use?.callId !== input.callId || use.toolName !== input.tool || use.argumentsHash !== input.argumentsHash)
+      throw new Error("managed_opencode_tool_result_binding_invalid");
+    await revalidateManagedNativeProjectRepositoriesCredentialReach({ db: input.db,
+      actor: { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId,
+        runId: input.runId, onBehalfOfUserId: projectRepositories.responsibleUserId },
+      companyId: input.companyId, result: input.result, capture: projectRepositories });
+  } else if (input.projectRepositories) throw new Error("managed_opencode_tool_result_binding_invalid");
   try {
     await input.db.transaction(async tx => {
       markResultPhase("transaction_locks");
@@ -8552,6 +8582,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         value.callId === input.callId && value.turnId === input.turnId && value.tool === input.tool &&
         value.argumentsHash === input.argumentsHash) : [];
       let conversationNoPlanProgress = false;
+      let conversationNoPlanHumanInput = false;
+      let questionInteractionOwner: { status: string; sourceVersion: string; decisionSource: Extract<NativePayloadSourceInput, { kind: "interaction" }> | null } | null = null;
       if (progressComment) {
         const semanticReceipts = record(run?.resultJson).semanticToolReceipts;
         const receipts = Object.values(record(semanticReceipts)).map(record).filter(value => {
@@ -8607,6 +8639,74 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           throw new Error("managed_opencode_tool_result_binding_invalid");
         }
       }
+      if (input.tool === "request_human_input") {
+        if (!questionOutputCapture || !parsed.success || call.length !== 1 ||
+          questionOutputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
+          questionOutputCapture.managedOpenCodeToolUse.toolName !== input.tool ||
+          questionOutputCapture.managedOpenCodeToolUse.argumentsHash !== input.argumentsHash)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, input.companyId, input.issueId,
+          questionOutputCapture, "request_human_input", { type: "agent", source: "agent_jwt", companyId: input.companyId,
+            agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run?.responsibleUserId ?? undefined });
+        const receipts = Object.values(record(record(run?.resultJson).semanticToolReceipts)).map(record).filter(value => {
+          const dispatch = record(value.nativeInputDispatch);
+          return value.operationId === "request_human_input" && nativeSha256(value.input) === input.argumentsHash &&
+            isDeepStrictEqual(value.result, input.result) && dispatch.callId === input.callId && dispatch.turnId === input.turnId &&
+            dispatch.dispatchId === call[0]!.dispatchId && dispatch.eventSeq === call[0]!.eventSeq && dispatch.attempt === call[0]!.attempt;
+        });
+        const interactionResult = record(input.result);
+        const interaction = record(interactionResult.interaction);
+        const interactionId = typeof interaction.id === "string" ? interaction.id : "";
+        const [currentInteractionRow] = interactionId ? await tx.select({ row: issueThreadInteractions,
+          version: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` }).from(issueThreadInteractions).where(and(
+          eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, input.issueId),
+          eq(issueThreadInteractions.id, interactionId), eq(issueThreadInteractions.sourceRunId, input.runId),
+          eq(issueThreadInteractions.createdByAgentId, input.agentId))).for("share") : [];
+        const storedInteraction = currentInteractionRow?.row ?? null;
+        const rowVersion = currentInteractionRow?.version ?? null;
+        const questionOwner = interactionId ? await (await import("./native-interaction-bridge.js")).captureNativeManagedQuestionInteractionOwner({
+          db: tx as unknown as Db, companyId: input.companyId, issueId: input.issueId, runId: input.runId,
+          agentId: input.agentId, interactionId,
+          reader: { type: "agent", source: "agent_jwt", companyId: input.companyId, agentId: input.agentId,
+            runId: input.runId, onBehalfOfUserId: run?.responsibleUserId ?? undefined },
+        }) : null;
+        const immutableInteractionMatches = Boolean(storedInteraction && interaction.id === storedInteraction.id &&
+          interaction.kind === storedInteraction.kind && interaction.title === storedInteraction.title &&
+          interaction.summary === storedInteraction.summary && isDeepStrictEqual(interaction.payload, storedInteraction.payload) &&
+          interaction.idempotencyKey === storedInteraction.idempotencyKey &&
+          interaction.continuationPolicy === storedInteraction.continuationPolicy &&
+          interaction.sourceRunId === storedInteraction.sourceRunId && interaction.createdByAgentId === storedInteraction.createdByAgentId);
+        const stateMatches = questionOwner && storedInteraction && questionOwner.sourceVersion === rowVersion &&
+          ((questionOwner.status === "pending" && storedInteraction.status === "pending" &&
+            (storedInteraction.kind === "request_item_verdicts" || storedInteraction.result === null) && !storedInteraction.resolvedAt && !storedInteraction.resolvedByUserId &&
+            !storedInteraction.resolvedByAgentId && !storedInteraction.resolvedByRunId && questionOwner.decisionSource === null) ||
+           (questionOwner.status !== "pending" && storedInteraction.status === questionOwner.status &&
+            questionOwner.decisionSource?.sourceVersion === questionOwner.sourceVersion));
+        questionInteractionOwner = questionOwner;
+        if (receipts.length !== 1 || !run?.responsibleUserId || !storedInteraction || !immutableInteractionMatches || !stateMatches)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        if (questionOutputCapture.dispatch.kind === "conversation_model_dispatch") {
+          if (questionOutputCapture.dispatch.runId !== input.runId || questionOutputCapture.dispatch.agentId !== input.agentId ||
+            questionOutputCapture.dispatch.issueId !== input.issueId)
+            throw new Error("managed_opencode_tool_result_binding_invalid");
+          const priorInvocation = await tx.select().from(toolInvocations).where(and(
+            eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
+            eq(toolInvocations.issueId, input.issueId), eq(toolInvocations.agentId, input.agentId),
+            eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
+            eq(toolInvocations.toolName, "request_human_input")));
+          if (priorInvocation.length) {
+            if (priorInvocation.length !== 1 || priorInvocation[0]!.status !== "succeeded" ||
+              priorInvocation[0]!.argumentsHash !== input.argumentsHash || priorInvocation[0]!.resultHash !== digest)
+              throw new Error("managed_opencode_tool_result_binding_invalid");
+          } else {
+            await assertNativeConversationToolNoPlanScope(tx as unknown as Db, { companyId: input.companyId,
+              issueId: input.issueId, agentId: input.agentId, runId: input.runId });
+            conversationNoPlanHumanInput = true;
+          }
+        } else if (questionOutputCapture.dispatch.kind !== "worker_model_dispatch") {
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        }
+      }
       if (projectCreate && input.tool === "call_api") {
         const effect = projectCreate.apiEffect;
         if (!effect || effect.operationId !== "POST /api/companies/{companyId}/projects" || effect.method !== "POST" ||
@@ -8622,7 +8722,10 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       const nativeReadTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
         (input.tool === "read_chat_attachment" || input.tool === "query_business_metric") ? input.tool : null;
       const nullInvocationTool = input.tool === "call_api" || input.tool === "create_project" || nativeReadResultTool ||
-        (conversationNoPlanProgress && input.tool === "report_progress");
+        (conversationNoPlanProgress && input.tool === "report_progress") ||
+        (conversationNoPlanHumanInput && input.tool === "request_human_input") ||
+        (input.tool === "list_project_repositories" && input.outputCapture?.dispatch.kind === "conversation_model_dispatch");
+
       const [invocation] = nullInvocationTool ? [] : await tx.select().from(toolInvocations).where(and(
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
         eq(toolInvocations.agentId, input.agentId),
@@ -8735,6 +8838,56 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
         managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
         managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash);
+      const conversationQuestionBinding = conversationModelBindingSchema.safeParse(matchingModelCalls[0]!.conversationModelBinding);
+      const conversationQuestionCaptureMatchesCall = Boolean(input.tool === "request_human_input" && managedOutputCapture &&
+        managedOutputCapture.runId === input.runId && managedUse?.callId === input.callId &&
+        managedUse.toolName === input.tool && managedUse.argumentsHash === input.argumentsHash &&
+        managedUse.responseContentHash === matchingModelCalls[0]!.responseContentHash &&
+        matchingModelCalls[0]!.modelPurpose === "conversation_model" && conversationQuestionBinding.success &&
+        managedOutputCapture.dispatch.kind === "conversation_model_dispatch" &&
+        managedOutputCapture.dispatch.runId === input.runId && managedOutputCapture.dispatch.agentId === input.agentId &&
+        managedOutputCapture.dispatch.issueId === input.issueId &&
+        managedOutputCapture.dispatch.reservationId === matchingModelCalls[0]!.reservationId &&
+        managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
+        managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
+        managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash &&
+        managedOutputCapture.dispatch.conversationSessionGeneration === conversationQuestionBinding.data.conversationSessionGeneration &&
+        managedOutputCapture.dispatch.executionManifestId === conversationQuestionBinding.data.executionManifestId &&
+        managedOutputCapture.dispatch.executionManifestHash === conversationQuestionBinding.data.executionManifestHash);
+      // Repository discovery is a read and can use the exact no-plan Conversation dispatch.
+      const conversationRepositoryReadCaptureMatchesCall = Boolean(input.tool === "list_project_repositories" &&
+        managedOutputCapture && managedOutputCapture.runId === input.runId && managedUse?.callId === input.callId &&
+        managedUse.toolName === input.tool && managedUse.argumentsHash === input.argumentsHash &&
+        managedUse.responseContentHash === matchingModelCalls[0]!.responseContentHash &&
+        managedOutputCapture.dispatch.kind === "conversation_model_dispatch" &&
+        managedOutputCapture.dispatch.runId === input.runId && managedOutputCapture.dispatch.agentId === input.agentId &&
+        managedOutputCapture.dispatch.issueId === input.issueId &&
+        managedOutputCapture.dispatch.reservationId === matchingModelCalls[0]!.reservationId &&
+        managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
+        managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
+        managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash &&
+        matchingModelCalls[0]!.modelPurpose === "conversation_model" &&
+        record(matchingModelCalls[0]!.conversationModelBinding).issueId === input.issueId);
+      if (input.tool === "request_human_input" && !outputCaptureMatchesCall && !conversationQuestionCaptureMatchesCall)
+        throw new Error("managed_opencode_tool_result_binding_invalid");
+      if (input.tool === "list_project_repositories") {
+        const noPlanConversationRead = conversationRepositoryReadCaptureMatchesCall && invocation === undefined;
+        const invocationBackedWorkerRead = outputCaptureMatchesCall && Boolean(invocation) &&
+          managedOutputCapture?.dispatch.kind === "worker_model_dispatch";
+        if ((!noPlanConversationRead && !invocationBackedWorkerRead) || !projectRepositories || !run?.responsibleUserId ||
+          projectRepositories.responsibleUserId !== run.responsibleUserId || projectRepositories.callId !== input.callId ||
+          projectRepositories.turnId !== input.turnId || projectRepositories.argumentsHash !== input.argumentsHash ||
+          projectRepositories.resultDigest !== contentHash || !managedOutputCapture)
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        if (noPlanConversationRead)
+          await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, input.companyId, input.issueId,
+            managedOutputCapture, "list_project_repositories", { type: "agent", source: "agent_jwt", companyId: input.companyId,
+              agentId: input.agentId, runId: input.runId, onBehalfOfUserId: run.responsibleUserId });
+        await assertManagedNativeProjectRepositoriesAuthorizationCurrent(tx as unknown as Db, {
+          companyId: input.companyId, runId: input.runId, agentId: input.agentId, issueId: input.issueId,
+          responsibleUserId: run.responsibleUserId, capture: projectRepositories,
+        });
+      }
       if (stageComment) {
         if (!outputCaptureMatchesCall || !managedOutputCapture || !isDeepStrictEqual(stageComment.outputCapture,managedOutputCapture))
           throw new Error("managed_opencode_tool_result_binding_invalid");
@@ -9049,12 +9202,17 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         ...(returnedProjectSource ? { projectSource: returnedProjectSource } : {}),
         ...(stageComment ? {stageComment} : {}),
         ...(progressComment ? { progressComment } : {}),
+        ...(questionOutputCapture ? { outputCapture: questionOutputCapture } : {}),
+        ...(questionOutputCapture && input.tool === "request_human_input" ? { questionInteractionOwner } : {}),
         ...(projectCreateSourceSet ? { projectCreate: { receipt: projectCreate!.receipt,
           sourceSet: projectCreateSourceSet, workspaceSources: createdProjectWorkspaceSources,
           outputCapture: projectCreate!.outputCapture,
           ...(projectCreate!.apiEffect ? { apiEffect: projectCreate!.apiEffect } : {}) } } : {}),
         taskRef: createdTask ? { issueId: createdTask.id } : null,
-        ...(contextReadCapture ? { contextRead: contextReadCapture } : {}), managedOpenCode: true }];
+        ...(contextReadCapture ? { contextRead: contextReadCapture } : {}),
+        ...(projectRepositories ? { projectRepositories } : {}),
+        ...(input.tool === "list_project_repositories" && conversationRepositoryReadCaptureMatchesCall
+          ? { outputCapture: managedOutputCapture } : {}), managedOpenCode: true }];
       const { digest: _receiptDigest, ...body } = parsed.data;
       const createdProjectPolicy = projectCreateSourceSet && createdProjectSource ? {
         ...projectCreateSourceSet.policy,
@@ -9072,6 +9230,10 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
             policy: createdProjectPolicy,
             inputs: unionNativePayloadSourceInputs([[inputSource], projectCreateSourceSet.inputs,
               [createdProjectSource, ...createdProjectWorkspaceSources]]),
+          } : input.tool === "list_project_repositories" && conversationRepositoryReadCaptureMatchesCall && managedOutputCapture ? {
+            policy: managedOutputCapture.sourceSet.policy,
+            inputs: unionNativePayloadSourceInputs([[inputSource], [managedOutputCapture.dispatch],
+              managedOutputCapture.sourceSet.inputs]),
           } : input.tool === "read_context" && input.contextRead ? {
             policy: input.contextRead.sourceSet.policy,
             inputs: [inputSource, ...input.contextRead.sourceSet.inputs],
@@ -9182,6 +9344,9 @@ async function assertManagedOpenCodeToolCallCurrent(input: Parameters<typeof ren
     if (!managedNativeProjectArgumentsSchema.safeParse(input.arguments).success)
       throw new Error("managed_opencode_project_create_arguments_not_supported");
   }
+  if (input.tool === "list_project_repositories" && (!input.arguments || typeof input.arguments !== "object" ||
+    Array.isArray(input.arguments) || Object.keys(input.arguments).length !== 0))
+    throw new Error("managed_opencode_project_repository_arguments_not_supported");
   const matchedIntent = matchingCallId[0]!.intent;
   if (typeof matchedIntent.responseContentHash !== "string" || typeof matchedIntent.reservationId !== "string")
     throw new Error("managed_opencode_tool_call_response_receipt_missing");
@@ -11482,7 +11647,8 @@ async function executePaperclipNativeSessionWithinScope(
                 const managedProjectApiCreate = call.tool === "call_api" &&
                   (managedNativeProjectApiCallSchema.safeParse(call.arguments).success ||
                     nativeStageCommentApiCallSchema.safeParse(call.arguments).success);
-                if (managedOpenCodeOutputCaptureRef && (["write_document", "create_task", "create_project", "report_progress", "self_remember"].includes(call.tool) || managedProjectApiCreate)) {
+                if (managedOpenCodeOutputCaptureRef && (["write_document", "create_task", "create_project", "report_progress", "self_remember", "request_human_input", "list_project_repositories"].includes(call.tool) || managedProjectApiCreate)) {
+
                   if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
                   managedOpenCodeOutputCaptureRef.value = await prepareManagedOpenCodeOutputCapture({
                     db: input.db, runId, companyId: input.execution.binding.companyId,
@@ -13927,6 +14093,27 @@ async function assertNativeOpenCodeConformanceBackendAuthority(input: {
   });
 }
 
+type ManagedOpenCodeWorkMode = "standard" | "planning" | "ask" | "skill_test";
+
+function managedSemanticActionAllowedInMode(name: string, mode: ManagedOpenCodeWorkMode): boolean {
+  const action = paperclipSemanticAction(name);
+  return !action || action.allowedModes.includes(mode);
+}
+
+export function nativeManagedOpenCodeRequiredToolNames(mode: ManagedOpenCodeWorkMode, hasOutputCapture: boolean): string[] {
+  const expected = ["read_document", "write_document", "create_task"]
+    .filter(name => managedSemanticActionAllowedInMode(name, mode));
+  if (hasOutputCapture) expected.push("create_project", "self_remember", "read_context", "request_human_input");
+  return [...new Set(expected.filter(name => name === "read_context" || name === "self_remember"
+    ? name === "read_context" || mode === "standard" : managedSemanticActionAllowedInMode(name, mode)))];
+}
+
+export function nativeManagedCallApiOperationIds(mode: ManagedOpenCodeWorkMode, stageCommentAvailable = false): string[] {
+  const candidates = ["GET /api/projects/{id}", "POST /api/companies/{companyId}/projects",
+    ...(stageCommentAvailable && mode === "standard" ? ["POST /api/issues/{id}/comments"] : [])];
+  return candidates.filter(operationId => runnerApiOperation(operationId).allowedModes.includes(mode));
+}
+
 /** Production runnerd backend seam, exported so provider wiring can be regression tested. */
 export async function createRunnerdBackend(input: {
   db: Db;
@@ -13977,7 +14164,8 @@ export async function createRunnerdBackend(input: {
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
   onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
-  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture } }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "request_human_input" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric" | "list_project_repositories"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectRepositories?: NativeProjectRepositoriesToolResultCapture; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture } }) => Promise<void>;
+
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -14334,14 +14522,16 @@ async function createRunnerdBackendWithinSessionClaim(
     managedOpenCodeTools = [];
     managedOpenCodeDynamicTools = [];
   } else if (managedOpenCode) {
-    const stageCommentCatalog = input.conversationMode !== true && input.bootstrapSourceClosure?.sourceSet &&
+    const workMode = input.execution.task.workMode as ManagedOpenCodeWorkMode;
+    const stageCommentCatalog = workMode === "standard" && input.conversationMode !== true && input.bootstrapSourceClosure?.sourceSet &&
       await nativeStageCommentApiEligible(input.db,{...input.execution.binding,
         preparedSourceSet:input.bootstrapSourceClosure.sourceSet});
+    const requiredManagedTools = nativeManagedOpenCodeRequiredToolNames(workMode, Boolean(input.nativeModelOutputCapture));
     const allowedNames = new Set(nativeReview
       ? ["read_document", "read_context", "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
         "resolve_review", "paperclip_finish", "paperclip_block"]
-      : ["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context",
-        "report_progress", "call_api", "get_task_context", "get_task_history",
+      : ["read_document", "write_document", "create_task", "request_human_input", "create_project", "self_remember", "read_context",
+        "report_progress", "call_api", "list_project_repositories", "get_task_context", "get_task_history",
         "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
@@ -14349,28 +14539,38 @@ async function createRunnerdBackendWithinSessionClaim(
       for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
         if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
       }
-      if (!allowedNames.has(name) || (blockedHumanInteraction && !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) return [];
-      if (name === "create_project" && !input.nativeModelOutputCapture) return [];
+      if (!allowedNames.has(name) || (!nativeReview && name === "self_remember" && workMode !== "standard") ||
+        (!nativeReview && !managedSemanticActionAllowedInMode(name, workMode)) ||
+        (blockedHumanInteraction && !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) return [];
+      if ((name === "create_project" || name === "request_human_input" || name === "list_project_repositories") && !input.nativeModelOutputCapture) return [];
+
       const schema = structuredClone(raw);
       if (name === "call_api") {
         // Keep the existing Project GET and add only the exact existing Project
         // POST whose server owner verifies the managed call capture, signed
         // Native effect claim, current task source, and Human-bound Project
         // receipt. No other API operation becomes provider-visible.
-        schema.description = "Read one current Project, or create one private internal Project, through the existing authenticated API routes. Supported operations are exactly GET /api/projects/{id} and POST /api/companies/{companyId}/projects.";
+        const operationIds = nativeManagedCallApiOperationIds(workMode, Boolean(stageCommentCatalog));
+        schema.description = `Use only these authenticated API operations in ${workMode}: ${operationIds.join(", ")}.`;
+        const pathProperties: Record<string, unknown> = {};
+        if (operationIds.includes("GET /api/projects/{id}")) pathProperties.id = { type: "string", format: "uuid" };
+        if (operationIds.includes("POST /api/companies/{companyId}/projects")) pathProperties.companyId = { type: "string", format: "uuid" };
         schema.inputSchema = {
           type: "object",
           additionalProperties: false,
           properties: {
-            operationId: { type: "string", enum: [
-              "GET /api/projects/{id}", "POST /api/companies/{companyId}/projects",
-            ] },
+            operationId: { type: "string", enum: operationIds },
             pathParams: { type: "object", additionalProperties: false,
-              properties: { id: { type: "string", format: "uuid" }, companyId: { type: "string", format: "uuid" } } },
-            body: managedNativeProjectApiBodyJsonSchema(),
+              properties: pathProperties },
+            ...(operationIds.includes("POST /api/companies/{companyId}/projects")
+              ? { body: managedNativeProjectApiBodyJsonSchema() } : {}),
           },
           required: ["operationId", "pathParams"],
         };
+      }
+      if (name === "list_project_repositories") {
+        schema.description = "List the current accountable Human's authorized GitHub repositories for Project selection. The result contains repository IDs, names and HTTPS URLs only; listing does not grant access or create a Project.";
+        schema.inputSchema = { type: "object", properties: {}, required: [], additionalProperties: false };
       }
       if (name === "call_api" && stageCommentCatalog) {
         Object.assign(schema,nativeStageCommentApiToolDefinition(schema,input.execution.binding.issueId));
@@ -14405,9 +14605,7 @@ async function createRunnerdBackendWithinSessionClaim(
     }));
     const names = schemas.map((tool) => tool.name);
     if ((nativeReview && (!names.includes("read_document") || !names.includes("resolve_review"))) ||
-      (!nativeReview && !blockedHumanInteraction && (!names.includes("read_document") || !names.includes("write_document") || !names.includes("create_task") ||
-      (input.nativeModelOutputCapture && !names.includes("self_remember")) ||
-      (input.nativeModelOutputCapture && !names.includes("read_context")))) ||
+      (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !names.includes(name))) ||
       !names.includes("paperclip_finish") || !names.includes("paperclip_block") || new Set(names).size !== names.length)
       throw new Error("managed_opencode_source_profile_tools_incomplete");
     managedOpenCodeTools = schemas;
@@ -14418,10 +14616,7 @@ async function createRunnerdBackendWithinSessionClaim(
       allowedNames.has(String(tool.name)) && !["paperclip_finish", "paperclip_block"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
-      (!nativeReview && !blockedHumanInteraction && !["read_document", "write_document", "create_task"].every(name => resumeToolNames.includes(name))) ||
-      (!nativeReview && !blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("create_project")) ||
-      (!nativeReview && !blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("self_remember")) ||
-      (!nativeReview && !blockedHumanInteraction && input.nativeModelOutputCapture && !resumeToolNames.includes("read_context")) ||
+      (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !resumeToolNames.includes(name))) ||
       (blockedHumanInteraction && !nativeReview && resumeToolNames.some(name => !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) ||
       resumeToolNames.some(name => !allowedNames.has(name)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");

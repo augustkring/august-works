@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { activityLog, heartbeatRuns, projectWorkspaces, projects, type Db } from "@paperclipai/db";
+import { activityLog, companyMemberships, heartbeatRuns, projectWorkspaces, projects, type Db } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput,
   type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../errors.js";
@@ -117,6 +117,163 @@ export async function consumeManagedNativeProjectApiCapture(db: Db, input: {
     await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, nativeManagedProjectApiCaptures: captures } })
       .where(eq(heartbeatRuns.id, run.id));
     return { capture, body: parsedBody.data };
+  });
+}
+
+
+export type NativeProjectRepositoryAuthorizationWitness = {
+  repositoryId: string;
+  connectionId: string;
+  grantId: string | null;
+  authorizationVersion: string;
+};
+
+/** Exact safe result and server-side authorization witnesses for one managed
+ * repository-discovery tool call. Credential values and secret payloads never
+ * enter this capture or the provider result. */
+export type NativeProjectRepositoriesToolResultCapture = {
+  callId: string;
+  turnId: string;
+  argumentsHash: string;
+  resultDigest: string;
+  responsibleUserId: string;
+  /** Canonical safe DTO retained so historical source validation can rederive this read. */
+  result: { repositories: import("@paperclipai/shared").ProjectRepository[];
+    connectionCount: number; failedConnectionCount: number };
+  repositoryAuthorizationWitnesses: NativeProjectRepositoryAuthorizationWitness[];
+};
+
+const managedProjectRepositoryListingSchema = z.object({}).strict();
+export const managedNativeProjectRepositoriesResultSchema = z.object({
+  repositories: z.array(z.object({
+    id: z.string().regex(/^\d+$/),
+    fullName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]*\/(?!\.{1,2}$)[A-Za-z0-9_.-]+$/),
+    url: z.string().url(),
+    private: z.boolean().optional(),
+    connections: z.array(z.string().trim().min(1).max(200)).max(100),
+  }).strict().refine(repository => repository.url === `https://github.com/${repository.fullName}`)).max(500),
+  connectionCount: z.number().int().min(0).max(5000),
+  failedConnectionCount: z.number().int().min(0).max(5000),
+}).strict();
+function publicManagedProjectRepositoryListing(available: {
+  repositories: import("@paperclipai/shared").ProjectRepository[];
+  connectionCount: number;
+  failedConnectionCount: number;
+}) {
+  return { repositories: available.repositories.map(repository => ({ ...repository,
+    connections: [...repository.connections].sort() })), connectionCount: available.connectionCount,
+    failedConnectionCount: available.failedConnectionCount };
+}
+
+export async function listManagedNativeProjectRepositories(input: {
+  db: Db;
+  actor: AuthorizationActor;
+  companyId: string;
+  callId: string;
+  turnId: string;
+  arguments: unknown;
+}): Promise<{ result: { repositories: import("@paperclipai/shared").ProjectRepository[];
+  connectionCount: number; failedConnectionCount: number }; capture: NativeProjectRepositoriesToolResultCapture }> {
+  const { db, actor, companyId } = input;
+  if (actor.type !== "agent" || actor.source !== "agent_jwt" || actor.companyId !== companyId ||
+    !actor.agentId || !actor.runId || !/^[\x21-\x7e]{1,240}$/.test(input.callId) ||
+    !/^[\x21-\x7e]{1,240}$/.test(input.turnId))
+    throw forbidden("Repository discovery requires an exact managed Native call");
+  managedProjectRepositoryListingSchema.parse(input.arguments);
+  const context = await projectToolContext(db, actor as never);
+  if (context.run.status !== "running" || context.run.runtimeMode !== "native" || !context.userId || context.localTrusted ||
+    actor.onBehalfOfUserId !== context.userId)
+    throw forbidden("Repository discovery requires the current accountable Human");
+  const available = await toolAccessService(db).listProjectRepositories(companyId, context.userId, false, true);
+  const result = managedNativeProjectRepositoriesResultSchema.parse(publicManagedProjectRepositoryListing(available));
+  if (Buffer.byteLength(JSON.stringify(result), "utf8") > 24 * 1024)
+    throw unprocessable("The authorized repository listing exceeds the managed tool result bound");
+  const witnesses = Object.values(available.repositoryAuthorizationWitnesses ?? {}).flat();
+  const repositoryIds = new Set(result.repositories.map(repository => repository.id));
+  if (repositoryIds.size !== result.repositories.length || witnesses.some(witness => !repositoryIds.has(witness.repositoryId)) ||
+    result.repositories.some(repository => !witnesses.some(witness => witness.repositoryId === repository.id)) ||
+    witnesses.some(witness => !isDeepStrictEqual(Object.keys(witness).sort(),
+      ["authorizationVersion", "connectionId", "grantId", "repositoryId"]) ||
+      !/^[0-9a-f]{64}$/.test(witness.authorizationVersion)))
+    throw forbidden("An authorized repository is missing its exact Human authorization witness");
+  const capture: NativeProjectRepositoriesToolResultCapture = {
+    callId: input.callId, turnId: input.turnId, argumentsHash: nativeSha256(input.arguments),
+    resultDigest: nativeSha256(result), responsibleUserId: context.userId, result,
+    repositoryAuthorizationWitnesses: witnesses,
+  };
+  if (Buffer.byteLength(JSON.stringify(capture), "utf8") > 32 * 1024)
+    throw unprocessable("The repository result and authorization witness exceed their managed bound");
+  return { result, capture };
+}
+
+/** Re-fetch the exact list through current credentials before a managed tool
+ * result is sealed, then compare the complete safe result and authority version.
+ * The transaction writer performs the final locked membership/grant check. */
+export async function revalidateManagedNativeProjectRepositoriesCredentialReach(input: {
+  db: Db;
+  actor: AuthorizationActor;
+  companyId: string;
+  result: unknown;
+  capture: NativeProjectRepositoriesToolResultCapture;
+}): Promise<void> {
+  const { db, actor, companyId, capture } = input;
+  const context = await projectToolContext(db, actor as never);
+  if (context.run.status !== "running" || context.run.runtimeMode !== "native" || !context.userId || context.localTrusted ||
+    context.userId !== capture.responsibleUserId || actor.onBehalfOfUserId !== context.userId ||
+    capture.resultDigest !== nativeSha256(input.result) || capture.resultDigest !== nativeSha256(capture.result) ||
+    !isDeepStrictEqual(capture.result, input.result))
+    throw forbidden("The repository listing no longer belongs to the current accountable Human");
+  const current = await toolAccessService(db).listProjectRepositories(companyId, context.userId, false, true);
+  const currentResult = publicManagedProjectRepositoryListing(current);
+  const currentWitnesses = Object.values(current.repositoryAuthorizationWitnesses ?? {}).flat();
+  const stable = (values: NativeProjectRepositoryAuthorizationWitness[]) => [...values].sort((a, b) =>
+    `${a.repositoryId}:${a.connectionId}:${a.grantId ?? ""}`.localeCompare(`${b.repositoryId}:${b.connectionId}:${b.grantId ?? ""}`));
+  if (nativeSha256(currentResult) !== capture.resultDigest || !isDeepStrictEqual(currentResult, input.result) ||
+    !isDeepStrictEqual(stable(currentWitnesses), stable(capture.repositoryAuthorizationWitnesses)))
+    throw forbidden("Current GitHub repository or credential reach differs from the exact provider result");
+}
+
+export async function assertManagedNativeProjectRepositoriesAuthorizationCurrent(db: Db, input: {
+  companyId: string;
+  runId: string;
+  agentId: string;
+  issueId: string;
+  responsibleUserId: string;
+  capture: NativeProjectRepositoriesToolResultCapture;
+}): Promise<void> {
+  const capturedResult = managedNativeProjectRepositoriesResultSchema.safeParse(input.capture.result);
+  const witnessRows = Array.isArray(input.capture.repositoryAuthorizationWitnesses)
+    ? input.capture.repositoryAuthorizationWitnesses : [];
+  const capturedRepositories = capturedResult.success ? capturedResult.data.repositories : [];
+  const capturedRepositoryIds = capturedRepositories.map(repository => repository.id);
+  const witnessIds = witnessRows.map(value => value?.repositoryId);
+  const witnessIdentities = witnessRows.map(value =>
+    `${value?.repositoryId}:${value?.connectionId}:${value?.grantId ?? ""}`);
+  if (!Array.isArray(input.capture.repositoryAuthorizationWitnesses) ||
+    input.capture.responsibleUserId !== input.responsibleUserId || !capturedResult.success ||
+    input.capture.resultDigest !== nativeSha256(input.capture.result) ||
+    witnessRows.some(value => !value || typeof value !== "object" || !isDeepStrictEqual(Object.keys(value).sort(),
+      ["authorizationVersion", "connectionId", "grantId", "repositoryId"]) ||
+      typeof value.repositoryId !== "string" || typeof value.connectionId !== "string" ||
+      value.grantId !== null && typeof value.grantId !== "string" ||
+      typeof value.authorizationVersion !== "string" || !/^[0-9a-f]{64}$/.test(value.authorizationVersion)) ||
+    new Set(capturedRepositoryIds).size !== capturedRepositoryIds.length || new Set(witnessIdentities).size !== witnessIdentities.length ||
+    capturedRepositoryIds.some(id => !witnessIds.includes(id)) || witnessIds.some(id => !capturedRepositoryIds.includes(id)))
+    throw forbidden("Repository authorization Human, result, or witness changed");
+  const [run] = await db.select({ responsibleUserId: heartbeatRuns.responsibleUserId,
+    runtimeMode: heartbeatRuns.runtimeMode }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"))).for("update");
+  const [membership] = await db.select({ status: companyMemberships.status }).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId, input.companyId), eq(companyMemberships.principalType, "user"),
+    eq(companyMemberships.principalId, input.responsibleUserId), eq(companyMemberships.status, "active"))).for("share");
+  if (!run || run.responsibleUserId !== input.responsibleUserId || !membership)
+    throw forbidden("Repository discovery requires the current active accountable Human");
+  const repositoryIds = [...new Set(input.capture.repositoryAuthorizationWitnesses.map(value => value.repositoryId))];
+  await toolAccessService(db).assertProjectRepositoryAuthorizationWitnessesCurrent({
+    companyId: input.companyId, userId: input.responsibleUserId, repositoryIds,
+    witnesses: input.capture.repositoryAuthorizationWitnesses,
   });
 }
 

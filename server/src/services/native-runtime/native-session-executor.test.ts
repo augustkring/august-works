@@ -74,7 +74,8 @@ vi.mock("./native-github-access.js", () => ({
 }));
 // These tests exercise lifecycle, persistence and recovery in isolation. The
 // focused admission test file exercises the real guard at executor entry.
-vi.mock("./paid-transport-admission.js", () => ({
+vi.mock("./paid-transport-admission.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./paid-transport-admission.js")>(),
   assertNativePaidTransportAdmitted: () => undefined,
 }));
 
@@ -330,6 +331,8 @@ import {
   verifyNativeHarnessBackup,
   shouldRestoreNativeHarnessBackupIntoSandbox,
   failUnclaimedNativeOpenCodeConformanceRun,
+  nativeManagedOpenCodeRequiredToolNames,
+  nativeManagedCallApiOperationIds,
 } from "./native-session-executor.js";
 
 beforeEach(() => {
@@ -338,6 +341,25 @@ beforeEach(() => {
   state.resolveRunnerBinary.mockReset().mockReturnValue("/tmp/paperclip-runnerd");
   state.resolveCurrentWakeCommentsBinding.mockReset().mockResolvedValue(null);
   state.assertCurrentWakeCommentsRead.mockReset().mockResolvedValue(undefined);
+});
+
+describe("managed OpenCode mode-aware tool completeness", () => {
+  it("derives required tools from canonical semantic modes and keeps call_api read-only in Ask and Planning", () => {
+    expect(nativeManagedOpenCodeRequiredToolNames("standard", true)).toEqual([
+      "read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "request_human_input",
+    ]);
+    expect(nativeManagedOpenCodeRequiredToolNames("planning", true)).toEqual([
+      "read_document", "write_document", "read_context", "request_human_input",
+    ]);
+    expect(nativeManagedOpenCodeRequiredToolNames("ask", true)).toEqual([
+      "read_document", "read_context", "request_human_input",
+    ]);
+    expect(nativeManagedCallApiOperationIds("standard", true)).toEqual([
+      "GET /api/projects/{id}", "POST /api/companies/{companyId}/projects", "POST /api/issues/{id}/comments",
+    ]);
+    expect(nativeManagedCallApiOperationIds("planning", true)).toEqual(["GET /api/projects/{id}"]);
+    expect(nativeManagedCallApiOperationIds("ask", true)).toEqual(["GET /api/projects/{id}"]);
+  });
 });
 
 describe("first meaningful native agent event", () => {

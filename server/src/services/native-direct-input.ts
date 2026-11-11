@@ -42,6 +42,7 @@ import { nativeRetainedRunResumeWitness, nativeToolContractFingerprintForTarget 
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, codexSemanticToolSpecs, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 import type { NativeTaskContinuationCapture } from "./execution-continuation.js";
+import type { NativeProjectRepositoriesToolResultCapture } from "./native-project-output.js";
 import { sanitizeQuarantinedCommentForHigherTrust, redactQuarantinedBodyForHigherTrust } from "./source-trust.js";
 import { captureNativeTaskWakeSource, type NativeConsumedSourceComponent, type NativeModelOutputCapture,
   type NativePayloadSourceSet } from "./native-runtime/native-execution-input.js";
@@ -4200,9 +4201,12 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       const managedProjectCreateResult = source.invocationId === null &&
         (source.toolName === "create_project" || managedProjectApiCreateResult);
       const managedConversationTaskResult = source.toolName === "create_task" && source.invocationId === null;
+      const managedSemanticNoInvocationResult = source.invocationId === null &&
+        (source.toolName === "report_progress" || source.toolName === "request_human_input" ||
+          source.toolName === "list_project_repositories");
       const nativeReadResultTool = ["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(source.toolName);
       if ((source.invocationId === null && !projectApiResult && !stageCommentResult && !managedProjectCreateResult &&
-          !managedConversationTaskResult && !nativeReadResultTool) ||
+          !managedConversationTaskResult && !managedSemanticNoInvocationResult && !nativeReadResultTool) ||
         (source.toolName === "call_api" && source.invocationId !== null) ||
         (source.toolName === "create_project" && source.invocationId !== null))
         throw forbidden("A Native tool result requires its original succeeded invocation");
@@ -4214,7 +4218,7 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       const matchingReceiptInputs = receipt?.success ? nativeToolResultReceiptCopies(receipt.data, source) : null;
       if (!producerRun || !sourceBindingCurrent || !receipt?.success || !matchingReceiptInputs || matchingReceiptInputs.exact < 1 || matchingReceiptInputs.conflicting ||
         matchingReceiptInputs.duplicateWithinEntry || captures.length !== 1 ||
-        (projectApiResult || stageCommentResult || managedProjectCreateResult || managedConversationTaskResult || nativeReadResultTool ? invocation !== undefined : !invocation || invocation.issueId !== producerRun.nativeIssueId ||
+        (projectApiResult || stageCommentResult || managedProjectCreateResult || managedConversationTaskResult || managedSemanticNoInvocationResult || nativeReadResultTool ? invocation !== undefined : !invocation || invocation.issueId !== producerRun.nativeIssueId ||
           invocation.toolName !== source.toolName || invocation.idempotencyKey !== `aw-native-tool:${source.runId}:${source.callId}`))
         throw forbidden("A Native historical tool result changed");
       const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
@@ -4406,6 +4410,17 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         await assertNativeConversationTaskResultCurrentInScope(db, scope, {
           companyId: input.companyId, issueId: producerIssueId, actor: input.actor, run, profile,
           receipt: receipt.data, source, capture: captures[0]!,
+        });
+      }
+      if (managedSemanticNoInvocationResult) {
+        if (!profile || !receipt?.success || captures.length !== 1)
+          throw forbidden("A Native managed semantic result source is unavailable");
+        const producerIssueId = producerRun.nativeIssueId;
+        if (!producerIssueId) throw forbidden("A Native managed semantic result producer is unavailable");
+        await assertNativeManagedSemanticToolResultCurrentInScope(db, scope, {
+          companyId: input.companyId, issueId: producerIssueId, actor: input.actor, run: producerRun,
+          profile, receipt: receipt.data, source, capture: captures[0]!,
+          depth: Math.max(0, historicalDocumentDepthHint - 1), siblingToolSourceProofs, historicalTransition,
         });
       }
       if (source.invocationId === null && nativeReadResultTool) {
@@ -5023,6 +5038,161 @@ export async function assertNativeManagedConsumedSourceSetCurrent(db: Db | Trans
     await lockNativeSourceReadPrivacy(tx, input.companyId, scope);
     return assertNativeManagedConsumedSourceSetCurrentInScope(tx, input, scope);
   }));
+}
+
+/** Validate the exact no-plan managed semantic result that produced a
+ * null-invocation tool_result marker. This path is closed to these canonical
+ * canonical owners; it never treats the marker itself as invocation proof. */
+async function assertNativeManagedSemanticToolResultCurrentInScope(db: Db | Transaction, scope: NativeSourceReadScope, input: {
+  companyId: string; issueId: string; actor: AuthorizationActor; run: typeof heartbeatRuns.$inferSelect;
+  profile: Record<string, unknown>; receipt: NativeRunInputSourceReceipt;
+  source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>;
+  capture: Record<string, unknown>; depth: number; siblingToolSourceProofs: NativeSiblingToolSourceProofs;
+  historicalTransition?: NativeHistoricalPendingTransitionContext;
+}): Promise<void> {
+  const capture = input.capture;
+  const fail = (): never => { throw forbidden("A Native managed semantic tool result changed"); };
+  const expectedTool = input.source.toolName;
+  if (input.source.runId !== input.run.id || input.source.invocationId !== null ||
+    (expectedTool !== "report_progress" && expectedTool !== "request_human_input" && expectedTool !== "list_project_repositories") ||
+    capture.managedOpenCode !== true || capture.tool !== expectedTool || capture.callId !== input.source.callId ||
+    capture.resultDigest !== input.source.contentHash || capture.source === undefined ||
+    !isDeepStrictEqual(capture.source, input.source) || typeof capture.turnId !== "string" ||
+    typeof capture.argumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(capture.argumentsHash) ||
+    !Number.isSafeInteger(capture.eventSeq) || !Number.isSafeInteger(capture.attempt)) fail();
+  const progress = expectedTool === "report_progress" ? nativeSourceRecord(capture.progressComment) : null;
+  const outputValue = expectedTool === "report_progress" ? progress?.outputCapture : capture.outputCapture;
+  if (!outputValue || typeof outputValue !== "object" || Array.isArray(outputValue)) fail();
+  const outputCapture = outputValue as NativeModelOutputCapture;
+  const managedUse = outputCapture.managedOpenCodeToolUse;
+  if (!managedUse || outputCapture.runId !== input.run.id || managedUse.callId !== input.source.callId ||
+    managedUse.toolName !== expectedTool || managedUse.argumentsHash !== capture.argumentsHash ||
+    !/^[0-9a-f]{64}$/.test(managedUse.responseContentHash) || outputCapture.dispatch.kind !== "conversation_model_dispatch" ||
+    outputCapture.dispatch.runId !== input.run.id || outputCapture.dispatch.issueId !== input.issueId ||
+    outputCapture.dispatch.agentId !== input.run.agentId || !outputCapture.sourceSet.policy.runIds.includes(input.run.id)) fail();
+  await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, input.issueId, outputCapture,
+    expectedTool, scope, input.depth, input.actor, input.run.finishedAt ? "settled" : "live", input.siblingToolSourceProofs,
+    input.historicalTransition);
+  const associations = Array.isArray(input.profile.nativeToolCallDispatchAssociations)
+    ? input.profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+      (value as Record<string, unknown>).callId === input.source.callId &&
+      (value as Record<string, unknown>).turnId === capture.turnId &&
+      (value as Record<string, unknown>).tool === expectedTool &&
+      (value as Record<string, unknown>).argumentsHash === capture.argumentsHash &&
+      (value as Record<string, unknown>).eventSeq === capture.eventSeq &&
+      (value as Record<string, unknown>).attempt === capture.attempt)
+    : [];
+  const turns = Array.isArray(input.profile.nativeModelInputDispatchIntents)
+    ? input.profile.nativeModelInputDispatchIntents.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+      (value as Record<string, unknown>).turnId === capture.turnId &&
+      (value as Record<string, unknown>).eventSeq === capture.eventSeq &&
+      (value as Record<string, unknown>).attempt === capture.attempt &&
+      (value as Record<string, unknown>).responsibleUserId === input.run.responsibleUserId)
+    : [];
+  if (associations.length !== 1 || turns.length !== 1 || associations[0]!.dispatchId !== turns[0]!.dispatchId) fail();
+
+  const semanticReceipts = Object.values(nativeSourceRecord(nativeSourceRecord(input.run.resultJson).semanticToolReceipts))
+    .filter(value => value && typeof value === "object" && !Array.isArray(value)) as Record<string, unknown>[];
+  const exactReceipts = semanticReceipts.filter(value => {
+    const dispatch = nativeSourceRecord(value.nativeInputDispatch);
+    return value.operationId === expectedTool && nativeSha256(value.input) === capture.argumentsHash &&
+      nativeSha256(value.result) === input.source.contentHash && dispatch.callId === input.source.callId &&
+      dispatch.turnId === capture.turnId && dispatch.dispatchId === associations[0]!.dispatchId &&
+      dispatch.eventSeq === capture.eventSeq && dispatch.attempt === capture.attempt;
+  });
+  if ((expectedTool !== "list_project_repositories" && exactReceipts.length !== 1) ||
+    (expectedTool === "list_project_repositories" && exactReceipts.length !== 0) || !input.run.responsibleUserId) fail();
+  const additional = input.receipt.additionalInputs.filter(entry => entry.responsibleUserId === input.run.responsibleUserId &&
+    entry.inputs.some(value => value.kind === "tool_result" && isDeepStrictEqual(value, input.source)));
+  if (additional.length !== 1) fail();
+
+  if (expectedTool === "list_project_repositories") {
+    const repositories = nativeSourceRecord(capture.projectRepositories);
+    const projectRepositoryKeys = ["argumentsHash", "callId", "repositoryAuthorizationWitnesses", "responsibleUserId",
+      "result", "resultDigest", "turnId"].sort();
+    const expectedInputs = unionNativePayloadSourceInputs([[input.source], [outputCapture.dispatch], outputCapture.sourceSet.inputs]);
+    if (!isDeepStrictEqual(Object.keys(repositories).sort(), projectRepositoryKeys) ||
+      repositories.callId !== input.source.callId || repositories.turnId !== capture.turnId ||
+      repositories.argumentsHash !== capture.argumentsHash || repositories.resultDigest !== input.source.contentHash ||
+      repositories.responsibleUserId !== input.run.responsibleUserId ||
+      nativeSha256(repositories.result) !== input.source.contentHash || expectedInputs.length > 256 ||
+      !isDeepStrictEqual(additional[0]!.policy, outputCapture.sourceSet.policy) ||
+      !isDeepStrictEqual(additional[0]!.inputs, expectedInputs)) fail();
+    const { assertManagedNativeProjectRepositoriesAuthorizationCurrent } = await import("./native-project-output.js");
+    await assertManagedNativeProjectRepositoriesAuthorizationCurrent(db as Db, {
+      companyId: input.companyId, runId: input.run.id, agentId: input.run.agentId, issueId: input.issueId,
+      responsibleUserId: input.run.responsibleUserId ?? fail(),
+      capture: repositories as unknown as NativeProjectRepositoriesToolResultCapture,
+    });
+    return;
+  }
+
+  if (expectedTool === "report_progress") {
+    const result = nativeSourceRecord(exactReceipts[0]!.result);
+    const args = nativeSourceRecord(exactReceipts[0]!.input);
+    const body = typeof args.body === "string" ? args.body : fail();
+    const commentId = typeof progress?.commentId === "string" ? progress.commentId : "";
+    const snapshotSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
+    const progressSourceInputs = unionNativePayloadSourceInputs([[input.source], [outputCapture.dispatch], outputCapture.sourceSet.inputs]);
+    if (progress?.callId !== input.source.callId || progress.argumentsHash !== capture.argumentsHash ||
+      progress.resultDigest !== input.source.contentHash || result.commentId !== commentId ||
+      !commentId || progressSourceInputs.length > 256 ||
+      !isDeepStrictEqual(additional[0]!.policy, outputCapture.sourceSet.policy) ||
+      !isDeepStrictEqual(additional[0]!.inputs, progressSourceInputs)) fail();
+    const [comment] = await db.select({ id: issueComments.id, issueId: issueComments.issueId,
+      authorType: issueComments.authorType, authorAgentId: issueComments.authorAgentId,
+      createdByRunId: issueComments.createdByRunId, body: issueComments.body, sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+      presentation: issueComments.presentation, metadata: issueComments.metadata,
+      payloadSourceSnapshot: issueComments.payloadSourceSnapshot, payloadSourceSnapshotInvalidated: issueComments.payloadSourceSnapshotInvalidated,
+      deletedAt: issueComments.deletedAt,
+    }).from(issueComments).where(and(eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+      eq(issueComments.id, commentId))).for("share");
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(comment?.payloadSourceSnapshot);
+    if (!snapshot.success) return fail();
+    if (!comment || comment.deletedAt || comment.authorType !== "agent" || comment.authorAgentId !== input.run.agentId ||
+      comment.createdByRunId !== input.run.id || comment.body !== body.trim() || comment.payloadSourceSnapshotInvalidated ||
+      !isDeepStrictEqual({ policy: snapshot.data.policy, inputs: snapshot.data.inputs }, snapshotSourceSet)) fail();
+    const commentSource = nativePayloadSourceInputSchema.parse({ kind: "comment", issueId: input.issueId,
+      commentId: comment.id, sourceVersion: comment.sourceVersion,
+      contentHash: nativeCommentProjectionHash({ body: comment.body, presentation: comment.presentation, metadata: comment.metadata }) });
+    if (commentSource.kind !== "comment") return fail();
+    await assertConversationCommentSourceCurrent(db, { companyId: input.companyId, actor: input.actor,
+      source: commentSource, policy: snapshot.data.policy, inputs: snapshot.data.inputs }, scope);
+    return;
+  }
+
+  const result = nativeSourceRecord(exactReceipts[0]!.result);
+  const interaction = nativeSourceRecord(result.interaction);
+  const interactionId = typeof interaction.id === "string" ? interaction.id : "";
+  const emptyPolicy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+  if (!interactionId || additional[0]!.responsibleUserId !== input.run.responsibleUserId ||
+    !isDeepStrictEqual(additional[0]!.policy, emptyPolicy) || !isDeepStrictEqual(additional[0]!.inputs, [input.source])) fail();
+  const [row] = await db.select({ id: issueThreadInteractions.id, kind: issueThreadInteractions.kind,
+    title: issueThreadInteractions.title, summary: issueThreadInteractions.summary, payload: issueThreadInteractions.payload,
+    idempotencyKey: issueThreadInteractions.idempotencyKey, continuationPolicy: issueThreadInteractions.continuationPolicy,
+    sourceRunId: issueThreadInteractions.sourceRunId, createdByAgentId: issueThreadInteractions.createdByAgentId,
+  }).from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId, input.companyId),
+    eq(issueThreadInteractions.issueId, input.issueId), eq(issueThreadInteractions.id, interactionId),
+    eq(issueThreadInteractions.sourceRunId, input.run.id), eq(issueThreadInteractions.createdByAgentId, input.run.agentId))).for("share");
+  const { captureNativeManagedQuestionInteractionOwner } = await import("./native-runtime/native-interaction-bridge.js");
+  const owner = await captureNativeManagedQuestionInteractionOwner({ db: db as Db, companyId: input.companyId,
+    issueId: input.issueId, runId: input.run.id, agentId: input.run.agentId, interactionId, reader: input.actor });
+  const expectedOwner = nativeSourceRecord(capture.questionInteractionOwner);
+  const recordedOwnerPending = expectedOwner.status === "pending";
+  const recordedOwnerValid = typeof expectedOwner.sourceVersion === "string" &&
+    /^\d+(?:\.\d+)?$/.test(expectedOwner.sourceVersion) &&
+    (recordedOwnerPending ? expectedOwner.decisionSource === null :
+      typeof expectedOwner.status === "string" && expectedOwner.decisionSource !== null);
+  const currentOwnerMatchesRecorded = recordedOwnerPending
+    ? recordedOwnerValid && (owner.status === "pending"
+      ? owner.sourceVersion === expectedOwner.sourceVersion && owner.decisionSource === null
+      : owner.status !== "pending" && owner.decisionSource !== null)
+    : owner.status === expectedOwner.status && owner.sourceVersion === expectedOwner.sourceVersion &&
+      isDeepStrictEqual(owner.decisionSource, expectedOwner.decisionSource);
+  if (!row || !recordedOwnerValid || !currentOwnerMatchesRecorded || interaction.id !== row.id || interaction.kind !== row.kind ||
+    interaction.title !== row.title || interaction.summary !== row.summary || !isDeepStrictEqual(interaction.payload, row.payload) ||
+    interaction.idempotencyKey !== row.idempotencyKey || interaction.continuationPolicy !== row.continuationPolicy ||
+    interaction.sourceRunId !== row.sourceRunId || interaction.createdByAgentId !== row.createdByAgentId) fail();
 }
 
 export interface NativeTemporalContextCapture {

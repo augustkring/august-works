@@ -80,7 +80,9 @@ import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-au
 import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent, assertNativeProjectSourceCurrent,
   assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet } from "../native-direct-input.js";
 import { PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED } from "../native-local-process-stop.js";
-import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
+import { assertManagedNativeProjectRepositoriesAuthorizationCurrent, assertNativeManagedProjectCreateReceiptCurrent,
+  managedNativeProjectRepositoriesResultSchema, type NativeProjectCreateReceipt,
+  type NativeProjectRepositoriesToolResultCapture } from "../native-project-output.js";
 import {
   anthropicReadOnlyCall,
   anthropicManagedMessagesCall,
@@ -547,7 +549,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
     actualTools.some((tool) => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
       "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block",
-      ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress"] : []),
+      ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress", "request_human_input", "list_project_repositories"] : []),
       ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
@@ -733,7 +735,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
           !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
             "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
-            ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress"] : []),
+            ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress", "request_human_input", "list_project_repositories"] : []),
             ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(toolName))
         {
           if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
@@ -778,6 +780,73 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         const sourceToolName = managedToolSourceName(toolName);
         if (source.callId !== block.tool_use_id || source.toolName !== sourceToolName)
           throw forbidden("managed_opencode_tool_result_identity_mismatch");
+        if (toolName === "list_project_repositories" && claims.scope === "conversation_model") {
+          if (source.invocationId !== null)
+            throw forbidden("Managed Conversation repository discovery cannot use a plan invocation");
+          const repositoryCapture = managedRecord(capture.projectRepositories) as unknown as NativeProjectRepositoriesToolResultCapture;
+          const outputCapture = managedRecord(capture.outputCapture) as unknown as NativeModelOutputCapture;
+          const use = outputCapture.managedOpenCodeToolUse;
+          const parsed = managedNativeProjectRepositoriesResultSchema.safeParse(result);
+          const sourceSet = outputCapture.sourceSet;
+          const exactClosure = nativeManagedProgressCommentSourceSet(outputCapture);
+          const expectedInputs = unionNativePayloadSourceInputs([[source], exactClosure.inputs]);
+          const repositoryKeys = ["argumentsHash", "callId", "repositoryAuthorizationWitnesses", "responsibleUserId", "result", "resultDigest", "turnId"];
+          const repositories = Array.isArray(managedRecord(result).repositories)
+            ? (managedRecord(result).repositories as unknown[]).map(managedRecord) : [];
+          const witnesses = Array.isArray(repositoryCapture.repositoryAuthorizationWitnesses)
+            ? repositoryCapture.repositoryAuthorizationWitnesses.map(managedRecord) : [];
+          const repositoryIds = repositories.map(value => value.id);
+          const witnessIdentities = witnesses.map(value => `${value.repositoryId}:${value.connectionId}:${value.grantId ?? ""}`);
+          const expectedEntries = receipt.data.additionalInputs.filter(entry =>
+            entry.responsibleUserId === claims.responsible_user_id &&
+            isDeepStrictEqual(entry.policy, sourceSet.policy) && isDeepStrictEqual(entry.inputs, expectedInputs));
+          const exactCopies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+            value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+          const conflictingCopies = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+          const dispatch = outputCapture.dispatch;
+          if (claims.scope !== "conversation_model" || dispatch.kind !== "conversation_model_dispatch" ||
+            !parsed.success || capture.managedOpenCode !== true || !use ||
+            !isDeepStrictEqual(Object.keys(repositoryCapture).sort(), repositoryKeys) ||
+            !Array.isArray(repositoryCapture.repositoryAuthorizationWitnesses) ||
+            !isDeepStrictEqual(Object.keys(managedRecord(capture.outputCapture)).sort(),
+              ["consumedSourceComponents", "dispatch", "managedOpenCodeToolUse", "runId", "sourceSet"]) ||
+            use.callId !== block.tool_use_id || use.toolName !== toolName || use.argumentsHash !== providerUse.argumentsHash ||
+            outputCapture.runId !== claims.run_id || dispatch.runId !== claims.run_id || dispatch.issueId !== run.nativeIssueId ||
+            dispatch.agentId !== claims.sub || dispatch.conversationSessionGeneration !== claims.conversation_model.conversationSessionGeneration ||
+            source.kind !== "tool_result" || source.runId !== claims.run_id || source.callId !== block.tool_use_id ||
+            source.toolName !== toolName || source.invocationId !== null || source.contentHash !== sourceResultDigest ||
+            repositoryCapture.callId !== block.tool_use_id || repositoryCapture.turnId !== matchingAssociations[0]!.turnId ||
+            repositoryCapture.argumentsHash !== providerUse.argumentsHash || repositoryCapture.resultDigest !== sourceResultDigest ||
+            nativeSha256(repositoryCapture.result) !== sourceResultDigest || !isDeepStrictEqual(repositoryCapture.result, result) ||
+            repositoryCapture.responsibleUserId !== claims.responsible_user_id || capture.resultDigest !== sourceResultDigest ||
+            repositories.length > 500 || repositoryIds.some(value => typeof value !== "string") ||
+            new Set(repositoryIds).size !== repositoryIds.length || new Set(witnessIdentities).size !== witnessIdentities.length ||
+            witnesses.some(value => !isDeepStrictEqual(Object.keys(value).sort(),
+              ["authorizationVersion", "connectionId", "grantId", "repositoryId"]) ||
+              typeof value.repositoryId !== "string" || typeof value.connectionId !== "string" ||
+              value.grantId !== null && typeof value.grantId !== "string" ||
+              typeof value.authorizationVersion !== "string" || !/^[0-9a-f]{64}$/.test(value.authorizationVersion)) ||
+            repositoryIds.some(id => !witnesses.some(value => value.repositoryId === id)) ||
+            witnesses.some(value => !repositoryIds.includes(value.repositoryId)) ||
+            expectedEntries.length !== 1 || exactCopies !== 1 || conflictingCopies)
+            throw forbidden("Managed repository listing has no exact no-plan Conversation source receipt");
+          const unexpectedInvocation = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
+            eq(toolInvocations.companyId, claims.company_id), eq(toolInvocations.runId, claims.run_id),
+            eq(toolInvocations.agentId, claims.sub), eq(toolInvocations.idempotencyKey,
+              `aw-native-tool:${claims.run_id}:${block.tool_use_id}`), eq(toolInvocations.toolName, toolName)));
+          if (unexpectedInvocation.length) throw forbidden("Managed conversation repository discovery unexpectedly has a plan charge");
+          await assertNativeModelOutputCaptureCurrent(db, claims.company_id, run.nativeIssueId!, outputCapture,
+            "list_project_repositories", sourceActor);
+          await assertManagedNativeProjectRepositoriesAuthorizationCurrent(db, {
+            companyId: claims.company_id, runId: claims.run_id, agentId: claims.sub,
+            issueId: run.nativeIssueId!, responsibleUserId: claims.responsible_user_id, capture: repositoryCapture,
+          });
+          const entry = expectedEntries[0]!;
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: entry.responsibleUserId,
+            policy: entry.policy, inputs: entry.inputs });
+          continue;
+        }
         if (toolName === "report_progress") {
           const progress = managedRecord(capture.progressComment);
           const outputCapture = managedRecord(progress.outputCapture) as unknown as NativeModelOutputCapture;
@@ -1176,6 +1245,105 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             policy: expectedEntries[0]!.policy, inputs: expectedEntries[0]!.inputs });
           continue;
         }
+        let questionOutputCapture: NativeModelOutputCapture | null = null;
+        let questionInteraction: typeof issueThreadInteractions.$inferSelect | null = null;
+        let questionInteractionVersion: string | null = null;
+        let currentQuestionOwner: { status: string; sourceVersion: string; decisionSource: NativePayloadSourceInput | null } | null = null;
+        if (toolName === "request_human_input") {
+          const interaction = managedRecord(managedRecord(result).interaction);
+          const interactionId = typeof interaction.id === "string" ? interaction.id : "";
+          const [currentInteractionRow] = interactionId ? await db.select({ row: issueThreadInteractions,
+            version: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` }).from(issueThreadInteractions).where(and(
+            eq(issueThreadInteractions.companyId, claims.company_id), eq(issueThreadInteractions.issueId, String(run.nativeIssueId)),
+            eq(issueThreadInteractions.id, interactionId), eq(issueThreadInteractions.sourceRunId, run.id),
+            eq(issueThreadInteractions.createdByAgentId, run.agentId))) : [];
+          const currentInteraction = currentInteractionRow?.row ?? null;
+          if (!currentInteraction || interaction.id !== currentInteraction.id || interaction.kind !== currentInteraction.kind ||
+            interaction.title !== currentInteraction.title || interaction.summary !== currentInteraction.summary ||
+            !isDeepStrictEqual(interaction.payload, currentInteraction.payload) || interaction.idempotencyKey !== currentInteraction.idempotencyKey ||
+            interaction.continuationPolicy !== currentInteraction.continuationPolicy ||
+            interaction.sourceRunId !== currentInteraction.sourceRunId || interaction.createdByAgentId !== currentInteraction.createdByAgentId)
+            throw forbidden("Managed Human question no longer has its exact immutable interaction owner");
+          questionInteraction = currentInteraction;
+          questionInteractionVersion = currentInteractionRow?.version ?? null;
+          currentQuestionOwner = await (await import("../native-runtime/native-interaction-bridge.js")).captureNativeManagedQuestionInteractionOwner({
+            db, companyId: claims.company_id, issueId: String(run.nativeIssueId), runId: run.id, agentId: run.agentId,
+            interactionId, reader: sourceActor,
+          });
+          if (!questionInteractionVersion || currentQuestionOwner.sourceVersion !== questionInteractionVersion ||
+            (currentQuestionOwner.status === "pending" && (currentInteraction.status !== "pending" ||
+              (currentInteraction.kind !== "request_item_verdicts" && currentInteraction.result !== null) || currentInteraction.resolvedAt || currentInteraction.resolvedByUserId ||
+              currentInteraction.resolvedByAgentId || currentInteraction.resolvedByRunId || currentQuestionOwner.decisionSource)) ||
+            (currentQuestionOwner.status !== "pending" && (currentInteraction.status !== currentQuestionOwner.status ||
+              !currentQuestionOwner.decisionSource)))
+            throw forbidden("Managed Human question has no exact current decision or pending owner");
+          const recordedOwner = managedRecord(capture.questionInteractionOwner);
+          if (recordedOwner.status === "pending") {
+            if (typeof recordedOwner.sourceVersion !== "string" || !/^\d+(?:\.\d+)?$/.test(recordedOwner.sourceVersion) ||
+              recordedOwner.decisionSource !== null ||
+              (currentQuestionOwner.status === "pending" && recordedOwner.sourceVersion !== currentQuestionOwner.sourceVersion))
+              throw forbidden("Managed Human question owner changed without a terminal decision source");
+            // If a Human resolves or supersedes after the successful owner commit, this terminal source is reconstructed below.
+          } else if (recordedOwner.status !== currentQuestionOwner.status ||
+            recordedOwner.sourceVersion !== currentQuestionOwner.sourceVersion ||
+            !isDeepStrictEqual(recordedOwner.decisionSource, currentQuestionOwner.decisionSource)) {
+            throw forbidden("Managed Human question terminal decision changed after result capture");
+          }
+          questionOutputCapture = managedRecord(capture.outputCapture) as unknown as NativeModelOutputCapture;
+          if (capture.managedOpenCode !== true || !questionOutputCapture.runId ||
+            questionOutputCapture.runId !== run.id || questionOutputCapture.managedOpenCodeToolUse?.callId !== block.tool_use_id ||
+            questionOutputCapture.managedOpenCodeToolUse.toolName !== "request_human_input" ||
+            questionOutputCapture.managedOpenCodeToolUse.argumentsHash !== providerUse.argumentsHash ||
+            !["worker_model_dispatch", "conversation_model_dispatch"].includes(questionOutputCapture.dispatch.kind) ||
+            questionOutputCapture.dispatch.runId !== run.id)
+            throw forbidden("Managed Human question has no exact current provider output capture");
+          await assertNativeModelOutputCaptureCurrent(db, claims.company_id, run.nativeIssueId!, questionOutputCapture,
+            "request_human_input", sourceActor);
+        }
+        if (toolName === "request_human_input" && source.invocationId === null) {
+          const outputCapture = questionOutputCapture!;
+          const interactionResult = managedRecord(result);
+          const interaction = managedRecord(interactionResult.interaction);
+          const interactionId = typeof interaction.id === "string" ? interaction.id : "";
+          const semanticReceipts = managedRecord(run.resultJson).semanticToolReceipts;
+          const matchingReceipts = Object.values(managedRecord(semanticReceipts)).map(managedRecord).filter(receipt => {
+            const dispatch = managedRecord(receipt.nativeInputDispatch);
+            return receipt.operationId === "request_human_input" &&
+              nativeSha256(receipt.input) === providerUse.argumentsHash && isDeepStrictEqual(receipt.result, result) &&
+              dispatch.callId === block.tool_use_id && dispatch.dispatchId === matchingAssociations[0]!.dispatchId &&
+              dispatch.turnId === matchingAssociations[0]!.turnId && dispatch.eventSeq === matchingAssociations[0]!.eventSeq &&
+              dispatch.attempt === matchingAssociations[0]!.attempt;
+          });
+          const storedInteraction = questionInteraction;
+          const additionalEntries = receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
+            entry.inputs.length === 1 && isDeepStrictEqual(entry.inputs[0], source));
+          const exactCopies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+            value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+          const conflictingCopies = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && value.callId === block.tool_use_id && !isDeepStrictEqual(value, source)));
+          if (claims.scope !== "conversation_model" || capture.managedOpenCode !== true || matchingReceipts.length !== 1 ||
+            !outputCapture.runId || outputCapture.dispatch.kind !== "conversation_model_dispatch" ||
+            outputCapture.dispatch.runId !== run.id || outputCapture.dispatch.agentId !== run.agentId ||
+            outputCapture.dispatch.issueId !== run.nativeIssueId ||
+            outputCapture.managedOpenCodeToolUse?.callId !== block.tool_use_id ||
+            outputCapture.managedOpenCodeToolUse.toolName !== "request_human_input" ||
+            outputCapture.managedOpenCodeToolUse.argumentsHash !== providerUse.argumentsHash ||
+            source.callId !== block.tool_use_id || source.toolName !== "request_human_input" ||
+            additionalEntries.length !== 1 || exactCopies !== 1 || conflictingCopies || !storedInteraction ||
+            storedInteraction.title !== String(managedRecord(matchingReceipts[0]!.input).title) ||
+            storedInteraction.summary !== String(managedRecord(matchingReceipts[0]!.input).prompt) ||
+            storedInteraction.sourceRunId !== run.id || storedInteraction.createdByAgentId !== run.agentId ||
+            run.responsibleUserId !== claims.responsible_user_id)
+            throw forbidden("Managed conversation question has no exact semantic interaction source receipt");
+          const unexpectedInvocation = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
+            eq(toolInvocations.companyId, claims.company_id), eq(toolInvocations.runId, claims.run_id),
+            eq(toolInvocations.agentId, claims.sub), eq(toolInvocations.idempotencyKey,
+              `aw-native-tool:${claims.run_id}:${block.tool_use_id}`), eq(toolInvocations.toolName, "request_human_input")));
+          if (unexpectedInvocation.length) throw forbidden("Managed no-plan conversation question unexpectedly has a plan charge");
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: additionalEntries[0]!.responsibleUserId,
+            policy: additionalEntries[0]!.policy, inputs: additionalEntries[0]!.inputs });
+          continue;
+        }
         if (typeof invocationId !== "string")
           throw forbidden("managed_opencode_tool_result_invocation_missing");
         const [invocation] = await db.select().from(toolInvocations).where(and(
@@ -1197,6 +1365,47 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         const consumedEntry = consumedEntries[0]!;
         consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: consumedEntry.responsibleUserId,
           policy: consumedEntry.policy, inputs: consumedEntry.inputs });
+        if (toolName === "list_project_repositories") {
+          const repositoryCapture = managedRecord(capture.projectRepositories) as unknown as NativeProjectRepositoriesToolResultCapture;
+          const repoResult = managedRecord(result);
+          const parsedRepositoryResult = managedNativeProjectRepositoriesResultSchema.safeParse(result);
+          const repositories = Array.isArray(repoResult.repositories) ? repoResult.repositories.map(managedRecord) : [];
+          const witnesses = Array.isArray(repositoryCapture.repositoryAuthorizationWitnesses)
+            ? repositoryCapture.repositoryAuthorizationWitnesses.map(managedRecord) : [];
+          const repositoryIds = repositories.map(value => value.id);
+          const witnessIdentities = witnesses.map(value => `${value.repositoryId}:${value.connectionId}:${value.grantId ?? ""}`);
+          const expectedPolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
+          if (!parsedRepositoryResult.success || capture.managedOpenCode !== true ||
+            !isDeepStrictEqual(Object.keys(repositoryCapture).sort(),
+              ["argumentsHash", "callId", "repositoryAuthorizationWitnesses", "responsibleUserId", "result", "resultDigest", "turnId"]) ||
+            repositoryCapture.callId !== block.tool_use_id ||
+            repositoryCapture.turnId !== matchingAssociations[0]!.turnId ||
+            repositoryCapture.argumentsHash !== providerUse.argumentsHash || repositoryCapture.resultDigest !== sourceResultDigest ||
+            nativeSha256(repositoryCapture.result) !== sourceResultDigest || !isDeepStrictEqual(repositoryCapture.result, result) ||
+            repositoryCapture.responsibleUserId !== claims.responsible_user_id ||
+            source.runId !== claims.run_id || source.toolName !== "list_project_repositories" || source.invocationId !== invocation.id ||
+            !isDeepStrictEqual(Object.keys(repoResult).sort(), ["connectionCount", "failedConnectionCount", "repositories"]) ||
+            !Number.isSafeInteger(repoResult.connectionCount) || Number(repoResult.connectionCount) < 0 ||
+            !Number.isSafeInteger(repoResult.failedConnectionCount) || Number(repoResult.failedConnectionCount) < 0 ||
+            repositories.length > 500 || repositoryIds.some(value => typeof value !== "string") ||
+            new Set(repositoryIds).size !== repositoryIds.length || new Set(witnessIdentities).size !== witnessIdentities.length ||
+            witnesses.some(value => !isDeepStrictEqual(Object.keys(value).sort(),
+              ["authorizationVersion", "connectionId", "grantId", "repositoryId"]) ||
+              typeof value.repositoryId !== "string" || typeof value.connectionId !== "string" ||
+              value.grantId !== null && typeof value.grantId !== "string" ||
+              typeof value.authorizationVersion !== "string" || !/^[0-9a-f]{64}$/.test(value.authorizationVersion)) ||
+            repositoryIds.some(repositoryId => !witnesses.some(value => value.repositoryId === repositoryId)) ||
+            witnesses.some(value => !repositoryIds.includes(value.repositoryId)) ||
+            consumedEntry.responsibleUserId !== claims.responsible_user_id ||
+            !isDeepStrictEqual(consumedEntry.policy, expectedPolicy) || !isDeepStrictEqual(consumedEntry.inputs, [source]))
+            throw forbidden("Managed repository listing result is not bound to its exact current Human authorization");
+          await assertManagedNativeProjectRepositoriesAuthorizationCurrent(db, {
+            companyId: claims.company_id, runId: claims.run_id, agentId: claims.sub,
+            issueId: run.nativeIssueId!, responsibleUserId: claims.responsible_user_id,
+            capture: repositoryCapture,
+          });
+          continue;
+        }
         if (toolName === "create_task") {
           const taskRef = managedRecord(capture.taskRef);
           const taskId = taskRef.issueId;

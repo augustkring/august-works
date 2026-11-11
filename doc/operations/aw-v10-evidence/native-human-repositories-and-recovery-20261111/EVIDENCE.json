@@ -1,0 +1,120 @@
+{
+  "schema": "blentera.software-evidence.v1",
+  "preparedAtUtc": "2026-11-11T11:11:30.604991+00:00",
+  "sourceParent": "8c75fa6bbbc877646e5eda008ee47d4b6452e4d5",
+  "sourceBase": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+  "runs": [
+    {
+      "label": "native-owner-release-r468",
+      "scope": "Five actual PostgreSQL cases preserve unknown Native execution/checkout ownership, reject a foreign checkout owner, and release only after canonical local Stop; legacy terminal behavior is retained.",
+      "exit": 0,
+      "seconds": 34.01995153399184
+    },
+    {
+      "label": "native-managed-question-owner-r476",
+      "scope": "One actual PostgreSQL case reconstructs pending, answered, accepted, rejected and comment-superseded Human interaction owners without mutating their source rows; retains default non-opt-in behavior.",
+      "exit": 0,
+      "seconds": 28.636768042022595
+    },
+    {
+      "label": "native-human-and-progress-authority-r478",
+      "scope": "Seven selected actual PostgreSQL authority cases cover Human-only proposals, question behavior and idempotent progress. Thirty-eight cases are unselected.",
+      "exit": 0,
+      "seconds": 26.679749255999923
+    },
+    {
+      "label": "native-review-history-fixture-r489",
+      "scope": "One selected actual PostgreSQL lower tool-result authority case preserves unknown assigned-review context history. The Task has a real current-Human source snapshot; the synthetic Run does not claim a full protocol-v1 Native receipt. Forty-four cases are unselected.",
+      "exit": 0,
+      "seconds": 23.902971867995802
+    },
+    {
+      "label": "native-repository-source-and-authority-regression-r490",
+      "scope": "Complete three-file executor, process-stop and authority regression after the lower-owner review fixture corrections.",
+      "exit": 0,
+      "seconds": 75.40740734900464
+    },
+    {
+      "label": "native-repository-credential-versions-r483",
+      "scope": "Eight actual PostgreSQL repository persistence/access cases, including same-secret latest-version rotation, selected grant credentials, membership revocation, grant locking, normalization and rollback.",
+      "exit": 0,
+      "seconds": 22.299657119991025
+    },
+    {
+      "label": "native-generated-operation-groups-check-r472",
+      "scope": "Official generated operation-group documentation check.",
+      "exit": 0,
+      "seconds": 0.6661459849856328
+    },
+    {
+      "label": "native-repository-and-source-owner-typecheck-r482",
+      "scope": "Full server TypeScript check including the shared managed progress/question/repository source consumers. The later R8 selected-credential change is additionally covered by the workspace check below.",
+      "exit": 0,
+      "seconds": 99.54902248698636
+    },
+    {
+      "label": "workspace-typecheck-native-human-repo-source-r484",
+      "scope": "Required recursive workspace typecheck with workspace-concurrency=1, including Runner contract/parity checks, server, UI and CLI.",
+      "exit": 0,
+      "seconds": 275.48605568299536
+    },
+    {
+      "label": "workspace-build-native-human-repo-source-r486",
+      "scope": "Required root pnpm build of the frozen checkpoint.",
+      "exit": 0,
+      "seconds": 188.48907040499034
+    },
+    {
+      "label": "native-repository-source-and-authority-regression-r485",
+      "exit": 1,
+      "seconds": 72.66540274498402,
+      "scope": "Three-file regression: 508 executor/process-stop cases pass; authority has 44 passes and one assigned-review task-source fixture failure. This earlier combined command is failed and remains unqualified; later corrected checks have their own receipts."
+    },
+    {
+      "label": "native-repository-source-and-authority-regression-r488",
+      "exit": 1,
+      "seconds": 73.32201174099464,
+      "scope": "Earlier three-file regression failed. Its passing subset is not promoted."
+    },
+    {
+      "label": "native-repository-source-and-authority-regression-r487",
+      "scope": "Harness setup failed on an incorrect test path before any test or PostgreSQL process started. Not a test result."
+    },
+    {
+      "label": "native-managed-question-owner-r465",
+      "scope": "Unsuccessful earlier iteration, not qualification.",
+      "reason": "The expired-state discriminator produced false instead of null for a non-expired interaction. Corrected before the passing owner checks."
+    },
+    {
+      "label": "native-owner-release-r467",
+      "scope": "Unsuccessful earlier iteration, not qualification.",
+      "reason": "Three teardown failures: newly earned canonical Stop events required deleting heartbeat_run_events before heartbeat_runs in both fixtures. Corrected before r468."
+    },
+    {
+      "label": "native-human-and-shared-owner-typecheck-r469",
+      "scope": "Unsuccessful earlier iteration, not qualification.",
+      "reason": "The new test omitted explicit parsed payload defaults. Corrected before r470 and the later full workspace check."
+    },
+    {
+      "label": "native-generated-operation-groups-r471",
+      "scope": "Unsuccessful earlier iteration, not qualification.",
+      "reason": "The three Runner catalog files passed 14 tests; the additional generation command used an unavailable tsx path. The official check passed with the correct pnpm command in r472."
+    },
+    {
+      "label": "native-managed-mode-catalog-r473",
+      "scope": "Unsuccessful earlier iteration, not qualification.",
+      "reason": "The lifecycle-only mock omitted the real tool-policy message export. Changed to an actual-module partial mock without changing its pre-existing lifecycle guard override; r474 and the full executor suite passed."
+    },
+    {
+      "label": "native-repository-and-source-owner-typecheck-r479",
+      "scope": "Unsuccessful earlier iteration, not qualification.",
+      "reason": "Two missing commas in the private combined Gateway catalog patch; corrected without changing the permitted tools."
+    },
+    {
+      "label": "native-repository-and-source-owner-typecheck-r481",
+      "scope": "Unsuccessful earlier iteration, not qualification.",
+      "reason": "Strict type narrowing and an accidental unused argument forwarding mismatch; corrected before r482."
+    }
+  ],
+  "boundary": "Every receipt qualifies only its recorded source bytes. The earlier failed regression iterations are retained beside the corrected regression receipt. Actual SDK-positive progress/question/repository flows, browser journeys, privileged Host/helper execution, paid-provider calls, deployment, representative Human evidence, full V10 acceptance and merge readiness are not established here. Historical requirement and migration-phase states are not promoted."
+}

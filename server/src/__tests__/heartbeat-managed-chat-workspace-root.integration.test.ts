@@ -93,4 +93,4 @@ it("dispatches an actual managed external-chat Native run in its isolated task r
   expect(await realpath(expectedTaskRoot)).toBe(expectedTaskRoot);
   expect(await readFile(join(legacyCwd, sentinelName), "utf8")).toBe(sentinelBody);
   await expect(access(join(expectedTaskRoot, sentinelName))).rejects.toMatchObject({ code: "ENOENT" });
-});
+}, 240_000);

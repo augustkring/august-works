@@ -85,10 +85,10 @@
     {
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "a2841ff3c8a57df361d49c95c7262c09a328139398123fe5eea3df0617519ad9",
+      "sourceSha256": "7b60e5bfab0e0ec2e49c9f31f860b5f4a180f5bfd79845e237490db755a3fb6c",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "Project creation now rechecks the exact repository connection and grant under transaction locks. The article already tells users to review the current account, scope, permissions, and displayed repair action; this backend revalidation does not change those steps."
+      "rationale": "Project creation revalidates the exact selected repository connection and Grant, current Human membership/audience, and the selected credential-secret version. A changed authorization witness blocks creation. The article already covers account, scope, permissions, and displayed repair action; these checks add no user-facing step."
     },
     {
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
@@ -173,10 +173,10 @@
     {
       "source": "server/src/services/tool-access.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "a2841ff3c8a57df361d49c95c7262c09a328139398123fe5eea3df0617519ad9",
+      "sourceSha256": "7b60e5bfab0e0ec2e49c9f31f860b5f4a180f5bfd79845e237490db755a3fb6c",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "Oprettelse af projekter kontrollerer nu den pr\u00e6cise repositoryforbindelse og adgang under transaktionsl\u00e5se. Artiklen vejleder allerede om at kontrollere konto, omfang, tilladelser og den viste reparationshandling; denne backendkontrol \u00e6ndrer ikke trinnene."
+      "rationale": "Ved projektoprettelse genkontrolleres den pr\u00e6cist valgte repositoryforbindelse og Grant, det aktuelle Human-medlemskab/audience samt versionen af den valgte credential secret. Et \u00e6ndret autorisationsgrundlag blokerer oprettelsen. Artiklen d\u00e6kker allerede konto, omfang, tilladelser og vist reparationshandling; kontrollen tilf\u00f8jer ingen brugerrettet handling."
     },
     {
       "source": "ui/src/components/JevSkillSuggestionSettings.tsx",
@@ -1581,7 +1581,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
+      "sourceSha256": "0fdf7e89d67910247315adb184e6543bf3f547d0a95be81b7db9c88fb6edc152",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
@@ -1685,7 +1685,7 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
+      "sourceSha256": "0fdf7e89d67910247315adb184e6543bf3f547d0a95be81b7db9c88fb6edc152",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."

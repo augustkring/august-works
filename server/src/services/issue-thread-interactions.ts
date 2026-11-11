@@ -2028,7 +2028,7 @@ export function issueThreadInteractionService(
   }
 
   async function assertIssueWorkspaceFinalizedForAccept(args: {
-    db: Pick<Db, "select">;
+    db: Db;
     issue: { id: string; companyId: string };
     sourceRunId: string | null;
   }) {

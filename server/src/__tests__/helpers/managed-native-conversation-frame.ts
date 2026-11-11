@@ -145,6 +145,8 @@ export async function runManagedNativeConversationFrame(input: {
     facts?: () => Record<string, unknown>;
     modelRequest?: (body: unknown, signal: AbortSignal) => ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
   }>;
+  /** Test-only mutation window at broker ingress, before Gateway request validation. */
+  beforeManagedConversationModelRequest?: (context: { db: ReturnType<typeof createDb>; requestNumber: number }) => Promise<void>;
   beforeProviderResponse?: (facts: {
     db: ReturnType<typeof createDb>;
     actor: AuthorizationActor;
@@ -283,6 +285,7 @@ export async function runManagedNativeConversationFrame(input: {
     sqlState?: string; constraint?: string; errorName?: string; errorStatus?: number;
     errorCode?: string; serviceFrames?: string[] }> = [];
   const providerCalls: Array<{ body: Record<string, unknown>; keyMatches: boolean }> = [];
+  let managedConversationModelRequestCount = 0;
   const gateway = workerModelGateway(db, { profiles: [profile], sourceSha,
     protectedEvidenceOrigin: "https://protected.test.invalid", fetch: async (url, init) => {
       if (String(url) !== "https://api.anthropic.com/v1/messages") {
@@ -376,6 +379,15 @@ export async function runManagedNativeConversationFrame(input: {
       res.once("finish", () => { fact.status = res.statusCode; brokerRequestFacts.push(fact); });
     }
     next();
+  });
+  // This fixture-only observer must run before the optional sandbox relay,
+  // which owns the authenticated request and intentionally does not call next.
+  brokerApp.use((req, _res, next) => {
+    if (req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages" ||
+      !input.beforeManagedConversationModelRequest) { next(); return; }
+    managedConversationModelRequestCount += 1;
+    void input.beforeManagedConversationModelRequest({ db, requestNumber: managedConversationModelRequestCount })
+      .then(() => next(), next);
   });
   brokerApp.use((req, res, next) => {
     if (!input.sandboxRelay || req.method !== "POST" || req.path !== "/runtime-tools/model/v1/messages") { next(); return; }

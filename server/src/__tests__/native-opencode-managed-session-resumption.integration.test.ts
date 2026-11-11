@@ -4,14 +4,15 @@ import { join } from "node:path";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { authSessions, createDb, documents, heartbeatRuns, heartbeatRunEvents, issueDocuments, issueThreadInteractions,
-  nativeRunFinalizations, nativeRunResults, workAssessments, statusDecisions } from "@paperclipai/db";
+import { activityLog, authSessions, createDb, documents, heartbeatRuns, heartbeatRunEvents, issueDocuments, issueThreadInteractions,
+  nativeRunFinalizations, nativeRunResults, toolInvocations, workAssessments, statusDecisions } from "@paperclipai/db";
 import { issueService } from "../services/issues.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { withManagedNativeHeartbeatFixture } from "./helpers/managed-native-heartbeat-fixture.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import type { PersistedNativeSession } from "../vendor/paperclip-runner/index.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 
 const variants = ["unchanged", "newer_active", "stale_idle"] as const;
 let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -64,6 +65,8 @@ describe.each(variants)("genuine managed OpenCode checkpoint resumption (%s)", v
     let providerBoundaryObserved = false;
     let planDocument: { id: string; revisionId: string; revisionNumber: number } | undefined;
     let pendingInteractionId: string | undefined;
+    let confirmationCallId: string | undefined;
+    const confirmationPrompt = "Accept the saved implementation plan before continuing?";
     let capturedSnapshot: PersistedNativeSession | undefined;
     let capturedResolve!: (value: PersistedNativeSession) => void;
     const checkpointCaptured = new Promise<PersistedNativeSession>(resolve => { capturedResolve = resolve; });
@@ -87,10 +90,11 @@ describe.each(variants)("genuine managed OpenCode checkpoint resumption (%s)", v
         }
         if (runId === originalRunId && variant !== "unchanged" && callIndex === 2) {
           if (!planDocument) throw new Error("managed_resumption_saved_plan_revision_missing");
-          return { stop_reason: "tool_use", content: [{ type: "tool_use", id: `resumption-confirm-${runId}`,
+          confirmationCallId = `resumption-confirm-${runId}`;
+          return { stop_reason: "tool_use", content: [{ type: "tool_use", id: confirmationCallId,
             name: toolName(body, "request_human_input"), input: { idempotencyKey: `resumption-confirm:${runId}`,
               interactionKind: "confirmation", title: "Confirm the saved implementation plan",
-              prompt: "Accept the saved implementation plan before continuing?",
+              prompt: confirmationPrompt,
               continuationPolicy: "wake_assignee_on_accept", resolverPolicy: "human_only",
               payload: { version: 1, prompt: "Accept the saved implementation plan?", target: {
                 type: "issue_document", issueId: execution.binding.issueId, documentId: planDocument.id,
@@ -201,6 +205,62 @@ describe.each(variants)("genuine managed OpenCode checkpoint resumption (%s)", v
 
         if (variant !== "unchanged") {
           await waitFor(() => Boolean(pendingInteractionId));
+          const [pendingQuestion] = await db.select().from(issueThreadInteractions)
+            .where(and(eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.issueId, task.id),
+              eq(issueThreadInteractions.id, pendingInteractionId!)));
+          expect(pendingQuestion).toMatchObject({ companyId, issueId: task.id, sourceRunId: wake.id,
+            createdByAgentId: agentId, kind: "request_confirmation", status: "pending" });
+          await waitFor(async () => {
+            const [current] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson,
+              resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
+            const profile = current?.runnerProfileJson as Record<string, any> | null;
+            const captures = Array.isArray(profile?.nativeToolResultSourceCaptures)
+              ? profile!.nativeToolResultSourceCaptures as Array<Record<string, any>> : [];
+            return captures.find(value => value.callId === confirmationCallId &&
+              value.tool === "request_human_input" && typeof value.resultDigest === "string") ?? null;
+          }, "persisted_human_question_tool_result", 60_000);
+          const [questionRun] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson,
+            resultJson: heartbeatRuns.resultJson }).from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id));
+          const questionProfile = questionRun!.runnerProfileJson as Record<string, any>;
+          const questionCapture = (questionProfile.nativeToolResultSourceCaptures as Array<Record<string, any>>)
+            .find(value => value.callId === confirmationCallId && value.tool === "request_human_input")!;
+          expect(questionCapture).toMatchObject({ callId: confirmationCallId, tool: "request_human_input",
+            eventSeq: expect.any(Number), attempt: expect.any(Number), resultDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+            source: { kind: "tool_result", runId: wake.id, callId: confirmationCallId,
+              toolName: "request_human_input", invocationId: expect.any(String) } });
+          expect(questionCapture.source.contentHash).toBe(questionCapture.resultDigest);
+          expect(questionCapture.questionInteractionOwner).toMatchObject({
+            status: "pending", sourceVersion: expect.stringMatching(/^\d+(?:\.\d+)?$/), decisionSource: null,
+          });
+          expect(questionCapture.outputCapture).toMatchObject({ runId: wake.id, dispatch: {
+            kind: expect.stringMatching(/^(worker_model_dispatch|conversation_model_dispatch)$/), runId: wake.id,
+          }, managedOpenCodeToolUse: { callId: confirmationCallId, toolName: "request_human_input",
+            argumentsHash: expect.stringMatching(/^[a-f0-9]{64}$/), responseContentHash: expect.stringMatching(/^[a-f0-9]{64}$/) } });
+          const [questionInvocation] = await db.select().from(toolInvocations).where(and(
+            eq(toolInvocations.companyId, companyId), eq(toolInvocations.id, questionCapture.source.invocationId),
+            eq(toolInvocations.runId, wake.id), eq(toolInvocations.issueId, task.id), eq(toolInvocations.agentId, agentId),
+            eq(toolInvocations.toolName, "request_human_input"), eq(toolInvocations.status, "succeeded"),
+            eq(toolInvocations.resultHash, questionCapture.resultDigest)));
+          expect(questionInvocation).toBeDefined();
+          const toolReceipt = (questionRun!.resultJson as Record<string, any>).semanticToolReceipts?.[`resumption-confirm:${wake.id}`];
+          expect(toolReceipt).toMatchObject({ operationId: "request_human_input", nativeInputDispatch: {
+            callId: confirmationCallId, turnId: questionCapture.turnId, dispatchId: expect.stringMatching(/^[a-f0-9-]{36}$/),
+            eventSeq: questionCapture.eventSeq, attempt: questionCapture.attempt } });
+          expect(nativeSha256(toolReceipt.result)).toBe(questionCapture.resultDigest);
+          expect(questionProfile.nativeInputSourceReceipt.additionalInputs).toEqual(expect.arrayContaining([
+            expect.objectContaining({ responsibleUserId: actor.userId,
+              inputs: expect.arrayContaining([expect.objectContaining({ kind: "tool_result", runId: wake.id,
+                callId: confirmationCallId, toolName: "request_human_input", contentHash: questionCapture.resultDigest })]) }),
+          ]));
+          const [questionActivity] = await db.select({ details: activityLog.details }).from(activityLog).where(and(
+            eq(activityLog.companyId, companyId), eq(activityLog.issueId, task.id),
+            eq(activityLog.action, "issue.thread_interaction_created"),
+            sql`${activityLog.details}->>'interactionId' = ${pendingInteractionId}`)).limit(1);
+          expect(questionActivity).toBeDefined();
+          const activityDetails = questionActivity!.details as Record<string, unknown>;
+          expect(activityDetails).not.toHaveProperty("prompt");
+          expect(activityDetails).not.toHaveProperty("summary");
+          expect(Object.values(activityDetails)).not.toContain(confirmationPrompt);
           if (!actor.sessionId) throw new Error("managed_resumption_current_human_session_missing");
           const [currentSession] = await db.select({ id: authSessions.id, userId: authSessions.userId,
             expiresAt: authSessions.expiresAt }).from(authSessions).where(and(eq(authSessions.id, actor.sessionId),
@@ -275,11 +335,19 @@ describe.each(variants)("genuine managed OpenCode checkpoint resumption (%s)", v
           expect(followup).toBeDefined();
           expect(followup!.id).not.toBe(wake.id);
           expect(followup!.status).toBe("succeeded");
+          const followupProfile = followup!.runnerProfileJson as Record<string, any>;
+          expect(followupProfile.nativeInputSourceReceipt).toMatchObject({ binding: {
+            companyId, issueId: task.id, agentId, responsibleUserId: actor.userId,
+          } });
+          expect(followupProfile.nativeInputSourceReceipt.bootstrap.inputs).toEqual(expect.arrayContaining([
+            expect.objectContaining({ kind: "interaction", issueId: task.id, interactionId: pendingInteractionId }),
+          ]));
           await closeManagedAgentHostForRun(followup!.id);
         }
         await closeManagedAgentHostForRun(wake.id);
       } finally {
         releaseCheckpoint();
+      }
       },
     });
   }, 900_000);

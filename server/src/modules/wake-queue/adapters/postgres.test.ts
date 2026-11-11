@@ -1,4 +1,8 @@
 import { instanceSettingsService } from "../../../services/instance-settings.js";
+import { spawn } from "node:child_process";
+import { issueService } from "../../../services/issues.js";
+import { persistHeartbeatRunProcessMetadata } from "../../../services/heartbeat.js";
+import { recordNativeLocalProcessStopAfterExit } from "../../../services/native-local-process-stop.js";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -13,6 +17,7 @@ import {
   environmentLeases,
   nativeRunFinalizations,
   nativeRunResults,
+  heartbeatRunEvents,
   heartbeatRuns,
   issueComments,
   issueRecoveryActions,
@@ -68,6 +73,7 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     await db.delete(environmentLeases);
     await db.delete(nativeRunFinalizations);
     await db.delete(nativeRunResults);
+    await db.delete(heartbeatRunEvents);
     await db.delete(heartbeatRuns);
     await db.delete(agentWakeupRequests);
     await db.delete(issueRecoveryActions);
@@ -156,6 +162,34 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     return runId;
   }
 
+  async function recordSettledNativeLocalRun(runId: string, companyId: string) {
+    const child = spawn(process.execPath, ["-e", "setTimeout(() => process.exit(0), 60)"], {
+      detached: true,
+      stdio: "ignore",
+    });
+    if (!child.pid) throw new Error("Native owner proof child did not expose a PID");
+    const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+    await persistHeartbeatRunProcessMetadata(db, runId, {
+      pid: child.pid,
+      processGroupId: child.pid,
+      startedAt: new Date().toISOString(),
+    });
+    await db.insert(environmentLeases).values({
+      companyId,
+      heartbeatRunId: runId,
+      provider: "local",
+      status: "active",
+      leasePolicy: "ephemeral",
+    });
+    await closed;
+    await db.update(environmentLeases).set({
+      status: "released",
+      releasedAt: new Date(),
+      cleanupStatus: "success",
+    }).where(eq(environmentLeases.heartbeatRunId, runId));
+    expect(await recordNativeLocalProcessStopAfterExit(db, companyId, runId)).toBe(true);
+  }
+
   async function seedDeferredWake(input: {
     companyId: string;
     agentId: string;
@@ -230,6 +264,63 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     expect(drained).toBe(false);
     expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
       .toMatchObject({ status: "deferred_issue_execution", runId: null });
+  });
+
+  it("retains terminal Native execution and checkout pointers while cleanup is unknown", async () => {
+    const companyId = await seedCompany();
+    const agentId = await seedAgent({ companyId });
+    const issueId = await seedIssue({ companyId, assigneeAgentId: agentId, status: "blocked" });
+    const runId = await seedRun({ companyId, agentId, status: "failed", contextSnapshot: { issueId } });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId,
+      finishedAt: new Date(), nativeProcessCleanupPending: null }).where(eq(heartbeatRuns.id, runId));
+    await db.update(issues).set({ executionRunId: runId, checkoutRunId: runId }).where(eq(issues.id, issueId));
+
+    const owner = issueService(db);
+    expect(await owner.clearExecutionRunIfTerminal(issueId)).toBe(false);
+    expect(await owner.clearCheckoutRunIfTerminal(issueId)).toBe(false);
+    expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+      .toMatchObject({ executionRunId: runId, checkoutRunId: runId });
+  });
+
+  it("keeps a foreign checkout owner when the execution pointer is Native", async () => {
+    const companyId = await seedCompany();
+    const agentId = await seedAgent({ companyId });
+    const issueId = await seedIssue({ companyId, assigneeAgentId: agentId, status: "blocked" });
+    const runId = await seedRun({ companyId, agentId, status: "failed", contextSnapshot: { issueId } });
+    const foreignRunId = await seedRun({ companyId, agentId, status: "running", contextSnapshot: { issueId } });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId,
+      finishedAt: new Date(), nativeProcessCleanupPending: null }).where(eq(heartbeatRuns.id, runId));
+    await db.update(issues).set({ executionRunId: runId, checkoutRunId: foreignRunId }).where(eq(issues.id, issueId));
+
+    const owner = issueService(db);
+    expect(await owner.clearExecutionRunIfTerminal(issueId)).toBe(false);
+    expect(await owner.clearCheckoutRunIfTerminal(issueId)).toBe(false);
+    expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+      .toMatchObject({ executionRunId: runId, checkoutRunId: foreignRunId });
+  });
+
+  it("keeps legacy terminal cleanup and clears Native only after its canonical local Stop", async () => {
+    const companyId = await seedCompany();
+    const agentId = await seedAgent({ companyId });
+    const issueId = await seedIssue({ companyId, assigneeAgentId: agentId, status: "blocked" });
+    const legacyRunId = await seedRun({ companyId, agentId, status: "failed", contextSnapshot: { issueId } });
+    await db.update(heartbeatRuns).set({ runtimeMode: "legacy", finishedAt: new Date() }).where(eq(heartbeatRuns.id, legacyRunId));
+    await db.update(issues).set({ executionRunId: legacyRunId, checkoutRunId: legacyRunId }).where(eq(issues.id, issueId));
+    const owner = issueService(db);
+    expect(await owner.clearExecutionRunIfTerminal(issueId)).toBe(true);
+    expect(await owner.clearCheckoutRunIfTerminal(issueId)).toBe(true);
+    expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+      .toMatchObject({ executionRunId: null, checkoutRunId: null });
+
+    const nativeRunId = await seedRun({ companyId, agentId, status: "failed", contextSnapshot: { issueId } });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId,
+      finishedAt: new Date(), nativeProcessCleanupPending: null }).where(eq(heartbeatRuns.id, nativeRunId));
+    await db.update(issues).set({ executionRunId: nativeRunId, checkoutRunId: nativeRunId }).where(eq(issues.id, issueId));
+    await recordSettledNativeLocalRun(nativeRunId, companyId);
+    expect(await owner.clearExecutionRunIfTerminal(issueId)).toBe(true);
+    expect(await owner.clearCheckoutRunIfTerminal(issueId)).toBe(true);
+    expect((await db.select().from(issues).where(eq(issues.id, issueId)))[0])
+      .toMatchObject({ executionRunId: null, checkoutRunId: null });
   });
 
   it("recovers a historical mention without consuming a former owner's task messages", async () => {

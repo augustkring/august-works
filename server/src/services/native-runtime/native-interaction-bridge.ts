@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { Db } from "@paperclipai/db";
 import type { NativeInteractionResponseEnvelope } from "../../vendor/paperclip-runner/index.js";
 import type { AuthorizationActor } from "../authorization.js";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   agents,
   toolActionRequests,
@@ -11,6 +11,7 @@ import {
   heartbeatRuns,
   issues,
   issueThreadInteractions,
+  issueComments,
   nativeRunFinalizations,
   nativeRunResults,
   statusDecisions,
@@ -18,7 +19,8 @@ import {
   activityLog,
   orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts,
 } from "@paperclipai/db";
-import { getAgentWorkEligibility, askUserQuestionsPayloadSchema, askUserQuestionsResultSchema, requestConfirmationResultSchema, type ExecutionContinuationEnvelope, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { getAgentWorkEligibility, askUserQuestionsPayloadSchema, askUserQuestionsResultSchema, requestConfirmationResultSchema,
+  requestItemVerdictsResultSchema, type ExecutionContinuationEnvelope, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { nativeSha256 } from "./canonical.js";
@@ -543,6 +545,8 @@ export async function materializeNativeInteractionResponses(input: {
   onContinuationSourceCapture?: (capture: NativeGovernedInteractionContinuationCapture) => void;
   onAnsweredQuestionCapture?: (capture: NativeAnsweredQuestionContinuationCapture) => void;
   onHumanReviewWithdrawalCapture?: (capture: NativeHumanReviewWithdrawalCapture) => void;
+  /** Include a canonical expired supersession outcome as a source-only response for the exact managed question result owner. */
+  includeSupersededOutcomes?: boolean;
 }): Promise<NativeInteractionResponseEnvelope[]> {
   const requestedIds = new Set(input.interactionIds.filter(Boolean));
   if (requestedIds.size === 0) return [];
@@ -603,10 +607,51 @@ export async function materializeNativeInteractionResponses(input: {
       }
     }
     const interactionResult = record(interaction.result);
-    const supersessionOutcome = interaction.status === "expired"
-      && ["superseded_by_newer_request", "superseded_by_comment", "stale_target"].includes(String(interactionResult.outcome));
+    const supersessionKind = interaction.status === "expired" ?
+      (["superseded_by_newer_request", "superseded_by_comment", "stale_target"].includes(String(interactionResult.outcome))
+        ? String(interactionResult.outcome)
+        : input.includeSupersededOutcomes && interaction.kind === "ask_user_questions" &&
+          ["superseded_by_newer_interaction", "superseded_by_comment"].includes(String(interactionResult.expirationReason))
+          ? String(interactionResult.expirationReason) : null) : null;
+    const supersessionOutcome = supersessionKind !== null;
     if (supersessionOutcome) {
-      const duplicate = interactionResult.outcome === "superseded_by_newer_request";
+      // Managed tool-result reconstruction is source-only. Its opt-in path must
+      // not mutate the interaction (or mint a different source version) while
+      // the exact callback result is being captured. Ordinary callers retain
+      // the established attention-status side effects below.
+      if (input.includeSupersededOutcomes && ["superseded_by_newer_request", "superseded_by_comment", "superseded_by_newer_interaction"].includes(String(supersessionKind))) {
+        const newer = supersessionKind === "superseded_by_newer_request" || supersessionKind === "superseded_by_newer_interaction";
+        const expectedKeys = interaction.kind === "ask_user_questions"
+          ? newer ? "answers,expirationReason,summaryMarkdown,supersededByInteractionId,version" : "answers,commentId,expirationReason,summaryMarkdown,version"
+          : interaction.kind === "request_item_verdicts"
+            ? "commentId,complete,items,outcome,version"
+            : newer ? "outcome,supersededByInteractionId,version" : "commentId,outcome,version";
+        const parsedResult = interaction.kind === "ask_user_questions"
+          ? askUserQuestionsResultSchema.safeParse(interaction.result)
+          : interaction.kind === "request_item_verdicts"
+            ? requestItemVerdictsResultSchema.safeParse(interaction.result)
+            : requestConfirmationResultSchema.safeParse(interaction.result);
+        if (!parsedResult.success || Object.keys(interactionResult).sort().join(",") !== expectedKeys || interactionResult.version !== 1)
+          throw new NativeInteractionBridgeError("native_interaction_supersession_owner_mismatch", "Superseded interaction result has an invalid canonical shape");
+        if (newer) {
+          const replacementId = interactionResult.supersededByInteractionId;
+          const replacement = typeof replacementId === "string" ? interactions.find(row => row.id === replacementId) : null;
+          if (!replacement || replacement.createdByAgentId !== input.agentId || replacement.createdAt < interaction.createdAt)
+            throw new NativeInteractionBridgeError("native_interaction_supersession_owner_mismatch", "Replacement interaction owner changed");
+        } else {
+          const commentId = interactionResult.commentId;
+          const [comment] = typeof commentId === "string" ? await input.db.select().from(issueComments).where(and(
+            eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+            eq(issueComments.id, commentId), isNull(issueComments.deletedAt))) : [];
+          if (!comment || !comment.authorUserId || comment.createdByRunId || interaction.resolvedByUserId !== comment.authorUserId ||
+            interaction.resolvedByAgentId || interaction.resolvedByRunId || comment.createdAt < interaction.createdAt)
+            throw new NativeInteractionBridgeError("native_interaction_supersession_owner_mismatch", "Human comment supersession owner changed");
+        }
+        responses.push({ interactionId: interaction.id, kind: interaction.kind,
+          response: { status: interaction.status, result: structuredClone(interaction.result!) as unknown as Record<string, unknown> } });
+        continue;
+      }
+      const duplicate = supersessionKind === "superseded_by_newer_request" || supersessionKind === "superseded_by_newer_interaction";
       const decision = resolveNativeAttentionStatus({
         facts: duplicate
           ? {
@@ -953,6 +998,38 @@ export async function materializeNativeInteractionResponses(input: {
     }
   }
   return redacted;
+}
+
+/** Reconstruct the current durable owner of one managed question result. Pending state stays a versioned pending owner; terminal Human resolution or supported supersession must pass the canonical Native interaction projection. */
+export async function captureNativeManagedQuestionInteractionOwner(input: {
+  db: Db; companyId: string; issueId: string; runId: string; agentId: string; interactionId: string;
+  reader: AuthorizationActor;
+}): Promise<{ status: string; sourceVersion: string; decisionSource: Extract<NativePayloadSourceInput, { kind: "interaction" }> | null }> {
+  const versions = new Map<string, string>();
+  const rows = await issueThreadInteractionService(input.db).listForIssue(input.issueId,
+    { onSourceVersionSelected: (id, version) => { versions.set(id, version); } });
+  const interaction = rows.find(row => row.id === input.interactionId);
+  const sourceVersion = versions.get(input.interactionId);
+  if (!interaction || !sourceVersion || interaction.companyId !== input.companyId || interaction.issueId !== input.issueId ||
+    !["request_confirmation", "request_checkbox_confirmation", "ask_user_questions", "suggest_tasks", "request_item_verdicts"].includes(interaction.kind) ||
+    interaction.sourceRunId !== input.runId || interaction.createdByAgentId !== input.agentId)
+    throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Managed question interaction owner changed");
+  if (interaction.status === "pending") {
+    if ((interaction.kind !== "request_item_verdicts" && interaction.result !== null) || interaction.resolvedAt ||
+      interaction.resolvedByUserId || interaction.resolvedByAgentId || interaction.resolvedByRunId)
+      throw new NativeInteractionBridgeError("native_interaction_unresolved", "Pending managed question has a terminal decision");
+    return { status: interaction.status, sourceVersion, decisionSource: null };
+  }
+  if (["accepted", "rejected", "answered", "cancelled"].includes(interaction.status) &&
+    (!interaction.resolvedByUserId || interaction.resolvedByAgentId || interaction.resolvedByRunId))
+    throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Managed question decision has no Human owner");
+  const sources: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
+  await materializeNativeInteractionResponses({ db: input.db, companyId: input.companyId, issueId: input.issueId,
+    runId: input.runId, agentId: input.agentId, interactionIds: [input.interactionId], sourceReader: input.reader,
+    includeSupersededOutcomes: true, onSourceCapture: source => { sources.push(source); } });
+  if (sources.length !== 1 || sources[0]!.sourceVersion !== sourceVersion)
+    throw new NativeInteractionBridgeError("native_interaction_binding_mismatch", "Managed question decision source changed");
+  return { status: interaction.status, sourceVersion, decisionSource: sources[0]! };
 }
 
 export type LegacyQuestionResponseWakeProjection = {

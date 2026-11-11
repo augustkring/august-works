@@ -1,0 +1,62 @@
+{
+  "cacheAdvice": [
+    {
+      "elapsedSeconds": 2.4637037990032695,
+      "filesAdvised": 370942,
+      "memoryAfter": 6096056320,
+      "contentChanged": false,
+      "activeTemporaryWorkspacesExcluded": true
+    }
+  ],
+  "harnessSha256": "bafea5850649c61ca27cbe7f37c1f0182382e11d0a38cd14e288f9b9d4fd4649",
+  "command": [
+    "node",
+    "/workspace/blentera-v10/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.config.ts",
+    "src/services/native-runtime/native-session-executor.test.ts",
+    "-t",
+    "managed OpenCode mode-aware tool completeness",
+    "--maxWorkers=1"
+  ],
+  "cwd": "/workspace/blentera-v10/server",
+  "leaseWaitSeconds": 4.445700324140489e-05,
+  "sourceManifest": "native-managed-mode-catalog-r473-source-manifest.json",
+  "filesystemFloorBytes": {
+    "/workspace": 122880000,
+    "/tmp": 1073741824
+  },
+  "globalMemoryReserveBytes": 2147483648,
+  "exit": 1,
+  "seconds": 16.820862013002625,
+  "stopReason": null,
+  "nodeHeapMiB": 1536,
+  "ownedDescendantRssLimitBytes": 8589934592,
+  "observedPeakOwnedDescendantRssBytes": 1561423872,
+  "processRssAtObservedPeak": [
+    {
+      "pid": 614283,
+      "parentPid": 614227,
+      "executable": "node",
+      "rssBytes": 889737216,
+      "nodeOptions": "--max-old-space-size=1536"
+    },
+    {
+      "pid": 614313,
+      "parentPid": 614283,
+      "executable": "node",
+      "rssBytes": 671686656,
+      "nodeOptions": "--max-old-space-size=1536"
+    }
+  ],
+  "rssAccounting": "sum of per-process RSS, including shared pages in each mapped process; sampled observation, not unique physical memory",
+  "trackedPidCount": 2,
+  "observedPostgresRelatedPids": [],
+  "uniqueTempRoot": "/var/tmp/mpg-zbz9_xws",
+  "samplingIntervalSeconds": 0.2,
+  "samples": 72,
+  "memoryBefore": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memoryAfter": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "qualification": "controlled component modules, no PostgreSQL process observed; no external provider/SDK/host proof"
+}

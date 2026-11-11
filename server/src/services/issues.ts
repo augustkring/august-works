@@ -7,6 +7,7 @@ import { documentService } from "./documents.js";
 import { parseTaskSearch, taskSearchCtes, taskSearchScore } from "./task-search.js";
 import { createdFromIssueCondition } from "./issue-creation-origin.js";
 import { executionProjectionsForRuns } from "./execution-projection.js";
+import { nativeOwnerReleaseHasCleanupProof } from "./native-owner-release.js";
 import { hasPendingRunCleanup } from "./execution-blocker.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
@@ -3050,16 +3051,22 @@ async function listPendingFinalizeBlockerIssueIds(
  * workspace, so callers must not wait on it to advance an in-flight operation.
  */
 export async function heartbeatRunIsTerminalOrMissing(
-  dbOrTx: Pick<Db, "select">,
+  dbOrTx: Db,
   runId: string,
+  expectedIssueId?: string,
 ): Promise<boolean> {
   const run = await dbOrTx
-    .select({ status: heartbeatRuns.status })
+    .select()
     .from(heartbeatRuns)
     .where(eq(heartbeatRuns.id, runId))
-    .then((rows: Array<{ status: string }>) => rows[0] ?? null);
+    .then((rows) => rows[0] ?? null);
   if (!run) return true;
-  return TERMINAL_HEARTBEAT_RUN_STATUSES.has(run.status);
+  if (!TERMINAL_HEARTBEAT_RUN_STATUSES.has(run.status)) return false;
+  if (run.runtimeMode !== "native") return true;
+  const nativeIssueId = expectedIssueId ?? run.nativeIssueId;
+  if (!nativeIssueId || run.nativeIssueId !== nativeIssueId ||
+      parseObject(run.contextSnapshot).issueId !== nativeIssueId) return false;
+  return nativeOwnerReleaseHasCleanupProof(dbOrTx, run, nativeIssueId);
 }
 
 /**
@@ -3078,12 +3085,11 @@ export async function heartbeatRunIsTerminalOrMissing(
  *   the gate forever — a failed sync-back must not permanently block a
  *   confirmation accept behind a misleading "still syncing" error.
  * - Latest `workspace_finalize` is still `running` → in flight, so NOT settled —
- *   unless the owning run has itself ended, in which case the `running` record is
- *   stale (the process died mid-finalize) and we treat it as settled rather than
- *   wait on a run that can never make progress.
+ *   unless the owning run has itself ended. Legacy runs keep the status rule;
+ *   Native runs count as ended only after exact physical-owner and cleanup proof.
  */
 export async function runWorkspaceIsFinalized(
-  dbOrTx: Pick<Db, "select">,
+  dbOrTx: Db,
   companyId: string,
   executionWorkspaceId: string,
   runId: string,
@@ -3119,8 +3125,8 @@ export async function runWorkspaceIsFinalized(
   // and `skipped`. It will not retry within this run, so gates must stop waiting.
   if (latestFinalize.status !== "running") return true;
 
-  // Finalize is still marked `running`. It is only genuinely in flight while the
-  // owning run is alive; a `running` record left behind by an ended run is stale.
+  // Finalize is still marked `running`. A `running` record is stale only after
+  // the run itself is terminal and, for Native, its physical owner has settled.
   return heartbeatRunIsTerminalOrMissing(dbOrTx, runId);
 }
 
@@ -7989,9 +7995,10 @@ export function issueService(db: Db) {
 
   async function isTerminalOrMissingHeartbeatRun(
     runId: string,
-    dbOrTx: DbReader = db,
+    issueId: string,
+    dbOrTx: Db = db,
   ) {
-    return heartbeatRunIsTerminalOrMissing(dbOrTx, runId);
+    return heartbeatRunIsTerminalOrMissing(dbOrTx, runId, issueId);
   }
 
   async function adoptStaleCheckoutRun(input: {
@@ -8035,7 +8042,7 @@ export function issueService(db: Db) {
       ]);
       const [existingRun, actorRun] = await Promise.all([
         tx
-          .select({ status: heartbeatRuns.status })
+          .select()
           .from(heartbeatRuns)
           .where(eq(heartbeatRuns.id, input.expectedCheckoutRunId))
           .then((rows) => rows[0] ?? null),
@@ -8045,8 +8052,9 @@ export function issueService(db: Db) {
           .where(eq(heartbeatRuns.id, input.actorRunId))
           .then((rows) => rows[0] ?? null),
       ]);
-      const stale =
-        !existingRun || TERMINAL_HEARTBEAT_RUN_STATUSES.has(existingRun.status);
+      const stale = !existingRun || await heartbeatRunIsTerminalOrMissing(
+        tx as unknown as Db, input.expectedCheckoutRunId, input.issueId,
+      );
       const actorLive =
         actorRun && !TERMINAL_HEARTBEAT_RUN_STATUSES.has(actorRun.status);
       if (!stale || !actorLive) {
@@ -8156,7 +8164,7 @@ export function issueService(db: Db) {
         sql`select ${issues.id} from ${issues} where ${issues.id} = ${issueId} for update`,
       );
       const issue = await tx
-        .select({ executionRunId: issues.executionRunId })
+        .select({ executionRunId: issues.executionRunId, checkoutRunId: issues.checkoutRunId })
         .from(issues)
         .where(eq(issues.id, issueId))
         .then((rows) => rows[0] ?? null);
@@ -8166,11 +8174,12 @@ export function issueService(db: Db) {
         sql`select ${heartbeatRuns.id} from ${heartbeatRuns} where ${heartbeatRuns.id} = ${issue.executionRunId} for update`,
       );
       const run = await tx
-        .select({ status: heartbeatRuns.status })
+        .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, issue.executionRunId))
         .then((rows) => rows[0] ?? null);
-      if (run && !TERMINAL_HEARTBEAT_RUN_STATUSES.has(run.status)) return false;
+      if (run?.runtimeMode === "native" && issue.checkoutRunId && issue.checkoutRunId !== issue.executionRunId) return false;
+      if (!await heartbeatRunIsTerminalOrMissing(tx as unknown as Db, issue.executionRunId, issueId)) return false;
 
       const updated = await tx
         .update(issues)
@@ -8193,11 +8202,9 @@ export function issueService(db: Db) {
     });
   }
 
-  // Symmetric to clearExecutionRunIfTerminal. Clears checkoutRunId (and the
-  // bundled execution lock cols) when the row's checkoutRunId points at a
-  // heartbeat run that is terminal or no longer exists. No assignee/status
-  // precondition: a terminal run holds no real claim regardless of who is
-  // assigned or what status the issue is currently in.
+  // Symmetric to clearExecutionRunIfTerminal. Clears checkoutRunId and bundled
+  // execution lock cols only after the referenced owner is settled. Legacy
+  // terminal runs retain the status rule; Native runs require family cleanup proof.
   async function clearCheckoutRunIfTerminal(issueId: string): Promise<boolean> {
     return db.transaction(async (tx) => {
       await tx.execute(
@@ -8216,12 +8223,7 @@ export function issueService(db: Db) {
       await tx.execute(
         sql`select ${heartbeatRuns.id} from ${heartbeatRuns} where ${heartbeatRuns.id} = ${issue.checkoutRunId} for update`,
       );
-      const run = await tx
-        .select({ status: heartbeatRuns.status })
-        .from(heartbeatRuns)
-        .where(eq(heartbeatRuns.id, issue.checkoutRunId))
-        .then((rows) => rows[0] ?? null);
-      if (run && !TERMINAL_HEARTBEAT_RUN_STATUSES.has(run.status)) return false;
+      if (!await heartbeatRunIsTerminalOrMissing(tx as unknown as Db, issue.checkoutRunId, issueId)) return false;
 
       if (
         issue.executionRunId &&
@@ -8230,16 +8232,7 @@ export function issueService(db: Db) {
         await tx.execute(
           sql`select ${heartbeatRuns.id} from ${heartbeatRuns} where ${heartbeatRuns.id} = ${issue.executionRunId} for update`,
         );
-        const executionRun = await tx
-          .select({ status: heartbeatRuns.status })
-          .from(heartbeatRuns)
-          .where(eq(heartbeatRuns.id, issue.executionRunId))
-          .then((rows) => rows[0] ?? null);
-        if (
-          executionRun &&
-          !TERMINAL_HEARTBEAT_RUN_STATUSES.has(executionRun.status)
-        )
-          return false;
+        if (!await heartbeatRunIsTerminalOrMissing(tx as unknown as Db, issue.executionRunId, issueId)) return false;
       }
 
       const updated = await tx
@@ -13227,7 +13220,7 @@ export function issueService(db: Db) {
         (current.assigneeAgentId === agentId || current.assigneeAgentId == null)
       ) {
         const stale = await isTerminalOrMissingHeartbeatRun(
-          current.executionRunId,
+          current.executionRunId, id,
         );
         if (stale) {
           const now = new Date();
@@ -13475,8 +13468,7 @@ export function issueService(db: Db) {
           !sameRunLock(existing.checkoutRunId, actorRunId ?? null)
         ) {
           const stale = await isTerminalOrMissingHeartbeatRun(
-            existing.checkoutRunId,
-            tx,
+            existing.checkoutRunId, id, tx as unknown as Db,
           );
           if (!stale) {
             throw conflict("Only checkout run can release issue", {

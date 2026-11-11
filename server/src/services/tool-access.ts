@@ -3166,11 +3166,75 @@ function readStdioTemplateId(config: Record<string, unknown>): string {
   return templateId.trim();
 }
 
+function projectRepositoryAuthorizationVersion(input: {
+  connection: typeof toolConnections.$inferSelect;
+  grant: typeof connectionGrants.$inferSelect | null;
+  userId: string | null;
+  activeMember: boolean;
+  audience: string[];
+  credentialSecretVersions: Array<{ secretId: string; status: string; ownerUserId: string | null;
+    userSecretDefinitionId: string | null; latestVersion: number; resolvedVersion: number }>;
+}): string {
+  const { connection, grant } = input;
+  return nativeSha256({
+    version: 2,
+    companyId: connection.companyId,
+    connectionId: connection.id,
+    connectionUpdatedAt: connection.updatedAt.toISOString(),
+    connectionStatus: connection.status,
+    connectionEnabled: connection.enabled,
+    connectionPurpose: connection.connectionPurpose,
+    connectionKind: connection.connectionKind,
+    connectionCredentialPolicy: connection.credentialPolicy,
+    connectionCredentialRefsHash: nativeSha256(connection.credentialRefs ?? []),
+    connectionCredentialSecretRefsHash: nativeSha256(connection.credentialSecretRefs ?? []),
+    credentialSecretVersions: input.credentialSecretVersions,
+    sourceTemplateKey: asRecord(connection.config).sourceTemplateKey ?? null,
+    connectorProfile: asRecord(asRecord(connection.config).oauth).connectorProfile ?? null,
+    grant: grant ? {
+      id: grant.id, updatedAt: grant.updatedAt.toISOString(), status: grant.status, kind: grant.kind,
+      subjectUserId: grant.subjectUserId,
+      credentialSecretRefsHash: nativeSha256(grant.credentialSecretRefs ?? []),
+    } : null,
+    userId: input.userId,
+    activeMember: input.activeMember,
+    audience: [...input.audience].sort(),
+  });
+}
+
 export function toolAccessService(
   db: Db,
   options: ToolAccessServiceOptions = {},
 ) {
   const secrets = secretService(db);
+
+  async function repositoryCredentialSecretVersions(connection: typeof toolConnections.$inferSelect,
+    grant: typeof connectionGrants.$inferSelect | null) {
+    // A usable grant is the credential source actually selected by the
+    // repository-list path. Parent connection refs are considered only for
+    // legacy shared connections with no grant.
+    const refs = grant ? (grant.credentialSecretRefs ?? []) : (connection.credentialSecretRefs ?? []);
+    if (refs.length > 64) throw forbidden("Repository credential metadata is unavailable");
+    const secretIds = [...new Set(refs.map(ref => ref.secretId))].sort();
+    if (!secretIds.length) return [];
+    const rows = await db.select({ id: companySecrets.id, status: companySecrets.status,
+      ownerUserId: companySecrets.ownerUserId, userSecretDefinitionId: companySecrets.userSecretDefinitionId,
+      latestVersion: companySecrets.latestVersion }).from(companySecrets).where(and(
+      eq(companySecrets.companyId, connection.companyId), inArray(companySecrets.id, secretIds)))
+      .orderBy(asc(companySecrets.id)).for("share");
+    const byId = new Map(rows.map(row => [row.id, row]));
+    if (byId.size !== secretIds.length) throw forbidden("Repository credential metadata is unavailable");
+    return refs.map(ref => {
+      const secret = byId.get(ref.secretId);
+      if (!secret || secret.status !== "active") throw forbidden("Repository credential is no longer active");
+      const selector = ref.versionSelector ?? "latest";
+      const resolvedVersion = selector === "latest" ? secret.latestVersion : Number(selector);
+      if (!Number.isSafeInteger(resolvedVersion) || resolvedVersion < 1 || resolvedVersion > secret.latestVersion)
+        throw forbidden("Repository credential version is unavailable");
+      return { secretId: ref.secretId, status: secret.status, ownerUserId: secret.ownerUserId,
+        userSecretDefinitionId: secret.userSecretDefinitionId, latestVersion: secret.latestVersion, resolvedVersion };
+    }).sort((left, right) => left.secretId.localeCompare(right.secretId) || left.resolvedVersion - right.resolvedVersion);
+  }
 
   async function resolvedRemoteEndpoint(
     connection: typeof toolConnections.$inferSelect,
@@ -17839,7 +17903,7 @@ export function toolAccessService(
         import("@paperclipai/shared").ProjectRepository
       >();
       const repositoryAuthorizationWitnesses = new Map<string, Array<{
-        repositoryId: string; connectionId: string; grantId: string | null;
+        repositoryId: string; connectionId: string; grantId: string | null; authorizationVersion: string;
       }>>();
       let connectionCount = 0;
       let failedConnectionCount = 0;
@@ -17882,6 +17946,7 @@ export function toolAccessService(
         let failed = false;
         for (const initialGrant of legacyShared ? [null] : availableGrants) {
           try {
+            let authorizationGrant = initialGrant;
             let rows: Array<{
               id: string;
               fullName: string;
@@ -17892,12 +17957,12 @@ export function toolAccessService(
               asRecord(asRecord(connection.config).oauth).connectorProfile ===
                 "github.code"
             ) {
-              const grant = await refreshManagedGitHubGrantAccess(
+              authorizationGrant = await refreshManagedGitHubGrantAccess(
                 connection,
                 initialGrant,
                 actor,
               );
-              rows = grant.providerTenant?.github?.repositories ?? [];
+              rows = authorizationGrant.providerTenant?.github?.repositories ?? [];
             } else {
               const headers = initialGrant
                 ? await (async () => {
@@ -17922,11 +17987,16 @@ export function toolAccessService(
                 : await resolveCredentialHeaders(connection, actor);
               rows = await loadGitHubTokenRepositories(headers);
             }
+            const audience = members.filter(member => member.grantId === authorizationGrant?.id)
+              .map(member => member.subjectId);
+            const credentialSecretVersions = await repositoryCredentialSecretVersions(connection, authorizationGrant);
             for (const row of rows) {
               mergeProjectRepository(repositories, row, connection.name);
               const witnesses = repositoryAuthorizationWitnesses.get(row.id) ?? [];
               const witness = { repositoryId: row.id, connectionId: connection.id,
-                grantId: initialGrant?.id ?? null };
+                grantId: authorizationGrant?.id ?? null,
+                authorizationVersion: projectRepositoryAuthorizationVersion({ connection, grant: authorizationGrant,
+                  userId, activeMember: localTrusted || memberships.length > 0, audience, credentialSecretVersions }) };
               if (!witnesses.some((value) => value.connectionId === witness.connectionId &&
                 value.grantId === witness.grantId)) witnesses.push(witness);
               repositoryAuthorizationWitnesses.set(row.id, witnesses);
@@ -17960,14 +18030,15 @@ export function toolAccessService(
       companyId: string;
       userId: string;
       repositoryIds: string[];
-      witnesses: Array<{ repositoryId: string; connectionId: string; grantId: string | null }>;
+      witnesses: Array<{ repositoryId: string; connectionId: string; grantId: string | null; authorizationVersion?: string }>;
     }) => {
       const repositoryIds = [...new Set(input.repositoryIds)];
       const connectionIds = [...new Set(input.witnesses.map((value) => value.connectionId))].sort();
       if (!repositoryIds.length) return;
       if (!input.userId || !connectionIds.length || input.witnesses.some((value) =>
         !repositoryIds.includes(value.repositoryId) || !connectionIds.includes(value.connectionId) ||
-        (value.grantId !== null && typeof value.grantId !== "string")))
+        (value.grantId !== null && typeof value.grantId !== "string") ||
+        (value.authorizationVersion !== undefined && !/^[0-9a-f]{64}$/.test(value.authorizationVersion))))
         throw forbidden("A selected repository no longer has its original Human authorization");
 
       // Match the grant/audience writer's order: connection -> grant ->
@@ -18000,20 +18071,35 @@ export function toolAccessService(
 
       for (const repositoryId of repositoryIds) {
         const repositoryWitnesses = input.witnesses.filter((value) => value.repositoryId === repositoryId);
-        const stillAuthorized = repositoryWitnesses.some((witness) => {
+        let stillAuthorized = false;
+        for (const witness of repositoryWitnesses) {
           const connection = connectionById.get(witness.connectionId);
           if (!connection || !connection.enabled || connection.status !== "active" ||
-            asRecord(connection.config).sourceTemplateKey !== "github") return false;
+            asRecord(connection.config).sourceTemplateKey !== "github") continue;
           const connectionGrants = grantsByConnection.get(connection.id) ?? [];
-          if (witness.grantId === null) return connectionGrants.length === 0 &&
-            connection.credentialPolicy === "shared" && activeMember;
+          if (witness.grantId === null) {
+            const authorized = connectionGrants.length === 0 && connection.credentialPolicy === "shared" && activeMember;
+            if (authorized) {
+              const credentialSecretVersions = await repositoryCredentialSecretVersions(connection, null);
+              if (witness.authorizationVersion === undefined || witness.authorizationVersion ===
+                projectRepositoryAuthorizationVersion({ connection, grant: null, userId: input.userId,
+                  activeMember, audience: [], credentialSecretVersions })) stillAuthorized = true;
+            }
+            if (stillAuthorized) break;
+            continue;
+          }
           const grant = connectionGrants.find((value) => value.id === witness.grantId);
           if (!grant || grant.status !== "active" ||
             (grant.kind === "organization" && ["per_user", "per_agent"].includes(connection.credentialPolicy)))
-            return false;
-          return canBrowseProjectRepositoryGrant({ grant, userId: input.userId, activeMember,
-            audience: audienceByGrant.get(grant.id) ?? [] });
-        });
+            continue;
+          const audience = audienceByGrant.get(grant.id) ?? [];
+          if (!canBrowseProjectRepositoryGrant({ grant, userId: input.userId, activeMember, audience })) continue;
+          const credentialSecretVersions = await repositoryCredentialSecretVersions(connection, grant);
+          if (witness.authorizationVersion === undefined || witness.authorizationVersion ===
+            projectRepositoryAuthorizationVersion({ connection, grant, userId: input.userId, activeMember, audience,
+              credentialSecretVersions })) stillAuthorized = true;
+          if (stillAuthorized) break;
+        }
         if (!stillAuthorized)
           throw forbidden("A selected repository's original Human authorization changed before Project creation");
       }

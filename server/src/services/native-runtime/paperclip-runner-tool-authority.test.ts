@@ -105,8 +105,12 @@ describe("PaperclipRunnerToolAuthority", () => {
       authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
   }
 
-  async function seedDispatchBoundAuthority(payloadSourceProtocolVersion = 0) {
+  async function seedDispatchBoundAuthority(payloadSourceProtocolVersion = 0,
+    options: { qualifyDispatch?: boolean } = {}) {
     const fixture = await seedDocumentReader(payloadSourceProtocolVersion);
+    // Some lower-owner tests use a current Human-created source snapshot but
+    // deliberately do not claim a full Native prompt closure.
+    const qualifyDispatch = options.qualifyDispatch ?? true;
     const controller = await currentNativeControllerIdentity();
     const leaseOwner = `tool-receipt-owner-${randomUUID()}`;
     const attempt = 3, eventSeq = 7;
@@ -183,7 +187,7 @@ describe("PaperclipRunnerToolAuthority", () => {
     };
     const bindCall = async (tool: string, callId: string, turnId: string, expectAssociation = true,
       argumentsHash?: string, requestedCollaborationMode?: "default" | "plan") => {
-      await prepareQualifiedDispatch();
+      if (qualifyDispatch) await prepareQualifiedDispatch();
       const turnInput = qualifiedTurnInput
         ? { ...qualifiedTurnInput, ...(requestedCollaborationMode ? { requestedCollaborationMode } : {}) }
         : { message: { role: "user" as const, text: `actual native input ${turnId}` },
@@ -530,7 +534,17 @@ describe("PaperclipRunnerToolAuthority", () => {
   });
 
   it("keeps assigned-review context unknown and prevents a later read from repairing its output history", async () => {
-    const fixture = await seedDispatchBoundAuthority(1);
+    // This authority test checks the lower tool-result owner using the current
+    // Human-created Task and its actual review assignment. The separate real
+    // managed-signoff case qualifies the full Native prompt/source closure.
+    const fixture = await seedDispatchBoundAuthority(1, { qualifyDispatch: false });
+    expect(fixture.human).toMatchObject({ type: "board", source: "session", userId });
+    const [humanTask] = await db.select({ payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+      payloadSourceSnapshot: issues.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated })
+      .from(issues).where(eq(issues.id, fixture.issueId));
+    expect(humanTask).toMatchObject({ payloadSourceProtocolVersion: 1, payloadSourceSnapshotInvalidated: false });
+    expect(humanTask?.payloadSourceSnapshot).not.toBeNull();
     const sourceAgentId = randomUUID(), sourceRunId = randomUUID(), contractId = randomUUID();
     const resultId = randomUUID(), assessmentId = randomUUID(), decisionId = randomUUID(), interactionId = randomUUID();
     await db.insert(agents).values({ id: sourceAgentId, companyId: fixture.companyId, name: "Assigned worker",
@@ -568,11 +582,6 @@ describe("PaperclipRunnerToolAuthority", () => {
     await db.update(heartbeatRuns).set({ contextSnapshot: { issueId: fixture.issueId,
       nativeReviewInteractionId: interactionId, nativeReviewDecisionId: decisionId,
       sourceRunId, revisionId: decisionId } }).where(eq(heartbeatRuns.id, fixture.runId));
-    await fixture.prepareQualifiedDispatch();
-    const preparedClosure = fixture.bootstrapSourceClosure();
-    expect(preparedClosure?.sourceSet.inputs.filter(value => value.kind === "workspace_metadata"))
-      .toEqual([expect.objectContaining({ runId: fixture.runId, origin: "task_session",
-        executionWorkspaceId: fixture.runId, sourceVersion: `task-session:${fixture.runId}` })]);
     const [reviewTaskOwner] = await db.select({ assigneeAgentId: issues.assigneeAgentId,
       executionRunId: issues.executionRunId, projectId: issues.projectId,
       executionWorkspaceId: issues.executionWorkspaceId, status: issues.status,
@@ -601,8 +610,8 @@ describe("PaperclipRunnerToolAuthority", () => {
       nativeSha256(historyArgs), "plan");
 
     const [runBefore] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fixture.runId));
-    expect(runBefore?.nativeInputSourceProtocolVersion).toBe(1);
-    expect(runBefore?.runnerProfileJson).toHaveProperty("nativeInputSourceReceipt");
+    expect(runBefore?.nativeInputSourceProtocolVersion).toBe(0);
+    expect(runBefore?.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
     let contextCapture: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
     const contextResult = await authority.execute({ tool: "get_task_context", callId: contextCallId, arguments: contextArgs }, {
       nativeToolCallIdentity: contextCall, onNativeInputToolResult: async capture => {
