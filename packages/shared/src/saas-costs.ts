@@ -81,6 +81,7 @@ export interface SaasCostSnapshot {
     managedRuntimeHostCost: { amountMinor: string; currency: "EUR"; basis: "provider_invoice" | "provider_price_estimate"; source: "operator_report_cpu_reservation_estimate"; unallocatedMultiCompanyMinor: string; unallocatedNoActiveCompanyMinor: string };
     providerModelCost: { reportedCents: string | null; estimatedCents: string | null; currency: "unspecified"; source: "cost_events"; reportedEventCount: number; estimatedEventCount: number; unpricedEventCount: number; unrecognizedEventCount: number; captureCompleteness: "not_established" };
     runtimeAndStorageUsage: { source: "usage_aggregates"; status: "aggregated_rows" | "no_aggregate_rows"; companyCount: number; bucketCount: number; latestSourceWatermark: string | null; quantities: { meterKey: string; quantity: string; unit: string }[] };
+    toolInvocationRecords?: { meterKey: "tool.invocation_records.v1"; source: "tool_invocations.created_at"; unit: "invocation_record"; coverage: "persisted_gateway_records_only"; recordCount: number; costStatus: "unavailable" };
     unavailable: { supportCost: "not_recorded"; analyticsCost: "not_recorded"; networkAndToolCost: "not_recorded"; storageAndRuntimeRates: "not_configured"; agentRunClassCost: "not_classified"; acceptedOutcomeCost: "no_canonical_cost_attribution" };
     tenants: {
       companyId: string;
@@ -93,6 +94,7 @@ export interface SaasCostSnapshot {
       providerUnpricedEventCount: number;
       providerUnrecognizedEventCount: number;
       usage: { meterKey: string; quantity: string; unit: string }[];
+      toolInvocationRecordCount?: number;
       estimatedHostRuntimeMinor: string | null;
       estimatedHostRuntimeCurrency: "EUR" | null;
       hostAllocation: "single_active_company" | "shared_account_unallocated" | "no_active_company_unallocated" | "no_reported_allocation";
@@ -116,12 +118,14 @@ export const saasCostSnapshotSchema = z.strictObject({
     managedRuntimeHostCost: z.strictObject({ amountMinor: money, currency: z.literal("EUR"), basis: z.enum(["provider_invoice", "provider_price_estimate"]), source: z.literal("operator_report_cpu_reservation_estimate"), unallocatedMultiCompanyMinor: money, unallocatedNoActiveCompanyMinor: money }),
     providerModelCost: z.strictObject({ reportedCents: z.string().regex(/^-?[0-9]{1,40}$/).nullable(), estimatedCents: z.string().regex(/^-?[0-9]{1,40}$/).nullable(), currency: z.literal("unspecified"), source: z.literal("cost_events"), reportedEventCount: z.number().int().nonnegative(), estimatedEventCount: z.number().int().nonnegative(), unpricedEventCount: z.number().int().nonnegative(), unrecognizedEventCount: z.number().int().nonnegative(), captureCompleteness: z.literal("not_established") }),
     runtimeAndStorageUsage: z.strictObject({ source: z.literal("usage_aggregates"), status: z.enum(["aggregated_rows", "no_aggregate_rows"]), companyCount: z.number().int().nonnegative(), bucketCount: z.number().int().nonnegative(), latestSourceWatermark: z.iso.datetime().nullable(), quantities: z.array(z.strictObject({ meterKey: z.string(), quantity: money, unit: z.string() })).max(5000) }),
+    toolInvocationRecords: z.strictObject({ meterKey: z.literal("tool.invocation_records.v1"), source: z.literal("tool_invocations.created_at"), unit: z.literal("invocation_record"), coverage: z.literal("persisted_gateway_records_only"), recordCount: z.number().int().nonnegative(), costStatus: z.literal("unavailable") }).optional(),
     unavailable: z.strictObject({ supportCost: z.literal("not_recorded"), analyticsCost: z.literal("not_recorded"), networkAndToolCost: z.literal("not_recorded"), storageAndRuntimeRates: z.literal("not_configured"), agentRunClassCost: z.literal("not_classified"), acceptedOutcomeCost: z.literal("no_canonical_cost_attribution") }),
     tenants: z.array(z.strictObject({
       companyId: z.uuid(), billingAccountId: z.uuid(), activeCompanyCountOnBillingAccount: z.number().int().nonnegative(),
       providerReportedCents: z.string().regex(/^-?[0-9]{1,40}$/).nullable(), providerEstimatedCents: z.string().regex(/^-?[0-9]{1,40}$/).nullable(), providerReportedEventCount: z.number().int().nonnegative(),
       providerEstimatedEventCount: z.number().int().nonnegative(), providerUnpricedEventCount: z.number().int().nonnegative(), providerUnrecognizedEventCount: z.number().int().nonnegative(),
       usage: z.array(z.strictObject({ meterKey: z.string(), quantity: money, unit: z.string() })).max(5),
+      toolInvocationRecordCount: z.number().int().nonnegative().optional(),
       estimatedHostRuntimeMinor: money.nullable(), estimatedHostRuntimeCurrency: z.literal("EUR").nullable(),
       hostAllocation: z.enum(["single_active_company", "shared_account_unallocated", "no_active_company_unallocated", "no_reported_allocation"]),
       totalCost: z.literal("unavailable_incomplete_components"),

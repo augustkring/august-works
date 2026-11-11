@@ -823,7 +823,8 @@ async function configureManagedRunSandboxHost(
       const chatWorkspace = !input.nativeOpenCodeConformance && run?.nativeIssueId
         ? await findNativeChatWorkspaceScope(input.db, { adapterType: "paperclip_runner", environmentDriver: "sandbox",
             companyId: input.companyId, agentId: input.agentId, issueId: run.nativeIssueId, runId,
-            responsibleUserId: run.responsibleUserId, conversationSessionGeneration: conversationGeneration })
+            responsibleUserId: run.responsibleUserId, conversationSessionGeneration: conversationGeneration,
+            sourceCommentId: typeof context.wakeCommentId === "string" ? context.wakeCommentId : null })
         : null;
       const host = preparedHostsByRun.get(runId) ?? prequalifiedConformanceHost ?? await configureManagedSandboxRun({ ...input,
         ...(input.nativeOpenCodeConformance ? { nativeOpenCodeConformance: true as const }
@@ -4367,7 +4368,8 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         ? run.contextSnapshot.conversationSessionGeneration : null;
     const scope = nativeConformanceMode ? null : await findNativeChatWorkspaceScope(db, {
       adapterType: "paperclip_runner", environmentDriver: "sandbox", companyId, agentId, issueId, runId,
-      responsibleUserId: run?.responsibleUserId, conversationSessionGeneration: conversationGeneration });
+      responsibleUserId: run?.responsibleUserId, conversationSessionGeneration: conversationGeneration,
+      sourceCommentId: typeof runContext.wakeCommentId === "string" ? runContext.wakeCommentId : null });
     let taskRoot = nativeConformanceMode ? null : scope && scope.projectId === null ? nativeChatWorkspaceCwd(scope, null, false) : null;
     if (ordinaryWorkerMode) {
       const workerRun = await assertOrdinaryWorker(runId);

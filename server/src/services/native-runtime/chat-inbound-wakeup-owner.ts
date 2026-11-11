@@ -4,8 +4,78 @@ import { chatActions, chatConversations, chatDeliveries, chatEndpointResources, 
   type Db } from "@paperclipai/db";
 import { forbidden } from "../../errors.js";
 import { credentialFingerprint, runtimeGeneration } from "../chat-runtime-fence.js";
+import { canonicalTeamsThreadId } from "../chat-control-chronology.js";
+import { parseGitHubReviewThreadIdentity } from "../chat-github-thread-id.js";
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+function sameThreadIdentity(provider: string, left: string, right: string): boolean {
+  if (left === right) return true;
+  if (provider !== "microsoft-teams") return false;
+  const canonicalLeft = canonicalTeamsThreadId(left);
+  return canonicalLeft !== null && canonicalLeft === canonicalTeamsThreadId(right);
+}
+
+function issueOriginThreadId(originId: string | null, endpointId: string, generation: number): string | null {
+  const prefix = `${endpointId}:`;
+  const suffix = `:${generation}`;
+  if (!originId?.startsWith(prefix) || !originId.endsWith(suffix) || originId.length <= prefix.length + suffix.length) return null;
+  return originId.slice(prefix.length, -suffix.length);
+}
+
+// The provider-owned publication lease commits this child row and returned URL
+// together. Check that earliest durable mapping, before later review projections.
+async function githubFindingThreadHasPublishedOwner(db: Db | DbTransaction, input: {
+  companyId: string;
+  endpointId: string;
+  issueId: string;
+  resourceId: string | null;
+  externalConversationId: string;
+  sessionGeneration: number;
+  issueOriginId: string | null;
+  childThreadId: string;
+  providerUrl: string | null;
+  allowHistoricalConversationState: boolean;
+}): Promise<boolean | null> {
+  const child = parseGitHubReviewThreadIdentity(input.childThreadId);
+  if (!child?.reviewCommentId) return null;
+  if (child.issue || !input.resourceId || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(child.repository) ||
+      !Number.isSafeInteger(Number(child.number)) || !Number.isSafeInteger(Number(child.reviewCommentId))) return false;
+  const [resource] = await db.select({ id: chatEndpointResources.id, providerResourceId: chatEndpointResources.providerResourceId })
+    .from(chatEndpointResources).where(and(eq(chatEndpointResources.companyId, input.companyId),
+      eq(chatEndpointResources.endpointId, input.endpointId), eq(chatEndpointResources.id, input.resourceId),
+      eq(chatEndpointResources.type, "repository"))).limit(1);
+  if (!resource || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(resource.providerResourceId)) return false;
+  const rootThreadId = `github:${resource.providerResourceId}:${child.number}`;
+  const rootCandidates = await db.select({
+    id: chatConversations.id,
+    resourceId: chatConversations.resourceId,
+    externalConversationId: chatConversations.externalConversationId,
+    sessionGeneration: chatConversations.sessionGeneration,
+    state: chatConversations.state,
+  }).from(chatConversations).where(and(
+    eq(chatConversations.companyId, input.companyId),
+    eq(chatConversations.endpointId, input.endpointId),
+    eq(chatConversations.issueId, input.issueId),
+    sql`lower(${chatConversations.externalThreadId}) = ${rootThreadId.toLowerCase()}`,
+  )).limit(2);
+  // A PR comment can start its own chat task. Only apply child-thread lineage
+  // rules when this exact Paperclip issue also owns the parent conversation.
+  if (!rootCandidates.length) return null;
+  if (rootCandidates.length > 1) return false;
+  const rootConversation = rootCandidates.find((root) => root.resourceId === input.resourceId &&
+    root.externalConversationId === input.externalConversationId && root.sessionGeneration === input.sessionGeneration &&
+    (input.allowHistoricalConversationState || ["active", "waiting"].includes(root.state)));
+  if (!rootConversation || child.repository.toLowerCase() !== resource.providerResourceId.toLowerCase()) return false;
+  let providerUrl: URL;
+  try { providerUrl = new URL(input.providerUrl ?? ""); } catch { return false; }
+  const expectedPath = `/${resource.providerResourceId}/pull/${child.number}`;
+  if (providerUrl.protocol !== "https:" || providerUrl.hostname !== "github.com" || providerUrl.port ||
+      providerUrl.username || providerUrl.password || providerUrl.search || providerUrl.pathname.toLowerCase() !== expectedPath.toLowerCase() ||
+      providerUrl.hash !== `#discussion_r${child.reviewCommentId}` ||
+      issueOriginThreadId(input.issueOriginId, input.endpointId, input.sessionGeneration)?.toLowerCase() !== rootThreadId.toLowerCase()) return false;
+  return true;
+}
 
 export type InboundWakeupAction = typeof chatActions.$inferSelect;
 export type CanonicalInboundWakeupDbSource = {
@@ -73,8 +143,19 @@ export async function readCanonicalInboundWakeupDbSource(db: Db | DbTransaction,
     eq(chatConversations.id, conversationId))).limit(1);
   if (!conversation || conversation.endpointId !== endpoint.id || conversation.issueId !== issue.id ||
       conversation.sessionGeneration !== payload.sessionGeneration ||
-      (!input.allowHistoricalConversationState && !["active", "waiting"].includes(conversation.state)) ||
-      issue.originId !== `${endpoint.id}:${conversation.externalThreadId}:${conversation.sessionGeneration}`) throw deny();
+      (!input.allowHistoricalConversationState && !["active", "waiting"].includes(conversation.state))) throw deny();
+  const originThreadId = issueOriginThreadId(issue.originId, endpoint.id, conversation.sessionGeneration);
+  const originMatches = originThreadId === conversation.externalThreadId ||
+    (endpoint.provider === "microsoft-teams" && sameThreadIdentity(endpoint.provider, originThreadId ?? "", conversation.externalThreadId));
+  const findingThreadOwner = endpoint.provider === "github"
+    ? await githubFindingThreadHasPublishedOwner(db, {
+        companyId: action.companyId, endpointId: endpoint.id, issueId: issue.id, resourceId: conversation.resourceId,
+        externalConversationId: conversation.externalConversationId, sessionGeneration: conversation.sessionGeneration,
+        issueOriginId: issue.originId, childThreadId: conversation.externalThreadId, providerUrl: conversation.providerUrl,
+        allowHistoricalConversationState: input.allowHistoricalConversationState === true,
+      })
+    : null;
+  if (findingThreadOwner === false || (!originMatches && findingThreadOwner !== true)) throw deny();
   const [resource] = conversation.resourceId ? await db.select().from(chatEndpointResources).where(and(
     eq(chatEndpointResources.endpointId, endpoint.id), eq(chatEndpointResources.id, conversation.resourceId))).limit(1) : [];
   const destinationAllowed = conversation.isDirectMessage ? endpoint.allowDirectMessages : Boolean(resource && resource.availability === "available" &&
@@ -132,7 +213,9 @@ export async function readCanonicalInboundWakeupDbSource(db: Db | DbTransaction,
   const event = eventRoot;
   const eventConversation = event.conversation && typeof event.conversation === "object" ? event.conversation as Record<string, unknown> : {};
   const eventMessage = event.message && typeof event.message === "object" ? event.message as Record<string, unknown> : {};
-  if (eventConversation.externalThreadId !== conversation.externalThreadId || eventMessage.providerMessageId !== source.providerMessageId) throw deny();
+  const eventThreadId = eventConversation.externalThreadId;
+  if (typeof eventThreadId !== "string" || !sameThreadIdentity(endpoint.provider, eventThreadId, conversation.externalThreadId) ||
+      eventMessage.providerMessageId !== source.providerMessageId) throw deny();
   return { action, issue, endpoint, delivery, conversation, responsibleUserId: expectedUserId,
     sourceCommentId: input.expectedCommentId, runtimeGeneration: generation,
     runtimeCredentialFingerprint: runtime.credentialFingerprint as string };

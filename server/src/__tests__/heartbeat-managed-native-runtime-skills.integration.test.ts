@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import {
   agents,
   companySkills,
   createDb,
   heartbeatRuns,
+  heartbeatRunEvents,
   toolApplications,
   toolConnectionInstalls,
   toolConnections,
@@ -21,7 +22,7 @@ import { companySkillService } from "../services/company-skills.ts";
 import { heartbeatService } from "../services/heartbeat.ts";
 import { instanceSettingsService } from "../services/instance-settings.ts";
 import { resolveNativeRuntimeMcpSnapshot } from "../services/native-runtime/runtime-context.js";
-import { runManagedNativeConversationFrame } from "./helpers/managed-native-conversation-frame.js";
+import { boundedRunnerFailureDiagnostic, runManagedNativeConversationFrame } from "./helpers/managed-native-conversation-frame.js";
 import { qualifiedOpenCodeBinary, makeFixtureTreeWritable } from "./helpers/managed-native-opencode-e2e-fixture.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -191,8 +192,33 @@ it("materializes agent-pinned Skill versions and installed MCP assignments in re
           if (primaryRun?.status === "succeeded" && secondaryRun?.status === "succeeded" && actualRuns.size === 2) break;
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        if (primaryRun?.status !== "succeeded" || secondaryRun?.status !== "succeeded" || actualRuns.size !== 2)
+        if (primaryRun?.status !== "succeeded" || secondaryRun?.status !== "succeeded" || actualRuns.size !== 2) {
+          const projectFailure = async (label: "primary" | "secondary", run: typeof primaryRun) => {
+            if (!run) return { label, found: false };
+            const events = await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType,
+              payload: heartbeatRunEvents.payload })
+              .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
+                eq(heartbeatRunEvents.runId, run.id), inArray(heartbeatRunEvents.eventType, ["error", "turn.failed"])))
+              .orderBy(asc(heartbeatRunEvents.seq)).limit(4);
+            const stage = ["preparing", "dispatching", "running", "settling", "completed", "failed"]
+              .find(value => value === run.executionStage) ?? "other";
+            const phase = ["provider_running", "observed", "committed", "terminal_failure"]
+              .find(value => value === run.nativePhase) ?? "other";
+            return { label, found: true, status: ["queued", "running", "succeeded", "failed", "timed_out", "cancelled", "interrupted", "superseded"]
+              .find(value => value === run.status) ?? "other",
+              error: boundedRunnerFailureDiagnostic(0, { error: { code: run.errorCode, message: run.error } }).error,
+              stage, phase, providerHookObserved: actualRuns.has(run.agentId),
+              runnerFailures: events.map(event => ({ eventType: event.eventType === "error" ? "error" : "turn.failed",
+                ...boundedRunnerFailureDiagnostic(event.seq, event.payload) })) };
+          };
+          try {
+            console.info("native_runtime_skill_settlement_failure", JSON.stringify({
+              providerHookObservedCount: actualRuns.size,
+              runs: await Promise.all([projectFailure("primary", primaryRun), projectFailure("secondary", secondaryRun)]),
+            }));
+          } catch { console.info("native_runtime_skill_settlement_failure", JSON.stringify({ diagnosticRead: "unavailable" })); }
           throw new Error("native_runtime_skill_agent_runs_not_settled_inside_signed_fixture");
+        }
         return { issueId: primaryIssueId, wakeCommentId: primaryWakeId };
       },
       beforeProviderResponse: async ({ db: fixtureDb, agentId, run, request, readStagedSkillFile }) => {

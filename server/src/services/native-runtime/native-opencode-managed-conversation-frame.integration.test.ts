@@ -68,6 +68,35 @@ describe("bounded Native runner failure diagnostics", () => {
         error: { name: "TypeError", code: "managed_provider_failed",
           messageSha256: createHash("sha256").update("synthetic PRP failure").digest("hex") } } });
   });
+
+  it("hashes unknown top-level codes and secret-looking payload keys", () => {
+    const privateCode = "bearer-sk-test-provider-secret";
+    const privateFailureCode = "private-account-credential-value";
+    const privateKey = "authorization_bearer_sk_test";
+    const payload = {
+      code: privateCode,
+      failure: { code: privateFailureCode },
+      adapter_failed: "safe known code remains separately represented",
+      [privateKey]: "private value",
+    };
+    const diagnostic = boundedRunnerFailureDiagnostic(9, payload);
+    const serialized = JSON.stringify(diagnostic);
+    for (const privateValue of [privateCode, privateFailureCode, privateKey, "private value"])
+      expect(serialized).not.toContain(privateValue);
+    expect(diagnostic).toMatchObject({
+      seq: 9,
+      code: null,
+      codeSha256: createHash("sha256").update(privateCode).digest("hex"),
+      failureCode: null,
+      failureCodeSha256: createHash("sha256").update(privateFailureCode).digest("hex"),
+      payloadKeys: ["code", "failure"],
+      unknownPayloadKeyCount: 2,
+      unknownPayloadKeysSha256: createHash("sha256").update(JSON.stringify(["adapter_failed", "authorization_bearer_sk_test"])).digest("hex"),
+    });
+    expect(boundedRunnerFailureDiagnostic(10, { errorCode: "adapter_failed" })).toMatchObject({
+      code: "adapter_failed", codeSha256: null,
+    });
+  });
 });
 
 describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCode frame", () => {

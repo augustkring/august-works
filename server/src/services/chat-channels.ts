@@ -7248,6 +7248,46 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     return typeof value === "string" && /^\d+$/.test(value) ? value : null;
   }
 
+  async function rebindMigratedChatIssueOrigins(
+    tx: DbTransaction,
+    endpoint: EndpointRow,
+    resourceId: string,
+    previousThreadPrefix: string,
+    migratedThreadPrefix: string,
+    caseInsensitive: boolean,
+  ) {
+    const threadIdentity = caseInsensitive
+      ? sql`lower(c.external_thread_id)`
+      : sql`c.external_thread_id`;
+    const prefixIdentity = caseInsensitive
+      ? sql`lower(${previousThreadPrefix})`
+      : sql`${previousThreadPrefix}`;
+    const isExactOrChildThread = sql`(
+      ${threadIdentity} = ${prefixIdentity}
+      or (
+        left(${threadIdentity}, char_length(${prefixIdentity})) = ${prefixIdentity}
+        and substring(c.external_thread_id from char_length(${previousThreadPrefix}) + 1 for 1) = ':'
+      )
+    )`;
+    const migratedThreadId = sql`case
+      when ${threadIdentity} = ${prefixIdentity} then ${migratedThreadPrefix}
+      else ${migratedThreadPrefix} || substring(
+        c.external_thread_id from char_length(${previousThreadPrefix}) + 1
+      )
+    end`;
+    await tx.execute(sql`update issues as i
+      set origin_id = ${endpoint.id}::text || ':' || (${migratedThreadId}) || ':' || c.session_generation::text
+      from chat_conversations as c
+      where c.company_id = ${endpoint.companyId}
+        and c.endpoint_id = ${endpoint.id}
+        and c.resource_id = ${resourceId}
+        and i.company_id = c.company_id
+        and i.id = c.issue_id
+        and i.origin_kind = 'chat_channel'
+        and i.origin_id = ${endpoint.id}::text || ':' || c.external_thread_id || ':' || c.session_generation::text
+        and ${isExactOrChildThread}`);
+  }
+
   async function upsertProviderResourceRow(
     tx: DbTransaction,
     endpoint: EndpointRow,
@@ -7320,6 +7360,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         const newThreadPrefix = `github:${item.providerResourceId}`;
         const oldProviderUrl = `https://github.com/${oldRepository}`;
         const newProviderUrl = `https://github.com/${item.providerResourceId}`;
+        await rebindMigratedChatIssueOrigins(
+          tx, endpoint, stableResource.id, oldThreadPrefix, newThreadPrefix, true,
+        );
         await tx
           .update(chatEndpointResources)
           .set({
@@ -24337,6 +24380,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
             ) {
               const previousThreadPrefix = `telegram:${previousProviderResourceId}`;
               const migratedThreadPrefix = `telegram:${providerResourceId}`;
+              await rebindMigratedChatIssueOrigins(
+                tx, currentEndpoint, previousResource.id, previousThreadPrefix, migratedThreadPrefix, false,
+              );
               await tx
                 .update(chatConversations)
                 .set({

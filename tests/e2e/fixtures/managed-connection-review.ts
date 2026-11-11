@@ -495,6 +495,16 @@ export async function withManagedConnectionReview(input: {
           ownedContext = await browser.newContext({ baseURL: origin, extraHTTPHeaders: { Origin: origin } });
           await ownedContext.addCookies([{ name: "session_token", value: session.token, url: origin }]);
           const page = await ownedContext.newPage();
+          // Claim first-admin through the supported browser owner before opening
+          // the seeded issue. This embedded instance is fresh for each fixture.
+          await page.goto("/");
+          const claim = page.getByRole("button", { name: "Claim this instance", exact: true });
+          await expect(claim).toBeVisible({ timeout: 30_000 });
+          const claimed = page.waitForResponse(response => response.request().method() === "POST" &&
+            new URL(response.url()).pathname === "/api/bootstrap/claim");
+          await claim.click();
+          expect((await claimed).status()).toBe(200);
+          await page.goto("/");
           const locale = await ownedContext.request.patch(`${origin}/api/auth/preferences`, { data: { expectedUserId: actor.userId, locale: "en" } });
           assert(locale.ok(), "Use the actual account locale owner");
           const [company] = await db.select().from(companies).where(eq(companies.id, companyId)); assert(company);

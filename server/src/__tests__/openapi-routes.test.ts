@@ -369,6 +369,7 @@ describe("openapi routes", () => {
     expect(schema.properties.unitEconomics.required).toEqual(expect.arrayContaining([
       "coverage", "platformCost", "managedRuntimeHostCost", "providerModelCost", "runtimeAndStorageUsage", "unavailable", "tenants",
     ]));
+    expect(schema.properties.unitEconomics.properties.toolInvocationRecords.required).toEqual(expect.arrayContaining(["meterKey", "source", "unit", "coverage", "recordCount", "costStatus"]));
     expect(schema.properties.unitEconomics.properties.coverage.enum).toEqual(["partial_sources_only"]);
     expect(schema.properties.unitEconomics.properties.providerModelCost.properties.currency.enum).toEqual(["unspecified"]);
     expect(schema.properties.unitEconomics.properties.unavailable.properties.acceptedOutcomeCost.enum).toEqual(["no_canonical_cost_attribution"]);

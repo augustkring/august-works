@@ -10,6 +10,7 @@ import {
   runtimeCells,
   runtimeHosts,
   usageAggregates,
+  toolInvocations,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -56,7 +57,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
     const [year, month] = snapshot.month.split("-").map(Number);
     const windowStart = new Date(Date.UTC(year!, month! - 1, 1));
     const windowEnd = new Date(Date.UTC(year!, month!, 1));
-    const [companyRows, providerRows, usageRows] = await Promise.all([
+    const [companyRows, providerRows, usageRows, toolInvocationRows] = await Promise.all([
       reader.select({ companyId: billingAccountCompanies.companyId, billingAccountId: billingAccountCompanies.billingAccountId })
         .from(billingAccountCompanies)
         .innerJoin(companies, eq(companies.id, billingAccountCompanies.companyId))
@@ -85,12 +86,21 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
         .where(and(eq(companies.status, "active"), lt(usageAggregates.bucketStart, windowEnd), gt(usageAggregates.bucketEnd, windowStart)))
         .groupBy(usageAggregates.companyId, usageAggregates.billingAccountId, usageAggregates.meterKey, usageAggregates.unit)
         .orderBy(usageAggregates.companyId, usageAggregates.meterKey).limit(5001),
+      reader.select({
+        companyId: toolInvocations.companyId,
+        recordCount: sql<number>`count(*)::int`,
+      }).from(toolInvocations).innerJoin(companies, eq(companies.id, toolInvocations.companyId))
+        .innerJoin(billingAccountCompanies, eq(billingAccountCompanies.companyId, toolInvocations.companyId))
+        .where(and(eq(companies.status, "active"), eq(billingAccountCompanies.status, "active"), gte(toolInvocations.createdAt, windowStart), lt(toolInvocations.createdAt, windowEnd)))
+        .groupBy(toolInvocations.companyId).orderBy(toolInvocations.companyId).limit(1001),
     ]);
-    if (companyRows.length > 1000 || providerRows.length > 1000 || usageRows.length > 5000)
+    if (companyRows.length > 1000 || providerRows.length > 1000 || usageRows.length > 5000 || toolInvocationRows.length > 1000)
       throw conflict("Operator unit economics exceeds its bounded current-source projection");
     const companyCountByAccount = new Map<string, number>();
     for (const row of companyRows) companyCountByAccount.set(row.billingAccountId, (companyCountByAccount.get(row.billingAccountId) ?? 0) + 1);
     const providerByCompany = new Map(providerRows.map(row => [row.companyId, row]));
+    const toolInvocationCountByCompany = new Map(toolInvocationRows.map(row => [row.companyId, row.recordCount]));
+    const toolInvocationRecordCount = toolInvocationRows.reduce((total, row) => total + row.recordCount, 0);
     const usageByCompany = new Map<string, { meterKey: string; quantity: string; unit: string }[]>();
     const globalUsage = new Map<string, { quantity: bigint; unit: string }>();
     let usageBucketCount = 0;
@@ -131,6 +141,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
         providerEstimatedCents: Number(provider?.estimatedEventCount ?? 0) > 0 ? provider!.estimatedCents : null,
         providerReportedEventCount: Number(provider?.reportedEventCount ?? 0), providerEstimatedEventCount: Number(provider?.estimatedEventCount ?? 0),
         providerUnpricedEventCount: Number(provider?.unpricedEventCount ?? 0), providerUnrecognizedEventCount: Number(provider?.unrecognizedEventCount ?? 0), usage: usageByCompany.get(companyId) ?? [],
+        toolInvocationRecordCount: toolInvocationCountByCompany.get(companyId) ?? 0,
         estimatedHostRuntimeMinor: hostAllocation === "single_active_company" ? hostAmount! : null,
         estimatedHostRuntimeCurrency: hostAllocation === "single_active_company" ? "EUR" as const : null,
         hostAllocation, totalCost: "unavailable_incomplete_components" as const,
@@ -153,6 +164,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
         managedRuntimeHostCost: { amountMinor: snapshot.hosts.reduce((sum, host) => sum + BigInt(host.monthlyMinor), 0n).toString(), currency: "EUR", basis: snapshot.basis, source: "operator_report_cpu_reservation_estimate", unallocatedMultiCompanyMinor: unallocatedSharedAccountHostMinor.toString(), unallocatedNoActiveCompanyMinor: unallocatedNoActiveCompanyHostMinor.toString() },
         providerModelCost: { reportedCents: providerTotals.reportedEventCount > 0 ? providerTotals.reportedCents.toString() : null, estimatedCents: providerTotals.estimatedEventCount > 0 ? providerTotals.estimatedCents.toString() : null, currency: "unspecified", source: "cost_events", reportedEventCount: providerTotals.reportedEventCount, estimatedEventCount: providerTotals.estimatedEventCount, unpricedEventCount: providerTotals.unpricedEventCount, unrecognizedEventCount: providerTotals.unrecognizedEventCount, captureCompleteness: "not_established" },
         runtimeAndStorageUsage: { source: "usage_aggregates", status: usageRows.length ? "aggregated_rows" : "no_aggregate_rows", companyCount: new Set(usageRows.map(row => row.companyId)).size, bucketCount: usageBucketCount, latestSourceWatermark: latestSourceWatermark?.toISOString() ?? null, quantities: [...globalUsage].map(([key, value]) => ({ meterKey: key.slice(0, key.indexOf("\u0000")), quantity: value.quantity.toString(), unit: value.unit })) },
+        toolInvocationRecords: { meterKey: "tool.invocation_records.v1", source: "tool_invocations.created_at", unit: "invocation_record", coverage: "persisted_gateway_records_only", recordCount: toolInvocationRecordCount, costStatus: "unavailable" },
         unavailable: { supportCost: "not_recorded", analyticsCost: "not_recorded", networkAndToolCost: "not_recorded", storageAndRuntimeRates: "not_configured", agentRunClassCost: "not_classified", acceptedOutcomeCost: "no_canonical_cost_attribution" },
         tenants: tenantRows,
       },

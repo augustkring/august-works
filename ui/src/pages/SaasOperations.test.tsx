@@ -40,10 +40,11 @@ const costSnapshot: SaasCostSnapshot = {
     managedRuntimeHostCost: { amountMinor: "10000", currency: "EUR", basis: "provider_price_estimate", source: "operator_report_cpu_reservation_estimate", unallocatedMultiCompanyMinor: "0", unallocatedNoActiveCompanyMinor: "0" },
     providerModelCost: { reportedCents: "125", estimatedCents: null, currency: "unspecified", source: "cost_events", reportedEventCount: 1, estimatedEventCount: 0, unpricedEventCount: 1, unrecognizedEventCount: 0, captureCompleteness: "not_established" },
     runtimeAndStorageUsage: { source: "usage_aggregates", status: "aggregated_rows", companyCount: 1, bucketCount: 1, latestSourceWatermark: "2026-10-28T00:00:00.000Z", quantities: [{ meterKey: "runtime.shared_millisecond", quantity: "60000", unit: "millisecond" }] },
+    toolInvocationRecords: { meterKey: "tool.invocation_records.v1", source: "tool_invocations.created_at", unit: "invocation_record", coverage: "persisted_gateway_records_only", recordCount: 4, costStatus: "unavailable" },
     unavailable: { supportCost: "not_recorded", analyticsCost: "not_recorded", networkAndToolCost: "not_recorded", storageAndRuntimeRates: "not_configured", agentRunClassCost: "not_classified", acceptedOutcomeCost: "no_canonical_cost_attribution" },
     tenants: [{ companyId: "10000000-0000-4000-8000-000000000001", billingAccountId: "10000000-0000-4000-8000-000000000003", activeCompanyCountOnBillingAccount: 1,
       providerReportedCents: "125", providerEstimatedCents: null, providerReportedEventCount: 1, providerEstimatedEventCount: 0, providerUnpricedEventCount: 1, providerUnrecognizedEventCount: 0,
-      usage: [{ meterKey: "runtime.shared_millisecond", quantity: "60000", unit: "millisecond" }], estimatedHostRuntimeMinor: "2500", estimatedHostRuntimeCurrency: "EUR", hostAllocation: "single_active_company", totalCost: "unavailable_incomplete_components" }],
+      usage: [{ meterKey: "runtime.shared_millisecond", quantity: "60000", unit: "millisecond" }], toolInvocationRecordCount: 4, estimatedHostRuntimeMinor: "2500", estimatedHostRuntimeCurrency: "EUR", hostAllocation: "single_active_company", totalCost: "unavailable_incomplete_components" }],
   },
 };
 const costSnapshotWithPlatform = (amountMinor: string): SaasCostSnapshot => ({
@@ -83,6 +84,8 @@ it("withdraws cached operator inventory and cost view while the same principal r
   await mount();
   await vi.waitFor(() => expect(container!.textContent).toContain("previous-release"));
   await vi.waitFor(() => expect(container!.textContent).toContain("77.77 EUR"));
+  expect(container!.textContent).toContain("Retained Gateway invocation records: 4");
+  expect(container!.textContent).toContain("not provider request volume or cost");
 
   await act(async () => {
     Object.assign(account, { settled: false, current: false, authorityEpoch: 1 });

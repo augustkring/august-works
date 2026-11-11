@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { saasCostSnapshotSchema } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../services/authorization.js";
+import type { SaasCostSnapshot } from "@paperclipai/shared";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -19,6 +20,7 @@ import {
   runtimeVersionCatalog,
   platformAdminAudit,
   usageAggregates,
+  toolInvocations,
 } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
@@ -198,6 +200,32 @@ const support = await getEmbeddedPostgresTestSupport();
         { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "storage.byte_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "4096000", unit: "byte_millisecond", sourceWatermark: now },
         { companyId: firstCompanyId, billingAccountId: accountId, meterKey: "backup.byte_millisecond", bucketStart: monthStart, bucketEnd: dayEnd, quantity: "2048000", unit: "byte_millisecond", sourceWatermark: now },
       ]);
+      const [firstInvocation] = await db.insert(toolInvocations).values({
+        companyId: firstCompanyId, idempotencyKey: "cost-tool-replay-once", toolName: "private-fixture-tool",
+        status: "pending", createdAt: now,
+      }).returning({ id: toolInvocations.id });
+      // The company-scoped unique key makes a replay reuse the durable row.
+      await db.insert(toolInvocations).values({
+        companyId: firstCompanyId, idempotencyKey: "cost-tool-replay-once", toolName: "private-fixture-tool",
+        status: "pending", createdAt: now,
+      }).onConflictDoNothing({ target: [toolInvocations.companyId, toolInvocations.idempotencyKey] });
+      await db.update(toolInvocations).set({ status: "failed", updatedAt: now })
+        .where(eq(toolInvocations.id, firstInvocation!.id));
+      // This prior-window row must not leak into the current-month projection.
+      await db.insert(toolInvocations).values({
+        companyId: firstCompanyId, idempotencyKey: "cost-tool-prior-window", toolName: "private-fixture-tool",
+        status: "succeeded", createdAt: new Date(monthStart.getTime() - 1),
+      });
+      // The exact start of the following month is outside this half-open window.
+      await db.insert(toolInvocations).values({
+        companyId: firstCompanyId, idempotencyKey: "cost-tool-next-window", toolName: "private-fixture-tool",
+        status: "succeeded", createdAt: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
+      });
+      // A second company's row remains attributed to that company, not the first.
+      await db.insert(toolInvocations).values({
+        companyId: secondCompanyId, idempotencyKey: "cost-tool-other-company", toolName: "private-fixture-tool",
+        status: "succeeded", createdAt: now,
+      });
       const input = report(),
         results = await Promise.all([
           service.record(operatorActor, input, now),
@@ -207,6 +235,8 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(() => saasCostSnapshotSchema.parse(results[0])).not.toThrow();
       const legacy = structuredClone(results[0]!);
       Reflect.deleteProperty(legacy.unitEconomics!, "schemaVersion");
+      Reflect.deleteProperty(legacy.unitEconomics!, "toolInvocationRecords");
+      legacy.unitEconomics!.tenants.forEach((tenant) => Reflect.deleteProperty(tenant, "toolInvocationRecordCount"));
       expect(saasCostSnapshotSchema.parse(legacy).unitEconomics.schemaVersion).toBe(1);
       expect(() => saasCostSnapshotSchema.parse({ ...results[0], unitEconomics: {
         ...results[0]!.unitEconomics, schemaVersion: 2,
@@ -226,6 +256,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(results[0]!.unitEconomics).toMatchObject({
         schemaVersion: 1,
         coverage: "partial_sources_only",
+        toolInvocationRecords: { meterKey: "tool.invocation_records.v1", source: "tool_invocations.created_at", unit: "invocation_record", coverage: "persisted_gateway_records_only", recordCount: 2, costStatus: "unavailable" },
         platformCost: { amountMinor: "5000", currency: "EUR", allocation: "environment_unallocated" },
         managedRuntimeHostCost: { amountMinor: "10000", currency: "EUR", basis: "provider_price_estimate", unallocatedMultiCompanyMinor: "0" },
         providerModelCost: { reportedCents: "125", estimatedCents: null, currency: "unspecified", reportedEventCount: 1, unpricedEventCount: 1, captureCompleteness: "not_established" },
@@ -238,8 +269,12 @@ const support = await getEmbeddedPostgresTestSupport();
       ]));
       expect(results[0]!.unitEconomics!.tenants).toContainEqual(expect.objectContaining({
         companyId: firstCompanyId, billingAccountId: accountId, providerReportedCents: "125", providerEstimatedCents: null, providerUnpricedEventCount: 1,
+        toolInvocationRecordCount: 1,
         estimatedHostRuntimeMinor: "2500", estimatedHostRuntimeCurrency: "EUR", hostAllocation: "single_active_company", totalCost: "unavailable_incomplete_components",
       }));
+      expect(results[0]!.unitEconomics!.tenants.find((tenant) => tenant.companyId === secondCompanyId)?.toolInvocationRecordCount).toBe(1);
+      expect(JSON.stringify(results[0]!.unitEconomics!.toolInvocationRecords)).not.toContain("private-fixture-tool");
+      expect(JSON.stringify(results[0]!.unitEconomics!.tenants.map(({ toolInvocationRecordCount }) => toolInvocationRecordCount))).not.toContain("cost-tool-replay-once");
       const current = await service.latest();
       expect(current).toMatchObject({ unitEconomics: { coverage: "partial_sources_only" } });
       expect(current!.unitEconomics!.providerModelCost.currency).toBe("unspecified");
@@ -258,6 +293,17 @@ const support = await getEmbeddedPostgresTestSupport();
           now,
         ),
       ).rejects.toMatchObject({ status: 409 });
+      // A retained v1 receipt without the additive field remains safe to replay.
+      const [receipt] = await db.select().from(platformAdminAudit)
+        .where(eq(platformAdminAudit.resourceId, input.idempotencyKey)).limit(1);
+      const legacySnapshot = structuredClone(receipt!.safeDetails!.snapshot as SaasCostSnapshot);
+      Reflect.deleteProperty(legacySnapshot.unitEconomics!, "toolInvocationRecords");
+      legacySnapshot.unitEconomics!.tenants.forEach((tenant) => Reflect.deleteProperty(tenant, "toolInvocationRecordCount"));
+      await db.update(platformAdminAudit).set({ safeDetails: { ...(receipt!.safeDetails ?? {}), snapshot: legacySnapshot } })
+        .where(eq(platformAdminAudit.id, receipt!.id));
+      const legacyReplay = await service.record(operatorActor, input, now);
+      expect(legacyReplay.unitEconomics!.toolInvocationRecords).toBeUndefined();
+      expect(saasCostSnapshotSchema.parse(legacyReplay).unitEconomics.schemaVersion).toBe(1);
     });
     it("refuses cost publication without current recent passkey proof, including a password session", async () => {
       const service = saasCostService(db, config), input = report();

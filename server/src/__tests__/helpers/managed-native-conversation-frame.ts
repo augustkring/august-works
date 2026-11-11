@@ -9,7 +9,7 @@ import { createConnection, type Socket } from "node:net";
 import { createServer as createHttpsServer } from "node:https";
 import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
   heartbeatRuns, heartbeatRunEvents, environmentLeases, issueComments, issueThreadInteractions, issues, nativeRunFinalizations, workspaceOperations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
@@ -75,9 +75,11 @@ export async function makeConversationFixtureTreeWritable(path: string): Promise
  * available only for unsupported-transport denial checks. */
 const NATIVE_EXECUTION_STAGES = ["preparing", "dispatching", "running", "settling", "completed", "failed"] as const;
 const NATIVE_PHASES = ["provider_running", "observed", "committed", "terminal_failure"] as const;
-function safeDiagnosticToken(value: unknown): string | null {
-  return typeof value === "string" && /^[A-Za-z0-9_:-]{1,96}$/.test(value) ? value : null;
-}
+const RUNNER_FAILURE_CODES = new Set(["adapter_failed", "setup_failed", "runner_ingress_unavailable", "runner_ingress_auth_failed",
+  "managed_provider_failed", "agentcore_active_turn_recovery_requires_review", "native_provider_terminal_failed",
+  "native_session_interrupted"]);
+const RUNNER_FAILURE_PAYLOAD_KEYS = new Set(["error", "errorCode", "code", "executionStage", "stage", "nativePhase",
+  "failure", "message", "prpEvent", "eventType", "type", "payload", "status", "name", "cause"]);
 function safeDiagnosticEnum<T extends readonly string[]>(value: unknown, allowed: T): T[number] | "other" | null {
   if (value == null) return null;
   return typeof value === "string" && (allowed as readonly string[]).includes(value) ? value as T[number] : "other";
@@ -85,31 +87,35 @@ function safeDiagnosticEnum<T extends readonly string[]>(value: unknown, allowed
 export function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
   const value = payload && typeof payload === "object" && !Array.isArray(payload)
     ? payload as Record<string, unknown> : {};
-  const code = safeDiagnosticToken(value.errorCode) ?? safeDiagnosticToken(value.code);
+  const hash = (raw: unknown) => typeof raw === "string" ? createHash("sha256").update(raw).digest("hex") : null;
+  const readCode = (raw: unknown) => typeof raw === "string"
+    ? RUNNER_FAILURE_CODES.has(raw) ? { code: raw, codeSha256: null }
+      : { code: null, codeSha256: hash(raw) }
+    : { code: null, codeSha256: null };
+  const topCode = readCode(typeof value.errorCode === "string" ? value.errorCode : value.code);
   const stage = safeDiagnosticEnum(value.executionStage ?? value.stage, NATIVE_EXECUTION_STAGES);
   const phase = safeDiagnosticEnum(value.nativePhase, NATIVE_PHASES);
   const failure = value.failure && typeof value.failure === "object" && !Array.isArray(value.failure)
     ? value.failure as Record<string, unknown> : {};
-  const failureCode = safeDiagnosticToken(failure.errorCode) ?? safeDiagnosticToken(failure.code);
+  const nestedCode = readCode(typeof failure.errorCode === "string" ? failure.errorCode : failure.code);
   const failureStage = safeDiagnosticEnum(failure.executionStage ?? failure.stage, NATIVE_EXECUTION_STAGES);
-  const safeShape = Object.keys(value).filter(key => /^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(key)).sort().slice(0, 16);
+  const payloadKeyNames = Object.keys(value).sort();
+  const safeShape = payloadKeyNames.filter(key => RUNNER_FAILURE_PAYLOAD_KEYS.has(key)).slice(0, 16);
+  const unknownPayloadKeys = payloadKeyNames.filter(key => !RUNNER_FAILURE_PAYLOAD_KEYS.has(key));
   const message = typeof value.message === "string" ? value.message.slice(0, 2048)
     : typeof failure.message === "string" ? failure.message.slice(0, 2048) : null;
-  const codes = new Set(["adapter_failed", "setup_failed", "runner_ingress_unavailable", "runner_ingress_auth_failed",
-    "managed_provider_failed", "agentcore_active_turn_recovery_requires_review", "native_provider_terminal_failed"]);
   const names = new Set(["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError",
     "AbortError", "TimeoutError", "AggregateError", "HttpError", "ZodError", "RunnerIngressConnectionError"]);
   const record = (raw: unknown) => raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : null;
-  const hash = (raw: unknown) => typeof raw === "string" ? createHash("sha256").update(raw).digest("hex") : null;
   const errorInfo = (raw: unknown, depth = 0): Record<string, unknown> | null => {
-    if (typeof raw === "string") return codes.has(raw) ? { kind: "code", code: raw } : { kind: "string", messageSha256: hash(raw) };
+    if (typeof raw === "string") return RUNNER_FAILURE_CODES.has(raw) ? { kind: "code", code: raw } : { kind: "string", messageSha256: hash(raw) };
     const item = record(raw);
     if (!item) return null;
     const errorCode = typeof item.code === "string" ? item.code : typeof item.errorCode === "string" ? item.errorCode : null;
     const cause = item.cause;
     return { kind: "object", name: typeof item.name === "string" ? names.has(item.name) ? item.name : "other" : null,
-      code: errorCode && codes.has(errorCode) ? errorCode : null,
-      codeSha256: errorCode && !codes.has(errorCode) ? hash(errorCode) : null,
+      code: errorCode && RUNNER_FAILURE_CODES.has(errorCode) ? errorCode : null,
+      codeSha256: errorCode && !RUNNER_FAILURE_CODES.has(errorCode) ? hash(errorCode) : null,
       messageSha256: hash(item.message), ...(depth < 1 && cause != null ? { cause: errorInfo(cause, depth + 1) } : {}) };
   };
   const prpEvent = record(value.prpEvent);
@@ -118,7 +124,10 @@ export function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
     .find(candidate => candidate === prpEvent?.eventType || candidate === prpEvent?.type) ?? null;
   const prpStatus = ["failed", "error", "cancelled", "interrupted"]
     .find(candidate => candidate === prpPayload?.status || candidate === prpEvent?.status) ?? null;
-  return { seq, payloadKeys: safeShape, code, stage, phase, failureCode, failureStage,
+  return { seq, payloadKeys: safeShape, unknownPayloadKeyCount: unknownPayloadKeys.length,
+    unknownPayloadKeysSha256: unknownPayloadKeys.length ? hash(JSON.stringify(unknownPayloadKeys)) : null,
+    code: topCode.code, codeSha256: topCode.codeSha256,
+    stage, phase, failureCode: nestedCode.code, failureCodeSha256: nestedCode.codeSha256, failureStage,
     messageSha256: message === null ? null : hash(message), error: errorInfo(value.error),
     prpEvent: prpEvent ? { eventType: prpEventType, status: prpStatus,
       error: errorInfo(prpEvent.error ?? prpPayload?.error) } : null };
@@ -1080,16 +1089,21 @@ export async function runManagedNativeConversationFrame(input: {
     if (finalRun?.status === "failed") {
       let runnerFailures: Array<Record<string, unknown>> = [];
       try {
-        runnerFailures = (await db.select({ seq: heartbeatRunEvents.seq, payload: heartbeatRunEvents.payload })
+        runnerFailures = (await db.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType,
+          payload: heartbeatRunEvents.payload })
           .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
-            eq(heartbeatRunEvents.runId, finalRun.id), eq(heartbeatRunEvents.eventType, "turn.failed")))
-          .orderBy(desc(heartbeatRunEvents.seq)).limit(3))
-          .map(event => boundedRunnerFailureDiagnostic(event.seq, event.payload));
+            eq(heartbeatRunEvents.runId, finalRun.id),
+            inArray(heartbeatRunEvents.eventType, ["error", "turn.failed"])))
+          .orderBy(asc(heartbeatRunEvents.seq)).limit(4))
+          .map(event => ({ eventType: event.eventType === "error" ? "error" : "turn.failed",
+            ...boundedRunnerFailureDiagnostic(event.seq, event.payload) }));
       } catch {
         runnerFailures = [{ diagnosticRead: "unavailable" }];
       }
       nativeFailureDiagnostics = { run: {
-        errorCode: safeDiagnosticToken(finalRun.errorCode),
+        errorCode: RUNNER_FAILURE_CODES.has(finalRun.errorCode ?? "") ? finalRun.errorCode : null,
+        errorCodeSha256: typeof finalRun.errorCode === "string" && !RUNNER_FAILURE_CODES.has(finalRun.errorCode)
+          ? createHash("sha256").update(finalRun.errorCode).digest("hex") : null,
         executionStage: safeDiagnosticEnum(finalRun.executionStage, NATIVE_EXECUTION_STAGES),
         nativePhase: safeDiagnosticEnum(finalRun.nativePhase, NATIVE_PHASES),
       }, runnerFailures,

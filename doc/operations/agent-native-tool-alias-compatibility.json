@@ -374,7 +374,7 @@
     },
     {
       "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
-      "sha256": "3e23ffa933a3f96a70c099f7f558df59103d5cb51e397cdbe05ed9df524a3360"
+      "sha256": "f6ef6349a1e187ba365953ec4d81fc661dd877f571d0dc03c64d6f1b217b74b3"
     },
     {
       "path": "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",

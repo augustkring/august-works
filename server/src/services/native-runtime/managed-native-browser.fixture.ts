@@ -387,6 +387,14 @@ describe.skipIf(!binary || !existsSync(binary) || !executablePath || !existsSync
               const claim = page.getByRole("button", { name: "Claim this instance", exact: true });
               try {
                 await page.goto(`${context.origin}${route}`);
+                await browserExpect(composer.or(claim).first()).toBeVisible({ timeout: 30_000 });
+                if (await claim.isVisible()) {
+                  const claimed = page.waitForResponse(response => response.request().method() === "POST" &&
+                    new URL(response.url()).pathname === "/api/bootstrap/claim");
+                  await claim.click();
+                  expect((await claimed).status()).toBe(200);
+                  await page.goto(`${context.origin}${route}`);
+                }
                 await browserExpect(composer).toBeVisible({ timeout: 30_000 });
               } catch (error) {
                 try { await entryDiagnostic.reportFailure("governed_handoff_entry", composer, claim); }
