@@ -636,7 +636,7 @@ it("retains a genuine Project Native run and recovery owner when physical worksp
       const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
         expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
         completionContract: { objective: "Complete a real Project-bound Native workspace run",
-          requiredOutputs: [],
+          requiredOutputs: [{ kind: "task_document", key: "copyback-evidence" }],
           businessInvariants: ["The source Project main branch remains unchanged"] },
         budgets: { maxModelCostMinor: 5, maxToolActions: 2 }, workers: [{ key: "writer", issueId: task.id }] });
       expect(facts().providerCallCount).toBe(0);

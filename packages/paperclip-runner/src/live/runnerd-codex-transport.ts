@@ -5854,6 +5854,41 @@ class DurablePrpCodexTransport implements CodexAppServerTransport {
         throw new Error(`runnerd exited while waiting for ${type}`);
       await new Promise((resolveWait) => setTimeout(resolveWait, 10));
     }
+    if (!this.#startupComplete && (type === "run.prepare" || type === "session.open")) {
+      const state = this.#core?.store.state;
+      const startupCommand = state?.commands.find((candidate) => candidate.type === type);
+      let runnerStatePresent = false;
+      let runnerStateIdentityMatches = false;
+      try {
+        const runnerState = await this.#readDurableRunnerState();
+        runnerStatePresent = true;
+        runnerStateIdentityMatches =
+          runnerState.runId === this.#eventIdentity?.runId &&
+          runnerState.runnerInstanceId === this.#eventIdentity?.runnerInstanceId &&
+          runnerState.environmentLeaseId === this.#eventIdentity?.environmentLeaseId &&
+          runnerState.normalizedSessionId === this.#eventIdentity?.normalizedSessionId;
+      } catch {
+        // The remote state read is best effort; absence and unreadability are
+        // intentionally represented by the same bounded diagnostic bit.
+      }
+      const authenticatedConnectionCount = Math.max(0, state?.connectionCount ?? 0);
+      const malformedFrameCount = Math.max(0, state?.malformedFrames ?? 0);
+      const authenticationObservation = authenticatedConnectionCount > 0
+        ? "authenticated_connection_seen"
+        : malformedFrameCount > 0
+          ? "unauthenticated_malformed_frames_seen"
+          : "no_authenticated_connection_seen";
+      this.#diagnostic(`native_prp_startup_wait ${JSON.stringify({
+        phase: type,
+        commandStatus: startupCommand?.status ?? "missing",
+        runnerExited: await this.#runnerHasExited(),
+        authenticationObservation,
+        authenticatedConnectionCount: Math.min(1_000_000, authenticatedConnectionCount),
+        malformedFrameCount: Math.min(1_000_000, malformedFrameCount),
+        runnerStatePresent,
+        runnerStateIdentityMatches,
+      })}`);
+    }
     throw new Error(
       `${this.#startupComplete ? "provider_transport_failed" : this.#startupFailureCode}: PRP command ${type} timed out`,
     );

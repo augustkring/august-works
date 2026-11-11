@@ -236,6 +236,151 @@ it("retains late Human comments across Native cleanup failure and promotes after
   });
 }, 300_000);
 
+it("rejects a result-less Native end_turn, then resumes the same Human plan after a real cleanup", async () => {
+  const followup = "Please finish the required result and keep the original plan.";
+  let taskId = "", firstRunId = "", firstStopSeen!: () => void, successorRequestStarted!: () => void;
+  let releaseSuccessorRequest!: () => void, successorSawComment = false;
+  const firstStopGate = new Promise<void>(resolve => { firstStopSeen = resolve; });
+  const successorRequestGate = new Promise<void>(resolve => { releaseSuccessorRequest = resolve; });
+  const successorRequestStartedGate = new Promise<void>(resolve => { successorRequestStarted = resolve; });
+  let providerCalls = 0;
+
+  await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    schedulerMode: "serial",
+    afterManagedSandboxStopReceipt: async ({ scope }) => {
+      if (scope.runId === firstRunId) firstStopSeen();
+    },
+    beforeManagedModelRequest: async ({ runId, issueId, body }) => {
+      if (issueId === taskId && !firstRunId) firstRunId = runId;
+      if (runId !== firstRunId && issueId === taskId && JSON.stringify(body).includes(followup)) {
+        successorSawComment = true;
+        successorRequestStarted();
+        await bounded(successorRequestGate, "successor_owner_observation");
+      }
+    },
+    providerReply: ({ body, callIndex, execution, runId }) => {
+      providerCalls++;
+      if (runId === firstRunId) {
+        // A real provider completion without paperclip_finish is not a valid
+        // Task result even when the model's text claims it has finished.
+        return { stop_reason: "end_turn", content: [{ type: "text", text: "Finished." }] };
+      }
+      if (callIndex === 1) return toolUse(body, "write_document", "result-less-retry-output", {
+        idempotencyKey: randomUUID(), key: "result", title: "Required result after Human follow-up",
+        body: "The original Human plan now has its required, source-bound result.", baseRevisionId: null });
+      if (callIndex === 2) return finish(body, execution, "result-less-retry-finish");
+      if (callIndex === 3) return { stop_reason: "end_turn", content: [{ type: "text", text: "Finished." }] };
+      throw new Error(`managed_native_result_continuation_unexpected_call_${callIndex}`);
+    },
+    driveScheduler: async ({ actor, companyId, agentId, heartbeat, humanApi, closeManagedAgentHostForRun }) => {
+      if (!actor.userId) throw new Error("managed_native_result_continuation_current_human_missing");
+      await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
+        heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, agentId));
+      const task = await issueService(db).create(companyId, { title: "Native missing required result",
+        description: "An end_turn without paperclip_finish must fail and remain resumable under the current Human plan.",
+        status: "todo", responsibleUserId: actor.userId, createdByUserId: actor.userId, assigneeAgentId: agentId }, db, undefined,
+        { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+      taskId = task.id;
+      const planService = orchestrationService(db);
+      const plan = await planService.create(actor, companyId, { issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Deliver the required result under this Human-authorized plan",
+          requiredOutputs: [{ kind: "task_document", key: "result" }],
+          businessInvariants: ["An end_turn with no semantic result must not complete the Task"] },
+        budgets: { maxModelCostMinor: 20, maxToolActions: 8, maxRetries: 1 },
+        workers: [{ key: "writer", issueId: task.id }] });
+      await planService.decide(actor, companyId, plan.id, { expectedVersion: plan.version,
+        action: "start", rationale: "Current Human authorizes one bounded attempt and continuation" });
+      const firstWake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: actor.userId,
+        payload: { issueId: task.id }, contextSnapshot: { issueId: task.id } });
+      if (!firstWake) throw new Error("managed_native_result_continuation_initial_wake_missing");
+
+      const failed = await waitFor(async () => heartbeat.getRun(firstWake.id).then(run => {
+        if (run?.status === "succeeded") throw new Error("native_end_turn_without_result_was_accepted");
+        return run?.status === "failed" ? run : null;
+      }), "native_missing_semantic_result_failure", 180_000);
+      expect(failed).toMatchObject({ runtimeMode: "native", status: "failed" });
+      expect(`${failed.errorCode ?? ""} ${failed.error ?? ""}`).toContain("native_finalization_missing");
+      expect(await db.select().from(nativeRunResults).where(and(
+        eq(nativeRunResults.companyId, companyId), eq(nativeRunResults.issueId, task.id), eq(nativeRunResults.runId, firstWake.id),
+      ))).toHaveLength(0);
+      const [preservedTask] = await db.select({ status: issues.status, executionRunId: issues.executionRunId })
+        .from(issues).where(eq(issues.id, task.id));
+      expect(preservedTask?.status).not.toBe("done");
+
+      await bounded(firstStopGate, "actual_native_host_stop_after_invalid_end_turn", 180_000);
+      const [firstLease] = await db.select().from(environmentLeases).where(and(
+        eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, firstWake.id)));
+      expect(firstLease).toBeTruthy();
+      const released = await waitFor(async () => db.select().from(environmentLeases).where(eq(environmentLeases.id, firstLease!.id))
+        .then(rows => rows[0]?.status === "released" && rows[0]?.cleanupStatus === "success" ? rows[0] : null),
+      "native_invalid_result_real_cleanup", 180_000);
+      expect(released.releasedAt).toBeInstanceOf(Date);
+      expect(await verifyNativeCleanupRuntimeState(db, { companyId, runId: firstWake.id, leaseId: firstLease!.id },
+        released.metadata?.remoteExecutionTermination)).toMatchObject({ state: "stopped", runId: firstWake.id, leaseId: firstLease!.id });
+
+      const commentResponse = await request(humanApi.app).post(`/api/issues/${task.id}/comments`)
+        .set("cookie", humanApi.humanCookie).set("Origin", "http://localhost")
+        .send({ body: followup, clientRequestId: randomUUID() });
+      expect(commentResponse.status).toBe(201);
+      const [comment] = await db.select().from(issueComments).where(and(
+        eq(issueComments.companyId, companyId), eq(issueComments.issueId, task.id),
+        eq(issueComments.authorUserId, actor.userId), eq(issueComments.body, followup), isNull(issueComments.createdByRunId)));
+      expect(comment).toBeTruthy();
+      const wake = await waitFor(async () => db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+        eq(agentWakeupRequests.reason, "issue_commented"),
+      )).then(rows => rows.find(row => row.payload?.commentId === comment!.id) ?? null), "human_result_continuation_wake");
+      await heartbeat.resumeQueuedRuns();
+      const promotedWake = await waitFor(async () => db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wake.id))
+        .then(rows => rows[0]?.runId ? rows[0] : null), "same_plan_human_continuation_promotion", 180_000);
+      const successorId = promotedWake.runId!;
+      expect(successorId).not.toBe(firstWake.id);
+      await bounded(successorRequestStartedGate, "successor_request_with_exact_comment", 180_000);
+      const [successor] = await db.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, successorId),
+        or(eq(heartbeatRuns.nativeIssueId, task.id), sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${task.id}`),
+      ));
+      expect(successor).toMatchObject({ runtimeMode: "native", status: "running", id: successorId });
+      const [currentOwner] = await db.select({ executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, task.id));
+      expect(currentOwner?.executionRunId).toBe(successorId);
+      const [successorRow] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, successor.id));
+      const receipt = nativeRunInputSourceReceiptSchema.parse(
+        (successorRow.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt);
+      const boundComment = receipt.bootstrap.inputs.filter(source => source.kind === "comment" && source.issueId === task.id);
+      expect(boundComment).toHaveLength(1);
+      expect(boundComment[0]).toMatchObject({ commentId: comment!.id, contentHash: expect.any(String), sourceVersion: expect.any(String) });
+      await waitFor(async () => successorSawComment ? true : null, "provider_consumed_exact_human_comment", 120_000);
+      const [successorAttempt] = await db.select().from(orchestrationWorkerAttempts).where(and(
+        eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.runId, successor.id)));
+      expect(successorAttempt).toBeTruthy();
+      releaseSuccessorRequest();
+      const final = await waitFor(async () => heartbeat.getRun(successorId).then(run => {
+        if (run?.status === "failed") throw new Error(`native_result_continuation_failed:${run.errorCode ?? "unknown"}`);
+        return run?.status === "succeeded" ? run : null;
+      }), "same_plan_native_result_committed", 180_000);
+      expect(final).toMatchObject({ runtimeMode: "native", status: "succeeded", nativePhase: "committed" });
+      const [finalization] = await db.select().from(nativeRunFinalizations).where(and(
+        eq(nativeRunFinalizations.companyId, companyId), eq(nativeRunFinalizations.runId, successorId),
+        eq(nativeRunFinalizations.issueId, task.id)));
+      expect(finalization).toMatchObject({ phase: "committed", leaseOwner: null });
+      const [result] = await db.select().from(nativeRunResults).where(and(
+        eq(nativeRunResults.companyId, companyId), eq(nativeRunResults.issueId, task.id), eq(nativeRunResults.runId, successorId)));
+      expect(result).toMatchObject({ schemaStatus: "accepted", completionContractId: successor.completionContractId,
+        resultJson: { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done" } });
+      const persistedPlan = await planService.get(actor, companyId, plan.id);
+      expect(persistedPlan).toMatchObject({ id: plan.id, status: "running", retriesUsed: 1 });
+      expect(persistedPlan?.attempts.filter(attempt => attempt.workerId === persistedPlan.workers[0]?.id)
+        .map(attempt => attempt.runId).sort()).toEqual([firstWake.id, successorId].sort());
+      expect(providerCalls).toBeGreaterThanOrEqual(2);
+      await closeManagedAgentHostForRun(firstWake.id);
+      await closeManagedAgentHostForRun(successorId);
+      releaseSuccessorRequest();
+    },
+  });
+}, 300_000);
+
 it("holds a same-Task wake during real Native cleanup while admitting an unrelated Task", async () => {
   let predecessorRunId = "", predecessorIssueId = "", unrelatedIssueId = "";
   let releaseFirstResponse!: () => void, firstResponseStarted!: () => void;

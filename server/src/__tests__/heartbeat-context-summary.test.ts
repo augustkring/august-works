@@ -109,9 +109,11 @@ describe("buildPaperclipTaskMarkdown", () => {
       interaction: { kind: "request_confirmation", status: "accepted" },
       acceptedPlan: { documentId: "plan-document", revisionId: "approved-revision", revisionNumber: 2 },
     });
-    expect(prompt).toContain("Perform that handoff now");
-    expect(prompt).toContain("ordinary assigned execution tasks");
-    expect(prompt).toContain("initialPlan before execution starts");
+    expect(prompt).toContain("Accepted chat plan directive:");
+    expect(prompt).toContain("ordinary assigned Tasks in Backlog");
+    expect(prompt).toContain("the relevant approved plan in each initialPlan");
+    expect(prompt).toContain("Do not move them to To do or start execution");
+    expect(prompt).toContain("save and start its bounded plan");
     expect(prompt).toContain("revision 2 approved-revision");
     expect(prompt).not.toContain("Implement the accepted plan on this issue");
   });
@@ -123,7 +125,7 @@ describe("buildPaperclipTaskMarkdown", () => {
       ...(kind === "unbound-confirmation" ? {} : { acceptedPlan: { documentId: "plan-document", revisionId: "approved-revision", revisionNumber: 2 } }),
       ...(kind === "new-comment" ? { wakeComment: { id: "later-comment", body: "Please revise it again first." } } : {}),
     });
-    expect(prompt).not.toContain("Perform that handoff now");
+    expect(prompt).not.toContain("Accepted chat plan directive:");
   });
 
   it("surfaces every coalesced wake comment in provider order", () => {

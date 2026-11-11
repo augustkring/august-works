@@ -3993,7 +3993,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     managedModelBrokerOriginPresent: boolean; modelBrokerSessionPhase: string | null;
     assignedMcpEnvironmentAbsent: boolean; credentialEnvironmentAbsent: boolean;
     nativePreparationPurpose: string | null; providerPackImageProbe: boolean; providerPackImageRootMatches: boolean;
-    exitCode: number | null; timedOut: boolean; erasureFailureGuard: string | null; hostSessionErrorCode: string | null;
+    exitCode: number | null; timedOut: boolean; elapsedMs: number; erasureFailureGuard: string | null; hostSessionErrorCode: string | null;
     hostSessionErrorDetails?: SafeHostExecErrorDetails }> = [];
   const nativeConformanceStartTupleObservations: Array<{ runId: string; tuple: Record<string, string> }> = [];
   relayHost.on("message", raw => {
@@ -4073,9 +4073,10 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       modelBrokerSessionPhase: typeof request.modelBrokerSession?.phase === "string" ? request.modelBrokerSession.phase : null,
       assignedMcpEnvironmentAbsent, credentialEnvironmentAbsent: noCredentialEnvironment,
       nativePreparationPurpose, providerPackImageProbe, providerPackImageRootMatches,
-      exitCode: null as number | null, timedOut: false, erasureFailureGuard: null as string | null,
+      exitCode: null as number | null, timedOut: false, elapsedMs: 0, erasureFailureGuard: null as string | null,
       hostSessionErrorCode: null as string | null, hostSessionErrorDetails: undefined as SafeHostExecErrorDetails | undefined };
     execFacts.push(fact);
+    const relayStartedAt = Date.now();
     if (typeof request.requestId === "string") hostExecErrorFactByRequestId.set(request.requestId, details => {
       fact.hostSessionErrorDetails = details;
     });
@@ -4277,6 +4278,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
             ? request.modelBrokerSession.startBindingDigest : null,
         });
         fact.exitCode = result.exitCode;
+        fact.timedOut = result.timedOut;
         relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId,
           exitCode: result.exitCode, timedOut: result.timedOut,
           ...(result.modelBrokerSessionReceipt ? { modelBrokerSessionReceipt: result.modelBrokerSessionReceipt } : {}) }));
@@ -4289,6 +4291,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
         fact.exitCode = 126;
         relayHost.send(JSON.stringify({ type: "exec_exit", channelId: message.channelId, exitCode: 126, timedOut: false }));
       } finally {
+        fact.elapsedMs = Math.min(600_000, Math.max(0, Date.now() - relayStartedAt));
         if (streamStarted) activeHostExecStreams--;
         if (typeof request.requestId === "string") hostExecErrorFactByRequestId.delete(request.requestId);
       }

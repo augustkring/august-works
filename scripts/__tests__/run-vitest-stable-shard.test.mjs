@@ -363,6 +363,7 @@ const managedNativeSuitePaths = [
   "server/src/__tests__/heartbeat-comment-wake-batching-managed-positive.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-chat-workspace-root.integration.test.ts",
+  "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-native-selection-fence.integration.test.ts",
   "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",

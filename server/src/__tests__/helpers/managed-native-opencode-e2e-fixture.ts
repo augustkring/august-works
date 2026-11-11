@@ -2455,6 +2455,37 @@ export async function runManagedNativeOpenCodeFixture(input: {
         } }).catch(error => {
           input.onPreserveDebugArtifacts?.();
           const failure = error instanceof Error ? error as Error & { code?: unknown; cause?: { code?: unknown }; stage?: unknown } : null;
+          if (sandboxHost) {
+            try {
+              const hostFacts = sandboxHost.facts() as Record<string, unknown>;
+              const rawExecFacts = Array.isArray(hostFacts.execFacts)
+                ? hostFacts.execFacts.filter(value => value && typeof value === "object" && !Array.isArray(value)) as Array<Record<string, unknown>> : [];
+              const relevantExecFacts = rawExecFacts.filter(value => value.modelBrokerSessionPhase === "start" ||
+                value.nativePreparationPurpose === "native_session_start").slice(-12).map(value => ({
+                executable: typeof value.executable === "string" ? basename(value.executable).replace(/[^A-Za-z0-9._-]/g, "").slice(0, 80) : "unknown",
+                purpose: value.nativePreparationPurpose === "native_session_start" ? "native_session_start" : null,
+                sessionPhase: value.modelBrokerSessionPhase === "start" ? "start" : value.modelBrokerSessionPhase === "refresh" ? "refresh" : null,
+                cwdExact: value.cwdExact === true,
+                exitCode: typeof value.exitCode === "number" && Number.isSafeInteger(value.exitCode) ? value.exitCode : null,
+                timedOut: value.timedOut === true,
+                elapsedMs: typeof value.elapsedMs === "number" && Number.isFinite(value.elapsedMs)
+                  ? Math.max(0, Math.min(600_000, Math.trunc(value.elapsedMs))) : null,
+                hostSessionErrorCode: typeof value.hostSessionErrorCode === "string" && /^[A-Za-z0-9_:-]{1,80}$/.test(value.hostSessionErrorCode)
+                  ? value.hostSessionErrorCode : null,
+              }));
+              const rawOwners = Array.isArray(hostFacts.relayCommandOwners)
+                ? hostFacts.relayCommandOwners.filter(value => value && typeof value === "object" && !Array.isArray(value)) as Array<Record<string, unknown>> : [];
+              const ownerNames = ["runner_launch", "runner_identity_read", "runner_monitor", "runner_diagnostic_read", "runner_signal", "runner_failure_cleanup"] as const;
+              const relayCommandCounts = Object.fromEntries(ownerNames.map(owner => [owner,
+                Math.min(1_000_000, rawOwners.filter(value => value.owner === owner).length)]));
+              diagnostics.push(`managed sandbox PRP startup facts: ${JSON.stringify({
+                phase: "native_session_start", relayAuthenticated: hostFacts.relayAuthenticated === true,
+                execCount: Math.min(1_000_000, rawExecFacts.length), relevantExecFacts, relayCommandCounts,
+              })}`);
+            } catch {
+              diagnostics.push("managed sandbox PRP startup facts: unavailable");
+            }
+          }
           if (input.processProbeOnly) {
             processProbeExecutionFailure = { name: safeCode(failure?.name) ?? "UnknownError",
               code: safeCode(failure?.code) ?? safeCode(failure?.cause?.code) ?? null };

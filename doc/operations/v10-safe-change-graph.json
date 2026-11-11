@@ -11,14 +11,14 @@
   },
   "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2055,
+    "sourceDeltaPathCount": 2056,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14645,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison."
+    "fullDiffPathCount": 14668,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
@@ -4203,16 +4203,16 @@
         "identity": "full master base supplied by current build task"
       },
       "sourceInventoryBoundary": {
-        "sourceDeltaPathCount": 2055,
+        "sourceDeltaPathCount": 2056,
         "deletedSourcePathCount": 41,
         "untrackedSourceCandidateCount": 0,
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 14645,
-        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison."
+        "fullDiffPathCount": 14668,
+        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification."
       },
-      "sourceAfterGeneration": "Complete staged source inventory against base81, including this 30-path browser/Task-handoff checkpoint and its exact software receipts. Actual SDK/browser execution and full V10 acceptance remain pending; source hashes do not promote historical requirement or migration-phase qualification."
+      "sourceAfterGeneration": "Complete staged source inventory against base81, including the 16-path source-policy/recovery checkpoint and its 22 software evidence files. Actual SDK/browser execution, full tests and complete V10 acceptance remain pending; historical requirement and phase states are unchanged."
     },
     {
       "id": "SCR-V10-HOTSPOT-01",
@@ -5507,7 +5507,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-context-summary.test.ts",
-          "sha256": "f760eceb0c6be47115cccd4799816f9cad3c41db99285abb77206aa80036c95c"
+          "sha256": "99bd4084938d86e563c8195fac7327ff7fea3e27f607e88472a4cce10357c493"
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-scheduling.test.ts",
@@ -5611,11 +5611,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-          "sha256": "5fdda8fb5bef6c0d96e8d46a3a134fb6aa8231fac311e1fdbd8cf824869eee15"
+          "sha256": "f1c501456cbbb3b718c722a84c4763690f489e4abd7c58e81fddc693a8beb23a"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19"
+          "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
         },
         {
           "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
@@ -5659,7 +5659,7 @@
         },
         {
           "path": "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
-          "sha256": "8096a2f6e81dc18b7d270d86c4d4e8d616c15c722ee7831602c414d9ffdff814"
+          "sha256": "597bdedbeeeabbfce65356c11d9f0e3f64a4b17c15276c8befafd2903509e384"
         },
         {
           "path": "server/src/__tests__/native-session-resumption.test.ts",
@@ -5783,7 +5783,7 @@
         },
         {
           "path": "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
-          "sha256": "6c18e1c20974b89666b1926276f17d42c37e6e446f4affe6f3ec2f810fdbe106"
+          "sha256": "0e8f729d2b099fda8c217c06580cd3fb7ecc63dfc8fb625c3f89cae742f583bb"
         },
         {
           "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
@@ -6955,11 +6955,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-          "sha256": "5fdda8fb5bef6c0d96e8d46a3a134fb6aa8231fac311e1fdbd8cf824869eee15"
+          "sha256": "f1c501456cbbb3b718c722a84c4763690f489e4abd7c58e81fddc693a8beb23a"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19"
+          "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
         },
         {
           "path": "server/src/__tests__/helpers/paperclip-semantic-conformance.ts",
@@ -7490,7 +7490,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19"
+          "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
         },
         {
           "path": "server/src/__tests__/issue-queued-comments-routes.test.ts",
@@ -7498,7 +7498,7 @@
         },
         {
           "path": "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
-          "sha256": "8096a2f6e81dc18b7d270d86c4d4e8d616c15c722ee7831602c414d9ffdff814"
+          "sha256": "597bdedbeeeabbfce65356c11d9f0e3f64a4b17c15276c8befafd2903509e384"
         },
         {
           "path": "server/src/__tests__/native-status-arbiter-corpus.test.ts",
@@ -7534,7 +7534,7 @@
         },
         {
           "path": "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
-          "sha256": "6c18e1c20974b89666b1926276f17d42c37e6e446f4affe6f3ec2f810fdbe106"
+          "sha256": "0e8f729d2b099fda8c217c06580cd3fb7ecc63dfc8fb625c3f89cae742f583bb"
         },
         {
           "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
@@ -8868,7 +8868,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19"
+          "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
         },
         {
           "path": "server/src/__tests__/issue-closed-workspace-routes.test.ts",
@@ -9148,7 +9148,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "b7eb730a3c54924864884acafffffafa9c8048e361c17e65a3133d70199b0d3b"
+          "sha256": "86064e23a513af3ee3bbff5071eb30ce4ed45f12439d30d87cf3eb99da396562"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -9176,7 +9176,7 @@
         },
         {
           "path": "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
-          "sha256": "6c18e1c20974b89666b1926276f17d42c37e6e446f4affe6f3ec2f810fdbe106"
+          "sha256": "0e8f729d2b099fda8c217c06580cd3fb7ecc63dfc8fb625c3f89cae742f583bb"
         },
         {
           "path": "server/src/services/native-runtime/manual-queue-adoption.test.ts",
@@ -9232,7 +9232,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "888d6e4f40bf412e040784f49604c6a812cd7c86abfa18dce6b101245f7ab18e"
+          "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc"
         },
         {
           "path": "server/src/services/native-runtime/status-decision-committer.ts",
@@ -9985,11 +9985,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-          "sha256": "5fdda8fb5bef6c0d96e8d46a3a134fb6aa8231fac311e1fdbd8cf824869eee15"
+          "sha256": "f1c501456cbbb3b718c722a84c4763690f489e4abd7c58e81fddc693a8beb23a"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19"
+          "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
         },
         {
           "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
@@ -10185,7 +10185,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "888d6e4f40bf412e040784f49604c6a812cd7c86abfa18dce6b101245f7ab18e"
+          "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc"
         },
         {
           "path": "server/src/services/native-runtime/task-reassignment.test.ts",
@@ -14543,7 +14543,7 @@
       "sources": [
         {
           "path": ".github/workflows/pr-trusted.yml",
-          "sha256": "b9c5f6308604b24561aeaf45336f5d7e577b7e811de57fd8f05a705bfdd4fc8b"
+          "sha256": "a697b5a6f81bc1bc44a5d828f94c6b330493db965b16e890c0f8d0c6896b2a3a"
         },
         {
           "path": "cli/src/__tests__/service-health-check.test.ts",
@@ -21937,7 +21937,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
-          "sha256": "79d6920ec3b219ec48fb56999954b40048f0f04d22de7c77d77d03184558e0dc"
+          "sha256": "9edd533f69b8fc761490ca4b4063019675b4c26b751550e77ff102fe28646614"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-project-workspace-fixture.ts",
@@ -22570,6 +22570,12 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-legacy-paid-admission.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
           "sha256": null
@@ -23479,6 +23485,7 @@
         "server/src/__tests__/execution-workspace-policy.test.ts",
         "server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
         "server/src/__tests__/heartbeat-legacy-paid-admission.integration.test.ts",
+        "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
         "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
         "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
         "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
@@ -23705,6 +23712,7 @@
         "server/src/__tests__/execution-workspace-policy.test.ts",
         "server/src/__tests__/fixtures/openshell-qualification-policy-golden.json",
         "server/src/__tests__/heartbeat-legacy-paid-admission.integration.test.ts",
+        "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
         "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
         "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
         "server/src/__tests__/legacy-runtime-assets.integration.test.ts",
@@ -24138,7 +24146,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
-          "sha256": "36a00920d4ce68694eb6006f203d953759b705e9f54f427212c0f62467408b8c"
+          "sha256": "d4fe1bf12a49cfb61aaf4c1a7bf4de6f43ab258b5e6cddab2bfd452da7c8a2b9"
         },
         {
           "path": "packages/paperclip-runner/src/native-session-runtime.test.ts",
@@ -24241,8 +24249,12 @@
           "sha256": "fe02e9129ea3ccbf62f0a0c1d0822f36dc4ce65dd6969a721569e6a22fd2f6f7"
         },
         {
+          "path": "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
+          "sha256": "5d249d8adc1c1da0d14224b30add4af4ebf35eff8b981d3ed53ad0d6cc9ec127"
+        },
+        {
           "path": "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
-          "sha256": "b05d9292adcce37d013d684cda2de109ae869c9c9927ed3f5dc841ddc691b3ae"
+          "sha256": "bdb997bb48648d666b67d3bbf83f9ed90012fa683d2c2a2310148770974dc214"
         },
         {
           "path": "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
@@ -24570,7 +24582,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
-          "sha256": "ac3b25bbe5b7fb59fe8610cd8b6e3150a4505b52e5abbcc9824074f8e38b931c"
+          "sha256": "805f168ee5771c3dde9124be6655f99d83d952e17349f5caf6acfd52106798f0"
         },
         {
           "path": "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
@@ -31433,7 +31445,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "166a72d32bf8d1468338cc5e13993dbe0b7c30559aa18cc4cb79ea68266407c3"
+          "sha256": "69a4542b5fc642fc88b42498ee9967eecc9654d51068839681360549e1b91f20"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -32024,7 +32036,7 @@
         },
         {
           "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-          "sha256": "8a23ee7f1adcb1968f483dbf23c24614d4a9758bdaae0868d1073c0269dd22e5"
+          "sha256": "281e5b894a70122463621b5891fb6fd65fd3e31a2ef0cbaa018dbca34cf031fc"
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
@@ -32064,7 +32076,7 @@
         },
         {
           "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-          "sha256": "7a1aab07e43defbc3243b6a27a6e51cc9bad4b6c76951d8dfe2c7278bd5ff6b6"
+          "sha256": "62ac96abd7d2e375655661a17f0b888f82437c7e08e91dc6a80387a98a933b7d"
         },
         {
           "path": "scripts/assert-cloud-image-sentry.mjs",
@@ -32164,7 +32176,7 @@
         },
         {
           "path": "scripts/run-vitest-stable.mjs",
-          "sha256": "482627aea2780f48904b609ae7114e45d3e71eec0c07019192449424e849a531"
+          "sha256": "9776847c487df6747f2a1935fcbf1b6ef6aea8b678f37851e96910099c9a5235"
         },
         {
           "path": "scripts/server-boot-smoke.sh",
@@ -46578,7 +46590,7 @@
       "id": "source:server/src/__tests__/heartbeat-context-summary.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-context-summary.test.ts",
-      "sha256": "f760eceb0c6be47115cccd4799816f9cad3c41db99285abb77206aa80036c95c",
+      "sha256": "99bd4084938d86e563c8195fac7327ff7fea3e27f607e88472a4cce10357c493",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -46948,7 +46960,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-frame.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
-      "sha256": "5fdda8fb5bef6c0d96e8d46a3a134fb6aa8231fac311e1fdbd8cf824869eee15",
+      "sha256": "f1c501456cbbb3b718c722a84c4763690f489e4abd7c58e81fddc693a8beb23a",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -46965,7 +46977,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19",
+      "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -47147,7 +47159,7 @@
       "id": "source:server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
-      "sha256": "8096a2f6e81dc18b7d270d86c4d4e8d616c15c722ee7831602c414d9ffdff814",
+      "sha256": "597bdedbeeeabbfce65356c11d9f0e3f64a4b17c15276c8befafd2903509e384",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05"
@@ -47626,7 +47638,7 @@
       "id": "source:server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
-      "sha256": "6c18e1c20974b89666b1926276f17d42c37e6e446f4affe6f3ec2f810fdbe106",
+      "sha256": "0e8f729d2b099fda8c217c06580cd3fb7ecc63dfc8fb625c3f89cae742f583bb",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",
@@ -49963,7 +49975,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "b7eb730a3c54924864884acafffffafa9c8048e361c17e65a3133d70199b0d3b",
+      "sha256": "86064e23a513af3ee3bbff5071eb30ce4ed45f12439d30d87cf3eb99da396562",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -50145,7 +50157,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "888d6e4f40bf412e040784f49604c6a812cd7c86abfa18dce6b101245f7ab18e",
+      "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-07"
@@ -52704,7 +52716,7 @@
       "id": "source:.github/workflows/pr-trusted.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/pr-trusted.yml",
-      "sha256": "b9c5f6308604b24561aeaf45336f5d7e577b7e811de57fd8f05a705bfdd4fc8b",
+      "sha256": "a697b5a6f81bc1bc44a5d828f94c6b330493db965b16e890c0f8d0c6896b2a3a",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -60193,7 +60205,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
-      "sha256": "79d6920ec3b219ec48fb56999954b40048f0f04d22de7c77d77d03184558e0dc",
+      "sha256": "9edd533f69b8fc761490ca4b4063019675b4c26b751550e77ff102fe28646614",
       "changeIds": [
         "SCR-V10-PROJECT-REPOSITORY-SOURCE"
       ],
@@ -61378,7 +61390,7 @@
       "id": "source:packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
-      "sha256": "36a00920d4ce68694eb6006f203d953759b705e9f54f427212c0f62467408b8c",
+      "sha256": "d4fe1bf12a49cfb61aaf4c1a7bf4de6f43ab258b5e6cddab2bfd452da7c8a2b9",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -61765,10 +61777,25 @@
       }
     },
     {
+      "id": "source:server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
+      "sha256": "5d249d8adc1c1da0d14224b30add4af4ebf35eff8b981d3ed53ad0d6cc9ec127",
+      "changeIds": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
       "id": "source:server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
-      "sha256": "b05d9292adcce37d013d684cda2de109ae869c9c9927ed3f5dc841ddc691b3ae",
+      "sha256": "bdb997bb48648d666b67d3bbf83f9ed90012fa683d2c2a2310148770974dc214",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -63000,7 +63027,7 @@
       "id": "source:server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
-      "sha256": "ac3b25bbe5b7fb59fe8610cd8b6e3150a4505b52e5abbcc9824074f8e38b931c",
+      "sha256": "805f168ee5771c3dde9124be6655f99d83d952e17349f5caf6acfd52106798f0",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -71072,7 +71099,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "166a72d32bf8d1468338cc5e13993dbe0b7c30559aa18cc4cb79ea68266407c3",
+      "sha256": "69a4542b5fc642fc88b42498ee9967eecc9654d51068839681360549e1b91f20",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -71702,7 +71729,7 @@
       "id": "source:doc/operations/agent-native-tool-alias-compatibility.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-      "sha256": "8a23ee7f1adcb1968f483dbf23c24614d4a9758bdaae0868d1073c0269dd22e5",
+      "sha256": "281e5b894a70122463621b5891fb6fd65fd3e31a2ef0cbaa018dbca34cf031fc",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -71852,7 +71879,7 @@
       "id": "source:scripts/__tests__/run-vitest-stable-shard.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-      "sha256": "7a1aab07e43defbc3243b6a27a6e51cc9bad4b6c76951d8dfe2c7278bd5ff6b6",
+      "sha256": "62ac96abd7d2e375655661a17f0b888f82437c7e08e91dc6a80387a98a933b7d",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -72227,7 +72254,7 @@
       "id": "source:scripts/run-vitest-stable.mjs",
       "kind": "current_source_owner",
       "path": "scripts/run-vitest-stable.mjs",
-      "sha256": "482627aea2780f48904b609ae7114e45d3e71eec0c07019192449424e849a531",
+      "sha256": "9776847c487df6747f2a1935fcbf1b6ef6aea8b678f37851e96910099c9a5235",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -88009,6 +88036,11 @@
     {
       "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
       "to": "source:server/src/__tests__/heartbeat-legacy-paid-admission.integration.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+      "to": "source:server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {

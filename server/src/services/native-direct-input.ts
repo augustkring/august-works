@@ -1804,13 +1804,15 @@ export interface NativeIssueEffectPrefix {
 export function nativeManagedProgressCommentSourceSet(capture: NativeModelOutputCapture): NativePayloadSourceSet {
   const dispatchCopies = capture.sourceSet.inputs.filter(source => source.kind === capture.dispatch.kind &&
     isDeepStrictEqual(source, capture.dispatch)).length;
-  if (dispatchCopies !== 0 || !capture.sourceSet.policy.runIds.includes(capture.runId))
+  if (dispatchCopies !== 0 || capture.dispatch.runId !== capture.runId)
     throw forbidden("Managed progress capture does not separate its registered dispatch from consumed inputs");
   const inputs = unionNativePayloadSourceInputs([[capture.dispatch], capture.sourceSet.inputs]);
   // One bounded slot is reserved for the provider-settled tool_result marker.
   if (inputs.length !== capture.sourceSet.inputs.length + 1 || inputs.length > 255)
     throw forbidden("Managed progress comment source closure exceeds its bound");
-  return { policy: capture.sourceSet.policy, inputs };
+  const policy = { ...capture.sourceSet.policy,
+    runIds: [...new Set([...capture.sourceSet.policy.runIds, capture.dispatch.runId])].sort() };
+  return { policy, inputs };
 }
 
 /** Validate the server-only provider/tool output carrier against the settled
@@ -5069,7 +5071,7 @@ async function assertNativeManagedSemanticToolResultCurrentInScope(db: Db | Tran
     managedUse.toolName !== expectedTool || managedUse.argumentsHash !== capture.argumentsHash ||
     !/^[0-9a-f]{64}$/.test(managedUse.responseContentHash) || outputCapture.dispatch.kind !== "conversation_model_dispatch" ||
     outputCapture.dispatch.runId !== input.run.id || outputCapture.dispatch.issueId !== input.issueId ||
-    outputCapture.dispatch.agentId !== input.run.agentId || !outputCapture.sourceSet.policy.runIds.includes(input.run.id)) fail();
+    outputCapture.dispatch.agentId !== input.run.agentId) fail();
   await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, input.issueId, outputCapture,
     expectedTool, scope, input.depth, input.actor, input.run.finishedAt ? "settled" : "live", input.siblingToolSourceProofs,
     input.historicalTransition);

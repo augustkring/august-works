@@ -11,7 +11,7 @@ import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRuns, issueComments, issueThreadInteractions, issues, nativeRunFinalizations, workspaceOperations,
+  heartbeatRuns, heartbeatRunEvents, issueComments, issueThreadInteractions, issues, nativeRunFinalizations, workspaceOperations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -73,6 +73,32 @@ export async function makeConversationFixtureTreeWritable(path: string): Promise
  * Paid positive fixtures use the actual signed RuntimeControl Sandbox relay
  * and its current attached provider credential. Explicit local mode remains
  * available only for unsupported-transport denial checks. */
+const NATIVE_EXECUTION_STAGES = ["preparing", "dispatching", "running", "settling", "completed", "failed"] as const;
+const NATIVE_PHASES = ["provider_running", "observed", "committed", "terminal_failure"] as const;
+function safeDiagnosticToken(value: unknown): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9_:-]{1,96}$/.test(value) ? value : null;
+}
+function safeDiagnosticEnum<T extends readonly string[]>(value: unknown, allowed: T): T[number] | "other" | null {
+  if (value == null) return null;
+  return typeof value === "string" && (allowed as readonly string[]).includes(value) ? value as T[number] : "other";
+}
+function boundedRunnerFailureDiagnostic(seq: number, payload: unknown) {
+  const value = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown> : {};
+  const code = safeDiagnosticToken(value.errorCode) ?? safeDiagnosticToken(value.code);
+  const stage = safeDiagnosticEnum(value.executionStage ?? value.stage, NATIVE_EXECUTION_STAGES);
+  const phase = safeDiagnosticEnum(value.nativePhase, NATIVE_PHASES);
+  const failure = value.failure && typeof value.failure === "object" && !Array.isArray(value.failure)
+    ? value.failure as Record<string, unknown> : {};
+  const failureCode = safeDiagnosticToken(failure.errorCode) ?? safeDiagnosticToken(failure.code);
+  const failureStage = safeDiagnosticEnum(failure.executionStage ?? failure.stage, NATIVE_EXECUTION_STAGES);
+  const safeShape = Object.keys(value).filter(key => /^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(key)).sort().slice(0, 16);
+  const message = typeof value.message === "string" ? value.message.slice(0, 2048)
+    : typeof failure.message === "string" ? failure.message.slice(0, 2048) : null;
+  return { seq, payloadKeys: safeShape, code, stage, phase, failureCode, failureStage,
+    messageSha256: message === null ? null : createHash("sha256").update(message).digest("hex") };
+}
+
 export async function runManagedNativeConversationFrame(input: {
   db: ReturnType<typeof createDb>;
   /** Independent read-only observer pool; never used for runtime operations. */
@@ -988,6 +1014,25 @@ export async function runManagedNativeConversationFrame(input: {
         }));
       } catch { /* Failure diagnostics must not replace the original Run outcome. */ }
     }
+    let nativeFailureDiagnostics: Record<string, unknown> | null = null;
+    if (finalRun?.status === "failed") {
+      let runnerFailures: Array<Record<string, unknown>> = [];
+      try {
+        runnerFailures = (await db.select({ seq: heartbeatRunEvents.seq, payload: heartbeatRunEvents.payload })
+          .from(heartbeatRunEvents).where(and(eq(heartbeatRunEvents.companyId, companyId),
+            eq(heartbeatRunEvents.runId, finalRun.id), eq(heartbeatRunEvents.eventType, "turn.failed")))
+          .orderBy(desc(heartbeatRunEvents.seq)).limit(3))
+          .map(event => boundedRunnerFailureDiagnostic(event.seq, event.payload));
+      } catch {
+        runnerFailures = [{ diagnosticRead: "unavailable" }];
+      }
+      nativeFailureDiagnostics = { run: {
+        errorCode: safeDiagnosticToken(finalRun.errorCode),
+        executionStage: safeDiagnosticEnum(finalRun.executionStage, NATIVE_EXECUTION_STAGES),
+        nativePhase: safeDiagnosticEnum(finalRun.nativePhase, NATIVE_PHASES),
+      }, runnerFailures };
+      console.info("conversation_native_failure_diagnostics", JSON.stringify(nativeFailureDiagnostics));
+    }
     const [manifest] = finalRun ? await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, finalRun.id)).limit(1) : [];
     const [reservation] = finalRun ? await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.conversationRunId, finalRun.id)).limit(1) : [];
     const [plan] = finalRun ? await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.issueId, conversationIssueId)).limit(1) : [];
@@ -1025,7 +1070,8 @@ export async function runManagedNativeConversationFrame(input: {
       conversationIssue: conversationIssue ?? null, foreignWriteStatus: foreignWrite.status,
       foreignWriteDidNotMutate: commentsAfterForeignWrite.length === countBeforeForeignWrite,
       sandboxRuntimeFacts,
-      runStatus: finalRun?.status ?? "not_started", success: finalRun?.status === "succeeded" };
+      runStatus: finalRun?.status ?? "not_started", success: finalRun?.status === "succeeded",
+      nativeFailureDiagnostics };
   } finally {
     await heartbeat.drainActiveRunExecutions().catch(() => undefined);
     try { await closeConversationApp?.(); }

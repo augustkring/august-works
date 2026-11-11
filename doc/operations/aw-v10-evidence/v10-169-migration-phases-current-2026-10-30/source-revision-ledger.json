@@ -5508,5 +5508,642 @@
     },
     "qualificationBoundary": "No V10-wide, production, paid-provider, physical Host, GA, merge-readiness or overall acceptance claim.",
     "evidenceRoot": "doc/operations/aw-v10-evidence/managed-browser-handoff-and-cleanup-20261111"
+  },
+  "nativeSourcePolicyRecoveryCheckpointR81": {
+    "sourceHead": "75d90c4e22ce9d2545e70cdc679e5fe7b12f80a6",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "R81 source policy/recovery checkpoint: 16 source paths (15 tracked modifications plus one untracked Native follow-up integration test) are exact-hash guarded. The separate 22-file R506\u2013R510 evidence root is not a source graph owner set. R508 server/runner TSC predates the R510-only test correction; R509 passed 77 tests, including actual embedded PostgreSQL owner reconstruction. R510 passed 41 component tests without a PostgreSQL process or SDK. Full pnpm test:run and actual SDK/browser qualification remain pending. Root staged all source and evidence candidates for publication; no untracked source remains.",
+    "changes": [
+      {
+        "path": ".github/workflows/pr-trusted.yml",
+        "sha256": "a697b5a6f81bc1bc44a5d828f94c6b330493db965b16e890c0f8d0c6896b2a3a",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "e0d67c4f76056bef0a6162a3a157ebe1f6f9d362a2ba2207fe6f5b324a53cc15"
+        },
+        "ownerGroups": [
+          "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
+        ]
+      },
+      {
+        "path": "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
+        "sha256": "d4fe1bf12a49cfb61aaf4c1a7bf4de6f43ab258b5e6cddab2bfd452da7c8a2b9",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "3a4eb700b873287866d25404a1724a5f9530ad0a98858190071c0774102a3483"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "sha256": "62ac96abd7d2e375655661a17f0b888f82437c7e08e91dc6a80387a98a933b7d",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "6056ed89191c7533521fc68ba67a041aa55b59f20ba5b9738412ad1c318600ba"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "scripts/run-vitest-stable.mjs",
+        "sha256": "9776847c487df6747f2a1935fcbf1b6ef6aea8b678f37851e96910099c9a5235",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "645adcb1db63b03b4ed1ac2e371bccca80b6684430a22abba1f987c23678ab5b"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-context-summary.test.ts",
+        "sha256": "99bd4084938d86e563c8195fac7327ff7fea3e27f607e88472a4cce10357c493",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "75486b90eeaad6e7518cc5cb0d9c626942399a197ebe75d30f9e1c825cface24"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts",
+        "sha256": "5d249d8adc1c1da0d14224b30add4af4ebf35eff8b981d3ed53ad0d6cc9ec127",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
+        "sha256": "bdb997bb48648d666b67d3bbf83f9ed90012fa683d2c2a2310148770974dc214",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+        "sha256": "9edd533f69b8fc761490ca4b4063019675b4c26b751550e77ff102fe28646614",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PROJECT-REPOSITORY-SOURCE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+        "sha256": "f1c501456cbbb3b718c722a84c4763690f489e4abd7c58e81fddc693a8beb23a",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "sha256": "69a4542b5fc642fc88b42498ee9967eecc9654d51068839681360549e1b91f20",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/native-opencode-managed-session-resumption.integration.test.ts",
+        "sha256": "597bdedbeeeabbfce65356c11d9f0e3f64a4b17c15276c8befafd2903509e384",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05"
+        ]
+      },
+      {
+        "path": "server/src/services/native-direct-input.ts",
+        "sha256": "86064e23a513af3ee3bbff5071eb30ce4ed45f12439d30d87cf3eb99da396562",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/heartbeat-managed-native-comment-handoff.integration.test.ts",
+        "sha256": "0e8f729d2b099fda8c217c06580cd3fb7ecc63dfc8fb625c3f89cae742f583bb",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+        "sha256": "805f168ee5771c3dde9124be6655f99d83d952e17349f5caf6acfd52106798f0",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+        "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "ae38465108573d9691013f8853254ea909038928b8a60f3f0836b70c3ab145eb"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      }
+    ],
+    "inventory": {
+      "previousSourceDeltaPathCount": 2055,
+      "currentSourceDeltaPathCount": 2056,
+      "deletedSourcePathCount": 41,
+      "trackedBase81FullDiffPathCount": 14645,
+      "expectedPublicationPathCountAfterStagingAllCurrentUntracked": 14668,
+      "untrackedSourceCandidateCount": 0,
+      "separateEvidenceFileCount": 22,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "newSourceOwnerAssignments": {
+        "server/src/__tests__/heartbeat-managed-native-conversation-followup.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      "existingChangedPathOwnerAssignmentsPreserved": true,
+      "evidenceRootExcludedFromSourceGraph": true,
+      "fullDiffPathCount": 14668,
+      "stagedCheckpointPathCount": 43
+    },
+    "metadataPinRefresh": {
+      "phasePinsRefreshed": [],
+      "aliasPinsRefreshed": [
+        {
+          "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+          "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
+        },
+        {
+          "path": "server/src/services/native-direct-input.ts",
+          "sha256": "86064e23a513af3ee3bbff5071eb30ce4ed45f12439d30d87cf3eb99da396562"
+        },
+        {
+          "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+          "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc"
+        }
+      ],
+      "aliasConsumerCountsPreserved": {
+        "aliases": 38,
+        "repositoryConsumerPaths": 21,
+        "sourcePins": 135
+      },
+      "officialAliasScanRequiredAfterRootApplication": true
+    },
+    "rootReviewedHelpPairs": [],
+    "helpSemanticReviewNotes": [
+      {
+        "articleId": "create-and-track-work",
+        "locale": "en",
+        "article": "docs/guides/board-operator/managing-tasks.md",
+        "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "linkedSources": [
+          {
+            "source": "ui/src/pages/ExperienceWork.tsx",
+            "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
+            "existingDecision": "updated",
+            "existingRationale": "The Task article now covers approved chat-plan handoff into Backlog, separate Human review and activation of each bounded plan, and moving Tasks to To do to queue work, alongside existing chat-confirmation and access guidance."
+          },
+          {
+            "source": "ui/src/pages/IssueDetail.tsx",
+            "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+            "existingDecision": "no_change",
+            "existingRationale": "The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+          },
+          {
+            "source": "server/src/services/agent-conversations.ts",
+            "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+            "existingDecision": "updated",
+            "existingRationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+          },
+          {
+            "source": "server/src/services/heartbeat.ts",
+            "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+            "existingDecision": "updated",
+            "existingRationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+          },
+          {
+            "source": "ui/src/pages/Orchestration.tsx",
+            "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
+            "existingDecision": "updated",
+            "existingRationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
+          },
+          {
+            "source": "ui/src/i18n/experience/en.json",
+            "sourceSha256": "488e65ca4d31eda48f5a8d721aafa38cbeeae42164f77853fd1e38f1cc563820",
+            "existingDecision": "updated",
+            "existingRationale": "The English UI labels expose the maximum model-cost limit and Backlog-to-To do queueing guidance; the paired article documents the Human review and activation steps."
+          }
+        ],
+        "r81Decision": "no_change",
+        "rationale": "R81 fixes Native source-set custody for progress, Human questions and repository discovery. The reviewed Task article already distinguishes plan approval from each bounded Task execution and requires the Human to review and start it; this change adds no Human action or permission."
+      },
+      {
+        "articleId": "create-and-track-work-da",
+        "locale": "da",
+        "article": "docs/da/guides/board-operator/managing-tasks.md",
+        "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "linkedSources": [
+          {
+            "source": "ui/src/pages/ExperienceWork.tsx",
+            "sourceSha256": "2d0092d35f217b44b0ef9ec9b0d38a22887ddf31e7dc7b4846f9e0c5b0d3829b",
+            "existingDecision": "updated",
+            "existingRationale": "Artiklen beskriver nu overdragelse fra godkendt chatplan til Backlog, separat Human-gennemgang og aktivering af hver afgr\u00e6nset plan samt flytning til Klar til start for at s\u00e6tte arbejdet i k\u00f8. Den eksisterende vejledning om chatbekr\u00e6ftelser og adgang er bevaret."
+          },
+          {
+            "source": "ui/src/pages/IssueDetail.tsx",
+            "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+            "existingDecision": "no_change",
+            "existingRationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+          },
+          {
+            "source": "server/src/services/agent-conversations.ts",
+            "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+            "existingDecision": "updated",
+            "existingRationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+          },
+          {
+            "source": "server/src/services/heartbeat.ts",
+            "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+            "existingDecision": "updated",
+            "existingRationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+          },
+          {
+            "source": "ui/src/pages/Orchestration.tsx",
+            "sourceSha256": "2c092e1b0beba303adbae2e26ef837b67401b6b08d91d377e98c45e3dc58bc12",
+            "existingDecision": "updated",
+            "existingRationale": "The Orchestration page captures the maximum model-cost limit and explains that Backlog tasks stay idle until a bounded plan is started and the Task is moved to To do; the paired article documents those controls."
+          },
+          {
+            "source": "ui/src/i18n/experience/da.json",
+            "sourceSha256": "5b51f265b1320ff6acb44c5445d9b44094bc962efff3194d4cee2c5598b10489",
+            "existingDecision": "updated",
+            "existingRationale": "De danske UI-tekster viser modelprisgr\u00e6nsen og vejledningen fra Backlog til Klar til start; den danske artikel beskriver de tilsvarende Human-gennemgangstrin."
+          }
+        ],
+        "r81Decision": "no_change",
+        "rationale": "R81 fixes Native source-set custody for progress, Human questions and repository discovery. The reviewed Task article already distinguishes plan approval from each bounded Task execution and requires the Human to review and start it; this change adds no Human action or permission."
+      },
+      {
+        "articleId": "recovering-work",
+        "locale": "en",
+        "article": "docs/help/recovering-work.md",
+        "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+        "linkedSources": [
+          {
+            "source": "ui/src/pages/IssueDetail.tsx",
+            "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+            "existingDecision": "no_change",
+            "existingRationale": "The current Task page still gates pause and resume actions on the current run and session. Descendant resume eligibility changed, but the article directs operators to the current task action and status, so its instructions remain accurate."
+          },
+          {
+            "source": "ui/src/components/IssueBlockedNotice.tsx",
+            "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
+            "existingDecision": "updated",
+            "existingRationale": "Blocked-task notice wording now uses the Blentera brand; its recovery action and the article\u2019s instructions are unchanged."
+          },
+          {
+            "source": "ui/src/lib/wait-for-stopped-runs.ts",
+            "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
+            "existingDecision": "updated",
+            "existingRationale": "The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+          },
+          {
+            "source": "server/src/services/issue-recovery-actions.ts",
+            "sourceSha256": "23704492b2cc2f801c60e72f2a1b3e4770cf907b5e00e86318bed76f9da6d131",
+            "existingDecision": "no_change",
+            "existingRationale": "The change removes an internal workspace-reader identifier from the public recovery-action projection; it does not change recovery choices or task guidance."
+          },
+          {
+            "source": "server/src/services/issues.ts",
+            "sourceSha256": "0fdf7e89d67910247315adb184e6543bf3f547d0a95be81b7db9c88fb6edc152",
+            "existingDecision": "no_change",
+            "existingRationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+          },
+          {
+            "source": "server/src/services/routines.ts",
+            "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+            "existingDecision": "no_change",
+            "existingRationale": "Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
+          },
+          {
+            "source": "server/src/services/scheduled-work.ts",
+            "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
+            "existingDecision": "no_change",
+            "existingRationale": "The scheduler restores persisted due times after work and recovery; it does not change the retry or recovery actions shown to a task owner."
+          },
+          {
+            "source": "server/src/routes/issues.ts",
+            "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
+            "existingDecision": "no_change",
+            "existingRationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+          },
+          {
+            "source": "server/src/services/execution-workspaces.ts",
+            "sourceSha256": "a1a0c7f8344dbc3cfe68bb79c01c3cb41e95d344b2d519b72db110bea31f4b70",
+            "existingDecision": "updated",
+            "existingRationale": "Workspace reopen and cleanup preserve source identity and customer files unless exact restoration is verified; the guide tells owners to check access and review preserved files before cleanup."
+          },
+          {
+            "source": "server/src/services/heartbeat.ts",
+            "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+            "existingDecision": "no_change",
+            "existingRationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
+          },
+          {
+            "source": "server/src/services/workspace-runtime.ts",
+            "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+            "existingDecision": "updated",
+            "existingRationale": "Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
+          },
+          {
+            "source": "server/src/services/managed-repository-checkout.ts",
+            "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
+            "existingDecision": "updated",
+            "existingRationale": "The checkout owner verifies the saved repository source before reopening work; the guide directs readers to check that source and its current connection."
+          },
+          {
+            "source": "server/src/services/git-credentials.ts",
+            "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
+            "existingDecision": "updated",
+            "existingRationale": "Repository credential access is rechecked for the current task owner; the guide says to restore the saved source connection before retrying workspace recovery."
+          }
+        ],
+        "r81Decision": "no_change",
+        "rationale": "R81 makes the existing progress, question and repository behaviors work within their current source policy without changing recovery actions or permissions. Internal failed-run diagnostics add no customer recovery step; the existing status, retry, stop and workspace guidance remains accurate."
+      },
+      {
+        "articleId": "recovering-work-da",
+        "locale": "da",
+        "article": "docs/da/help/recovering-work.md",
+        "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+        "linkedSources": [
+          {
+            "source": "ui/src/pages/IssueDetail.tsx",
+            "sourceSha256": "c0235b4c85888b1317df8dd43e68cdeb4596d649d7a4c45868c45d90600505a3",
+            "existingDecision": "no_change",
+            "existingRationale": "Den aktuelle opgaveside kr\u00e6ver fortsat den aktuelle k\u00f8rsel og session for pause- og genoptagelseshandlinger. Kriterierne for genoptagelse af underopgaver er \u00e6ndret, men artiklen henviser til handlingen og status for den aktuelle opgave, s\u00e5 vejledningen er fortsat korrekt."
+          },
+          {
+            "source": "ui/src/components/IssueBlockedNotice.tsx",
+            "sourceSha256": "086106438a168ffb3a1ea34f01a9674ff4cfc00b889e9af97a49488d9061e53b",
+            "existingDecision": "updated",
+            "existingRationale": "Danish version checked against the same source delta: blocked-task notice wording now uses the Blentera brand; its recovery action and the article\u2019s instructions are unchanged."
+          },
+          {
+            "source": "ui/src/lib/wait-for-stopped-runs.ts",
+            "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
+            "existingDecision": "updated",
+            "existingRationale": "Danish version checked against the same current source behavior: The stop-waiting UI is covered by the article\u2019s instruction to keep the task open, wait for status, and inspect the original run when an outcome is unknown."
+          },
+          {
+            "source": "server/src/services/issue-recovery-actions.ts",
+            "sourceSha256": "23704492b2cc2f801c60e72f2a1b3e4770cf907b5e00e86318bed76f9da6d131",
+            "existingDecision": "no_change",
+            "existingRationale": "Danish version checked against the same current source behavior: The change removes an internal workspace-reader identifier from the public recovery-action projection; it does not change recovery choices or task guidance."
+          },
+          {
+            "source": "server/src/services/issues.ts",
+            "sourceSha256": "0fdf7e89d67910247315adb184e6543bf3f547d0a95be81b7db9c88fb6edc152",
+            "existingDecision": "no_change",
+            "existingRationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+          },
+          {
+            "source": "server/src/services/routines.ts",
+            "sourceSha256": "405fdcbbcb8fd9b5d3e6fece3e25722f5ea7f015fc6c0c37dbeff69caf81372c",
+            "existingDecision": "no_change",
+            "existingRationale": "Danish counterpart checked against the same source behavior. Scheduled work resolves only the configured current active Human; an unavailable default is an owner recovery condition and does not choose a replacement silently."
+          },
+          {
+            "source": "server/src/services/scheduled-work.ts",
+            "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
+            "existingDecision": "no_change",
+            "existingRationale": "Danish version checked against the same current source behavior: The scheduler restores persisted due times after work and recovery; it does not change the retry or recovery actions shown to a task owner."
+          },
+          {
+            "source": "server/src/routes/issues.ts",
+            "sourceSha256": "8e8b905bf4cf340ce24f935b3b835a5f251ec3025e995644d8a7bd6e798b1859",
+            "existingDecision": "no_change",
+            "existingRationale": "The source fix binds the complete owned upload set atomically to the first Human comment, and retains explicit Human continuation and unknown-charge ownership. The existing Help instructions for support, recovery, Stop, retention and deletion remain accurate."
+          },
+          {
+            "source": "server/src/services/execution-workspaces.ts",
+            "sourceSha256": "a1a0c7f8344dbc3cfe68bb79c01c3cb41e95d344b2d519b72db110bea31f4b70",
+            "existingDecision": "updated",
+            "existingRationale": "Danish version checked against the same current source behavior: Workspace reopen and cleanup preserve source identity and customer files unless exact restoration is verified; the guide tells owners to check access and review preserved files before cleanup."
+          },
+          {
+            "source": "server/src/services/heartbeat.ts",
+            "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+            "existingDecision": "no_change",
+            "existingRationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
+          },
+          {
+            "source": "server/src/services/workspace-runtime.ts",
+            "sourceSha256": "9bea9b30457d3700a8f9440c47e4fecedc43edb2ae42920e4e41eaae344e6085",
+            "existingDecision": "updated",
+            "existingRationale": "Danish version checked against the same current source behavior: Cleanup keeps Git workspaces without exact restoration proof and avoids removing non-empty local workspaces; the article tells owners to review files reported as kept."
+          },
+          {
+            "source": "server/src/services/managed-repository-checkout.ts",
+            "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
+            "existingDecision": "updated",
+            "existingRationale": "Danish version checked against the same current source behavior: The checkout owner verifies the saved repository source before reopening work; the guide directs readers to check that source and its current connection."
+          },
+          {
+            "source": "server/src/services/git-credentials.ts",
+            "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
+            "existingDecision": "updated",
+            "existingRationale": "Danish version checked against the same current source behavior: Repository credential access is rechecked for the current task owner; the guide says to restore the saved source connection before retrying workspace recovery."
+          }
+        ],
+        "r81Decision": "no_change",
+        "rationale": "R81 makes the existing progress, question and repository behaviors work within their current source policy without changing recovery actions or permissions. Internal failed-run diagnostics add no customer recovery step; the existing status, retry, stop and workspace guidance remains accurate."
+      }
+    ],
+    "helpReviewDisposition": "No current dirty source path appears in the 350 canonical Help linked-source pairs. The four English/Danish task and recovery articles were read; no article edits or invented source/article review pairs are recorded. Existing review rows and hashes remain intact.",
+    "rootReportedCheckpointFacts": {
+      "r506": "PASS: syntax and 46 Node routing tests, 27.8s; source snapshot preceding R510-only test correction.",
+      "r507": "FAILED: RSS cap stopped before Runner; no runner started. Preserve as failed attempt, not a pass.",
+      "r508": "PASS: protected server TypeScript 127.128s and Runner TypeScript 6.431s with exact SHA/mtime; it precedes the R510-only test change.",
+      "r509": "PASS: 77 selected tests across three source files, 70.71s Vitest / 71.256s harness; actual embedded PostgreSQL; source SHA/mtime unchanged, no OOM, normal owned DB cleanup, zero left processes. No actual SDK/browser/Host claim.",
+      "r510": "PASS: 41 Task-context component tests, 15.38s Vitest / 15.863s harness; no PostgreSQL process observed, no SDK or Host execution; source pins/mtimes unchanged, no OOM, normal cleanup.",
+      "pending": "Full pnpm test:run and actual SDK/browser qualification remain pending. R508 check predates the R510-only test correction; do not claim current-source full workspace/build typecheck."
+    },
+    "evidenceRoot": {
+      "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111",
+      "files": [
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/EVIDENCE.json",
+          "sha256": "844a6c35b1c5e0ec213606f6caad7a8f05661a6f1339d63799da1e292dadef80"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/README.md",
+          "sha256": "5f141de0c6b8384f33724284157528ee4268d3ecd3d57dacadf0216e1ce00897"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/SHA256SUMS",
+          "sha256": "37d3793b40ecfd67fc2b4a95434b459a862d961b710ea26a1b013b60a0d6af6a"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/bounded-chat-handoff-context-regression-r510-cleanup.json",
+          "sha256": "0954c561a25b45e51e9094a4314d78cb88b70ccc251658c249096e5120f12b54"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/bounded-chat-handoff-context-regression-r510-receipt.json",
+          "sha256": "79d95ffab4f89995ca864e298a3807b537961542eeed2882497cc862f6fd8c77"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/bounded-chat-handoff-context-regression-r510-source-after.json",
+          "sha256": "d4e59270aa7302a87f23401835165158eef3b11743cff3f71667fcfccd235b53"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/bounded-chat-handoff-context-regression-r510-source-manifest.json",
+          "sha256": "db1d5da19b3612cb0114afb4e5ebefbdceac0bca454ca07f0200772e60331383"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-followup-routing-and-recovery-syntax-r506-receipt.json",
+          "sha256": "b4a604099420f77629bdcff1f8d6c78acd4aa160aee85e22864ce49c782f7be0"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-followup-routing-and-recovery-syntax-r506-source-before.json",
+          "sha256": "8e852575ee2b0f77f4c90a8caa3f339f3f261474c351a31adec97b8e5cb9ed3f"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r507-build-receipt.json",
+          "sha256": "c6c9ef7c35c0cd63b2ac7c243ca57ac019cde885267139639b75199202983780"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r507-read-only-source-protection-restored.json",
+          "sha256": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r507-read-only-source-protection.json",
+          "sha256": "749926e5906e793f56c8f850047d0c8b1f325fe1fbc9ce6b9dfdb932f612984d"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r507-source-before.json",
+          "sha256": "5bb4cd4b22f24b4fe17b699c002d5b3456b0c3eee7fa301b6f6009ac97b2b313"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r508-build-receipt.json",
+          "sha256": "273a4ceea4376f3d544ff21b05260ae2c5554d002cb501603806646b8ca92705"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r508-read-only-source-protection-restored.json",
+          "sha256": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r508-read-only-source-protection.json",
+          "sha256": "749926e5906e793f56c8f850047d0c8b1f325fe1fbc9ce6b9dfdb932f612984d"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r508-source-after.json",
+          "sha256": "d315b49f545dbddb15a38a2f98f857e2c4d6b38332af0e6260d45166bc56772b"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-and-recovery-protected-typecheck-r508-source-before.json",
+          "sha256": "5bb4cd4b22f24b4fe17b699c002d5b3456b0c3eee7fa301b6f6009ac97b2b313"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-owner-regressions-r509-cleanup.json",
+          "sha256": "436ee482c68705c3d1a9414c88c390e8bc1c8759e0ea4c50bf7e5e82450e9f0b"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-owner-regressions-r509-receipt.json",
+          "sha256": "62e30a00aac1d016f6670aaed870773e6868a61a02e69aa547ccff29632d27fc"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-owner-regressions-r509-source-after.json",
+          "sha256": "d58c00cf9de1986099841507de150a311c2d1375c2cf8ca89486edb81622c2a9"
+        },
+        {
+          "path": "doc/operations/aw-v10-evidence/native-source-policy-and-recovery-20261111/native-source-policy-owner-regressions-r509-source-manifest.json",
+          "sha256": "6fd3022d65e1bcf67b9ea9a2e13b5f8f3d81119d5f928dbf89edc0f0cec01327"
+        }
+      ],
+      "fileCount": 22,
+      "sourceInventoryTreatment": "Evidence files are publication paths, never source graph owner paths."
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "historical169RequirementStatusesPreserved": true,
+      "existingPhaseCasesAndPendingRowsPreserved": true,
+      "aliasLifecyclePromotion": false,
+      "sourceHashRefreshIsNotQualification": true
+    },
+    "qualificationBoundary": "Not a V10-wide, production, paid-provider, physical Host, GA, merge-readiness or complete acceptance claim."
   }
 }

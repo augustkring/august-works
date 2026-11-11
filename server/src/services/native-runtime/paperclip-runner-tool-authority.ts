@@ -1706,8 +1706,7 @@ export class PaperclipRunnerToolAuthority {
           onBehalfOfUserId: context.run.responsibleUserId ?? undefined };
         if (managedUse && outputCapture) {
           if (outputCapture.runId !== context.run.id || outputCapture.dispatch.runId !== context.run.id ||
-            !["worker_model_dispatch", "conversation_model_dispatch"].includes(outputCapture.dispatch.kind) ||
-            !outputCapture.sourceSet.policy.runIds.includes(context.run.id))
+            !["worker_model_dispatch", "conversation_model_dispatch"].includes(outputCapture.dispatch.kind))
             throw forbidden("Managed progress comment source does not belong to this Native run");
           if (outputCapture.dispatch.kind === "conversation_model_dispatch") {
             if (outputCapture.dispatch.issueId !== this.binding.issueId || outputCapture.dispatch.agentId !== this.binding.agentId ||
@@ -2918,9 +2917,11 @@ export class PaperclipRunnerToolAuthority {
     if (!capture || !use || typeof callId !== "string" || use.callId !== callId ||
       use.toolName !== "request_human_input" || use.argumentsHash !== nativeSha256(input) ||
       capture.runId !== context.run.id || capture.dispatch.runId !== context.run.id ||
-      !["worker_model_dispatch", "conversation_model_dispatch"].includes(capture.dispatch.kind) ||
-      !capture.sourceSet.policy.runIds.includes(context.run.id))
+      !["worker_model_dispatch", "conversation_model_dispatch"].includes(capture.dispatch.kind))
       throw forbidden("Managed Human question has no exact settled provider tool-use capture");
+    // The source policy lists run-valued prompt inputs. It need not include
+    // the current execution run when the prompt has no retained-run source;
+    // capture.runId plus the exact dispatch and output-source verifier bind it.
     if (capture.dispatch.kind === "conversation_model_dispatch") {
       if (capture.dispatch.issueId !== this.binding.issueId || capture.dispatch.agentId !== this.binding.agentId ||
         capture.dispatch.conversationSessionGeneration !== context.issue.conversationSessionGeneration)

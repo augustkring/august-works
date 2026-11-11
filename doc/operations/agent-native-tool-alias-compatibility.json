@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "36d7eaefacd3576bd265795fc7c50503f694014d8952318a020c6792dc4c5e19"
+      "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "b7eb730a3c54924864884acafffffafa9c8048e361c17e65a3133d70199b0d3b"
+      "sha256": "86064e23a513af3ee3bbff5071eb30ce4ed45f12439d30d87cf3eb99da396562"
     },
     {
       "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
@@ -386,7 +386,7 @@
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "888d6e4f40bf412e040784f49604c6a812cd7c86abfa18dce6b101245f7ab18e"
+      "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc"
     },
     {
       "path": "server/src/services/notification-preference-proposals.ts",

@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { agentExecutionManifests, agentWakeupRequests, orchestrationModelReservations, orchestrationWorkerAttempts, documents, heartbeatRuns, issueDocuments,
-  issueThreadInteractions, issues } from "@paperclipai/db";
+  issueThreadInteractions, issueRecoveryActions, issueComments, issues } from "@paperclipai/db";
 import request from "supertest";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -42,7 +42,7 @@ function use(body: Record<string, unknown>, name: string, id: string, input: Rec
   return { stop_reason: "tool_use" as const, content: [{ type: "tool_use", id, name: tool(body, name), input }] };
 }
 
-it("schedules a bounded retry for an accepted interaction after a genuine managed Native predecessor", async () => {
+async function runAcceptedInteractionSetupFailure(transient: boolean) {
   const binary = qualifiedOpenCodeBinary();
   if (!binary) throw new Error("qualified_opencode_binary_unavailable");
   let actualFirstRunId: string | null = null;
@@ -59,7 +59,9 @@ it("schedules a bounded retry for an accepted interaction after a genuine manage
       continuationBootstrapFailed = true;
       // Controlled transient setup fault before the real Runner process exists.
       // No Run, interaction, Host receipt, or retry row is fabricated by this seam.
-      throw new Error('Sandbox provider "managed" is installed via plugin "fixture.managed", but its worker is not running.');
+      throw new Error(transient
+        ? 'Sandbox provider "managed" is installed via plugin "fixture.managed", but its worker is not running.'
+        : 'Sandbox provider "managed" is not installed or its plugin worker is not running.');
     },
     beforeProviderResponse: async ({ companyId: currentCompany, run, issueId }) => {
       if (!actualFirstRunId) actualFirstRunId = run.id;
@@ -158,7 +160,7 @@ it("schedules a bounded retry for an accepted interaction after a genuine manage
       }, { timeout: 90_000, interval: 100 });
       expect(continuationBootstrapFailed).toBe(true);
       expect(failedRun).toMatchObject({ runtimeMode: "native", nativeIssueId: task.id, errorCode: "setup_failed" });
-      expect(failedRun.error).toContain("worker is not running");
+      expect(failedRun.error).toContain(transient ? "is installed via plugin" : "is not installed or its plugin worker is not running");
       expect(factsForRun(failedRun.id).providerCallCount).toBe(0);
       expect(failedRun.contextSnapshot).toMatchObject({ issueId: task.id, taskId: task.id,
         interactionId: pending!.id, interactionStatus: "accepted" });
@@ -172,32 +174,66 @@ it("schedules a bounded retry for an accepted interaction after a genuine manage
         eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, planId),
         eq(orchestrationWorkerAttempts.runId, failedRun.id)));
       expect(failedAttempt).toMatchObject({ companyId, planId, runId: failedRun.id });
-      const retry = await vi.waitFor(async () => {
-        const rows = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
-          eq(heartbeatRuns.retryOfRunId, failedRun.id)));
-        const row = rows[0];
-        expect(row?.status).toBe("scheduled_retry");
-        return row!;
-      }, { timeout: 30_000, interval: 100 });
-      expect(retry).toMatchObject({ status: "scheduled_retry", retryOfRunId: failedRun.id,
-        scheduledRetryAttempt: 1, scheduledRetryReason: "interaction_continuation_infra_retry" });
-      expect(retry.contextSnapshot).toMatchObject({ issueId: task.id, interactionId: pending!.id,
-        interactionStatus: "accepted", scheduledRetryAttempt: 1 });
-      const [retryWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, retry.wakeupRequestId!));
-      expect(retryWake).toMatchObject({ reason: "interaction_continuation_infra_retry", payload: { issueId: task.id,
-        interactionId: pending!.id, retryOfRunId: failedRun.id, scheduledRetryAttempt: 1 } });
-      expect(facts().providerCallCount).toBeGreaterThanOrEqual(3);
-      const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, planId));
-      expect(attempts.map(row => row.runId)).toEqual(expect.arrayContaining([predecessor!.id, failedRun.id]));
-      // The scheduled retry owns the issue but has no Worker attempt until admission.
-      expect(attempts.some(row => row.runId === retry.id)).toBe(false);
-      const reservations = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, planId));
-      expect(reservations.some(row => row.workerAttemptId && attempts.some(attempt => attempt.id === row.workerAttemptId))).toBe(true);
+      if (transient) {
+        const retry = await vi.waitFor(async () => {
+          const rows = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+            eq(heartbeatRuns.retryOfRunId, failedRun.id)));
+          const row = rows[0];
+          expect(row?.status).toBe("scheduled_retry");
+          return row!;
+        }, { timeout: 30_000, interval: 100 });
+        expect(retry).toMatchObject({ status: "scheduled_retry", retryOfRunId: failedRun.id,
+          scheduledRetryAttempt: 1, scheduledRetryReason: "interaction_continuation_infra_retry" });
+        expect(retry.contextSnapshot).toMatchObject({ issueId: task.id, interactionId: pending!.id,
+          interactionStatus: "accepted", scheduledRetryAttempt: 1 });
+        const [retryWake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, retry.wakeupRequestId!));
+        expect(retryWake).toMatchObject({ reason: "interaction_continuation_infra_retry", payload: { issueId: task.id,
+          interactionId: pending!.id, retryOfRunId: failedRun.id, scheduledRetryAttempt: 1 } });
+        expect(facts().providerCallCount).toBeGreaterThanOrEqual(3);
+        const attempts = await db.select().from(orchestrationWorkerAttempts).where(eq(orchestrationWorkerAttempts.planId, planId));
+        expect(attempts.map(row => row.runId)).toEqual(expect.arrayContaining([predecessor!.id, failedRun.id]));
+        expect(attempts.some(row => row.runId === retry.id)).toBe(false);
+        const reservations = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, planId));
+        expect(reservations.some(row => row.workerAttemptId && attempts.some(attempt => attempt.id === row.workerAttemptId))).toBe(true);
+        const [issue] = await db.select().from(issues).where(eq(issues.id, task.id));
+        expect(issue?.executionRunId).toBe(retry.id);
+      } else {
+        const interaction = await vi.waitFor(async () => {
+          const [row] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, pending!.id));
+          expect(row?.result).toMatchObject({ version: 1, outcome: "accepted", resumeFailure: {
+            status: "needs_attention", errorCode: "setup_failed", runId: failedRun.id } });
+          return row!;
+        }, { timeout: 30_000, interval: 100 });
+        expect(interaction.status).toBe("accepted");
+        const retryRowsAfterEscalation = await db.select().from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.retryOfRunId, failedRun.id)));
+        expect(retryRowsAfterEscalation).toEqual([]);
+        const runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+        expect(runs.some(row => row.retryOfRunId === failedRun.id)).toBe(false);
+        expect(runs.some(row => row.status === "scheduled_retry" &&
+          row.scheduledRetryReason === "interaction_continuation_infra_retry")).toBe(false);
+        const [issue] = await db.select({ status: issues.status }).from(issues).where(eq(issues.id, task.id));
+        expect(issue?.status).toBe("blocked");
+        const [recovery] = await db.select({ status: issueRecoveryActions.status, sourceIssueId: issueRecoveryActions.sourceIssueId })
+          .from(issueRecoveryActions).where(eq(issueRecoveryActions.sourceIssueId, task.id));
+        expect(recovery).toMatchObject({ status: "active", sourceIssueId: task.id });
+        const comments = await db.select().from(issueComments).where(and(eq(issueComments.companyId, companyId),
+          eq(issueComments.issueId, task.id)));
+        const failureComments = comments.filter(comment => comment.authorType === "system" &&
+          comment.body.includes("Agent failed to resume after approval: `setup_failed` — needs attention"));
+        expect(failureComments).toHaveLength(1);
+      }
       const [acceptedInteraction] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, pending!.id));
       expect(acceptedInteraction).toMatchObject({ status: "accepted", sourceRunId: predecessor!.id,
         resolvedByUserId: actor.userId });
-      const [issue] = await db.select().from(issues).where(eq(issues.id, task.id));
-      expect(issue?.executionRunId).toBe(retry.id);
     },
   });
+}
+
+it("schedules a bounded retry for an accepted interaction after a genuine managed Native predecessor", async () => {
+  await runAcceptedInteractionSetupFailure(true);
+}, 300_000);
+
+it("escalates a permanent accepted-interaction setup failure without retrying the Native run", async () => {
+  await runAcceptedInteractionSetupFailure(false);
 }, 300_000);

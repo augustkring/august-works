@@ -185,7 +185,7 @@ describe.each(variants)("genuine managed OpenCode checkpoint resumption (%s)", v
           expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
           completionContract: { objective: variant === "unchanged" ? "Complete the bounded task" :
             "Save a plan, then continue after Human plan acceptance",
-            requiredOutputs: variant === "unchanged" ? [] : [{ kind: "task_document", key: "plan" }],
+            requiredOutputs: [{ kind: "task_document", key: "plan" }],
             businessInvariants: ["Recovery retains the original contract"] },
           budgets: { maxModelCostMinor: 25, maxToolActions: 5 }, workers: [{ key: "writer", issueId: task.id }] });
         await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,

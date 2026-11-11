@@ -147,12 +147,21 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation report 
     const outputCapture = progressProof.outputCapture as unknown as NativeModelOutputCapture;
     expect(outputCapture.dispatch).toMatchObject({ kind: "conversation_model_dispatch", runId,
       issueId: result.issueId, agentId });
+    expect(outputCapture.sourceSet.policy.runIds).not.toContain(runId);
     expect(outputCapture.sourceSet.inputs).not.toContainEqual(outputCapture.dispatch);
     const commentSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
+    expect(commentSourceSet.policy.runIds).toContain(runId);
+    expect(outputCapture.sourceSet.policy.runIds).not.toContain(runId);
     expect(commentSourceSet.inputs).toContainEqual(outputCapture.dispatch);
     expect({ policy: snapshot.policy, inputs: snapshot.inputs }).toEqual(commentSourceSet);
     await expect(assertNativeModelOutputCaptureCurrent(db, companyId, result.issueId, outputCapture,
       "report_progress", undefined, "settled")).resolves.toBeUndefined();
+    await expect(assertNativeModelOutputCaptureCurrent(db, companyId, result.issueId, {
+      ...outputCapture, runId: randomUUID(),
+    }, "report_progress", undefined, "settled")).rejects.toThrow();
+    await expect(assertNativeModelOutputCaptureCurrent(db, companyId, result.issueId, {
+      ...outputCapture, dispatch: { ...outputCapture.dispatch, runId: randomUUID() } as typeof outputCapture.dispatch,
+    }, "report_progress", undefined, "settled")).rejects.toThrow();
     await expect(assertNativeModelOutputCaptureCurrent(db, companyId, result.issueId, {
       ...outputCapture, dispatch: { ...outputCapture.dispatch, reservationId: `forged-${runId}` } as typeof outputCapture.dispatch,
     }, "report_progress")).rejects.toThrow();
@@ -245,7 +254,13 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation report 
     const additionalInputs = Array.isArray(receipt.additionalInputs) ? receipt.additionalInputs as Array<Record<string, unknown>> : [];
     const repositorySource = nativePayloadSourceInputSchema.parse(capture!.source);
     const outputCapture = capture!.outputCapture as unknown as NativeModelOutputCapture;
+    expect(outputCapture.sourceSet.policy.runIds).not.toContain(result.run!.id);
+    await expect(assertNativeModelOutputCaptureCurrent(db, result.run!.companyId, result.issueId, outputCapture,
+      "list_project_repositories", { type: "agent", source: "agent_jwt", companyId: result.run!.companyId,
+        agentId: result.run!.agentId, runId: result.run!.id,
+        onBehalfOfUserId: result.run!.responsibleUserId ?? undefined }, "settled")).resolves.toBeUndefined();
     const repositoryReadClosure = nativeManagedProgressCommentSourceSet(outputCapture);
+    expect(repositoryReadClosure.policy.runIds).toContain(result.run!.id);
     expect(additionalInputs).toContainEqual({ responsibleUserId: result.run!.responsibleUserId,
       policy: outputCapture.sourceSet.policy,
       inputs: unionNativePayloadSourceInputs([[repositorySource], repositoryReadClosure.inputs]) });
@@ -415,6 +430,29 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation report 
     expect(questionConsumedIntent).toBeDefined();
     const consumedSet = questionConsumedIntent!.consumedSourceSet as NativePayloadSourceSet;
     const consumedComponents = questionConsumedIntent!.consumedSourceComponents as NativeConsumedSourceComponent[];
+    const captures = Array.isArray(profile.nativeToolResultSourceCaptures)
+      ? profile.nativeToolResultSourceCaptures as Array<Record<string, unknown>> : [];
+    const questionCapture = captures.find(value => value.managedOpenCode === true && value.tool === "request_human_input" &&
+      value.callId === questionCallId);
+    expect(questionCapture).toBeDefined();
+    const outputCapture = questionCapture!.outputCapture as unknown as NativeModelOutputCapture;
+    expect(outputCapture).toMatchObject({ runId: result.run!.id, dispatch: {
+      kind: "conversation_model_dispatch", runId: result.run!.id, issueId: result.issueId, agentId: result.run!.agentId,
+    } });
+    // The current run is bound by the exact output capture and its dispatch;
+    // policy.runIds only names run-valued prompt sources and can legitimately omit it.
+    expect(outputCapture.sourceSet.policy.runIds).not.toContain(result.run!.id);
+    const questionReader = { type: "agent" as const, source: "agent_jwt" as const,
+      companyId: result.run!.companyId, agentId: result.run!.agentId, runId: result.run!.id,
+      onBehalfOfUserId: conversation!.userId! };
+    await expect(assertNativeModelOutputCaptureCurrent(db, result.run!.companyId, result.issueId,
+      outputCapture, "request_human_input", questionReader, "settled")).resolves.toBeUndefined();
+    await expect(assertNativeModelOutputCaptureCurrent(db, result.run!.companyId, result.issueId, {
+      ...outputCapture, runId: randomUUID(),
+    }, "request_human_input", questionReader, "settled")).rejects.toThrow();
+    await expect(assertNativeModelOutputCaptureCurrent(db, result.run!.companyId, result.issueId, {
+      ...outputCapture, dispatch: { ...outputCapture.dispatch, runId: randomUUID() } as typeof outputCapture.dispatch,
+    }, "request_human_input", questionReader, "settled")).rejects.toThrow();
     await expect(assertNativeManagedConsumedSourceSetCurrent(db, { companyId: result.run!.companyId,
       issueId: result.issueId, runId: result.run!.id,
       actor: { type: "agent", source: "agent_jwt", companyId: result.run!.companyId, agentId: result.run!.agentId,
