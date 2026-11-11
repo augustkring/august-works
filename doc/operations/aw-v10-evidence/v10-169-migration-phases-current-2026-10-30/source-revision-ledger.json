@@ -6145,5 +6145,703 @@
       "sourceHashRefreshIsNotQualification": true
     },
     "qualificationBoundary": "Not a V10-wide, production, paid-provider, physical Host, GA, merge-readiness or complete acceptance claim."
+  },
+  "assignedMcpChannelNativeSkillsCheckpointR82": {
+    "sourceHead": "418927deb40016024ef56c2473761933be6770a9",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "R82 assigned-MCP, linked-channel Native conversation, and pinned Skills software checkpoint: 30 exact-hash source/configuration/test/inventory paths (25 tracked modifications and five untracked source candidates) are guarded. The separate 19-file evidence root is publication evidence, not source graph ownership. Root recorded a full-workspace TypeScript pass (r525), full-workspace build pass (r526 after the r525 RSS-cap stop), and 64 focused mixed unit/actual embedded-PostgreSQL tests across five files (r527). Full pnpm test:run is not green/qualified; Native SDK/Host scenarios and CI81 failure families remain unqualified. The accepted-origin MCP retention edge after steering to another Human remains under private follow-up. PR42 is draft/unmerged.",
+    "changes": [
+      {
+        "path": ".github/workflows/pr-trusted.yml",
+        "sha256": "4964e29c806749c079688afaccf04e118cb63b50277101c6490f80d343380d9a",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "e0d67c4f76056bef0a6162a3a157ebe1f6f9d362a2ba2207fe6f5b324a53cc15"
+        },
+        "ownerGroups": [
+          "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
+        ]
+      },
+      {
+        "path": "doc/operations/agent-native-ui-operation-coverage.json",
+        "sha256": "ce1bd452a6c4667f21e459a0e1851bc0fb0c0fc7fe33565d21d559f6e3df6338",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "sha256": "9e244a5399d73c46f95e4d1f4f4635c2b4cdce23f4982547dcdc317be1ca4c01",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "6056ed89191c7533521fc68ba67a041aa55b59f20ba5b9738412ad1c318600ba"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "scripts/run-vitest-stable.mjs",
+        "sha256": "25605a5131504eb8b3d4f1d5f715502aedbd37fbdbfb5203bee95a459d3ab532",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "645adcb1db63b03b4ed1ac2e371bccca80b6684430a22abba1f987c23678ab5b"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-managed-native-runtime-skills.integration.test.ts",
+        "sha256": "472a2c6a1e57d0bc8d42b9327d7f7ce5c55b1cfaaf424e9552d5440a39a9719a",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/connection-intent-railway-fixture.ts",
+        "sha256": "578ac19e37777655a03f9756ab3031d446d5ca30111e3cbe64ee6922865c1f80",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
+        "sha256": "f1311a697aa5771e4ba9c2c762e26460f7c72c68c8abbaeb5ecc56ffa3d94c44",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-04",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+        "sha256": "522ea090f6536f6781e6247d465d2e04daecbfc36b77980fe9e9c56e5dadb4e2",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+        "sha256": "31fbf016a6410b0972a2b414b5c1b8c0ba50cfb53da0651b4b346623729f0fbc",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "0b269adbae7f611db238677bcd199793054eb4f03833cf3f518af9eb338fb705"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/agent-conversations.ts",
+        "sha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "024ce08ba86de65ccf416f5b4bd734a535bd677c22e43aa9b7ea0dfe9afefed4"
+        },
+        "ownerGroups": [
+          "SCR-V10-CUSTOMER-EXPERIENCE",
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+          "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
+        ]
+      },
+      {
+        "path": "server/src/services/chat-channels.ts",
+        "sha256": "c8d406984fe4083b57619d1e42d6701a19a2c70715c99a8a2d77ef266b10a2a4",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "10454054c67f5a2eeaaceb84d1036ddb18adbb2272e8a9c79e61f0f31de9fd3d"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/chat-runtime-fence.ts",
+        "sha256": "ccf7f8770c21988fb8c2d5fb2ab063cc1df362d64bbd1a24a4350968483f9386",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/heartbeat.ts",
+        "sha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "24769d49ec221f329c6b069041ce85a957cc2e3267cdeda370e6e737ba01c9f9"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07",
+          "SCR-V10-HOTSPOT-08",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/native-direct-input.ts",
+        "sha256": "68eb68e0c236b5f5b82b4c9edd495f8ddd95fab99645e7e6c40a91bf393f3480",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/assigned-mcp-tools.test.ts",
+        "sha256": "fd75770d3a3ceb566999c1ee913792e54b9e35158ef12425b09698e642fa3949",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "0977e7f6a7b39f2d29bfaa61b1e38ab60fc86e4340d6bf971254f85712906924"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/assigned-mcp-tools.ts",
+        "sha256": "b56b39bedc565272ad52b585832276e9d46691304ca1a649d2ab177caccedc23",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "211ff06472d25172431e082dbe52b5308d9cf1ae63c51675835eb919309c8e19"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
+        "sha256": "24bca230aa564c94d465919712a7d0c1a503a9831344e4da18d9a427026def37",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-channel-conversation-owner.ts",
+        "sha256": "279ac6ff98a9ba0aa6aa04711c3db13d42e1ca5acc3d4823c1f86ca76c759d8e",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-chat-workspace.ts",
+        "sha256": "53ccb04adeccdd1ada0675b06599a0237a8aedbe561d51ed87f0097dd3afef09",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "4861739be69984ab668687b133b613faf8bf9e1336060235fe6e90b7b9838555"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
+        "sha256": "27b1a59ff6492d87af763c6f08823212706c41f5dbc0493dde977ad2de07f2a3",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.test.ts",
+        "sha256": "6650d21a6905cf29f6fbe0e2302a63d149bdf3b1e1f3e0c6ed3bf095a78249e2",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "ff503510502bb2661a1652d41c0d3823f10babe4e37b5b9bbdc8f2194943129a"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "sha256": "45f31b38e32b6c50f30cdc2f00cc183cab7240f023c4ce7780644dc947b26a86",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "b8d7ae5a0360d6d3dd9fada6fe45edbae0c435169fef84e48a978c1cac8f205d"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
+        "sha256": "a09d87d61194a0c96db748fabb8b2a8860bac1ea8d47b362977fda7389434520",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "20870009588481a676285f049f06823a8e1acd9c183a8ed4bcd68c4ea36a3e49"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+        "sha256": "82e89ba1d0115f7ffa56ea057451b87727fee727ef1c1d0a7723d5ea78b2b023",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "ae38465108573d9691013f8853254ea909038928b8a60f3f0836b70c3ab145eb"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/worker-conversation-root.ts",
+        "sha256": "fbb5eb6ea4ac3ae111de61c347696779c50066f380b15724aff237edc099e7de",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/orchestration/native-tool-boundary.ts",
+        "sha256": "734f0b69f84fa962509b1195340579cf5b9d22023498de01e2997a6385e13a50",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "5de08bc964a284dd801d5c51e3fc6f2359b5c1fdaf1d83b6dd3f7d1e28d09f29"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/orchestration/worker-model-gateway.ts",
+        "sha256": "40277285fead1579a69d896ac2c8dfbc442dd625587c39ea01337ee2a3fd5984",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "2fd8c76c01468ae8ce244fd7ed01054a3499cfb4923823e4106933fe1a56d9bb"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/tool-access-policy.ts",
+        "sha256": "33ee5b1bbecc5ccc07254fedaf55896c9a78c61ebb4a380da087dbfaf8d5a5b8",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "85daea7fdb1def18faab60ce38157d143fcefe7b9dfb615143d2234986714d26"
+        },
+        "ownerGroups": [
+          "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
+        ]
+      },
+      {
+        "path": "server/src/services/tool-gateway.ts",
+        "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "186dc3e025648c757ada83ea3013b5894a0eb61e78a4a08474c8a40a2ebc77de"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "tests/e2e/fixtures/managed-connection-review.ts",
+        "sha256": "b1c39174665d4452f22a6eb83d1f36e69d125aefd2a1f1c2baac8888e586f827",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-CUSTOMER-EXPERIENCE"
+        ]
+      }
+    ],
+    "inventory": {
+      "previousSourceDeltaPathCount": 2056,
+      "currentSourceDeltaPathCount": 2062,
+      "deletedSourcePathCount": 41,
+      "trackedBase81FullDiffPathCount": 14669,
+      "expectedPublicationPathCountAfterStagingAllCurrentUntracked": 14693,
+      "trackedSourceModificationCount": 25,
+      "untrackedSourceCandidateCount": 5,
+      "separateEvidenceFileCount": 19,
+      "separateEvidenceBytes": 69032,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "newSourceOwnerAssignments": {
+        "server/src/__tests__/heartbeat-managed-native-runtime-skills.integration.test.ts": [
+          "SCR-V10-HOTSPOT-11"
+        ],
+        "server/src/services/chat-runtime-fence.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "server/src/services/native-runtime/assigned-mcp-tools.test.ts": [
+          "SCR-V10-HOTSPOT-07"
+        ],
+        "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02"
+        ],
+        "server/src/services/native-runtime/native-channel-conversation-owner.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02"
+        ],
+        "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      "existingChangedPathOwnerAssignmentsPreserved": true,
+      "evidenceRootExcludedFromSourceGraph": true,
+      "fourUnchangedCompilerInputsExcludedFromSourceDelta": true
+    },
+    "metadataPinRefresh": {
+      "phasePinsRefreshed": [
+        {
+          "path": "server/src/services/native-runtime/native-session-executor.ts",
+          "sha256": "45f31b38e32b6c50f30cdc2f00cc183cab7240f023c4ce7780644dc947b26a86"
+        }
+      ],
+      "aliasPinsRefreshed": [
+        {
+          "path": "server/src/services/native-direct-input.ts",
+          "sha256": "68eb68e0c236b5f5b82b4c9edd495f8ddd95fab99645e7e6c40a91bf393f3480"
+        },
+        {
+          "path": "server/src/services/native-runtime/native-session-executor.ts",
+          "sha256": "45f31b38e32b6c50f30cdc2f00cc183cab7240f023c4ce7780644dc947b26a86"
+        },
+        {
+          "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+          "sha256": "82e89ba1d0115f7ffa56ea057451b87727fee727ef1c1d0a7723d5ea78b2b023"
+        },
+        {
+          "path": "server/src/services/orchestration/worker-model-gateway.ts",
+          "sha256": "40277285fead1579a69d896ac2c8dfbc442dd625587c39ea01337ee2a3fd5984"
+        },
+        {
+          "path": "server/src/services/tool-access-policy.ts",
+          "sha256": "33ee5b1bbecc5ccc07254fedaf55896c9a78c61ebb4a380da087dbfaf8d5a5b8"
+        },
+        {
+          "path": "server/src/services/tool-gateway.ts",
+          "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734"
+        }
+      ],
+      "aliasConsumerCountsPreserved": {
+        "aliases": 38,
+        "repositoryConsumerPaths": 21,
+        "sourcePins": 135
+      },
+      "officialAliasScanRequiredAfterRootApplication": true
+    },
+    "rootReviewedHelpPairs": [
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "recovering-work",
+        "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+        "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+        "decision": "no_change",
+        "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "recovering-work-da",
+        "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+        "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+        "decision": "no_change",
+        "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "export-and-delete",
+        "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+        "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+        "decision": "no_change",
+        "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "export-and-delete-da",
+        "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+        "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+        "decision": "no_change",
+        "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
+      },
+      {
+        "source": "server/src/services/tool-gateway.ts",
+        "articleId": "apps-and-connections",
+        "sourceSha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
+        "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
+        "decision": "no_change",
+        "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
+      },
+      {
+        "source": "server/src/services/tool-gateway.ts",
+        "articleId": "apps-and-connections-da",
+        "sourceSha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
+        "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
+        "decision": "no_change",
+        "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
+      },
+      {
+        "source": "server/src/services/agent-conversations.ts",
+        "articleId": "create-and-track-work",
+        "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
+        "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "decision": "updated",
+        "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+      },
+      {
+        "source": "server/src/services/agent-conversations.ts",
+        "articleId": "create-and-track-work-da",
+        "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
+        "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "decision": "updated",
+        "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "create-and-track-work",
+        "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+        "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
+        "decision": "updated",
+        "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "create-and-track-work-da",
+        "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
+        "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
+        "decision": "updated",
+        "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+      }
+    ],
+    "helpSemanticReviewNotes": "Source SHA refresh only. Preserve current decisions and rationales. The task article already describes Human-approved handoff and bounded-run verification; recovery and export/delete article scopes remain unchanged; connector setup/reconnect instructions are unchanged by backend MCP/channel policy changes. No Help article content or user action changes are claimed.",
+    "helpReviewDisposition": "The 28-article canonical reader identifies ten existing English/Danish linked-source pairs for changed agent-conversations.ts, heartbeat.ts and tool-gateway.ts. Refresh only the source hashes; preserve all existing decisions, rationale, article hashes and article content. Current task guidance already covers Human-approved bounded handoff; recovery and export/delete scope and connector setup/reconnect steps remain accurate. No new user action is documented.",
+    "rootReportedCheckpointFacts": {
+      "r525": "PASS full-workspace TypeScript 298.319743s.",
+      "r525_build_attempt": "STOPPED by 6 GiB process-group RSS cap before OOM; do not report as pass.",
+      "r526": "PASS full-workspace build 211.376078s, 7 GiB cap with 2 GiB global reserve.",
+      "r527": "PASS 64 focused tests across five files, 60.131961s; mixed unit and actual embedded-PostgreSQL owner/policy tests; no SDK or signed Host qualification.",
+      "pending": "Full pnpm test:run is not green/qualified; new Native MCP/channel/Skills SDK scenarios require actual qualified CI. CI81 unresolved Native/browser, legacy paid-positive, queue/performance failures remain. Approved MCP retention after steering to another Human still has an accepted-origin Source gap; private follow-up in progress. PR42 remains draft/unmerged; no phase, release, paid-transport, accessibility, Human or SDK qualification promotion."
+    },
+    "evidenceRoot": {
+      "path": "doc/operations/aw-v10-evidence/assigned-mcp-and-channel-native-skills-20261111",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "2e4a272717edbdd0674ceab69343d3102b7f8779a526e71845950c8468a95ad9",
+          "bytes": 1404
+        },
+        {
+          "path": "SHA256SUMS",
+          "sha256": "e32d2a3425116bb3f2db9008b8497b322fb75b37ae5e57b9ced29241c189f1cf",
+          "bytes": 1729
+        },
+        {
+          "path": "ci81-lower-suite-triage.md",
+          "sha256": "e080314ed6af9d438c61d275d0705abd284c5b771b2a569c3a0769114b65a004",
+          "bytes": 3649
+        },
+        {
+          "path": "ci81-native-triage.md",
+          "sha256": "5a761cb01eb3e0c4dcc9b5f5c501030dbdd134ce0a3d17a98a48e20641f89dc1",
+          "bytes": 6169
+        },
+        {
+          "path": "focused-tests-r527-cleanup.json",
+          "sha256": "7ad414946a2c5c66119ca73011c2cc34c92ac2cce9db2a7343aac2d614b4fb14",
+          "bytes": 273
+        },
+        {
+          "path": "focused-tests-r527-receipt.json",
+          "sha256": "b8d22593b6c65ff921466ca5a9f464fdf1d34224ee6424835341dda283f1a904",
+          "bytes": 4424
+        },
+        {
+          "path": "focused-tests-r527-source-after.json",
+          "sha256": "95e94aa2aeeb74cca3f27e8f88fdf0c422e5dd422bd719abd4f653412f512718",
+          "bytes": 8558
+        },
+        {
+          "path": "focused-tests-r527-source-manifest.json",
+          "sha256": "5f064ce9115f6293c207c6524a6583be5110dd4b6e77bd242017ba6d1ba11aff",
+          "bytes": 11845
+        },
+        {
+          "path": "focused-tests-r527.log.gz",
+          "sha256": "cdc0b2ef72f22106726e39a294c01a9f6edc1c762d783780f556306387dcee3d",
+          "bytes": 224
+        },
+        {
+          "path": "r525-post-exit-source-stability.json",
+          "sha256": "a4f0160359bc47b7b6be1be64cf11a7b1217ff89400feb4db038e34908176b4e",
+          "bytes": 225
+        },
+        {
+          "path": "r525-protection-restored.json",
+          "sha256": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071",
+          "bytes": 74
+        },
+        {
+          "path": "r526-protection-restored.json",
+          "sha256": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071",
+          "bytes": 74
+        },
+        {
+          "path": "r526-source-after.json",
+          "sha256": "e78978524d28006ea80cf9a91a033f39e9f57fabe0a8c877c5830876c586deb0",
+          "bytes": 4401
+        },
+        {
+          "path": "source-before.json",
+          "sha256": "dcc9a07d82420e913418c57b1249edb3e37e37e9fec7d0c0b6ccdebf76f44aab",
+          "bytes": 7141
+        },
+        {
+          "path": "verification-summary.json",
+          "sha256": "25c989791fe5f41a3bc8cbac41f17b60f5853ccb9e8f4cdb8d7fb03ede89f693",
+          "bytes": 1575
+        },
+        {
+          "path": "workspace-build-r526-receipt.json",
+          "sha256": "fa7944778deaf14f4fb4032733688d158b7790e8bb1d5a4cc8ee52609fe7acdb",
+          "bytes": 691
+        },
+        {
+          "path": "workspace-build-r526.log.gz",
+          "sha256": "aa21a021e8ee1bf205160ec8a0adf313e5da6de2b766e59b48fe8db4c2508a4d",
+          "bytes": 13052
+        },
+        {
+          "path": "workspace-typecheck-and-stopped-build-r525-receipt.json",
+          "sha256": "2326e66e02fe03c3791211aec0ebb660306d53c4b65dfaa93caa09616de5d287",
+          "bytes": 1103
+        },
+        {
+          "path": "workspace-typecheck-r525.log.gz",
+          "sha256": "1e37be7c1154aca82b4fdf185361b8a1655644aef710c1c0d2351784f4ac40d1",
+          "bytes": 2421
+        }
+      ],
+      "fileCount": 19,
+      "bytes": 69032,
+      "sourceInventoryTreatment": "Evidence files are publication paths, never source graph owner paths."
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "historical169RequirementStatusesPreserved": true,
+      "existingPhaseCasesAndPendingRowsPreserved": true,
+      "aliasLifecyclePromotion": false,
+      "qualificationPromoted": false,
+      "sourceHashRefreshIsNotQualification": true
+    },
+    "qualificationBoundary": "This is a bounded software implementation checkpoint. It does not claim a green full test suite, SDK/Host/browser qualification, release readiness, V10-wide acceptance, paid-provider execution, or GA.",
+    "publicationInventory": {
+      "stagedCheckpointFiles": 56,
+      "sourcePaths": 30,
+      "metadataPaths": 7,
+      "separateEvidencePaths": 19,
+      "fullBase81StagedDiffPaths": 14693,
+      "remainingUntrackedSourceCandidates": 0
+    }
   }
 }

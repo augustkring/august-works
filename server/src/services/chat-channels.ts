@@ -31,6 +31,8 @@ import { takePhotonCompanion } from "./photon/attachments.js";
 import { writePhotonCheckpoint } from "./photon/receiver.js";
 import { PhotonState } from "./photon/state.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import { credentialFingerprint, runtimeGeneration } from "./chat-runtime-fence.js";
+import { readCanonicalInboundWakeupDbSource } from "./native-runtime/chat-inbound-wakeup-owner.js";
 import { HEIF_CONTENT_TYPES, photonHeifPreview, validatePhotonImage } from "./photon/media.js";
 import { projectSafeChatPublicationText } from "./chat-publication-projection.js";
 import { PhotonAnswerValidationError, nativePhotonInteraction, publishPhotonPrompt, photonResponseCommand, parsePhotonQuestionAnswer, type PhotonPromptReceipt, type PhotonInteractionBinding, type PhotonDraft } from "./photon/interactions.js";
@@ -957,25 +959,6 @@ function githubRecoveryWindow(value: unknown): GitHubRecoveryWindow | null {
     : null;
 }
 
-function runtimeGeneration(setup: ChatEndpointSetupState): number {
-  const value = Number((setup as InternalSetupState).runtimeGeneration ?? 0);
-  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
-function credentialFingerprint(refs: ToolCredentialSecretRef[]): string {
-  const stable = refs
-    .map((ref) => ({
-      configPath: ref.configPath,
-      secretId: ref.secretId,
-      versionSelector: ref.versionSelector ?? "latest",
-    }))
-    .sort((left, right) =>
-      `${left.configPath}:${left.secretId}:${left.versionSelector}`.localeCompare(
-        `${right.configPath}:${right.secretId}:${right.versionSelector}`,
-      ),
-    );
-  return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
-}
 
 const ATTACHMENT_FAILURE_NOTICE_PREFIX = "attachment-failure-notice:";
 
@@ -11830,37 +11813,12 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         payload.requestedByActorId !== action.principalId)
     )
       throw deny();
-    const source = await tx
-      .select({
-        authorUserId: issueComments.authorUserId,
-        deletedAt: issueComments.deletedAt,
-      })
-      .from(chatMessageLinks)
-      .innerJoin(
-        issueComments,
-        and(
-          eq(issueComments.id, chatMessageLinks.commentId),
-          eq(issueComments.companyId, action.companyId),
-          eq(issueComments.issueId, issue.id),
-        ),
-      )
-      .where(
-        and(
-          eq(chatMessageLinks.companyId, action.companyId),
-          eq(chatMessageLinks.endpointId, endpoint.id),
-          eq(chatMessageLinks.conversationId, conversation.id),
-          eq(chatMessageLinks.deliveryId, delivery.id),
-          eq(chatMessageLinks.commentId, payload.commentId),
-          eq(chatMessageLinks.direction, "inbound"),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null);
-    if (
-      !source ||
-      (source.deletedAt && !notice?.terminal) ||
-      source.authorUserId !== expectedUserId
-    )
+    const source = await readCanonicalInboundWakeupDbSource(tx, {
+      action, expectedIssueId: issue.id, expectedAgentId: payload.agentId, expectedCommentId: payload.commentId,
+      expectedUserId, allowTerminalIssue: notice?.terminal === true, allowTerminalAction: notice?.terminal === true,
+      allowEarlyAction: true, allowDeletedSource: notice?.terminal === true,
+    });
+    if (source.endpoint.id !== endpoint.id || source.delivery.id !== delivery.id || source.conversation.id !== conversation.id)
       throw deny();
     return { issue, delivery, endpoint, conversation };
   }

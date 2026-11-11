@@ -32,6 +32,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
+import { readNativeChannelConversationScope } from "../native-runtime/native-channel-conversation-owner.js";
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
@@ -134,6 +135,18 @@ export async function assertNativeConversationToolNoPlanScope(db: Db, b: {
   companyId: string; issueId: string; agentId: string; runId: string;
 }): Promise<void> {
   if (await scope(db, b)) throw forbidden("Native conversation action unexpectedly has a plan invocation scope");
+  const [issue] = await db.select().from(issues).where(and(eq(issues.companyId, b.companyId), eq(issues.id, b.issueId))).limit(1);
+  if (issue?.originKind !== "chat_channel") return;
+  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, b.companyId),
+    eq(heartbeatRuns.id, b.runId), eq(heartbeatRuns.agentId, b.agentId))).limit(1);
+  const generation = run?.contextSnapshot?.conversationSessionGeneration;
+  const sourceCommentId = run?.contextSnapshot?.wakeCommentId;
+  if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.nativeIssueId !== b.issueId ||
+      run.responsibleUserId === null || typeof generation !== "number" || typeof sourceCommentId !== "string")
+    throw forbidden("Native channel conversation tool is outside its current linked-Human turn");
+  await readNativeChannelConversationScope(db, { companyId: b.companyId, issueId: b.issueId, agentId: b.agentId,
+    responsibleUserId: run.responsibleUserId, runId: b.runId, sessionGeneration: generation,
+    sourceCommentId, consumer: "live_tool_boundary" });
 }
 
 /** Acquire source locks in the shared analytical -> Memory -> plan -> Task/run order. */
@@ -450,7 +463,10 @@ export async function withOrchestrationNativeTool(
   externallyMetered = false,
 ): Promise<unknown> {
   const preliminary = await scope(db, b);
-  if (!preliminary) return effect();
+  if (!preliminary) {
+    await assertNativeConversationToolNoPlanScope(db, b);
+    return effect();
+  }
   if (!/^[\x21-\x7e]{1,240}$/.test(call.callId))
     throw badRequest("Native tool call identity must be bounded");
   const args = call.arguments && typeof call.arguments === "object" && !Array.isArray(call.arguments)

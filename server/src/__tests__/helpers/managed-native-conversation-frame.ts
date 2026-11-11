@@ -11,7 +11,7 @@ import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRuns, heartbeatRunEvents, issueComments, issueThreadInteractions, issues, nativeRunFinalizations, workspaceOperations,
+  heartbeatRuns, heartbeatRunEvents, environmentLeases, issueComments, issueThreadInteractions, issues, nativeRunFinalizations, workspaceOperations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -138,6 +138,7 @@ export async function runManagedNativeConversationFrame(input: {
   /** Optional browser driver; absent preserves the existing mini-app/Supertest route flow. */
   driveConversation?: (context: {
     app: ExpressApp;
+    heartbeat: ReturnType<typeof heartbeatService>;
     origin: string;
     humanCookie: string;
     companyId: string;
@@ -204,6 +205,8 @@ export async function runManagedNativeConversationFrame(input: {
     budget: { companyMonthlyCents: number; agentMonthlyCents: number };
     profileBinding: { id: string; providerBindingId: string; providerSnapshotHash: string; qualifiedConfigurationHash: string; model: string };
     usage: { inputTokens: number; outputTokens: number };
+    /** Read one already-staged Skill file through the exact signed Host for this live Run. */
+    readStagedSkillFile?: (skillKey: string, relativePath?: string) => Promise<string>;
   }) => Promise<void>;
   afterRunSettledBeforeTeardown?: (facts: {
     db: ReturnType<typeof createDb>;
@@ -538,7 +541,43 @@ export async function runManagedNativeConversationFrame(input: {
           profileBinding: { id: profile.id, providerBindingId: profile.providerBindingId,
             providerSnapshotHash: profile.providerSnapshotHash, qualifiedConfigurationHash: profile.qualifiedConfigurationHash,
             model: profile.tariff.model },
-          usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens } }); }
+          usage: { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens },
+          readStagedSkillFile: async (skillKey, relativePath = "SKILL.md") => {
+            if (!/^[a-zA-Z0-9_./-]{1,180}$/.test(relativePath) || relativePath.startsWith("/") ||
+                relativePath.split("/").some(part => !part || part === "." || part === ".."))
+              throw new Error("conversation_fixture_skill_read_path_invalid");
+            const nativeInput = profileValue.nativeExecutionInput as Record<string, any> | undefined;
+            const execution = nativeInput && typeof nativeInput === "object" ? nativeInput : null;
+            const runtimeContext = execution?.runtimeContext && typeof execution.runtimeContext === "object"
+              ? execution.runtimeContext as Record<string, any> : null;
+            const skills = Array.isArray(runtimeContext?.skills) ? runtimeContext!.skills as Array<Record<string, any>> : [];
+            const skillIndex = skills.findIndex(skill => skill.key === skillKey);
+            if (skillIndex < 0) throw new Error("conversation_fixture_runtime_skill_missing");
+            const bundle = skills[skillIndex]!.bundle;
+            if (!bundle || typeof bundle.digest !== "string" || !/^[a-f0-9]{64}$/.test(bundle.digest))
+              throw new Error("conversation_fixture_runtime_skill_bundle_invalid");
+            const sessionId = execution?.session?.normalizedSessionId ?? `session-${context.runId}`;
+            if (typeof sessionId !== "string" || sessionId.length > 512)
+              throw new Error("conversation_fixture_runtime_skill_session_invalid");
+            const sessionDigest = createHash("sha256").update(sessionId).digest("hex");
+            const [lease] = await db.select({ id: environmentLeases.id, metadata: environmentLeases.metadata })
+              .from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+                eq(environmentLeases.heartbeatRunId, context.runId), eq(environmentLeases.status, "active")))
+              .orderBy(desc(environmentLeases.createdAt)).limit(1);
+            const metadata = lease?.metadata && typeof lease.metadata === "object"
+              ? lease.metadata as Record<string, unknown> : {};
+            const remoteCwd = typeof metadata.remoteCwd === "string" ? metadata.remoteCwd : null;
+            if (!lease || !remoteCwd || !sandboxHeartbeat?.sandboxExec)
+              throw new Error("conversation_fixture_signed_skill_host_missing");
+            const remoteRoot = `${remoteCwd.replace(/\/$/, "")}/.paperclip-runtime/paperclip-runner/sessions/${sessionDigest}/filesystem/context/skills/${skillIndex}-${bundle.digest.slice(0, 12)}`;
+            const result = await sandboxHeartbeat.sandboxExec({ companyId, runId: context.runId, leaseId: lease.id,
+              command: "/bin/cat", args: [`${remoteRoot}/${relativePath}`], cwd: remoteCwd,
+              timeoutMs: 10_000, nativePreparationPurpose: "native_runtime_context_prepare" });
+            if (!result || result.exitCode !== 0 || result.timedOut || typeof result.stdout !== "string" ||
+                Buffer.byteLength(result.stdout, "utf8") > 256_000)
+              throw new Error("conversation_fixture_signed_skill_read_failed");
+            return result.stdout;
+          } }); }
         catch (error) {
           providerHookFailure = { name: error instanceof Error ? error.name : "UnknownError",
             message: error instanceof Error ? error.message.slice(0, 400) : "non_error_throwable" };
@@ -921,8 +960,6 @@ export async function runManagedNativeConversationFrame(input: {
     const conversationPrompt = input.conversationPrompt ?? "Please respond briefly and complete this conversation turn.";
     if (input.driveConversation) {
       if (input.firstCommentAttachment) throw new Error("conversation_fixture_attachment_requires_default_comment_driver");
-      if (!input.createConversationApp)
-        throw new Error("conversation_fixture_browser_driver_requires_composed_app");
       const [company] = await db.select({ issuePrefix: companies.issuePrefix }).from(companies)
         .where(eq(companies.id, companyId)).limit(1);
       if (!company?.issuePrefix) throw new Error("conversation_fixture_company_prefix_missing");
@@ -931,7 +968,7 @@ export async function runManagedNativeConversationFrame(input: {
         { id: agentId, name: input.managedPrimaryAgentName ?? "Fox" },
         ...(input.managedAgentNames ?? []).map((name, index) => ({ id: additionalAgentIds[index]!, name })),
       ];
-      const driven = await input.driveConversation({ app, origin: conversationOrigin, humanCookie, companyId, agentId, managedAgents,
+      const driven = await input.driveConversation({ app, heartbeat, origin: conversationOrigin, humanCookie, companyId, agentId, managedAgents,
         chatPath: `/api/companies/${companyId}/chats/${agentId}`,
         conversationRoute: `/${company.issuePrefix}/chats/${agentId}`,
         prompt: conversationPrompt,

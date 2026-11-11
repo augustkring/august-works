@@ -10,7 +10,7 @@ import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent,
   assertNativeConversationToolNoPlanScope } from "../orchestration/native-tool-boundary.js";
-import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
+import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
 import { authorizationService, issueReadSqlCondition, type AuthorizationActor } from "../authorization.js";
 import { handoffPlanContext } from "./handoff-plan-context.js";
@@ -566,6 +566,9 @@ export class PaperclipRunnerToolAuthority {
     onManagedStageCommentToolResult?: (capture: NativeManagedStageCommentCapture) => Promise<void>;
     onManagedProgressCommentToolResult?: (capture: { callId: string; argumentsHash: string; resultDigest: string;
       commentId: string; outputCapture: NativeModelOutputCapture }) => Promise<void>;
+    onAssignedMcpToolInvocation?: (witness: AssignedMcpInvocationWitness) => Promise<void>;
+    onAssignedMcpToolPending?: (witness: AssignedMcpPendingWitness) => Promise<void>;
+    onAssignedMcpToolSearch?: (witness: AssignedMcpSearchWitness) => Promise<void>;
     nativeToolCallIdentity?: NativeBackendToolCallIdentity;
   } = {}): Promise<unknown> {
     const dependencyInteraction = await captureNativeBlockedHumanInteraction(this.db, this.binding, this.binding.blockedHumanInteraction);
@@ -603,7 +606,8 @@ export class PaperclipRunnerToolAuthority {
         () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult,
           source => { nativeInputSource.value = source; }, capture => { managedProjectCreateCapture.value = capture; },
           capture => { managedStageCommentCapture.value = capture; }, boundNativeCall,
-          capture => { managedProjectRepositoriesCapture.value = capture; }),
+          capture => { managedProjectRepositoriesCapture.value = capture; }, options.onAssignedMcpToolInvocation,
+          options.onAssignedMcpToolPending, options.onAssignedMcpToolSearch),
         call.tool === MANAGED_NATIVE_REMEMBER_TOOL ||
           (call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false)));
       if (call.tool === "read_document") {
@@ -713,7 +717,10 @@ export class PaperclipRunnerToolAuthority {
     onManagedProjectCreateCapture?: (capture: NativeManagedProjectCreateCapture) => void,
     onManagedStageCommentCapture?: (capture: NativeManagedStageCommentCapture) => void,
     nativeToolCall?: NativeBackendToolCallIdentity | null,
-    onManagedProjectRepositoriesCapture?: (capture: NativeProjectRepositoriesToolResultCapture) => void): Promise<unknown> {
+    onManagedProjectRepositoriesCapture?: (capture: NativeProjectRepositoriesToolResultCapture) => void,
+    onAssignedMcpToolInvocation?: (witness: AssignedMcpInvocationWitness) => Promise<void>,
+    onAssignedMcpToolPending?: (witness: AssignedMcpPendingWitness) => Promise<void>,
+    onAssignedMcpToolSearch?: (witness: AssignedMcpSearchWitness) => Promise<void>): Promise<unknown> {
     if (this.binding.nativeReview) {
       if (call.tool === "resolve_review") return this.#resolveReview(call.arguments, call.callId);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
@@ -722,7 +729,8 @@ export class PaperclipRunnerToolAuthority {
     }
     if (this.binding.assignedMcpTools?.has(call.tool)) {
       const current = await this.#boundContext();
-      return this.binding.assignedMcpTools.execute(call, current.issue.workMode as "standard" | "planning" | "ask");
+      return this.binding.assignedMcpTools.execute(call, current.issue.workMode as "standard" | "planning" | "ask",
+        onAssignedMcpToolInvocation, onAssignedMcpToolPending, onAssignedMcpToolSearch);
     }
     if (isConnectorTool(call.tool)) {
       if (!(this.binding.connectorAssignments ?? []).some((assignment) => assignment.tools.some((tool) => tool.name === call.tool))) throw forbidden("Connector tool is not available to this run");

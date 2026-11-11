@@ -3,6 +3,7 @@ import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { chatConversations, issues, type Db } from "@paperclipai/db";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
+import { readNativeChannelConversationScope } from "./native-channel-conversation-owner.js";
 
 export type NativeChatWorkspaceScope = {
   companyId: string;
@@ -33,6 +34,7 @@ export async function findNativeChatWorkspaceScope(
     runId?: string | null;
     responsibleUserId?: string | null;
     conversationSessionGeneration?: number | null;
+    sourceCommentId?: string | null;
     instanceRoot?: string;
   },
 ): Promise<NativeChatWorkspaceScope | null> {
@@ -99,8 +101,20 @@ export async function findNativeChatWorkspaceScope(
       selectedCanonicalConversationScope: canonicalRunBoundConversation,
     }));
   }
-  if (issue.originKind !== "chat_channel" && !issue.hasConversation && !canonicalRunBoundConversation)
-    return null;
+  let canonicalChannelConversation = false;
+  if (issue.originKind === "chat_channel") {
+    if (!input.runId || !input.responsibleUserId || !input.sourceCommentId || typeof input.conversationSessionGeneration !== "number") return null;
+    try {
+      const scope = await readNativeChannelConversationScope(db, {
+        companyId: input.companyId, issueId: input.issueId, agentId: input.agentId,
+        responsibleUserId: input.responsibleUserId, runId: input.runId,
+        sessionGeneration: input.conversationSessionGeneration, sourceCommentId: input.sourceCommentId, consumer: "workspace",
+      });
+      canonicalChannelConversation = scope.issueId === issue.id && scope.runId === input.runId;
+    } catch { canonicalChannelConversation = false; }
+  }
+  if (issue.originKind === "chat_channel" && !canonicalChannelConversation) return null;
+  if (issue.originKind !== "chat_channel" && !issue.hasConversation && !canonicalRunBoundConversation) return null;
   const instanceRoot = await realpath(
     input.instanceRoot ?? resolvePaperclipInstanceRoot(),
   );

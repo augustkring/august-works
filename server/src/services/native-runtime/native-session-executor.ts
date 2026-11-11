@@ -95,6 +95,7 @@ import type {
   PrpStructuredRunResult,
 } from "../../vendor/paperclip-runner/index.js";
 import {
+  runnerCodexDynamicToolsFit,
   NativeProviderTerminalFailure,
   NativeSessionCleanupQuarantinedError,
   NativeSessionProtocolIntegrityError,
@@ -173,6 +174,7 @@ import {
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256, nativeCallApiResultEnvelope } from "./canonical.js";
+import { validateToolContent } from "../tool-content-guards.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
@@ -190,7 +192,8 @@ import { PaperclipRunnerToolAuthority, resolveNativeInputDispatchReceiptIdentity
   type NativeManagedProjectCreateCapture } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { NATIVE_OPENCODE_CONFORMANCE_SYSTEM } from "../orchestration/native-opencode-conformance-source.js";
-import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
+import { createAssignedMcpTools, getAssignedMcpGateway, type AssignedMcpInvocationWitness, type AssignedMcpPendingWitness, type AssignedMcpSearchWitness } from "./assigned-mcp-tools.js";
+import { captureNativeGovernedPendingInteractions } from "./native-interaction-bridge.js";
 import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
 import { NativeChatAttachmentReadScope } from "./chat-attachment-read.js";
 import {
@@ -1551,6 +1554,22 @@ export async function synchronizeCompletedProviderPlan(input: {
   };
 }
 
+export async function captureManagedOpenCodeAssignedMcpPending(input: {
+  managedCapturePresent: boolean;
+  call: { tool: string; callId: string; turnId: string; argumentsHash: string };
+  pending: AssignedMcpPendingWitness;
+  onManagedOpenCodeToolPending?: (call: { tool: string; callId: string; turnId: string;
+    argumentsHash: string; pending: AssignedMcpPendingWitness }) => Promise<void>;
+}): Promise<void> {
+  // Codex and other non-broker providers still use the canonical Gateway's
+  // approval interaction. Only the managed OpenCode path has this extra
+  // retained provider-history owner.
+  if (!input.managedCapturePresent) return;
+  if (!input.onManagedOpenCodeToolPending)
+    throw new Error("managed_opencode_pending_tool_capture_unavailable");
+  await input.onManagedOpenCodeToolPending({ ...input.call, pending: input.pending });
+}
+
 class SessionToolAuthorityEpoch {
   readonly runId: string;
   #authority: PaperclipRunnerToolAuthority;
@@ -1561,9 +1580,9 @@ class SessionToolAuthorityEpoch {
     private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>,
     private readonly onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>,
     private readonly onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>,
-    private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>,
-    private readonly onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "request_human_input" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric" | "list_project_repositories"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectRepositories?: NativeProjectRepositoriesToolResultCapture; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture } }) => Promise<void>,
-
+    private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown; assignedMcpCall?: boolean }) => Promise<void>,
+    private readonly onManagedOpenCodeToolResult?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectRepositories?: NativeProjectRepositoriesToolResultCapture; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture }; assignedMcpSearch?: AssignedMcpSearchWitness; assignedMcp?: AssignedMcpInvocationWitness }) => Promise<void>,
+    private readonly onManagedOpenCodeToolPending?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; pending: AssignedMcpPendingWitness }) => Promise<void>,
     private readonly managedContextReadCapture?: { value: NativeContextReadBinding | null },
     private readonly serializeManagedOperation?: <T>(operation: () => Promise<T>) => Promise<T>) {
     this.runId = runId;
@@ -1658,6 +1677,9 @@ class SessionToolAuthorityEpoch {
       const projectRepositoriesCapture: { value: NativeProjectRepositoriesToolResultCapture | null } = { value: null };
       const projectCreateCapture: { value: NativeManagedProjectCreateCapture | null } = { value: null };
       const stageCommentCapture: { value: NativeManagedStageCommentCapture | null } = { value: null };
+      const assignedMcpInvocation: { value: AssignedMcpInvocationWitness | null } = { value: null };
+      const assignedMcpSearch: { value: AssignedMcpSearchWitness | null } = { value: null };
+      const assignedMcpPending: { value: AssignedMcpPendingWitness | null } = { value: null };
       const progressCommentCapture: { value: { callId: string; argumentsHash: string; resultDigest: string;
         commentId: string; outputCapture: NativeModelOutputCapture } | null } = { value: null };
       let result: unknown;
@@ -1673,14 +1695,35 @@ class SessionToolAuthorityEpoch {
           onManagedProjectCreateToolResult: async capture => { projectCreateCapture.value = capture; },
           onManagedStageCommentToolResult: async capture => { stageCommentCapture.value = capture; },
           onManagedProgressCommentToolResult: async capture => { progressCommentCapture.value = capture; },
+          onAssignedMcpToolInvocation: async witness => { assignedMcpInvocation.value = witness; },
+          onAssignedMcpToolPending: async witness => { assignedMcpPending.value = witness; },
+          onAssignedMcpToolSearch: async witness => { assignedMcpSearch.value = witness; },
           ...(call.turnId ? { nativeToolCallIdentity: { tool: call.tool, callId: call.callId, turnId: call.turnId } } : {}),
         });
       } catch (error) {
+        if (assignedMcpPending.value && call.turnId) {
+          await captureManagedOpenCodeAssignedMcpPending({
+            managedCapturePresent: Boolean(this.onManagedOpenCodeToolResult || this.onManagedOpenCodeToolPending),
+            call: { tool: call.tool, callId: call.callId, turnId: call.turnId, argumentsHash },
+            pending: assignedMcpPending.value, onManagedOpenCodeToolPending: this.onManagedOpenCodeToolPending,
+          });
+        }
         reportContextToolFailure("managed_get_task_context_authority_failure_test_facts", error);
         reportCreateTaskFailure("managed_create_task_authority_failure_test_facts", error);
         throw error;
       }
       markPhase("authority_effect");
+      if (call.turnId && assignedMcpInvocation.value) {
+        const witness = assignedMcpInvocation.value;
+        if (witness.providerToolName !== call.tool || witness.providerArgumentsHash !== argumentsHash ||
+          witness.resultHash !== nativeSha256(result))
+          throw new Error("managed_opencode_tool_result_binding_invalid");
+        await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId,
+          argumentsHash, result, assignedMcp: witness });
+      }
+      if (call.turnId && assignedMcpSearch.value)
+        await this.onManagedOpenCodeToolResult?.({ tool: call.tool, callId: call.callId, turnId: call.turnId,
+          argumentsHash, result, assignedMcpSearch: assignedMcpSearch.value });
       if (call.turnId && (call.tool === "read_document" || call.tool === "write_document" || call.tool === "report_progress" ||
         call.tool === "create_task" || call.tool === "self_remember" || call.tool === "request_human_input" || call.tool === "read_context" || call.tool === "list_project_repositories" ||
 
@@ -8478,11 +8521,246 @@ export async function recordNativeToolCallDispatchAssociation(input: Parameters<
   }
 }
 
+function nativeRunInputSourceReferenceCount(receipt: NativeRunInputSourceReceipt): number {
+  const references = new Set<string>();
+  for (const sources of [receipt.bootstrap, ...receipt.dispatches, ...receipt.additionalInputs]) {
+    for (const key of ["issueIds", "projectIds", "runIds", "memoryIds", "foundationRevisionIds"] as const) {
+      for (const sourceId of sources.policy[key]) references.add(`${key}:${sourceId}`);
+    }
+    for (const source of sources.inputs) references.add(`input:${JSON.stringify(source)}`);
+  }
+  return references.size;
+}
+
+async function recordNativeAssignedMcpPendingAction(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; turnId: string; callId: string; tool: string; argumentsHash: string;
+  pending: AssignedMcpPendingWitness; outputCapture: NativeModelOutputCapture;
+}): Promise<void> {
+  if (input.pending.providerToolName !== input.tool || input.pending.sourceRunId !== input.runId ||
+    input.pending.providerArgumentsHash !== input.argumentsHash ||
+    input.pending.idempotencyKey !== `aw-native-tool:${input.runId}:${input.callId}` ||
+    input.outputCapture.runId !== input.runId || input.outputCapture.dispatch.runId !== input.runId ||
+    input.outputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
+    input.outputCapture.managedOpenCodeToolUse?.toolName !== input.tool ||
+    input.outputCapture.managedOpenCodeToolUse?.argumentsHash !== input.argumentsHash ||
+    Buffer.byteLength(JSON.stringify({ pending: input.pending, outputCapture: input.outputCapture })) > 1536 * 1024)
+    throw new Error("native_assigned_mcp_pending_binding_invalid");
+  await renewNativeSessionExecutionLease(input);
+  await input.db.transaction(async tx => {
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run) throw new Error("native_assigned_mcp_pending_binding_invalid");
+    const profile = record(run.runnerProfileJson);
+    const raw = profile.nativeToolCallDispatchAssociations;
+    if (!Array.isArray(raw) || raw.length > 512) throw new Error("native_assigned_mcp_pending_binding_invalid");
+    const associations = raw.map(record);
+    const matches = associations.map((association, index) => ({ association, index })).filter(({ association }) =>
+      association.turnId === input.turnId && association.callId === input.callId && association.tool === input.tool &&
+      association.argumentsHash === input.argumentsHash);
+    if (matches.length !== 1) throw new Error("native_assigned_mcp_pending_binding_invalid");
+    const { association, index } = matches[0]!;
+    if (association.pendingMcpAction !== undefined) throw new Error("native_assigned_mcp_pending_binding_invalid");
+    const pendingOwners = await captureNativeGovernedPendingInteractions({ db: tx as unknown as Db,
+      companyId: input.companyId, issueId: input.issueId, runId: input.runId, agentId: input.agentId,
+      interactionIds: [input.pending.interactionId] });
+    const pendingOwner = pendingOwners.length === 1 ? pendingOwners[0]! : null;
+    if (!pendingOwner || pendingOwner.projection.actionRequestId !== input.pending.actionRequestId ||
+      pendingOwner.projection.invocationId !== input.pending.invocationId ||
+      pendingOwner.projection.argumentsHash !== input.pending.argumentsHash)
+      throw new Error("native_assigned_mcp_pending_owner_invalid");
+    const sourceReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    if (!sourceReceipt.success || sourceReceipt.data.binding.companyId !== input.companyId ||
+      sourceReceipt.data.binding.issueId !== input.issueId || sourceReceipt.data.binding.runId !== input.runId ||
+      sourceReceipt.data.binding.agentId !== input.agentId || sourceReceipt.data.binding.responsibleUserId !== run.responsibleUserId ||
+      !run.responsibleUserId) throw new Error("native_assigned_mcp_pending_receipt_invalid");
+    const interactionSource = nativePayloadSourceInputSchema.safeParse(pendingOwner.source);
+    if (!interactionSource.success || interactionSource.data.kind !== "interaction" ||
+      interactionSource.data.interactionId !== input.pending.interactionId || interactionSource.data.issueId !== input.issueId)
+      throw new Error("native_assigned_mcp_pending_owner_invalid");
+    const exactInteractionEntries = sourceReceipt.data.additionalInputs.filter(entry =>
+      entry.responsibleUserId === run.responsibleUserId && entry.inputs.length === 1 &&
+      isDeepStrictEqual(entry.inputs[0], interactionSource.data));
+    if (exactInteractionEntries.length > 1) throw new Error("native_assigned_mcp_pending_receipt_ambiguous");
+    let nextReceipt = sourceReceipt.data;
+    if (exactInteractionEntries.length === 0) {
+      const { digest: _receiptDigest, ...receiptBody } = sourceReceipt.data;
+      const sourcePolicy = nativePayloadSourcePolicySchema.parse({ issueIds: [input.issueId], projectIds: [], runIds: [],
+        memoryIds: [], foundationRevisionIds: [] });
+      const nextBody = { ...receiptBody, additionalInputs: [...receiptBody.additionalInputs, {
+        responsibleUserId: run.responsibleUserId, policy: sourcePolicy, inputs: [interactionSource.data],
+      }] };
+      const candidate = { ...nextBody, digest: await postgresJsonbSha256(tx, nextBody) };
+      const parsedNext = nativeRunInputSourceReceiptSchema.safeParse(candidate);
+      if (!parsedNext.success || Buffer.byteLength(JSON.stringify(parsedNext.data.additionalInputs), "utf8") > 512 * 1024)
+        throw new Error("native_assigned_mcp_pending_receipt_invalid");
+      nextReceipt = parsedNext.data;
+    }
+    const next = associations.map((value, itemIndex) => {
+      if (itemIndex !== index) return value;
+      const { sourceCaptureReservationBytes: _reservation, sourceReceiptReservationBytes: _receiptBytes,
+        sourceReceiptReservationCount: _receiptCount, sourceReceiptAdditionalInputCount: _additionalInputCount,
+        ...settled } = value;
+      return { ...settled, pendingMcpAction: { ...input.pending, pendingOwner, outputCapture: input.outputCapture } };
+    });
+    const nextBytes = Buffer.byteLength(JSON.stringify(next));
+    const otherReservations = associations.reduce((sum, value, itemIndex) => {
+      if (itemIndex === index) return sum;
+      const amount = value.sourceCaptureReservationBytes;
+      if (amount === undefined) return sum;
+      if (!Number.isSafeInteger(amount) || (amount as number) < 1) throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+      return sum + (amount as number);
+    }, 0);
+    const otherReceipt = associations.reduce<{ bytes: number; references: number; additionalInputs: number }>((sum, value, itemIndex) => {
+      if (itemIndex === index) return sum;
+      const bytes = value.sourceReceiptReservationBytes;
+      const references = value.sourceReceiptReservationCount;
+      const additionalInputs = value.sourceReceiptAdditionalInputCount;
+      if (bytes === undefined && references === undefined && additionalInputs === undefined) return sum;
+      if (!Number.isSafeInteger(bytes) || (bytes as number) < 1 || references !== 2 || additionalInputs !== 1)
+        throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+      return { bytes: sum.bytes + (bytes as number), references: sum.references + 2,
+        additionalInputs: sum.additionalInputs + 1 };
+    }, { bytes: 0, references: 0, additionalInputs: 0 });
+    const receiptInputBytes = Buffer.byteLength(JSON.stringify(nextReceipt.additionalInputs));
+    const receiptBytes = Buffer.byteLength(JSON.stringify(nextReceipt));
+    if (nextBytes + otherReservations > 2 * 1024 * 1024 || nextBytes > 2 * 1024 * 1024 ||
+      nextReceipt.additionalInputs.length + otherReceipt.additionalInputs > 256 ||
+      receiptInputBytes + otherReceipt.bytes > 512 * 1024 ||
+      nativeRunInputSourceReferenceCount(nextReceipt) + otherReceipt.references > 256 ||
+      receiptBytes + otherReceipt.bytes > 2 * 1024 * 1024)
+      throw new Error("native_assigned_mcp_pending_binding_invalid");
+    const [stored] = await tx.update(heartbeatRuns).set({ runnerProfileJson: {
+      ...profile, nativeToolCallDispatchAssociations: next, nativeInputSourceReceipt: nextReceipt,
+    }, updatedAt: new Date() }).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
+      .returning({ profile: heartbeatRuns.runnerProfileJson });
+    if (nativeSha256(record(stored?.profile).nativeToolCallDispatchAssociations) !== nativeSha256(next))
+      throw new Error("native_assigned_mcp_pending_persistence_failed");
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+  });
+}
+
+export function nativeAssignedMcpSourceCaptureReservationBytes(outputCapture: NativeModelOutputCapture): number {
+  // Successful captures persist this source set both inside outputCapture and
+  // as the separately addressable same-run sourceSet field.
+  return Buffer.byteLength(JSON.stringify(outputCapture)) +
+    Buffer.byteLength(JSON.stringify(outputCapture.sourceSet)) + 160 * 1024;
+}
+
+async function assertNativeAssignedMcpPendingCapacity(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; turnId: string; callId: string; tool: string; argumentsHash: string;
+  outputCapture: NativeModelOutputCapture;
+}): Promise<void> {
+  // Reserve the known maximum retained source payload before the Gateway can
+  // cause an external effect. The reservation lives on the exact existing
+  // provider-call association and is consumed in the result-capture transaction.
+  const captureBytes = Buffer.byteLength(JSON.stringify(input.outputCapture));
+  const reserveBytes = nativeAssignedMcpSourceCaptureReservationBytes(input.outputCapture);
+  const receiptReserveBytes = 16 * 1024;
+  const receiptReserveReferences = 2;
+  const receiptReserveAdditionalInputs = 1;
+  if (input.outputCapture.runId !== input.runId || input.outputCapture.dispatch.runId !== input.runId ||
+    input.outputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
+    input.outputCapture.managedOpenCodeToolUse?.toolName !== input.tool ||
+    input.outputCapture.managedOpenCodeToolUse?.argumentsHash !== input.argumentsHash ||
+    captureBytes > 1024 * 1024 || reserveBytes > 1536 * 1024)
+    throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+  await renewNativeSessionExecutionLease(input);
+  await input.db.transaction(async tx => {
+    const [run] = await tx.select({ id: heartbeatRuns.id, profile: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run) throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    const profile = record(run.profile);
+    const associations = profile.nativeToolCallDispatchAssociations;
+    if (!Array.isArray(associations) || associations.length > 512 || Buffer.byteLength(JSON.stringify(associations)) > 2 * 1024 * 1024)
+      throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    const captures = profile.nativeToolResultSourceCaptures;
+    if (captures !== undefined && !Array.isArray(captures)) throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    const receipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+    if (!receipt.success || receipt.data.additionalInputs.length > 256)
+      throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    const receiptOccupied = Buffer.byteLength(JSON.stringify(receipt.data.additionalInputs));
+    const values = associations.map(record);
+    const matches = values.map((association, index) => ({ association, index })).filter(({ association }) =>
+      association.turnId === input.turnId && association.callId === input.callId && association.tool === input.tool &&
+      association.argumentsHash === input.argumentsHash);
+    if (matches.length !== 1) throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    const existing = matches[0]!.association.sourceCaptureReservationBytes;
+    if (existing !== undefined) {
+      const receiptBytes = matches[0]!.association.sourceReceiptReservationBytes;
+      const receiptCount = matches[0]!.association.sourceReceiptReservationCount;
+      if (existing !== reserveBytes || receiptBytes !== receiptReserveBytes || receiptCount !== receiptReserveReferences ||
+        matches[0]!.association.sourceReceiptAdditionalInputCount !== receiptReserveAdditionalInputs)
+        throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+      return;
+    }
+    const captureRows = Array.isArray(captures) ? captures.length : 0;
+    const captureOccupied = Array.isArray(captures) ? Buffer.byteLength(JSON.stringify(captures)) : 0;
+    const index = matches[0]!.index;
+    let reservations = 0;
+    let activeReservations = 0;
+    let receiptReservations = 0;
+    let receiptReferenceReservations = 0;
+    let receiptAdditionalInputReservations = 0;
+    for (const association of values) {
+      const bytes = association.sourceReceiptReservationBytes;
+      const references = association.sourceReceiptReservationCount;
+      const additionalInputs = association.sourceReceiptAdditionalInputCount;
+      if (bytes === undefined && references === undefined && additionalInputs === undefined) continue;
+      if (!Number.isSafeInteger(bytes) || (bytes as number) < 1 || references !== 2 || additionalInputs !== 1)
+        throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+      receiptReservations += bytes as number;
+      receiptReferenceReservations += references as number;
+      receiptAdditionalInputReservations += additionalInputs as number;
+    }
+    const withoutReservation = values.map(association => {
+      const value = association.sourceCaptureReservationBytes;
+      if (value !== undefined) {
+        if (!Number.isSafeInteger(value) || (value as number) < 1)
+          throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+        reservations += value as number;
+        activeReservations += 1;
+      }
+      const { sourceCaptureReservationBytes: _old, sourceReceiptReservationBytes: _receiptBytes,
+        sourceReceiptReservationCount: _receiptCount, sourceReceiptAdditionalInputCount: _additionalInputCount,
+        ...plain } = association;
+      return plain;
+    });
+    const associationOccupied = Buffer.byteLength(JSON.stringify(withoutReservation));
+    if (captureRows + activeReservations + 1 > 256 || captureOccupied + reservations + reserveBytes > 2 * 1024 * 1024 ||
+      associationOccupied + reservations + reserveBytes > 2 * 1024 * 1024 ||
+      receipt.data.additionalInputs.length + receiptAdditionalInputReservations + receiptReserveAdditionalInputs > 256 ||
+      receiptOccupied + receiptReservations + receiptReserveBytes > 512 * 1024 ||
+      nativeRunInputSourceReferenceCount(receipt.data) + receiptReferenceReservations + receiptReserveReferences > 256 ||
+      Buffer.byteLength(JSON.stringify(receipt.data)) + receiptReservations + receiptReserveBytes > 2 * 1024 * 1024)
+      throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    const next = values.map((value, itemIndex) => itemIndex === index
+      ? { ...value, sourceCaptureReservationBytes: reserveBytes,
+        sourceReceiptReservationBytes: receiptReserveBytes,
+        sourceReceiptReservationCount: receiptReserveReferences,
+        sourceReceiptAdditionalInputCount: receiptReserveAdditionalInputs } : value);
+    if (Buffer.byteLength(JSON.stringify(next)) > 2 * 1024 * 1024)
+      throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    const [stored] = await tx.update(heartbeatRuns).set({ runnerProfileJson: {
+      ...profile, nativeToolCallDispatchAssociations: next,
+    }, updatedAt: new Date() }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+    if (nativeSha256(record(stored?.profile).nativeToolCallDispatchAssociations) !== nativeSha256(next))
+      throw new Error("native_assigned_mcp_pending_capacity_exceeded");
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+  });
+}
+
 async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
   agentId: string; turnId: string; callId: string; argumentsHash: string;
-  tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "request_human_input" | "read_context" | "call_api" |
-    "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric" | "list_project_repositories"; result: unknown;
-
+  tool: string; result: unknown;
+  assignedMcpSearch?: AssignedMcpSearchWitness;
+  assignedMcp?: AssignedMcpInvocationWitness;
   contextRead?: NativeContextReadBinding;
   projectRead?: NativeProjectToolResultSource;
   projectRepositories?: NativeProjectRepositoriesToolResultCapture;
@@ -8506,6 +8784,37 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
     diagnosticPhase = next;
   };
   const questionOutputCapture = input.tool === "request_human_input" ? input.outputCapture ?? null : null;
+  if (input.assignedMcp && (input.assignedMcp.providerToolName !== input.tool ||
+    input.assignedMcp.providerArgumentsHash !== input.argumentsHash || input.assignedMcp.resultHash !== nativeSha256(input.result) ||
+    input.assignedMcp.idempotencyKey !== `aw-native-tool:${input.runId}:${input.callId}` ||
+    !/^[0-9a-f]{64}$/.test(input.assignedMcp.descriptorHash) ||
+    typeof input.assignedMcp.gatewayToolName !== "string" || input.assignedMcp.gatewayToolName.length > 512 ||
+    !input.assignedMcp.gatewayToolName.trim() || /[\u0000-\u001f\u007f]/.test(input.assignedMcp.gatewayToolName) ||
+    !/^[A-Za-z0-9_-]{1,200}$/.test(input.assignedMcp.gatewayPublicId) ||
+    input.assignedMcp.invocationId.length < 1 ||
+    Buffer.byteLength(JSON.stringify(input.assignedMcp.argumentsProjection)) > 64 * 1024 ||
+    validateToolContent({ value: input.assignedMcp.argumentsProjection, direction: "arguments", sensitiveMode: "block",
+      promptInjectionMode: "ignore" }).summary.sha256 !== input.assignedMcp.argumentsHash ||
+    nativeSha256(input.assignedMcp.selectorName === null ? input.assignedMcp.argumentsProjection :
+      { name: input.assignedMcp.selectorName, arguments: input.assignedMcp.argumentsProjection }) !== input.assignedMcp.providerArgumentsHash ||
+    !/^[0-9a-f]{64}$/.test(input.assignedMcp.parametersSchemaHash) ||
+    !["mcp_remote_http", "mcp_local_stdio"].includes(input.assignedMcp.providerType) ||
+    !["read", "write", "destructive"].includes(input.assignedMcp.risk) ||
+    !/^[0-9a-f]{64}$/.test(input.assignedMcp.providerDefinitionHash) ||
+    (input.assignedMcp.selectorName !== null && input.assignedMcp.selectorName !== input.assignedMcp.mappedToolAlias)))
+    throw new Error("managed_opencode_tool_result_binding_invalid");
+  if (input.assignedMcpSearch && (input.assignedMcp || input.assignedMcpSearch.providerToolName !== input.tool ||
+    input.assignedMcpSearch.mappedToolAlias !== input.tool || input.assignedMcpSearch.sourceRunId !== input.runId ||
+    input.assignedMcpSearch.argumentsHash !== input.argumentsHash || input.assignedMcpSearch.resultHash !== nativeSha256(input.result) ||
+    Buffer.byteLength(JSON.stringify(input.assignedMcpSearch.argumentsProjection)) > 4 * 1024 ||
+    nativeSha256(input.assignedMcpSearch.argumentsProjection) !== input.assignedMcpSearch.argumentsHash ||
+    !/^[0-9a-f]{64}$/.test(input.assignedMcpSearch.providerDefinitionHash) ||
+    input.assignedMcpSearch.descriptorProjections.length > 20 ||
+    Buffer.byteLength(JSON.stringify(input.assignedMcpSearch.descriptorProjections)) > 32 * 1024 ||
+    input.assignedMcpSearch.descriptorProjections.some(item => !/^[A-Za-z0-9_.:-]{1,256}$/.test(item.name) ||
+      !/^[0-9a-f]{64}$/.test(item.descriptorHash) || !/^[0-9a-f]{64}$/.test(item.parametersSchemaHash) ||
+      !["mcp_remote_http", "mcp_local_stdio"].includes(item.providerType) || !["read", "write", "destructive"].includes(item.risk))))
+    throw new Error("managed_opencode_tool_result_binding_invalid");
   if (input.tool === "request_human_input" && (!questionOutputCapture ||
     questionOutputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
     questionOutputCapture.managedOpenCodeToolUse.toolName !== "request_human_input" ||
@@ -8716,22 +9025,28 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
           !/^[0-9a-f]{64}$/.test(effect.bodyHash))
           throw new Error("managed_opencode_tool_result_binding_invalid");
       }
-      const invocationToolName = input.tool === "self_remember" ? "paperclip-self:remember" : input.tool;
+      const invocationToolName = input.assignedMcp?.gatewayToolName ?? (input.tool === "self_remember" ? "paperclip-self:remember" : input.tool);
       const nativeReadResultTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
         input.tool === "read_chat_attachment" || input.tool === "query_business_metric";
       const nativeReadTool = input.tool === "get_task_context" || input.tool === "get_task_history" ||
         (input.tool === "read_chat_attachment" || input.tool === "query_business_metric") ? input.tool : null;
-      const nullInvocationTool = input.tool === "call_api" || input.tool === "create_project" || nativeReadResultTool ||
+      const nullInvocationTool = !input.assignedMcp && (Boolean(input.assignedMcpSearch) || input.tool === "call_api" || input.tool === "create_project" || nativeReadResultTool ||
         (conversationNoPlanProgress && input.tool === "report_progress") ||
         (conversationNoPlanHumanInput && input.tool === "request_human_input") ||
-        (input.tool === "list_project_repositories" && input.outputCapture?.dispatch.kind === "conversation_model_dispatch");
+        (input.tool === "list_project_repositories" && input.outputCapture?.dispatch.kind === "conversation_model_dispatch"));
 
       const [invocation] = nullInvocationTool ? [] : await tx.select().from(toolInvocations).where(and(
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.runId, input.runId),
         eq(toolInvocations.agentId, input.agentId),
         eq(toolInvocations.idempotencyKey, `aw-native-tool:${input.runId}:${input.callId}`),
         eq(toolInvocations.toolName, invocationToolName), eq(toolInvocations.status, "succeeded"),
-        eq(toolInvocations.argumentsHash, input.argumentsHash),
+        ...(input.assignedMcp ? [eq(toolInvocations.id, input.assignedMcp.invocationId),
+          eq(toolInvocations.gatewayId, input.assignedMcp.gatewayId),
+          eq(toolInvocations.gatewayPublicId, input.assignedMcp.gatewayPublicId),
+          input.assignedMcp.connectionId === null ? isNull(toolInvocations.connectionId) : eq(toolInvocations.connectionId, input.assignedMcp.connectionId),
+          input.assignedMcp.catalogEntryId === null ? isNull(toolInvocations.catalogEntryId) : eq(toolInvocations.catalogEntryId, input.assignedMcp.catalogEntryId),
+          input.assignedMcp.catalogSchemaHash === null ? isNull(toolInvocations.catalogSchemaHash) : eq(toolInvocations.catalogSchemaHash, input.assignedMcp.catalogSchemaHash)] : []),
+        eq(toolInvocations.argumentsHash, input.assignedMcp?.argumentsHash ?? input.argumentsHash),
       )).for("share");
       const resultTaskCandidate = record(record(input.result).task);
       const conversationCreateTaskWireIntents = input.tool === "create_task" && resultTaskCandidate.parentId === null &&
@@ -8821,7 +9136,8 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
                 for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
                   if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
                 }
-                const expectedWireName = input.tool === "self_remember" ? "self_remember" : input.tool;
+                const expectedWireName = input.assignedMcpSearch?.providerToolName ?? input.assignedMcp?.providerToolName ??
+                  (input.tool === "self_remember" ? "self_remember" : input.tool);
                 return use.id === input.callId && name === expectedWireName && use.argumentsHash === input.argumentsHash;
               });
           }) : [];
@@ -8829,16 +9145,37 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         throw new Error("managed_opencode_tool_result_binding_invalid");
       const managedOutputCapture = input.outputCapture;
       const managedUse = managedOutputCapture?.managedOpenCodeToolUse;
-      const outputCaptureMatchesCall = Boolean(managedOutputCapture && managedOutputCapture.runId === input.runId &&
-        managedUse?.callId === input.callId && managedUse.toolName === input.tool &&
-        managedUse.argumentsHash === input.argumentsHash && managedUse.responseContentHash === matchingModelCalls[0]!.responseContentHash &&
+      const conversationQuestionBinding = conversationModelBindingSchema.safeParse(matchingModelCalls[0]!.conversationModelBinding);
+      const workerReviewOutputCaptureMatchesCall = Boolean(managedOutputCapture &&
         ["worker_model_dispatch", "review_model_dispatch"].includes(managedOutputCapture.dispatch.kind) &&
         managedOutputCapture.dispatch.runId === input.runId &&
         managedOutputCapture.dispatch.reservationId === matchingModelCalls[0]!.reservationId &&
         managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
         managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
         managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash);
-      const conversationQuestionBinding = conversationModelBindingSchema.safeParse(matchingModelCalls[0]!.conversationModelBinding);
+      const conversationOutputCaptureMatchesCall = Boolean(managedOutputCapture &&
+        matchingModelCalls[0]!.modelPurpose === "conversation_model" && conversationQuestionBinding.success &&
+        managedOutputCapture.dispatch.kind === "conversation_model_dispatch" &&
+        managedOutputCapture.dispatch.runId === input.runId && managedOutputCapture.dispatch.agentId === input.agentId &&
+        managedOutputCapture.dispatch.issueId === input.issueId &&
+        managedOutputCapture.dispatch.reservationId === matchingModelCalls[0]!.reservationId &&
+        managedOutputCapture.dispatch.callId === matchingModelCalls[0]!.callId &&
+        managedOutputCapture.dispatch.requestHash === matchingModelCalls[0]!.requestHash &&
+        managedOutputCapture.dispatch.wireBodyHash === matchingModelCalls[0]!.wireBodyHash &&
+        managedOutputCapture.dispatch.conversationSessionGeneration === conversationQuestionBinding.data.conversationSessionGeneration &&
+        managedOutputCapture.dispatch.executionManifestId === conversationQuestionBinding.data.executionManifestId &&
+        managedOutputCapture.dispatch.executionManifestHash === conversationQuestionBinding.data.executionManifestHash);
+      const outputCaptureMatchesCall = Boolean(managedOutputCapture && managedOutputCapture.runId === input.runId &&
+        managedUse?.callId === input.callId && managedUse.toolName === input.tool &&
+        managedUse.argumentsHash === input.argumentsHash && managedUse.responseContentHash === matchingModelCalls[0]!.responseContentHash &&
+        (workerReviewOutputCaptureMatchesCall || conversationOutputCaptureMatchesCall));
+      if (input.assignedMcp && (!outputCaptureMatchesCall || !managedOutputCapture ||
+        managedUse?.toolName !== input.assignedMcp.providerToolName))
+        throw new Error("managed_opencode_tool_result_binding_invalid");
+      if (input.assignedMcpSearch && (!outputCaptureMatchesCall || !managedOutputCapture ||
+        managedUse?.toolName !== input.assignedMcpSearch.providerToolName ||
+        !input.assignedMcpSearch.gatewayPublicId || !input.assignedMcpSearch.gatewayId || !input.assignedMcpSearch.gatewayProfileId))
+        throw new Error("managed_opencode_tool_result_binding_invalid");
       const conversationQuestionCaptureMatchesCall = Boolean(input.tool === "request_human_input" && managedOutputCapture &&
         managedOutputCapture.runId === input.runId && managedUse?.callId === input.callId &&
         managedUse.toolName === input.tool && managedUse.argumentsHash === input.argumentsHash &&
@@ -9195,6 +9532,10 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
       if (priorCaptures.length >= 256) throw new Error("managed_opencode_tool_result_budget_exceeded");
       const nextCaptures = [...priorCaptures, { eventSeq: call[0]!.eventSeq, attempt: call[0]!.attempt,
         turnId: input.turnId, callId: input.callId, tool: input.tool, argumentsHash: input.argumentsHash, resultDigest: contentHash,
+        ...(input.assignedMcpSearch ? { assignedMcpSearch: input.assignedMcpSearch, outputCapture: input.outputCapture,
+          sourceSet: input.outputCapture!.sourceSet } : {}),
+        ...(input.assignedMcp ? { assignedMcp: input.assignedMcp, outputCapture: input.outputCapture,
+          sourceSet: input.outputCapture!.sourceSet } : {}),
         source: { kind: "tool_result", runId: input.runId, callId: input.callId, toolName: invocationToolName,
           invocationId: invocation?.id ?? null, contentHash }, documentRevision,
         ...(nativeReadCapture ? { nativeReadResult: true, sourceSet: nativeReadCapture.sourceSet,
@@ -9218,6 +9559,39 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         ...projectCreateSourceSet.policy,
         projectIds: [...new Set([...projectCreateSourceSet.policy.projectIds, createdProjectSource.projectId])].sort(),
       } : null;
+      let nextToolCallAssociations = profile.nativeToolCallDispatchAssociations;
+      if (input.assignedMcp || input.assignedMcpSearch) {
+        const rawAssociations = profile.nativeToolCallDispatchAssociations;
+        if (!Array.isArray(rawAssociations)) throw new Error("managed_opencode_tool_result_budget_exceeded");
+        const associations = rawAssociations.map(record);
+        const matching = associations.map((association, index) => ({ association, index })).filter(({ association }) =>
+          association.callId === input.callId && association.turnId === input.turnId && association.tool === input.tool &&
+          association.argumentsHash === input.argumentsHash && association.dispatchId === call[0]!.dispatchId &&
+          association.eventSeq === call[0]!.eventSeq && association.attempt === call[0]!.attempt);
+        if (matching.length !== 1 || !Number.isSafeInteger(matching[0]!.association.sourceCaptureReservationBytes) ||
+          !Number.isSafeInteger(matching[0]!.association.sourceReceiptReservationBytes) ||
+          matching[0]!.association.sourceReceiptReservationCount !== 2 ||
+          matching[0]!.association.sourceReceiptAdditionalInputCount !== 1)
+          throw new Error("managed_opencode_tool_result_budget_exceeded");
+        const captureBytes = Buffer.byteLength(JSON.stringify(nextCaptures));
+        const activeReservations = associations.reduce((sum, association, index) => sum +
+          (index === matching[0]!.index ? 0 : Number.isSafeInteger(association.sourceCaptureReservationBytes) &&
+            (association.sourceCaptureReservationBytes as number) > 0 ? association.sourceCaptureReservationBytes as number : 0), 0);
+        const reservedCaptureCount = associations.filter((association, index) => index !== matching[0]!.index &&
+          Number.isSafeInteger(association.sourceCaptureReservationBytes) && (association.sourceCaptureReservationBytes as number) > 0).length;
+        if (nextCaptures.length + reservedCaptureCount > 256 || captureBytes + activeReservations > 2 * 1024 * 1024)
+          throw new Error("managed_opencode_tool_result_budget_exceeded");
+        nextToolCallAssociations = associations.map((association, index) => {
+          if (index !== matching[0]!.index) return association;
+          const { sourceCaptureReservationBytes: _reservation, sourceReceiptReservationBytes: _receiptBytes,
+            sourceReceiptReservationCount: _receiptCount,
+            sourceReceiptAdditionalInputCount: _additionalInputCount, ...settled } = association;
+          return settled;
+        });
+        const associationBytes = Buffer.byteLength(JSON.stringify(nextToolCallAssociations));
+        if (associationBytes + activeReservations > 2 * 1024 * 1024)
+          throw new Error("managed_opencode_tool_result_budget_exceeded");
+      }
       const updatedReceiptBody = { ...body, additionalInputs: nativeReadCapture
         ? parsed.data.additionalInputs
         : [...parsed.data.additionalInputs, {
@@ -9251,10 +9625,35 @@ async function recordManagedOpenCodeToolResult(input: Parameters<typeof renewNat
         }] };
       markResultPhase("receipt_build");
       const receipt = { ...updatedReceiptBody, digest: await postgresJsonbSha256(tx, updatedReceiptBody) };
-      if (!nativeRunInputSourceReceiptSchema.safeParse(receipt).success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)
+      const parsedFinalReceipt = nativeRunInputSourceReceiptSchema.safeParse(receipt);
+      if (!parsedFinalReceipt.success || Buffer.byteLength(JSON.stringify(nextCaptures)) > 2 * 1024 * 1024)
         throw new Error("managed_opencode_tool_result_budget_exceeded");
+      if (input.assignedMcp || input.assignedMcpSearch) {
+        const rawAssociations = profile.nativeToolCallDispatchAssociations;
+        if (!Array.isArray(rawAssociations)) throw new Error("managed_opencode_tool_result_budget_exceeded");
+        const outstanding = rawAssociations.map(record).filter(value =>
+          value.callId !== input.callId || value.turnId !== input.turnId || value.tool !== input.tool ||
+          value.argumentsHash !== input.argumentsHash || value.dispatchId !== call[0]!.dispatchId ||
+          value.eventSeq !== call[0]!.eventSeq || value.attempt !== call[0]!.attempt)
+          .reduce<{ bytes: number; references: number; additionalInputs: number }>((sum, value) => {
+            const bytes = value.sourceReceiptReservationBytes;
+            const references = value.sourceReceiptReservationCount;
+            const additionalInputs = value.sourceReceiptAdditionalInputCount;
+            if (bytes === undefined && references === undefined && additionalInputs === undefined) return sum;
+            if (!Number.isSafeInteger(bytes) || (bytes as number) < 1 || references !== 2 || additionalInputs !== 1)
+              throw new Error("managed_opencode_tool_result_budget_exceeded");
+            return { bytes: sum.bytes + (bytes as number), references: sum.references + 2,
+              additionalInputs: sum.additionalInputs + 1 };
+          }, { bytes: 0, references: 0, additionalInputs: 0 });
+        if (parsedFinalReceipt.data.additionalInputs.length + outstanding.additionalInputs > 256 ||
+          Buffer.byteLength(JSON.stringify(parsedFinalReceipt.data.additionalInputs)) + outstanding.bytes > 512 * 1024 ||
+          nativeRunInputSourceReferenceCount(parsedFinalReceipt.data) + outstanding.references > 256 ||
+          Buffer.byteLength(JSON.stringify(parsedFinalReceipt.data)) + outstanding.bytes > 2 * 1024 * 1024)
+          throw new Error("managed_opencode_tool_result_budget_exceeded");
+      }
       const [stored] = await tx.update(heartbeatRuns).set({ runnerProfileJson: {
         ...profile, nativeInputSourceReceipt: receipt, nativeToolResultSourceCaptures: nextCaptures,
+        ...(nextToolCallAssociations ? { nativeToolCallDispatchAssociations: nextToolCallAssociations } : {}),
       }, updatedAt: new Date() }).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")))
         .returning({ profile: heartbeatRuns.runnerProfileJson });
       markResultPhase("receipt_persist");
@@ -11647,7 +12046,7 @@ async function executePaperclipNativeSessionWithinScope(
                 const managedProjectApiCreate = call.tool === "call_api" &&
                   (managedNativeProjectApiCallSchema.safeParse(call.arguments).success ||
                     nativeStageCommentApiCallSchema.safeParse(call.arguments).success);
-                if (managedOpenCodeOutputCaptureRef && (["write_document", "create_task", "create_project", "report_progress", "self_remember", "request_human_input", "list_project_repositories"].includes(call.tool) || managedProjectApiCreate)) {
+                if (managedOpenCodeOutputCaptureRef && (["write_document", "create_task", "create_project", "report_progress", "self_remember", "request_human_input", "list_project_repositories"].includes(call.tool) || managedProjectApiCreate || call.assignedMcpCall === true)) {
 
                   if (launchEventSeq === null) throw new Error("managed_opencode_tool_call_source_binding_invalid");
                   managedOpenCodeOutputCaptureRef.value = await prepareManagedOpenCodeOutputCapture({
@@ -11655,6 +12054,13 @@ async function executePaperclipNativeSessionWithinScope(
                     issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
                     leaseOwner, attempt, controller, eventSeq: launchEventSeq, ...call,
                   });
+                  if (call.assignedMcpCall === true) {
+                    await assertNativeAssignedMcpPendingCapacity({ db: input.db, runId,
+                      companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                      agentId: input.execution.binding.agentId, leaseOwner, attempt, controller,
+                      turnId: call.turnId, callId: call.callId, tool: call.tool,
+                      argumentsHash: nativeSha256(call.arguments), outputCapture: managedOpenCodeOutputCaptureRef.value });
+                  }
                 }
               } catch (error) {
                 throw error;
@@ -11673,6 +12079,24 @@ async function executePaperclipNativeSessionWithinScope(
                   } finally {
                     if (managedOpenCodeOutputCaptureRef) managedOpenCodeOutputCaptureRef.value = null;
                     if (managedContextReadCaptureRef) managedContextReadCaptureRef.value = null;
+                  }
+                  await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+                  await renewNativeSessionExecutionLease({ db: input.db, runId,
+                    companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                    leaseOwner, attempt, controller });
+                },
+                onManagedOpenCodeToolPending: async call => {
+                  if (launchEventSeq === null) throw new Error("managed_opencode_pending_tool_binding_invalid");
+                  await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+                  try {
+                    const outputCapture = managedOpenCodeOutputCaptureRef?.value;
+                    if (!outputCapture) throw new Error("managed_opencode_pending_tool_capture_unavailable");
+                    await recordNativeAssignedMcpPendingAction({ db: input.db, runId,
+                      companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                      agentId: input.execution.binding.agentId, leaseOwner, attempt, controller,
+                      ...call, outputCapture });
+                  } finally {
+                    if (managedOpenCodeOutputCaptureRef) managedOpenCodeOutputCaptureRef.value = null;
                   }
                   await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
                   await renewNativeSessionExecutionLease({ db: input.db, runId,
@@ -14163,8 +14587,9 @@ export async function createRunnerdBackend(input: {
   onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
   onProjectToolResult?: (source: NativeProjectToolResultSource) => Promise<void>;
   onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
-  onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown }) => Promise<void>;
-  onManagedOpenCodeToolResult?: (call: { tool: "read_document" | "write_document" | "create_task" | "create_project" | "report_progress" | "self_remember" | "request_human_input" | "read_context" | "call_api" | "get_task_context" | "get_task_history" | "read_chat_attachment" | "query_business_metric" | "list_project_repositories"; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectRepositories?: NativeProjectRepositoriesToolResultCapture; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture } }) => Promise<void>;
+  onNativeToolCall?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; arguments: unknown; assignedMcpCall?: boolean }) => Promise<void>;
+  onManagedOpenCodeToolResult?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; result: unknown; contextRead?: NativeContextReadBinding; projectRead?: NativeProjectToolResultSource; projectRepositories?: NativeProjectRepositoriesToolResultCapture; stageComment?: NativeManagedStageCommentCapture; projectCreate?: NativeManagedProjectCreateCapture; progressComment?: { callId: string; argumentsHash: string; resultDigest: string; commentId: string; outputCapture: NativeModelOutputCapture }; assignedMcpSearch?: AssignedMcpSearchWitness; assignedMcp?: AssignedMcpInvocationWitness }) => Promise<void>;
+  onManagedOpenCodeToolPending?: (call: { tool: string; callId: string; turnId: string; argumentsHash: string; pending: AssignedMcpPendingWitness }) => Promise<void>;
 
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
@@ -14365,7 +14790,9 @@ async function createRunnerdBackendWithinSessionClaim(
   // Remote Codex already sends dynamic tool calls over authenticated PRP. Keep
   // the assigned gateway on the control plane instead of asking the sandbox to
   // reach the host's HTTP origin (which may be private or loopback-only).
-  const relayAssignedMcp = remoteTarget !== null && input.execution.provider.kind === "codex";
+  const managedOpenCodeRelay = input.execution.provider.kind === "opencode" &&
+    (input.conversationMode === true || Boolean((input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()));
+  const relayAssignedMcp = (remoteTarget !== null && input.execution.provider.kind === "codex") || managedOpenCodeRelay;
   const assignedMcpUrl = input.runnerEnvironment?.PAPERCLIP_NATIVE_MCP_URL;
   const assignedMcpToken = input.runnerEnvironment?.PAPERCLIP_NATIVE_MCP_TOKEN;
   const assignedMcpName = input.runnerEnvironment?.PAPERCLIP_NATIVE_MCP_NAME;
@@ -14379,15 +14806,24 @@ async function createRunnerdBackendWithinSessionClaim(
   if (relayAssignedMcp && hasAssignedMcp && !assignedGatewayPublicId) {
     throw new Error("assigned native MCP gateway path is invalid");
   }
-  const assignedMcpTools = relayAssignedMcp && !nativeReview && assignedMcpUrl && assignedMcpToken
+  const assignedMcpResponsibleUserId = reviewRun?.responsibleUserId;
+  if (relayAssignedMcp && hasAssignedMcp && !assignedMcpResponsibleUserId)
+    throw new Error("assigned native MCP requires the current responsible Human");
+  const assignedMcpTools = relayAssignedMcp && !nativeReview && assignedMcpUrl && assignedMcpToken && assignedMcpResponsibleUserId
     ? await createAssignedMcpTools({
+        db: input.db,
+        companyId: input.execution.binding.companyId,
+        issueId: input.execution.binding.issueId,
+        runId: input.execution.binding.runId,
+        agentId: input.execution.binding.agentId,
+        responsibleUserId: assignedMcpResponsibleUserId,
         gateway: getAssignedMcpGateway(input.db),
         gatewayPublicId: assignedGatewayPublicId!,
         bearerToken: assignedMcpToken,
         workMode: input.execution.task.workMode,
       })
     : undefined;
-  const sandboxOpenCodeMcp = remoteTarget?.transport === "sandbox"
+  const sandboxOpenCodeMcp = remoteTarget?.transport === "sandbox" && !managedOpenCodeRelay
     && input.execution.provider.kind === "opencode"
     ? nativeMcpLaunchBinding(input.runnerEnvironment ?? {})
     : null;
@@ -14452,8 +14888,10 @@ async function createRunnerdBackendWithinSessionClaim(
     input.onDocumentRead,
     input.onProjectToolResult,
     input.onNativeInputToolResult,
-    input.onNativeToolCall,
+    input.onNativeToolCall ? call => input.onNativeToolCall!({ ...call,
+      assignedMcpCall: assignedMcpTools?.has(call.tool) ?? false }) : undefined,
     input.onManagedOpenCodeToolResult,
+    input.onManagedOpenCodeToolPending,
     input.managedNativeContextReadCapture,
     input.serializeManagedOperation,
   );
@@ -14533,14 +14971,22 @@ async function createRunnerdBackendWithinSessionClaim(
       : ["read_document", "write_document", "create_task", "request_human_input", "create_project", "self_remember", "read_context",
         "report_progress", "call_api", "list_project_repositories", "get_task_context", "get_task_history",
         "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block"]);
+    const assignedCatalogToolNames = new Set<string>();
     const schemas: Array<Record<string, unknown>> = dynamicTools.flatMap((raw): Array<Record<string, unknown>> => {
       if (typeof raw.name !== "string") return [];
       let name = raw.name;
+      const assignedCatalogTool = assignedMcpTools?.has(name) ?? false;
+      // The registered server catalog and retained source proof use the
+      // normalized Paperclip name. OpenCode's bridge adds `paperclip_` when it
+      // serializes that schema to the provider, so normalize wrappers even
+      // when they are members of the assigned MCP catalog.
       for (const prefix of ["paperclip__", "paperclip_", "paperclip."]) {
         if (name.startsWith(prefix)) { name = name.slice(prefix.length); break; }
       }
-      if (!allowedNames.has(name) || (!nativeReview && name === "self_remember" && workMode !== "standard") ||
-        (!nativeReview && !managedSemanticActionAllowedInMode(name, workMode)) ||
+      if (assignedCatalogTool) assignedCatalogToolNames.add(name);
+      if ((!allowedNames.has(name) && !assignedCatalogTool && !(assignedMcpTools?.has(name) ?? false)) ||
+        (!nativeReview && !assignedCatalogTool && name === "self_remember" && workMode !== "standard") ||
+        (!nativeReview && !assignedCatalogTool && !managedSemanticActionAllowedInMode(name, workMode)) ||
         (blockedHumanInteraction && !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) return [];
       if ((name === "create_project" || name === "request_human_input" || name === "list_project_repositories") && !input.nativeModelOutputCapture) return [];
 
@@ -14603,6 +15049,10 @@ async function createRunnerdBackendWithinSessionClaim(
       providerTool.inputSchema = { ...inputSchema, additionalProperties: false };
       return providerTool;
     }));
+    const schemaNames = new Set(schemas.map(tool => typeof tool.name === "string" ? tool.name : ""));
+    const directAssignedTools = assignedMcpTools?.directDefinitions(definitions =>
+      runnerCodexDynamicToolsFit([...schemas, ...definitions])) ?? [];
+    schemas.push(...directAssignedTools.filter(tool => typeof tool.name !== "string" || !schemaNames.has(tool.name)));
     const names = schemas.map((tool) => tool.name);
     if ((nativeReview && (!names.includes("read_document") || !names.includes("resolve_review"))) ||
       (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !names.includes(name))) ||
@@ -14613,12 +15063,15 @@ async function createRunnerdBackendWithinSessionClaim(
     // terminal controls. Keep them in the broker's exact catalog proof, but
     // pass only Paperclip CRUD tools to the bridge to avoid duplicate names.
     managedOpenCodeDynamicTools = schemas.filter((tool) =>
-      allowedNames.has(String(tool.name)) && !["paperclip_finish", "paperclip_block"].includes(String(tool.name)));
+      (allowedNames.has(String(tool.name)) || assignedCatalogToolNames.has(String(tool.name)) ||
+        (assignedMcpTools?.has(String(tool.name)) ?? false)) &&
+      !["paperclip_finish", "paperclip_block"].includes(String(tool.name)));
     const resumeToolNames = managedOpenCodeDynamicTools.map((tool) => String(tool.name));
     if (new Set(resumeToolNames).size !== resumeToolNames.length ||
       (!nativeReview && !blockedHumanInteraction && requiredManagedTools.some(name => !resumeToolNames.includes(name))) ||
       (blockedHumanInteraction && !nativeReview && resumeToolNames.some(name => !NATIVE_BLOCKED_INTERACTION_READ_TOOLS.has(name))) ||
-      resumeToolNames.some(name => !allowedNames.has(name)))
+      resumeToolNames.some(name => !allowedNames.has(name) && !assignedCatalogToolNames.has(name) &&
+        !(assignedMcpTools?.has(name) ?? false)))
       throw new Error("managed_opencode_resume_tool_catalog_invalid");
     const taskEnvelope = nativeSessionTaskEnvelope(input.execution);
     const sourceContextForAuthority = "runtimeContext" in input.execution ? input.execution.runtimeContext : null;

@@ -27,6 +27,8 @@ import {
   issues,
   issuePrivacySources,
   statusDecisions,
+  toolProfiles,
+  toolMcpGateways,
   workAssessments,
 } from "@paperclipai/db";
 import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
@@ -47,7 +49,7 @@ import { assertNativeRunReadSourceHistoryQualified, recordNativeModelInputDispat
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
-import { createAssignedMcpTools } from "./assigned-mcp-tools.js";
+import { buildAssignedMcpSearchResult, createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import type { ToolGatewayService } from "../tool-gateway.js";
 import { READ_CURRENT_WAKE_COMMENTS_TOOL_NAME } from "./current-wake-comments.js";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
@@ -1241,14 +1243,21 @@ describe("PaperclipRunnerToolAuthority", () => {
   });
 
   it("fits large assigned catalogs alongside workspace and completion tools without dropping task tools", async () => {
-    const listToolsForNamedGateway = vi.fn().mockResolvedValue(Array.from({ length: 224 }, (_, i) => ({
+    const descriptors = Array.from({ length: 224 }, (_, i) => ({
       name: `app.action_${i}`, displayName: `Action ${i}`, description: "Read a fixture",
-      parametersSchema: { type: "object", properties: {} }, risk: "read",
-    })));
-    const assignedMcpTools = await createAssignedMcpTools({
-      gateway: { listToolsForNamedGateway } as unknown as ToolGatewayService,
-      gatewayPublicId: "fixture", bearerToken: "fixture-token",
-    });
+      parametersSchema: { type: "object", properties: {} }, risk: "read" as const,
+      pluginId: "fixture", providerType: "mcp_remote_http" as const,
+    }));
+    const listToolsForNamedGateway = vi.fn().mockResolvedValue(descriptors);
+    const [profile] = await db.insert(toolProfiles).values({ companyId,
+      profileKey: `assigned-tools-${randomUUID()}`, name: `Assigned tools ${randomUUID()}`, defaultAction: "deny" }).returning();
+    const gatewayPublicId = `gw_${randomUUID().replaceAll("-", "")}`;
+    await db.insert(toolMcpGateways).values({ companyId, gatewayPublicId,
+      name: `Assigned tools ${randomUUID()}`, slug: `assigned-tools-${randomUUID()}`,
+      profileId: profile!.id, agentId, issueId });
+    const assignedMcpTools = await createAssignedMcpTools({ db, companyId, issueId, runId, agentId,
+      responsibleUserId: userId, gateway: { listToolsForNamedGateway } as unknown as ToolGatewayService,
+      gatewayPublicId, bearerToken: "fixture-token" });
     const binding = { companyId, agentId, issueId, runId, workspaceRoot: "/tmp/fixture-workspace" };
     const baseline = new PaperclipRunnerToolAuthority(db, binding).definitions();
     expect(runnerCodexDynamicToolsFit([...baseline, ...assignedMcpTools.definitions()])).toBe(false);
@@ -1260,12 +1269,15 @@ describe("PaperclipRunnerToolAuthority", () => {
     expect(tools.map(tool => tool.name)).toEqual(expect.arrayContaining([
       "paperclip_search_assigned_tools", "paperclip_call_assigned_tool", "register_deliverable",
     ]));
-    const call = { tool: "paperclip_search_assigned_tools", callId: "discover", arguments: { query: "Action 223" } };
-    await expect(authority.execute(call)).resolves.toMatchObject({ tools: [expect.objectContaining({ description: "Action 223: Read a fixture" })] });
+    const pureSearch = buildAssignedMcpSearchResult({ query: "Action 223" }, descriptors.map(descriptor => ({
+      alias: `app_action_${descriptor.name.slice("app.action_".length)}`, descriptor,
+    })), "standard");
+    expect(pureSearch).toMatchObject({ tools: [expect.objectContaining({ description: "Action 223: Read a fixture" })] });
     listToolsForNamedGateway.mockClear();
     await db.update(heartbeatRuns).set({ status: "succeeded" }).where(eq(heartbeatRuns.id, runId));
     try {
-      await expect(authority.execute(call)).rejects.toThrow("paperclip_runner_tool_binding_not_authorized");
+      await expect(authority.execute({ tool: "paperclip_search_assigned_tools", callId: "discover",
+        arguments: { query: "Action 223" } })).rejects.toThrow("paperclip_runner_tool_binding_not_authorized");
       expect(listToolsForNamedGateway).not.toHaveBeenCalled();
     } finally {
       await db.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, runId));
@@ -1277,16 +1289,16 @@ describe("PaperclipRunnerToolAuthority", () => {
     const execute = vi.fn().mockResolvedValue({ content: "synthetic memory" });
     const authority = new PaperclipRunnerToolAuthority(db, {
       companyId, agentId, issueId, runId,
-      assignedMcpTools: { definitions: () => [tool], has: (name) => name === tool.name, execute },
+      assignedMcpTools: { definitions: () => [tool], directDefinitions: () => [tool], isSearch: () => false, has: (name) => name === tool.name, execute },
     });
     expect(authority.definitions()).toContainEqual(tool);
     const call = { tool: tool.name, callId: "assigned-mcp", arguments: { query: "compass" } };
     await expect(authority.execute(call)).resolves.toEqual({ content: "synthetic memory" });
-    expect(execute).toHaveBeenCalledWith(call, "standard");
+    expect(execute).toHaveBeenCalledWith(call, "standard", undefined, undefined, undefined);
     await db.update(issues).set({ workMode: "ask" }).where(eq(issues.id, issueId));
     try {
       await authority.execute(call);
-      expect(execute).toHaveBeenLastCalledWith(call, "ask");
+      expect(execute).toHaveBeenLastCalledWith(call, "ask", undefined, undefined, undefined);
     } finally {
       await db.update(issues).set({ workMode: "standard" }).where(eq(issues.id, issueId));
     }

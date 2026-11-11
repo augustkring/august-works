@@ -12,7 +12,7 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-type Capture = { purpose: "catalog" | "workspace_probe" | "projects_probe" | "projects_call" | "target_validation" | "deployment_validation" | "restart" };
+type Capture = { purpose: "catalog" | "workspace_probe" | "projects_probe" | "projects_call" | "target_validation" | "deployment_validation" | "restart" | "large_tool_call" };
 
 /** Only the HTTP boundary is controlled. Discovery, schema/version hashing,
  * vault bindings, grants, profiles and invocation authority use real owners.
@@ -32,6 +32,25 @@ export async function prepareConnectionIntentRailwayFixture(input: {
   const deploymentId = randomUUID();
   const deploymentInstanceId = randomUUID();
   const credentialValue = randomUUID();
+  let largeSchemaEnabled = false;
+  const largeToolProperties = Object.fromEntries(Array.from({ length: 80 }, (_, index) => [`field_${String(index).padStart(4, "0")}`, {
+    type: "string", description: `Fixed fixture schema field ${index}: a bounded value used to prove large assigned schemas are fetched in authenticated chunks.`,
+  }]));
+  const largeToolSchema = { type: "object", additionalProperties: false, properties: largeToolProperties,
+    required: ["field_0000"] };
+  // Three valid but unused assigned schemas push the total direct-definition
+  // catalog past its signed Runnerd envelope while each descriptor remains
+  // below the normal per-schema limit. This makes the fixture exercise the
+  // real compact search/chunk fallback without relaxing any production cap.
+  const ballastTools = Array.from({ length: 3 }, (_, toolIndex) => ({
+    name: `fixture-ballast-${toolIndex + 1}`,
+    description: `Fixed bounded catalog ballast ${toolIndex + 1}.`,
+    inputSchema: { type: "object", additionalProperties: false, properties: Object.fromEntries(
+      Array.from({ length: 20 }, (_, fieldIndex) => [`field_${String(fieldIndex).padStart(2, "0")}`, {
+        type: "string", description: `Bounded catalog-only field ${toolIndex + 1}-${fieldIndex}: ${"x".repeat(13_500)}`,
+      }])) },
+    annotations: { readOnlyHint: true },
+  }));
   const captures: Capture[] = [];
   const endpointLookup: NonNullable<Parameters<typeof toolAccessService>[1]>["remoteHttpEndpointLookup"] = async hostname => {
     if (hostname !== new URL(RAILWAY_MCP_URL).hostname && hostname !== new URL(RAILWAY_API_URL).hostname)
@@ -51,9 +70,21 @@ export async function prepareConnectionIntentRailwayFixture(input: {
         captures.push({ purpose: "catalog" });
         // Never advertise a reserved paperclip-railway-* descriptor. The real
         // refresh owner adds its own fixed contracts after the API probe.
-        return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [] } });
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: largeSchemaEnabled ? [
+          { name: "fixture-large", description: "Read the fixed large-schema fixture result.", inputSchema: largeToolSchema,
+            annotations: { readOnlyHint: true } },
+          ...ballastTools,
+        ] : [] } });
       }
       const params = object(body.params);
+      if (body.method === "tools/call" && params.name === "fixture-large") {
+        const args = object(params.arguments);
+        if (Object.keys(args).length !== 1 || args.field_0000 !== "schema-chunk-proof")
+          throw new Error("railway_fixture_large_tool_arguments_not_fixed");
+        captures.push({ purpose: "large_tool_call" });
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text",
+          text: JSON.stringify({ ok: true, marker: "large-schema-result", value: args.field_0000 }) }] } });
+      }
       if (body.method !== "tools/call" || params.name !== "list-workspaces" ||
           Object.keys(object(params.arguments)).length !== 0)
         throw new Error("railway_fixture_mcp_operation_not_fixed");
@@ -129,9 +160,29 @@ export async function prepareConnectionIntentRailwayFixture(input: {
   await access.putConnectionInstalls(connection.id, {
     installs: [{ targetType: "agent", targetId: input.holderAgentId }],
   }, actor);
+  const enableLargeSchemaTool = async () => {
+    largeSchemaEnabled = true;
+    const updated = await access.refreshCatalog(connection.id, actor, { restoreDraftDefaults: true });
+    const largeTool = updated.catalog.find(entry => entry.toolName === "fixture-large");
+    if (!largeTool || largeTool.status !== "active" || !largeTool.schemaHash || !largeTool.versionHash)
+      throw new Error("railway_fixture_large_schema_discovery_failed");
+    await toolAccessPolicyService(input.db).createPolicy(input.companyId, {
+      name: "Read the large fixture tool", policyType: "allow", priority: 200, enabled: true,
+      selectors: { connectionId: connection.id, toolName: "fixture-large" },
+    }, { userId: input.userId });
+    for (const filler of ballastTools) {
+      const entry = updated.catalog.find(candidate => candidate.toolName === filler.name);
+      if (!entry || entry.status !== "active" || !entry.schemaHash || !entry.versionHash)
+        throw new Error("railway_fixture_catalog_ballast_discovery_failed");
+      await toolAccessPolicyService(input.db).createPolicy(input.companyId, {
+        name: `Read ${filler.name}`, policyType: "allow", priority: 200, enabled: true,
+        selectors: { connectionId: connection.id, toolName: filler.name },
+      }, { userId: input.userId });
+    }
+  };
   return {
     connection: refreshed.connection, tool, workspaceId, projectId,
     deploymentTarget: { projectId, environmentId, serviceId, deploymentId }, deploymentInstanceId, request, endpointLookup,
-    captures: () => captures.map(capture => ({ ...capture })),
+    enableLargeSchemaTool, captures: () => captures.map(capture => ({ ...capture })),
   };
 }

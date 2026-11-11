@@ -44746,7 +44746,7 @@
         "post:`/companies/${companyId}/orchestration/plans/${id}/intervene`"
       ],
       "argumentsSignature": "companyId!, selected, { expectedPlanVersion: detail.data!.version, action, rationale }",
-      "line": 39,
+      "line": 41,
       "occurrence": 0,
       "owner": "server/src/services/supervision/supervision-service.ts",
       "classification": "HUMAN_ONLY",
@@ -44789,7 +44789,7 @@
         "post:`/companies/${companyId}/orchestration/plans`"
       ],
       "argumentsSignature": "companyId!, draft",
-      "line": 53,
+      "line": 56,
       "occurrence": 0,
       "owner": "server/src/services/orchestration/orchestration-service.ts",
       "classification": "HUMAN_ONLY",
@@ -44832,7 +44832,7 @@
         "post:`/companies/${companyId}/orchestration/plans/${id}/decisions`"
       ],
       "argumentsSignature": "companyId!, selected, { expectedVersion: detail.data.version, action, rationale }",
-      "line": 57,
+      "line": 60,
       "occurrence": 0,
       "owner": "server/src/services/orchestration/orchestration-service.ts",
       "classification": "HUMAN_ONLY",

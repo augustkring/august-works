@@ -65,6 +65,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { captureNativeReviewWakeWitness, getNativeReviewAssignment, readNativeReviewAssignmentContext } from "../native-runtime/native-review-participant.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { isCurrentConversationModelRoot, isCurrentWorkerConversationRoot } from "../native-runtime/worker-conversation-root.js";
+import { readNativeChannelConversationScope } from "../native-runtime/native-channel-conversation-owner.js";
 import type { NativeConsumedSourceComponent, NativeModelOutputCapture } from "../native-runtime/native-execution-input.js";
 import {
   lockMemoryPrivacy,
@@ -78,7 +79,8 @@ import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent, assertNativeProjectSourceCurrent,
-  assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet } from "../native-direct-input.js";
+  assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet,
+  assertNativeAssignedMcpApprovalErrorCurrent, assertNativeAssignedMcpSearchResultCurrent } from "../native-direct-input.js";
 import { PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED } from "../native-local-process-stop.js";
 import { assertManagedNativeProjectRepositoriesAuthorizationCurrent, assertNativeManagedProjectCreateReceiptCurrent,
   managedNativeProjectRepositoriesResultSchema, type NativeProjectCreateReceipt,
@@ -449,6 +451,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   sourceSetHash: string;
   consumedSourceSet: { policy: Record<string, string[]>; inputs: NativePayloadSourceInput[] };
   consumedSourceComponents: NativeConsumedSourceComponent[];
+  pendingAssignedMcp: boolean;
 }> {
   await assertNativeAnalyticalRunPayloadAccess(db, claims.company_id, claims.run_id);
   const [run] = await db.select().from(heartbeatRuns).where(and(
@@ -546,12 +549,9 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
       ...(typeof tool.description === "string" ? { description: tool.description } : {}),
       input_schema: tool.input_schema };
   }).sort((a, b) => a.name.localeCompare(b.name));
-  if (!isDeepStrictEqual(actualTools, expectedTools) ||
-    actualTools.some((tool) => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-      "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block",
-      ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress", "request_human_input", "list_project_repositories"] : []),
-      ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(tool.name)))
+  if (!isDeepStrictEqual(actualTools, expectedTools))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
+  const exactProviderSchemaNames = new Set(expectedTools.map(tool => tool.name));
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
   const captures = Array.isArray(profile.nativeToolResultSourceCaptures) ? profile.nativeToolResultSourceCaptures.map(managedRecord) : [];
@@ -559,6 +559,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   let sawAuthorizedUserPrompt = false;
   let currentPromptBinding: { promptHash: string; sourceSetHash: string } | null = null;
   const consumedSourceComponents: ManagedSourceComponent[] = [];
+  let pendingAssignedMcp = false;
   const priorProviderToolUses = new Map<string, { toolName: string; argumentsHash: string; intent: Record<string, unknown> }>();
   const consumedProviderToolUses = new Set<string>();
   for (const messageValue of Array.isArray(request.messages) ? request.messages : []) {
@@ -724,6 +725,31 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           item.attempt === matchingAssociations[0]!.attempt);
         const content = typeof block.content === "string" ? block.content : Array.isArray(block.content)
           ? block.content.map((part) => typeof managedRecord(part).text === "string" ? managedRecord(part).text : "").join("") : "";
+        if (block.is_error === true) {
+          const pendingMatches = matchingAssociations.length === 1
+            ? [matchingAssociations[0]!].filter(item => managedRecord(item.pendingMcpAction).providerToolName === toolName)
+            : [];
+          if (pendingMatches.length !== 1 || matchingCaptures.length !== 0 || !exactProviderSchemaNames.has(toolName) ||
+            !["worker_model", "conversation_model"].includes(claims.scope))
+            throw forbidden("Managed assigned MCP error result has no exact pending approval owner");
+          const pending = await assertNativeAssignedMcpApprovalErrorCurrent(db, {
+            companyId: claims.company_id, issueId: run.nativeIssueId!, runId: claims.run_id, agentId: claims.sub,
+            responsibleUserId: claims.responsible_user_id, providerToolName: toolName,
+            callId: block.tool_use_id, turnId: String(pendingMatches[0]!.turnId),
+            argumentsHash: providerUse.argumentsHash, messages: request.messages, actor: sourceActor,
+          });
+          const pendingEntries = receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
+            entry.inputs.some(value => value.kind === "interaction" && isDeepStrictEqual(value, pending.source)));
+          const exactCopies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+            value.kind === "interaction" && isDeepStrictEqual(value, pending.source)).length, 0);
+          if (pendingEntries.length !== 1 || exactCopies !== 1)
+            throw forbidden("Managed assigned MCP pending interaction is not in the accepted source receipt");
+          const pendingEntry = pendingEntries[0]!;
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: pendingEntry.responsibleUserId,
+            policy: pendingEntry.policy, inputs: pendingEntry.inputs });
+          pendingAssignedMcp ||= pending.pending;
+          continue;
+        }
         if (toolName === "paperclip_finish") {
           await assertManagedPaperclipFinishResult({ db, claims, run, profile, providerUse,
             callId: block.tool_use_id, content, block });
@@ -732,11 +758,13 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           // acknowledged private-source prefix to the source union.
           continue;
         }
-        if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
-          !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
-            "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
-            ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress", "request_human_input", "list_project_repositories"] : []),
-            ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(toolName))
+        const nativeBuiltin = ["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
+          "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block",
+          ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress", "request_human_input", "list_project_repositories"] : []),
+          ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(toolName);
+        const assignedProviderTool = exactProviderSchemaNames.has(toolName) &&
+          (toolName === "search_assigned_tools" || toolName === "call_assigned_tool" || toolName.startsWith("app_"));
+        if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 || (!nativeBuiltin && !assignedProviderTool))
         {
           if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
             console.info("managed-native-result-receipt-miss", JSON.stringify({
@@ -777,9 +805,35 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           throw forbidden("Managed OpenCode call_api result has no exact runner envelope");
         if (source.kind !== "tool_result" || source.contentHash !== sourceResultDigest)
           throw forbidden("managed_opencode_tool_result_source_digest_mismatch");
-        const sourceToolName = managedToolSourceName(toolName);
-        if (source.callId !== block.tool_use_id || source.toolName !== sourceToolName)
+        const assignedInvocation = capture.assignedMcp && typeof capture.assignedMcp === "object"
+          ? managedRecord(capture.assignedMcp) : null;
+        const sourceToolName = assignedInvocation && typeof assignedInvocation.gatewayToolName === "string"
+          ? assignedInvocation.gatewayToolName : managedToolSourceName(toolName);
+        if (source.callId !== block.tool_use_id || source.toolName !== sourceToolName ||
+          assignedInvocation && assignedInvocation.providerToolName !== toolName)
           throw forbidden("managed_opencode_tool_result_identity_mismatch");
+        if (capture.assignedMcpSearch !== undefined) {
+          if (!assignedProviderTool || !toolName.includes("search_assigned_tools") || source.invocationId !== null ||
+            !isDeepStrictEqual(capture.sourceSet, managedRecord(capture.outputCapture).sourceSet))
+            throw forbidden("Managed assigned MCP search has no exact no-invocation source capture");
+          const searchSource = nativePayloadSourceInputSchema.parse(source);
+          if (searchSource.kind !== "tool_result") throw forbidden("Managed assigned MCP search source is invalid");
+          await assertNativeAssignedMcpSearchResultCurrent(db, {
+            companyId: claims.company_id, issueId: run.nativeIssueId!, runId: claims.run_id, agentId: claims.sub,
+            responsibleUserId: claims.responsible_user_id, actor: sourceActor, capture, source: searchSource, result,
+            conversationState: "live",
+          });
+          const entries = receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
+            entry.inputs.some(value => value.kind === "tool_result" && isDeepStrictEqual(value, source)));
+          const copies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+            value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+          if (entries.length !== 1 || copies !== 1) throw forbidden("Managed assigned MCP search source receipt is ambiguous");
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: entries[0]!.responsibleUserId,
+            policy: entries[0]!.policy, inputs: entries[0]!.inputs });
+          continue;
+        }
+        if (!nativeBuiltin && !assignedProviderTool)
+          throw forbidden("Managed OpenCode tool result is outside the current server-owned tool schema");
         if (toolName === "list_project_repositories" && claims.scope === "conversation_model") {
           if (source.invocationId !== null)
             throw forbidden("Managed Conversation repository discovery cannot use a plan invocation");
@@ -1169,11 +1223,19 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
               payloadSourceSnapshot: issues.payloadSourceSnapshot,
               payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
             }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, run.nativeIssueId))).for("share") : [];
+          const channelScope = claims.scope === "conversation_model" && run.nativeIssueId &&
+            conversationRoot && (await db.select({ originKind: issues.originKind }).from(issues).where(and(
+              eq(issues.companyId, claims.company_id), eq(issues.id, run.nativeIssueId))).limit(1))[0]?.originKind === "chat_channel"
+            ? await readNativeChannelConversationScope(db, { companyId: claims.company_id, issueId: run.nativeIssueId,
+                agentId: claims.sub, responsibleUserId: claims.responsible_user_id, runId: claims.run_id,
+                sessionGeneration: claims.conversation_model.conversationSessionGeneration,
+                sourceCommentId: typeof run.contextSnapshot?.wakeCommentId === "string" ? run.contextSnapshot.wakeCommentId : "", consumer: "live_token" })
+            : null;
           const conversationModelRootCurrent = claims.scope === "conversation_model" && !!run.nativeIssueId &&
             claims.conversation_model.issueId === run.nativeIssueId && isCurrentConversationModelRoot({
               root: conversationRoot, contextSnapshot: run.contextSnapshot, companyId: claims.company_id,
               agentId: claims.sub, responsibleUserId: claims.responsible_user_id, runId: claims.run_id,
-              binding: claims.conversation_model,
+              binding: claims.conversation_model, channelScope,
             });
           const taskResultChecks = {
             managedCapture: capture.managedOpenCode === true && capture.nativeReadResult !== true && capture.tool === "create_task",
@@ -1434,11 +1496,19 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
             companyId: claims.company_id, issueId: run.nativeIssueId, agentId: claims.sub,
             responsibleUserId: run.responsibleUserId, runId: claims.run_id,
           });
+          const channelScope = !!run.nativeIssueId && claims.scope === "conversation_model" &&
+            conversationRoot && (await db.select({ originKind: issues.originKind }).from(issues).where(and(
+              eq(issues.companyId, claims.company_id), eq(issues.id, run.nativeIssueId))).limit(1))[0]?.originKind === "chat_channel"
+            ? await readNativeChannelConversationScope(db, { companyId: claims.company_id, issueId: run.nativeIssueId,
+                agentId: claims.sub, responsibleUserId: run.responsibleUserId!, runId: claims.run_id,
+                sessionGeneration: claims.conversation_model.conversationSessionGeneration,
+                sourceCommentId: typeof run.contextSnapshot?.wakeCommentId === "string" ? run.contextSnapshot.wakeCommentId : "", consumer: "retained_source" })
+            : null;
           const conversationModelRootCurrent = !!run.nativeIssueId && claims.scope === "conversation_model" &&
             claims.conversation_model.issueId === run.nativeIssueId && isCurrentConversationModelRoot({
               root: conversationRoot, contextSnapshot: run.contextSnapshot, companyId: claims.company_id,
               agentId: claims.sub, responsibleUserId: run.responsibleUserId, runId: claims.run_id,
-              binding: claims.conversation_model,
+              binding: claims.conversation_model, channelScope,
             });
           const planBackedDraftCapture = capture.managedOpenCode === true && capture.nativeReadResult !== true &&
             capture.tool === "create_task" && capture.callId === block.tool_use_id &&
@@ -1537,7 +1607,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
     sourceSet: { policy: parsedPolicy.data, inputs: parsedInputs.data } });
   return { ...currentPromptBinding,
     consumedSourceSet: { policy: parsedPolicy.data, inputs: parsedInputs.data },
-    consumedSourceComponents,
+    consumedSourceComponents, pendingAssignedMcp,
   };
 }
 
@@ -2188,12 +2258,20 @@ export function workerModelGateway(db: Db, options: Options) {
     const [manifest] = await tx.select().from(agentExecutionManifests).where(and(
       eq(agentExecutionManifests.companyId, claims.company_id), eq(agentExecutionManifests.id, binding.executionManifestId),
       eq(agentExecutionManifests.agentId, claims.sub), eq(agentExecutionManifests.runId, claims.run_id)));
+    const channelScope = run && issue?.originKind === "chat_channel"
+      ? await readNativeChannelConversationScope(tx as Db, { companyId: claims.company_id, issueId: binding.issueId,
+          agentId: claims.sub, responsibleUserId: claims.responsible_user_id, runId: claims.run_id,
+          sessionGeneration: binding.conversationSessionGeneration,
+          sourceCommentId: typeof run.contextSnapshot?.wakeCommentId === "string" ? run.contextSnapshot.wakeCommentId : "", consumer: "live_token" })
+      : null;
+    const conversationIdentityCurrent = Boolean(channelScope) ||
+      (issue?.conversationAgentId === claims.sub && issue.conversationUserId === claims.responsible_user_id &&
+        issue.conversationSessionGeneration === binding.conversationSessionGeneration && issue.conversationState === "active" &&
+        !issue.conversationRetiredAt);
     if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.scopeKind !== "issue" ||
       run.nativeIssueId !== binding.issueId || run.responsibleUserId !== claims.responsible_user_id ||
       run.contextSnapshot?.conversationSessionGeneration !== binding.conversationSessionGeneration ||
-      !issue || issue.conversationAgentId !== claims.sub || issue.conversationUserId !== claims.responsible_user_id ||
-      issue.conversationSessionGeneration !== binding.conversationSessionGeneration || issue.conversationState !== "active" ||
-      issue.conversationRetiredAt || issue.assigneeAgentId !== claims.sub || issue.executionRunId !== claims.run_id ||
+      !issue || !conversationIdentityCurrent || issue.assigneeAgentId !== claims.sub || issue.executionRunId !== claims.run_id ||
       !["in_review", "in_progress"].includes(issue.status) || !manifest || manifest.hash !== binding.executionManifestHash ||
       manifest.manifest.responsibleUserId !== claims.responsible_user_id ||
       manifest.manifest.executionScope.delegatedScopes.some(scope => scope.companyId !== claims.company_id) ||
@@ -2596,15 +2674,23 @@ export function workerModelGateway(db: Db, options: Options) {
       const [manifest] = await db.select().from(agentExecutionManifests).where(and(
         eq(agentExecutionManifests.companyId, input.companyId), eq(agentExecutionManifests.agentId, input.agentId),
         eq(agentExecutionManifests.runId, input.runId)));
+      const channelScope = run && issue?.originKind === "chat_channel"
+        ? await readNativeChannelConversationScope(db, { companyId: input.companyId, issueId: issue.id,
+            agentId: input.agentId, responsibleUserId: input.responsibleUserId, runId: input.runId,
+            sessionGeneration: Number(run.contextSnapshot?.conversationSessionGeneration ?? 0),
+            sourceCommentId: typeof run.contextSnapshot?.wakeCommentId === "string" ? run.contextSnapshot.wakeCommentId : "", consumer: "live_token" })
+        : null;
+      const conversationIdentityCurrent = Boolean(channelScope) || Boolean(issue?.conversationAgentId === input.agentId &&
+        issue.conversationUserId === input.responsibleUserId && issue.conversationState === "active" &&
+        issue.conversationSessionGeneration !== null);
       if (!run || run.runtimeMode !== "native" || run.status !== "running" || run.scopeKind !== "issue" ||
-        run.responsibleUserId !== input.responsibleUserId || !issue || issue.conversationAgentId !== input.agentId ||
-        issue.conversationUserId !== input.responsibleUserId || issue.conversationState !== "active" ||
-        issue.conversationSessionGeneration === null || issue.executionRunId !== input.runId ||
+        run.responsibleUserId !== input.responsibleUserId || !issue || !conversationIdentityCurrent ||
+        issue.executionRunId !== input.runId ||
         !["in_review", "in_progress"].includes(issue.status) ||
         !manifest || manifest.manifest.responsibleUserId !== input.responsibleUserId)
         throw forbidden("One exact active authenticated Native conversation is required");
       const binding: ConversationModelBinding = { issueId: issue.id,
-        conversationSessionGeneration: issue.conversationSessionGeneration,
+        conversationSessionGeneration: channelScope?.sessionGeneration ?? issue.conversationSessionGeneration!,
         executionManifestId: manifest.id, executionManifestHash: manifest.hash };
       const minted = createRuntimeToolsToken({ ...input, conversationModelBinding: binding, scope: "conversation_model" });
       const claims = minted && verifyRuntimeToolsToken(minted.token, "conversation_model");
@@ -3178,6 +3264,17 @@ export function workerModelGateway(db: Db, options: Options) {
         });
         financiallySettled = outcome.status === "completed";
         if (outcome.status !== "completed") throw conflict("Worker model charge could not be confirmed");
+        if (requestSourceBinding.pendingAssignedMcp) {
+          const responseTools = result.responseContent.filter(block => block.type === "tool_use");
+          const validConversationYield = claims.scope === "conversation_model" && responseTools.length === 0;
+          const workerFinishInput = responseTools.length === 1 ? managedRecord(responseTools[0]!.input) : {};
+          const workerFinishClaim = managedRecord(workerFinishInput.completionClaim);
+          const validWorkerYield = claims.scope === "worker_model" && responseTools.length === 1 &&
+            responseTools[0]!.name === "paperclip_finish" && workerFinishInput.reportedWorkDisposition === "yielded" &&
+            workerFinishClaim.objectiveSatisfied === false;
+          if (!validConversationYield && !validWorkerYield)
+            throw forbidden("Pending assigned MCP approval permits only a truthful yielded terminal response");
+        }
         const responseContentHash = nativeSha256(result.responseContent);
         managedFailureStage = "response_run_binding";
         await db.transaction(async (tx) => {

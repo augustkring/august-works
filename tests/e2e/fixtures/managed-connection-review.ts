@@ -6,12 +6,14 @@ import { join } from "node:path";
 import { and, eq, sql } from "../../../packages/db/node_modules/drizzle-orm/index.js";
 import { expect, type Page, type BrowserContext, type APIRequestContext } from "@playwright/test";
 import { createDb, agents, authSessions, authUsers, companies, heartbeatRuns, agentWakeupRequests,
-  issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases } from "../../../packages/db/src/index.ts";
+  issueComments, issueThreadInteractions, issues, documents, issueDocuments, environmentLeases,
+  connectionGrants, toolCatalogEntries, toolConnections } from "../../../packages/db/src/index.ts";
 import { createApp } from "../../../server/src/app.js";
 import { createStorageService } from "../../../server/src/storage/service.js";
 import { createLocalDiskStorageProvider } from "../../../server/src/storage/local-disk-provider.js";
 import { setupLiveEventsWebSocketServer } from "../../../server/src/realtime/live-events-ws.js";
 import { getAssignedMcpGateway } from "../../../server/src/services/native-runtime/assigned-mcp-tools.js";
+import { assertNativeAssignedMcpSearchResultCurrent, assertNativePayloadSourceSetCurrent } from "../../../server/src/services/native-direct-input.js";
 import { verifyNativeCleanupRuntimeState } from "../../../server/src/services/execution-sandbox/run-lease-cleanup.js";
 import { issueService } from "../../../server/src/services/issues.js";
 import { createDecisionWakeOriginAgent } from "../../../server/src/services/decision-wakeup.js";
@@ -36,6 +38,32 @@ const record = (value: unknown): Record<string, unknown> => {
   assert(value && typeof value === "object" && !Array.isArray(value));
   return value as Record<string, unknown>;
 };
+function resultText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(item => {
+    const block = record(item); return typeof block.text === "string" ? block.text : "";
+  }).join("");
+  return JSON.stringify(value) ?? "";
+}
+function toolResultBlock(body: Record<string, unknown>, callId: string): Record<string, unknown> | null {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  const blocks = messages.flatMap(message => {
+    const content = record(message).content; return Array.isArray(content) ? content : [];
+  }).map(record).filter(block => block.type === "tool_result" && block.tool_use_id === callId);
+  assert(blocks.length <= 1);
+  return blocks[0] ?? null;
+}
+function parseToolResult(body: Record<string, unknown>, callId: string): Record<string, unknown> | null {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  const blocks = messages.flatMap(message => {
+    const content = record(message).content; return Array.isArray(content) ? content : [];
+  }).map(record);
+  const matches = blocks.filter(block => block.type === "tool_result" && block.tool_use_id === callId);
+  if (!matches.length) return null;
+  assert.equal(matches.length, 1);
+  const result = JSON.parse(resultText(matches[0]!.content));
+  return record(result);
+}
 
 /** A real Human, installed fixed-contract Railway tool and actual scheduler
  * Runs. Only the existing Railway HTTP boundary and model responses are
@@ -69,11 +97,138 @@ export async function withManagedConnectionReview(input: {
   let laterTaskId: string | undefined, laterCommentId: string | undefined;
   const pendingNoteBody = "Keeping this review pending while I check.";
   const providerRuns: string[] = [];
+  let maxProviderRequestBytes = 0;
   let responseText = "";
   const outcomeByRun = new Map<string, string>();
+  let laterSchemaOffset = 0;
+  let laterSchemaJson = "";
+  const validatedLaterSearchCalls = new Set<string>();
   const previousApi = process.env.PAPERCLIP_API_URL;
   const previousDiagnostics = process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS;
   let fixtureFailure: unknown;
+  const validateSuccessfulToolCapture = async (runId: string, callId: string) => {
+    assert(scope);
+    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, scope.companyId),
+      eq(heartbeatRuns.id, runId))).limit(1);
+    assert(run && run.nativeIssueId && run.responsibleUserId);
+    const actor = { type: "agent" as const, source: "none" as const, companyId: scope.companyId,
+      agentId: run.agentId, runId, onBehalfOfUserId: run.responsibleUserId };
+    const receipt = record(run.runnerProfileJson).nativeInputSourceReceipt;
+    const additional = Array.isArray(record(receipt).additionalInputs) ? record(receipt).additionalInputs as Array<unknown> : [];
+    const matches = additional.map(record).filter(entry => Array.isArray(entry.inputs) && entry.inputs.some(value =>
+      record(value).kind === "tool_result" && record(value).callId === callId));
+    assert.equal(matches.length, 1, "The real wrapper invocation enters the receipt once");
+    const entry = matches[0]!;
+    const validate = () => assertNativePayloadSourceSetCurrent(db, { companyId: scope!.companyId,
+      issueId: run.nativeIssueId!, runId, actor, policy: record(entry.policy) as never,
+      inputs: entry.inputs as never[] });
+    await validate();
+    const profile = record(run.runnerProfileJson);
+    const captures = Array.isArray(profile.nativeToolResultSourceCaptures) ? profile.nativeToolResultSourceCaptures : [];
+    const originalProfile = structuredClone(profile);
+    const mutateCapture = async (mutate: (item: Record<string, unknown>) => void) => {
+      const next = captures.map(value => {
+        const item = record(value);
+        if (item.callId !== callId || item.managedOpenCode !== true) return value;
+        const changed = structuredClone(item); mutate(changed); return changed;
+      });
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeToolResultSourceCaptures: next } })
+        .where(and(eq(heartbeatRuns.companyId, scope!.companyId), eq(heartbeatRuns.id, runId)));
+    };
+    try {
+      await mutateCapture(value => { record(value.assignedMcp).providerArgumentsHash = "f".repeat(64); });
+      await expect(validate()).rejects.toThrow();
+      await db.update(heartbeatRuns).set({ runnerProfileJson: originalProfile })
+        .where(and(eq(heartbeatRuns.companyId, scope!.companyId), eq(heartbeatRuns.id, runId)));
+      await mutateCapture(value => { record(value.assignedMcp).descriptorHash = "0".repeat(64); });
+      await expect(validate()).rejects.toThrow();
+    } finally {
+      await db.update(heartbeatRuns).set({ runnerProfileJson: originalProfile })
+        .where(and(eq(heartbeatRuns.companyId, scope!.companyId), eq(heartbeatRuns.id, runId)));
+    }
+    await validate();
+  };
+  const validateSearchCapture = async (runId: string, callId: string, result: unknown, mutationOracles = false) => {
+    assert(scope);
+    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, scope.companyId),
+      eq(heartbeatRuns.id, runId))).limit(1);
+    assert(run && run.nativeIssueId && run.responsibleUserId);
+    const profile = record(run.runnerProfileJson);
+    const captures = Array.isArray(profile.nativeToolResultSourceCaptures) ? profile.nativeToolResultSourceCaptures : [];
+    const capture = captures.map(record).find(value => value.callId === callId && value.managedOpenCode === true);
+    assert(capture && capture.assignedMcpSearch);
+    const actor = { type: "agent" as const, source: "none" as const, companyId: scope.companyId,
+      agentId: run.agentId, runId, onBehalfOfUserId: run.responsibleUserId };
+    const assertCurrent = async () => {
+      const [fresh] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, scope!.companyId), eq(heartbeatRuns.id, runId))).limit(1);
+      const freshCaptures = record(fresh?.runnerProfileJson).nativeToolResultSourceCaptures;
+      const freshCapture = Array.isArray(freshCaptures) ? freshCaptures.map(record)
+        .find(value => value.callId === callId && value.managedOpenCode === true) : null;
+      assert(freshCapture);
+      return assertNativeAssignedMcpSearchResultCurrent(db, {
+        companyId: scope!.companyId, issueId: run.nativeIssueId!, runId, agentId: run.agentId!,
+        responsibleUserId: run.responsibleUserId!, actor, capture: freshCapture, source: record(freshCapture.source) as never,
+        result, conversationState: "live",
+      });
+    };
+    await assertCurrent();
+    if (!mutationOracles) return;
+    const originalProfile = structuredClone(profile);
+    const replaceCapture = async (mutate: (value: Record<string, unknown>) => void) => {
+      const nextCaptures = captures.map(value => {
+        const item = record(value);
+        if (item.callId !== callId || item.managedOpenCode !== true) return value;
+        const changed = structuredClone(item); mutate(changed); return changed;
+      });
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeToolResultSourceCaptures: nextCaptures } })
+        .where(and(eq(heartbeatRuns.companyId, scope!.companyId), eq(heartbeatRuns.id, runId)));
+    };
+    const restoreProfile = async () => db.update(heartbeatRuns).set({ runnerProfileJson: originalProfile })
+      .where(and(eq(heartbeatRuns.companyId, scope!.companyId), eq(heartbeatRuns.id, runId)));
+    try {
+      await replaceCapture(value => { record(value.assignedMcpSearch).providerToolName = "forged_search_alias"; });
+      await expect(assertCurrent()).rejects.toThrow();
+      await restoreProfile();
+      const refs = record(capture.assignedMcpSearch).descriptorProjections as Array<Record<string, unknown>>;
+      assert(refs.length > 0);
+      const connectionId = refs[0]!.connectionId;
+      const catalogEntryId = refs[0]!.catalogEntryId;
+      assert.equal(typeof connectionId, "string"); assert.equal(typeof catalogEntryId, "string");
+      const [connection] = await db.select().from(toolConnections).where(and(eq(toolConnections.companyId, scope.companyId),
+        eq(toolConnections.id, connectionId as string))).limit(1);
+      const [catalog] = await db.select().from(toolCatalogEntries).where(and(eq(toolCatalogEntries.companyId, scope.companyId),
+        eq(toolCatalogEntries.id, catalogEntryId as string))).limit(1);
+      const [grant] = await db.select().from(connectionGrants).where(and(eq(connectionGrants.companyId, scope.companyId),
+        eq(connectionGrants.connectionId, connectionId as string), eq(connectionGrants.status, "active"))).limit(1);
+      assert(connection && catalog && grant);
+      try {
+        await db.update(connectionGrants).set({ revokedAt: new Date() }).where(eq(connectionGrants.id, grant.id));
+        await expect(assertCurrent()).rejects.toThrow();
+      } finally {
+        await db.update(connectionGrants).set({ revokedAt: null }).where(eq(connectionGrants.id, grant.id));
+      }
+      try {
+        await db.update(toolConnections).set({ enabled: false }).where(eq(toolConnections.id, connection.id));
+        await expect(assertCurrent()).rejects.toThrow();
+      } finally {
+        await db.update(toolConnections).set({ enabled: connection.enabled }).where(eq(toolConnections.id, connection.id));
+      }
+      try {
+        await db.update(toolCatalogEntries).set({ schemaHash: "0".repeat(64) }).where(eq(toolCatalogEntries.id, catalog.id));
+        await expect(assertCurrent()).rejects.toThrow();
+      } finally {
+        await db.update(toolCatalogEntries).set({ schemaHash: catalog.schemaHash }).where(eq(toolCatalogEntries.id, catalog.id));
+      }
+      await replaceCapture(value => {
+        const witness = record(value.assignedMcpSearch); witness.providerDefinitionHash = "f".repeat(64);
+      });
+      await expect(assertCurrent()).rejects.toThrow();
+    } finally {
+      await restoreProfile();
+    }
+    await assertCurrent();
+  };
   try {
     process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS = "1";
     await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: binary, timeoutSec: 180,
@@ -138,10 +293,44 @@ export async function withManagedConnectionReview(input: {
         }
       },
       beforeProviderResponse: async ({ reservation, run, manifest, request: wire, sourceReceipt }) => {
+        const requestBytes = Buffer.byteLength(JSON.stringify(wire.body), "utf8");
+        maxProviderRequestBytes = Math.max(maxProviderRequestBytes, requestBytes);
+        assert(requestBytes <= 64_000, "Actual provider request stays within the signed 64KB envelope");
         assert.equal(reservation.status, "dispatched"); assert.equal(reservation.purpose, "worker_model");
         assert(reservation.maximumMinor > 0 && reservation.workerAttemptId);
         assert.equal(reservation.providerWireReceipt?.bodySha256, wire.wireBodySha256);
         assert.equal(manifest.runId, run.id); assert(sourceReceipt);
+        if (rolesByRun.get(run.id)?.role === "later") {
+          const authority = record(record(run.runnerProfileJson).nativeOpenCodeSourceAuthority);
+          const registeredSchemas = Array.isArray(authority.toolSchemas) ? authority.toolSchemas.map(record) : [];
+          const registeredNames = registeredSchemas.map(schema => schema.name).filter((name): name is string => typeof name === "string");
+          assert.equal(registeredNames.filter(name => name === "search_assigned_tools").length, 1);
+          assert.equal(registeredNames.filter(name => name === "call_assigned_tool").length, 1,
+            "The retained catalog stores each normalized wrapper exactly once");
+          assert(!registeredNames.includes("paperclip_search_assigned_tools") &&
+            !registeredNames.includes("paperclip_call_assigned_tool") &&
+            !registeredNames.some(name => name.startsWith("paperclip_paperclip_")),
+            "Registered wrapper names have no bridge prefix or doubled prefix");
+          assert(!registeredNames.some(name => name === "fixture-large" || name.startsWith("fixture-ballast-")),
+            "The oversized direct catalog uses compact on-demand search instead of sending full schemas");
+          const requestBody = record(wire.body);
+          const blocks = (Array.isArray(requestBody.messages) ? requestBody.messages : []).flatMap(message => {
+            const content = record(message).content; return Array.isArray(content) ? content : [];
+          }).map(record);
+          for (const block of blocks) {
+            const id = block.tool_use_id;
+            if (block.type !== "tool_result" || typeof id !== "string") continue;
+            if (id === "review.call:large-later") {
+              await validateSuccessfulToolCapture(run.id, id);
+              continue;
+            }
+            if ((!id.startsWith("review-search-later") && !id.startsWith("review-schema-later-")) ||
+              validatedLaterSearchCalls.has(id)) continue;
+            const result = JSON.parse(resultText(block.content));
+            await validateSearchCapture(run.id, id, result, validatedLaterSearchCalls.size === 0);
+            validatedLaterSearchCalls.add(id);
+          }
+        }
       },
       providerReply: ({ body, callIndex, execution, runId }) => {
         if (!providerRuns.includes(runId)) providerRuns.push(runId);
@@ -168,14 +357,78 @@ export async function withManagedConnectionReview(input: {
           ...(!done ? { continuation: { kind: "response_wake", summary: "Resume after the Human resolves the tool review.",
             idempotencyKey: "railway-review-human-response" } } : {}),
         });
-        if ((role === "request" || role === "later") && callIndex === 1) {
+        if (role === "request" && callIndex === 1) {
           assert(railway);
           const selected = tools.filter(value => /railway/i.test(value.name) && /list[-_]?projects/i.test(value.name));
           assert.equal(selected.length, 1);
-          return use(`review-railway-${role}`, selected[0]!.name,
-            { workspaceId: railway.workspaceId, first: role === "later" ? 2 : 25 });
+          return use("review-railway-request", selected[0]!.name,
+            { workspaceId: railway.workspaceId, first: 25 });
         }
-        if (role === "request" && callIndex === 2) return finish(false);
+        if (role === "later" && callIndex === 1) {
+          const searchWrapper = tool("paperclip_search_assigned_tools");
+          const callWrapper = tool("paperclip_call_assigned_tool");
+          assert.equal(searchWrapper, "paperclip_search_assigned_tools");
+          assert.equal(callWrapper, "paperclip_call_assigned_tool");
+          assert(!tools.some(value => value.name === "paperclip_paperclip_search_assigned_tools" ||
+            value.name === "paperclip_paperclip_call_assigned_tool" || value.name === "fixture-large" ||
+            value.name.startsWith("fixture-ballast-")), "The provider sees one wrapper prefix and no oversized direct schemas");
+          return use("review-search-later", searchWrapper, { query: "fixture-large", limit: 10 });
+        }
+        if (role === "later" && parseToolResult(body, "review-document-2") !== null) return finish(true);
+        if (role === "later" && callIndex >= 3) {
+          const largeResult = parseToolResult(body, "review.call:large-later");
+          if (largeResult) {
+            assert.equal(typeof largeResult.content, "string");
+            const largePayload = record(JSON.parse(largeResult.content as string));
+            assert.equal(largePayload.marker, "large-schema-result");
+            responseText = "I read the actual assigned large-schema result through on-demand search and the canonical call wrapper.";
+            outcomeByRun.set(runId, responseText);
+            return use("review-document-2", tool("write_document"), { idempotencyKey: "review-retained-outcome", key: "result",
+              title: "Actual governed Railway review outcome", body: responseText, baseRevisionId: null });
+          }
+        }
+        if (role === "later" && callIndex >= 2) {
+          const useId = `review-schema-later-${callIndex}`;
+          const priorSearch = parseToolResult(body, "review-search-later");
+          assert(priorSearch);
+          const matches = Array.isArray(priorSearch.tools) ? priorSearch.tools.map(record) : [];
+          const selected = matches.find(value => value.inputSchemaRef === value.name || value.name === "fixture-large");
+          assert(selected, "The oversized assigned schema remains discoverable by the actual SDK");
+          const alias = String(selected.name);
+          if (selected.inputSchemaRef && laterSchemaOffset >= 0) {
+            const priorChunk = callIndex > 2 ? parseToolResult(body, `review-schema-later-${callIndex - 1}`) : null;
+            if (priorChunk && typeof priorChunk.schemaJson === "string") laterSchemaJson += priorChunk.schemaJson;
+            const nextOffset = priorChunk && typeof priorChunk.nextSchemaOffset === "number" ? priorChunk.nextSchemaOffset : 0;
+            laterSchemaOffset = nextOffset;
+            if (!priorChunk || (priorChunk.nextSchemaOffset !== null && typeof priorChunk.nextSchemaOffset !== "number")) {
+              return use(useId, tool("paperclip_search_assigned_tools"), { query: "", schemaTool: alias, schemaOffset: nextOffset });
+            }
+            if (priorChunk.nextSchemaOffset !== null) {
+              return use(useId, tool("paperclip_search_assigned_tools"), { query: "", schemaTool: alias, schemaOffset: nextOffset });
+            }
+            const reconstructed = JSON.parse(laterSchemaJson) as { properties?: Record<string, unknown> };
+            assert.equal(Object.keys(reconstructed.properties ?? {}).length, 80,
+              "All schema chunks reconstruct the full bounded 80-field definition");
+            assert(Object.hasOwn(reconstructed.properties ?? {}, "field_0000"));
+            assert(Object.hasOwn(reconstructed.properties ?? {}, "field_0079"),
+              "The second schema chunk is required before the assigned call is allowed");
+            const callName = tool("paperclip_call_assigned_tool");
+            return use("review.call:large-later", callName, { name: alias, arguments: { field_0000: "schema-chunk-proof" } });
+          }
+          assert.equal(selected.name, "fixture-large");
+          const callName = tool("paperclip_call_assigned_tool");
+          return use("review.call:large-later", callName, { name: alias, arguments: { field_0000: "schema-chunk-proof" } });
+        }
+        if (role === "request" && callIndex === 2) {
+          const approvalError = toolResultBlock(body, "review-railway-request");
+          assert(approvalError, "The actual OpenCode SDK must replay its pending MCP error in the next provider request");
+          assert.deepEqual(Object.keys(approvalError).sort(), ["content", "is_error", "tool_use_id", "type"]);
+          assert.equal(approvalError.type, "tool_result");
+          assert.equal(approvalError.is_error, true);
+          assert.equal(approvalError.tool_use_id, "review-railway-request");
+          assert.match(resultText(approvalError.content), /human approval card/i);
+          return finish(false);
+        }
         if (role === "pending_note" && callIndex === 1) return finish(false);
         if (role === "resolution" && callIndex === 1) {
           const responses = execution.interactionResponses;
@@ -197,19 +450,10 @@ export async function withManagedConnectionReview(input: {
           return use("review-document-1", tool("write_document"), { idempotencyKey: "review-retained-outcome", key: "result",
             title: "Actual governed Railway review outcome", body: responseText, baseRevisionId: null });
         }
-        if (role === "later" && callIndex === 2) {
-          const messages = body.messages as Array<{ content: unknown }>;
-          const results = messages.flatMap(message => Array.isArray(message.content) ? message.content : []) as Array<Record<string, unknown>>;
-          const result = results.find(value => value.type === "tool_result" && value.tool_use_id === "review-railway-later");
-          assert(result && result.is_error !== true && JSON.stringify(result.content).includes("Roadmap"));
-          responseText = "I found the actual Railway project Roadmap with the later bounded arguments.";
-          outcomeByRun.set(runId, responseText);
-          return use("review-document-2", tool("write_document"), { idempotencyKey: "review-retained-outcome", key: "result",
-            title: "Actual governed Railway review outcome", body: responseText, baseRevisionId: null });
-        }
         // The accepted terminal summary is published by the existing Native
         // presentation owner with this actual Run's agent/run attribution.
-        if ((role === "resolution" && callIndex === 2) || (role === "later" && callIndex === 3)) return finish(true);
+        if ((role === "resolution" && callIndex === 2) || (role === "later" && callIndex >= 4 &&
+          parseToolResult(body, "review-document-2") !== null)) return finish(true);
         return { stop_reason: "end_turn", content: [{ type: "text", text: role === "resolution" || role === "later" ? responseText : "Waiting for the Human review." }] };
       },
       driveScheduler: async ({ actor, companyId, agentId, heartbeat, factsForRun }) => {
@@ -351,6 +595,7 @@ export async function withManagedConnectionReview(input: {
             },
             createLaterTask: async () => {
               assert.equal(input.journey, "always");
+              await railway!.enableLargeSchemaTool();
               const later = await createTask(true); laterTaskId = later.id;
               await openTask(later.id, true); return { id: later.id };
             },
@@ -396,7 +641,10 @@ export async function withManagedConnectionReview(input: {
             await verifyStopped(row.run.id);
           }
           assert.equal(railway.captures().filter(capture => capture.purpose === "projects_call").length,
-            input.journey === "decline" ? 0 : input.journey === "always" ? 2 : 1);
+            input.journey === "decline" ? 0 : 1);
+          assert.equal(railway.captures().filter(capture => capture.purpose === "large_tool_call").length,
+            input.journey === "always" ? 1 : 0);
+          if (input.journey === "always") assert(maxProviderRequestBytes > 0 && maxProviderRequestBytes <= 64_000);
           const [finished] = await db.select().from(issues).where(eq(issues.id, task.id)); assert.equal(finished?.status, "done");
           const [retained] = await db.select({ body: documents.latestBody }).from(issueDocuments).innerJoin(documents,
             and(eq(documents.id, issueDocuments.documentId), eq(documents.companyId, companyId))).where(and(

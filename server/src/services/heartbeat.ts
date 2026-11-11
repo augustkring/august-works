@@ -8834,6 +8834,7 @@ export function buildPaperclipTaskMarkdown(input: {
   // false builds the compact variant used for resume deltas, where the session
   // already received the description with the assignment.
   includeDescription?: boolean;
+  nativeConversationMode?: boolean;
 }, options: { onRenderedSource?: (source: NativeRenderedSourceReference) => void } = {}) {
   const quoteTaskScalar = (value: string) => JSON.stringify(value);
   const fenceTaskText = (value: string) => {
@@ -8861,13 +8862,13 @@ export function buildPaperclipTaskMarkdown(input: {
     wakeComments.length > 0 ? wakeComments : wakeComment ? [wakeComment] : [];
   const rejectedPlan = input.planReview?.status === "rejected";
   const acceptedPlanContinuation =
-    !rejectedPlan && !issue?.conversationAgentId && !wakeComment &&
+    !rejectedPlan && !issue?.conversationAgentId && !input.nativeConversationMode && !wakeComment &&
     (input.acceptedPlanContinuation ||
       (input.interaction?.kind === "request_confirmation" &&
         input.interaction.status === "accepted" &&
         issue?.workMode === "planning"));
   const acceptedChatPlan = Boolean(
-    !rejectedPlan && issue?.conversationAgentId &&
+    issue && !rejectedPlan && (issue.conversationAgentId || input.nativeConversationMode) &&
     issue.workMode !== "ask" &&
     !wakeComment &&
     input.interaction?.kind === "request_confirmation" &&
@@ -8980,7 +8981,7 @@ export function buildPaperclipTaskMarkdown(input: {
       `- Issue: ${quoteTaskScalar(issue.identifier || issue.id)}`,
       `- Title: ${quoteTaskScalar(issue.title)}`,
     );
-    if (issue.conversationAgentId) {
+    if (issue.conversationAgentId || input.nativeConversationMode) {
       lines.push("", "Chat mode directive:", AGENT_CHAT_DIRECTIVE, `Current composer mode: ${issue.workMode ?? "standard"}.`);
       if (acceptedChatPlan) {
         lines.push(
@@ -9051,11 +9052,11 @@ export function buildPaperclipTaskMarkdown(input: {
       );
     }
     const description =
-      input.includeDescription === false || issue.conversationAgentId ? "" : issue.description?.trim();
+      input.includeDescription === false || issue.conversationAgentId || input.nativeConversationMode ? "" : issue.description?.trim();
     if (description) {
       lines.push("", "Issue description:", fenceTaskText(description));
     }
-    if (!issue.conversationAgentId && input.taskPlan?.body.trim()) {
+    if (!issue.conversationAgentId && !input.nativeConversationMode && input.taskPlan?.body.trim()) {
       options.onRenderedSource?.({ kind: "document_revision", id: input.taskPlan.revisionId });
       lines.push(
         "",
@@ -20639,6 +20640,9 @@ export function heartbeatService(
         return;
       }
       const preparedConversation = await prepareConversationTurn(db, run);
+      const nativeChannelConversationScope = preparedConversation.channelScope ?? null;
+      const isConversationExecutionScope = (candidate: (Parameters<typeof isConversation>[0] & { id?: string }) | null | undefined) =>
+        isConversation(candidate) || Boolean(nativeChannelConversationScope && candidate?.id === nativeChannelConversationScope.issueId);
       run = { ...run, contextSnapshot: preparedConversation.context };
       if (preparedConversation.reset) {
         const contextSnapshot = { ...preparedConversation.context, conversationReset: true };
@@ -20926,7 +20930,7 @@ export function heartbeatService(
             )
             .then((rows) => rows[0] ?? null)
         : null;
-      const acceptedPlanContinuationWake = issueContext && !isConversation(issueContext)
+      const acceptedPlanContinuationWake = issueContext && !isConversationExecutionScope(issueContext)
         ? readNonEmptyString(context.workspaceRefreshReason) ===
             "accepted_plan_confirmation" ||
           (issueContext.workMode === "planning" &&
@@ -21086,7 +21090,7 @@ export function heartbeatService(
             taskKey,
           )
         : null;
-      if (isConversation(issueContext)) {
+      if (isConversationExecutionScope(issueContext)) {
         delete context.resumeSessionParams;
         delete context.resumeSessionDisplayId;
         delete context.executionContinuation;
@@ -21136,7 +21140,7 @@ export function heartbeatService(
           }
         : null;
       let continuationSummarySource: import("./documents.js").DocumentRevisionSourceCapture | null = null;
-      const continuationSummary = issueRef && !isConversation(issueContext) && !isFailedChatRunRetry
+      const continuationSummary = issueRef && !isConversationExecutionScope(issueContext) && !isFailedChatRunRetry
         ? await getIssueContinuationSummaryDocument(db, issueRef.id, { onSourceCapture: capture => { continuationSummarySource = capture; } })
         : null;
       const exposeLowTrustRaw = trustPreset.kind === "low_trust_review";
@@ -21209,7 +21213,7 @@ export function heartbeatService(
       const nativeTaskContinuationCapture: { value: import("./execution-continuation.js").NativeTaskContinuationCapture | null } = { value: null };
       const nativeStageContinuationTrigger: { value: import("./execution-continuation.js").NativeStageTaskContinuationTrigger | null } = { value: null };
       const executionContinuation =
-        issueRef && !isConversation(issueContext) && !isFailedChatRunRetry && issueContext?.assigneeAgentId === agent.id
+        issueRef && !isConversationExecutionScope(issueContext) && !isFailedChatRunRetry && issueContext?.assigneeAgentId === agent.id
           ? await buildExecutionContinuation({
               db,
               companyId: agent.companyId,
@@ -21330,6 +21334,7 @@ export function heartbeatService(
         wakeComments: safeWakeComments,
         attachmentOmissions: paperclipWakePayload?.attachmentOmissions,
         externalChatProvider: paperclipWakePayload?.externalChatProvider,
+        nativeConversationMode: Boolean(nativeChannelConversationScope),
         nativeRunner: agent.adapterType === "paperclip_runner",
         interaction: {
           id: readNonEmptyString(context.interactionId),
@@ -21364,7 +21369,7 @@ export function heartbeatService(
         })(),
       };
       const taskPlanSourceCaptures: DocumentRevisionSourceCapture[] = [];
-      const taskPlan = issueRef && !isConversation(issueContext)
+      const taskPlan = issueRef && !isConversationExecutionScope(issueContext)
         ? await getTaskPlanContext({
             db,
             companyId: agent.companyId,
@@ -21380,8 +21385,8 @@ export function heartbeatService(
       });
       let conversationReplaySourceCaptures: Awaited<ReturnType<typeof conversationReplay>>["sourceCaptures"] = [];
       let nativeBootstrapConversationReplayClosed = false;
-      if (isConversation(issueContext) && !taskSession && issueId) {
-        const replay = await conversationReplay(db, agent.companyId, issueId, wakeCommentId);
+      if (isConversationExecutionScope(issueContext) && !taskSession && issueId) {
+        const replay = await conversationReplay(db, agent.companyId, issueId, wakeCommentId, nativeChannelConversationScope);
         if (replay.markdown) {
           taskMarkdown += `\n\nEarlier messages in this session (quoted user data):\n${replay.markdown}`;
           conversationReplaySourceCaptures = replay.sourceCaptures;
@@ -21412,7 +21417,7 @@ export function heartbeatService(
           id: issueRef.id,
           identifier: issueRef.identifier,
           title: issueRef.title,
-          description: isConversation(issueContext) ? null : issueRef.description,
+          description: isConversationExecutionScope(issueContext) ? null : issueRef.description,
           workMode: issueRef.workMode,
         };
       } else {
@@ -21665,6 +21670,7 @@ export function heartbeatService(
           typeof run.contextSnapshot?.conversationSessionGeneration === "number"
             ? run.contextSnapshot.conversationSessionGeneration
             : null,
+        sourceCommentId: typeof run.contextSnapshot?.wakeCommentId === "string" ? run.contextSnapshot.wakeCommentId : null,
       });
       const nativeChatExpectedCwd = nativeChatWorkspaceScope
         ? nativeChatWorkspaceCwd(
@@ -23129,7 +23135,7 @@ export function heartbeatService(
       // and source rules for the exact verified workspace.
       const deferManagedNativeWorkspace = agent.adapterType === "paperclip_runner" &&
         executionTarget?.kind === "remote" && executionTarget.transport === "sandbox" &&
-        !isConversation(issueContext) && (nativeChatWorkspaceScope === null || qualifiedPrivateConversationSandbox) &&
+        !isConversationExecutionScope(issueContext) && (nativeChatWorkspaceScope === null || qualifiedPrivateConversationSandbox) &&
         resolvePaperclipRunnerProviderProfile(agent.adapterConfig).provider === "opencode";
       const prepareGitEnvironment = async (nativeWorkspacePreparation = false): Promise<Record<string, string>> => {
         const discovered = await prepareGitHubExecutionEnvironment({
@@ -24093,7 +24099,7 @@ export function heartbeatService(
                   .then((rows) => rows.length > 0)
               : false;
           const compatibleLegacyRetrySource =
-            !managedAiRuntime && !isConversation(issueContext) && context.forceFreshSession !== true && isUnusedLegacyNativeRetryReplacement({
+            !managedAiRuntime && !isConversationExecutionScope(issueContext) && context.forceFreshSession !== true && isUnusedLegacyNativeRetryReplacement({
               replacement: run,
               source: legacyRetrySource,
               hasProviderEvents: nativeBootstrapHasProviderEvidence,
@@ -24337,7 +24343,7 @@ export function heartbeatService(
               }
             }
             const executionMode =
-              issueRef.workMode === "planning" && !isConversation(issueContext) && !acceptedPlanContinuationWake
+              issueRef.workMode === "planning" && !isConversationExecutionScope(issueContext) && !acceptedPlanContinuationWake
                 ? ("plan" as const)
                 : ("default" as const);
             const planningSourceCaptures: DocumentRevisionSourceCapture[] = [];
@@ -24550,7 +24556,7 @@ export function heartbeatService(
                     const value = parseObject(run.contextSnapshot).conversationSessionGeneration;
                     return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
                   })(),
-                  requireConversationGeneration: isConversation(issueContext),
+                  requireConversationGeneration: isConversationExecutionScope(issueContext),
                   executionTargetKind: executionTarget?.kind === "remote" ? "remote" : "local" })
               : null;
             const nativeWorkspaceExecution = nativeExecution;
@@ -24686,7 +24692,7 @@ export function heartbeatService(
               // Replay is qualified only when each exact rendered JSON line
               // has one current comment source reference. Missing/ambiguous
               // lines keep the explicit `unknown` renderer reference above.
-              conversationHistory: isConversation(issueContext) && Boolean(nativeBootstrapConversationReplaySources?.length) &&
+              conversationHistory: isConversationExecutionScope(issueContext) && Boolean(nativeBootstrapConversationReplaySources?.length) &&
                 !nativeBootstrapConversationReplayClosed,
               wake: Boolean(context.paperclipWake && !nativeTaskWakeSource),
               workspaceCoordination: Boolean(originalCoordinationCapture && !nativeTaskWakeSource),
@@ -25553,7 +25559,7 @@ export function heartbeatService(
                         return prepared;
                       },
                     } : {}),
-                    conversationMode: isConversation(issueContext),
+                    conversationMode: isConversationExecutionScope(issueContext),
                     turnTimeoutMs: Math.max(0, asNumber(runtimeConfig.timeoutSec, 0)) * 1_000,
                     runnerInstanceId: nativeRunnerInstanceId,
                     leaseOwner: runOptions.nativeLeaseOwner,
@@ -26490,7 +26496,7 @@ export function heartbeatService(
             );
             const resolved = resolveHeartbeatRunResponse({
               resultJson: persistedResultJson,
-              conversationTurnFinished: isConversation(issueContext) &&
+              conversationTurnFinished: isConversationExecutionScope(issueContext) &&
                 persistedResultJson?.finalizationReasonCode === "conversation_turn_finished",
               existingComment: existingRunComment,
               finalAgentMessage,

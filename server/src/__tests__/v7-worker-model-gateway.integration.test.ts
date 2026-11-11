@@ -25,6 +25,8 @@ import {
   connectionGrants,
   toolConnections,
   toolConnectionInstalls,
+  toolProfiles,
+  toolProfileEntries,
   createDb,
   heartbeatRuns,
   heartbeatRunEvents,
@@ -65,6 +67,7 @@ import { orchestrationService } from "../services/orchestration/orchestration-se
 import * as agentRunCancellation from "../agent-run-cancellation.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
+import { validateToolContent } from "../services/tool-content-guards.js";
 import { blenteraPlatformContractHashes } from "../services/tool-gateway.js";
 import { preparePlatformSkillAdmission } from "../services/platform-skill-admission.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
@@ -82,8 +85,8 @@ import { purgeMemoryRecords, purgeDerivedWorkflowMemory, lockMemoryPrivacy } fro
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 import { PaperclipRunnerSemanticAuthority } from "../services/native-runtime/runner-semantic-authority.js";
-import { createAssignedMcpTools } from "../services/native-runtime/assigned-mcp-tools.js";
-import type { ToolGatewayService } from "../services/tool-gateway.js";
+import { createAssignedMcpTools, registerAssignedMcpGateway } from "../services/native-runtime/assigned-mcp-tools.js";
+import { prepareConnectionIntentRailwayFixture } from "./helpers/connection-intent-railway-fixture.js";
 import { withOrchestrationNativeTool } from "../services/orchestration/native-tool-boundary.js";
 import { createAwTextDraftBackend } from "../services/native-runtime/aw-text-draft-backend.js";
 import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
@@ -1501,91 +1504,73 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       expect(calls).toBe(1);
       await session.close({ reason: "revoked" });
     });
-    it("charges assigned-tool catalog search and keeps actual MCP invocation charging at its existing gateway", async () => {
-      let effects = 0;
-      // Private gateway fixture uses the actual Native SQL invocation guard.
-      // It does not establish a live connected-tool or credential qualification.
-      const assigned = await createAssignedMcpTools({
-        gateway: {
-          listToolsForNamedGateway: async () => [
-            {
-              name: "fixture.read",
-              displayName: "Read",
-              description: "Private native charge fixture",
-              risk: "read",
-              parametersSchema: { type: "object", properties: {} },
-            },
-          ],
-          executeTool: async () => {
-            const [receipt] = await db
-              .insert(toolInvocations)
-              .values({
-                companyId: f.home,
-                agentId: f.presence.id,
-                issueId: task.id,
-                runId: run.id,
-                toolName: "fixture.read",
-                riskLevel: "read",
-                status: "executing",
-              })
-              .returning();
-            effects++;
-            await db
-              .update(toolInvocations)
-              .set({ status: "succeeded", completedAt: new Date() })
-              .where(eq(toolInvocations.id, receipt!.id));
-            return { status: "completed", result: { fixture: true } };
-          },
-        } as unknown as ToolGatewayService,
-        gatewayPublicId: "private-budget-fixture",
-        bearerToken: "private-fixture-token",
-      });
-      const authority = new PaperclipRunnerToolAuthority(db, {
-        ...nativeBinding(),
-        assignedMcpTools: assigned,
-      });
-      const catalog = (await authority.execute({
-        tool: "paperclip_search_assigned_tools",
-        callId: "catalog-native-budget",
-        arguments: { query: "" },
-      })) as { tools: Array<{ name: string }> };
+    it("charges assigned-tool catalog search and an actual fixed-contract MCP invocation at their existing owners", async () => {
+      const railway = await prepareConnectionIntentRailwayFixture({ db, companyId: f.home,
+        userId: f.userId, holderAgentId: f.presence.id });
+      const [gatewayProfile] = await db.insert(toolProfiles).values({ companyId: f.home,
+        profileKey: `assigned-budget-${randomUUID()}`, name: `Assigned budget ${randomUUID()}`, defaultAction: "deny" }).returning();
+      await db.insert(toolProfileEntries).values({ companyId: f.home, profileId: gatewayProfile!.id,
+        selectorType: "connection", effect: "include", connectionId: railway.connection.id });
+      const gatewayOwner = createToolGatewayService(db, { remoteHttpRequest: railway.request });
+      const namedGateway = await gatewayOwner.createNamedGateway({ companyId: f.home,
+        body: { name: `Assigned budget ${randomUUID()}`, profileId: gatewayProfile!.id,
+          agentId: f.presence.id, issueId: task.id }, actor: { userId: f.userId } });
+      registerAssignedMcpGateway(db, gatewayOwner, scopedDb => createToolGatewayService(scopedDb,
+        { remoteHttpRequest: railway.request }));
+      const gatewaySession = await gatewayOwner.createNamedGatewayToken({ companyId: f.home,
+        gatewayId: namedGateway.id, body: { name: "Native assigned-tool fixture",
+          subjectType: "heartbeat_run", subjectId: run.id, allowedActions: ["tools/list", "tools/call"] },
+        actor: { userId: f.userId } });
+      const assigned = await createAssignedMcpTools({ db, companyId: f.home, issueId: task.id, runId: run.id,
+        agentId: f.presence.id, responsibleUserId: f.userId, gateway: gatewayOwner,
+        gatewayPublicId: namedGateway.gatewayPublicId, bearerToken: gatewaySession.token });
+      const authority = new PaperclipRunnerToolAuthority(db, { ...nativeBinding(), assignedMcpTools: assigned });
+      const catalog = (await authority.execute({ tool: "paperclip_search_assigned_tools",
+        callId: "catalog-native-budget", arguments: { query: "list projects" } })) as { tools: Array<{ name: string }> };
       expect(catalog.tools).toHaveLength(1);
-      await authority.execute({
-        tool: catalog.tools[0]!.name,
-        callId: "mcp-native-budget",
-        arguments: {},
-      });
-      expect(effects).toBe(1);
-      expect(
-        (
-          await db
-            .select()
-            .from(orchestrationPlans)
-            .where(eq(orchestrationPlans.id, plan.id))
-        )[0],
-      ).toMatchObject({ toolActionsUsed: 2, status: "running" });
-      expect(
-        await db
-          .select()
-          .from(toolInvocations)
-          .where(eq(toolInvocations.runId, run.id)),
-      ).toHaveLength(2);
-      await expect(
-        authority.execute({
-          tool: catalog.tools[0]!.name,
-          callId: "mcp-native-exhausted",
-          arguments: {},
-        }),
-      ).rejects.toThrow();
-      expect(effects).toBe(1);
-      expect(
-        (
-          await db
-            .select()
-            .from(orchestrationPlans)
-            .where(eq(orchestrationPlans.id, plan.id))
-        )[0],
-      ).toMatchObject({ toolActionsUsed: 2, status: "paused" });
+      await authority.execute({ tool: catalog.tools[0]!.name, callId: "mcp-native-budget",
+        arguments: { workspaceId: railway.workspaceId, first: 25 } });
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(1);
+
+      const invocationRows = await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id));
+      expect(invocationRows).toHaveLength(2);
+      expect(invocationRows.filter(row => row.toolName === "paperclip_search_assigned_tools" && row.status === "succeeded"))
+        .toHaveLength(1);
+      const gatewayDescriptors = await gatewayOwner.listToolsForNamedGateway({ gatewayPublicId: namedGateway.gatewayPublicId,
+        bearerToken: gatewaySession.token });
+      const projectsDescriptor = gatewayDescriptors.find(descriptor => descriptor.connectionId === railway.connection.id &&
+        descriptor.catalogEntryId === railway.tool.id);
+      expect(projectsDescriptor).toBeDefined();
+      const actualProjectsInvocation = invocationRows.filter(row => row.status === "succeeded" &&
+        row.toolName === projectsDescriptor!.name);
+      expect(actualProjectsInvocation).toHaveLength(1);
+      expect(actualProjectsInvocation[0]).toMatchObject({ connectionId: railway.connection.id,
+        catalogEntryId: railway.tool.id, catalogSchemaHash: railway.tool.schemaHash,
+        upstreamToolName: railway.tool.toolName, riskLevel: "read", agentId: f.presence.id,
+        issueId: task.id, runId: run.id, gatewayId: namedGateway.id, gatewayPublicId: namedGateway.gatewayPublicId,
+        idempotencyKey: `aw-native-tool:${run.id}:mcp-native-budget`, credentialScopeSummary: expect.any(Object),
+        argumentsHash: validateToolContent({ value: { workspaceId: railway.workspaceId, first: 25 },
+          direction: "arguments", sensitiveMode: "block", promptInjectionMode: "ignore" }).summary.sha256 });
+      expect(actualProjectsInvocation[0]!.credentialScopeSummary).not.toBeNull();
+      const retainedResult = actualProjectsInvocation[0]!.workflowResultJson;
+      expect(retainedResult).not.toBeNull();
+      const sanitizedResult = validateToolContent({ value: retainedResult, direction: "result", sensitiveMode: "redact",
+        promptInjectionMode: "block" });
+      expect(sanitizedResult.value).toEqual(retainedResult);
+      expect(sanitizedResult.summary.sha256).toBe(actualProjectsInvocation[0]!.resultHash);
+      expect((retainedResult as Record<string, unknown>).content).toContain("Fixture project inventory");
+      expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+        .toMatchObject({ toolActionsUsed: 2, status: "running" });
+      await expect(authority.execute({ tool: catalog.tools[0]!.name, callId: "mcp-native-exhausted",
+        arguments: { workspaceId: railway.workspaceId, first: 25 } })).rejects.toThrow();
+      expect(railway.captures().filter(capture => capture.purpose === "projects_call")).toHaveLength(1);
+      expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0])
+        .toMatchObject({ toolActionsUsed: 2, status: "paused" });
+      const settledInvocations = await db.select().from(toolInvocations).where(eq(toolInvocations.runId, run.id));
+      expect(settledInvocations).toHaveLength(3);
+      expect(settledInvocations.filter(row => row.status === "succeeded")).toHaveLength(2);
+      expect(settledInvocations.find(row => row.idempotencyKey === `aw-native-tool:${run.id}:mcp-native-exhausted`))
+        .toMatchObject({ status: "authorized", resultHash: null, workflowResultJson: null });
     });
     it("shares one tool ceiling across both Native protocol authority paths", async () => {
       await db

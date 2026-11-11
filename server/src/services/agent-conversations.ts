@@ -6,9 +6,11 @@ import {
 import type { NativeStatusDecision } from "./native-runtime/status-arbiter.js";
 import { createHash } from "node:crypto";
 import type { NativePayloadSourceInput, NativePayloadSourceSnapshot } from "@paperclipai/shared";
-import { and, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, exists, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
 import {
   agentTaskSessions,
+  chatConversations,
+  chatMessageLinks,
   agentWakeupRequests,
   heartbeatRuns,
   issueComments,
@@ -19,8 +21,10 @@ import {
 } from "@paperclipai/db";
 
 import { sanitizeQuarantinedCommentForHigherTrust } from "./source-trust.js";
+import { readNativeChannelConversationScope, type NativeChannelConversationScope } from "./native-runtime/native-channel-conversation-owner.js";
 
 export type ConversationIdentity = {
+  originKind?: string | null;
   conversationAgentId?: string | null;
   conversationUserId?: string | null;
   conversationState?: string | null;
@@ -127,7 +131,7 @@ export async function prepareConversationTurn(
       .from(issues)
       .where(and(eq(issues.id, issueId), eq(issues.companyId, run.companyId)))
       .for("update");
-    if (!isConversation(issue))
+    if (!issue || (!isConversation(issue) && issue.originKind !== "chat_channel"))
       return { context, reset: false, conversation: false };
     const commentId =
       typeof context.wakeCommentId === "string"
@@ -147,6 +151,34 @@ export async function prepareConversationTurn(
             ),
           )
       : [];
+    let channelScope: NativeChannelConversationScope | null = null;
+    if (issue.originKind === "chat_channel") {
+      if (!comment?.authorUserId || typeof context.wakeCommentId !== "string" || context.wakeCommentId !== comment.id) {
+        return { context, reset: false, conversation: false };
+      }
+      try {
+        channelScope = await readNativeChannelConversationScope(tx as unknown as Db, {
+          companyId: run.companyId, issueId, agentId: run.agentId, responsibleUserId: comment.authorUserId,
+          runId: run.id, sessionGeneration: typeof context.conversationSessionGeneration === "number"
+            ? context.conversationSessionGeneration : (await tx.select({ generation: chatConversations.sessionGeneration })
+              .from(chatConversations).where(and(eq(chatConversations.companyId, run.companyId), eq(chatConversations.issueId, issueId))).limit(1))[0]?.generation ?? -1,
+          sourceCommentId: comment.id, consumer: "run_admission",
+        });
+      } catch {
+        return { context, reset: false, conversation: false };
+      }
+      if (comment.conversationSessionGeneration != null && comment.conversationSessionGeneration !== channelScope.sessionGeneration)
+        return { context, reset: false, conversation: false };
+      if (issue.status !== "in_progress") await tx.update(issues).set({ status: "in_progress",
+        statusVersion: sql`${issues.statusVersion} + 1`, updatedAt: new Date() })
+        .where(and(eq(issues.companyId, run.companyId), eq(issues.id, issue.id), eq(issues.executionRunId, run.id)));
+      await tx.update(chatConversations).set({ state: "active", updatedAt: new Date() })
+        .where(and(eq(chatConversations.companyId, run.companyId), eq(chatConversations.id, channelScope.conversationId),
+          eq(chatConversations.sessionGeneration, channelScope.sessionGeneration)));
+      const next = { ...context, conversationSessionGeneration: channelScope.sessionGeneration, conversationMode: true };
+      await tx.update(heartbeatRuns).set({ contextSnapshot: next }).where(eq(heartbeatRuns.id, run.id));
+      return { context: next, reset: false, conversation: true, channelScope };
+    }
     const reset = Boolean(
       comment && comment.authorUserId && isConversationReset(comment.body),
     );
@@ -245,11 +277,59 @@ export async function settleConversationTurn(
       .from(issues)
       .where(and(eq(issues.id, issueId), eq(issues.companyId, run.companyId)))
       .for("update");
-    if (
-      !isConversation(issue) ||
-      (issue.executionRunId && issue.executionRunId !== run.id)
-    )
-      return false;
+    if (issue?.originKind === "chat_channel") {
+      const sourceCommentId = typeof context.wakeCommentId === "string" ? context.wakeCommentId : null;
+      const generation = context.conversationSessionGeneration;
+      if (!sourceCommentId || typeof generation !== "number" || issue.executionRunId !== run.id) return false;
+      const [response] = await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+        eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId),
+        eq(issueComments.createdByRunId, run.id), eq(issueComments.authorAgentId, run.agentId), isNull(issueComments.deletedAt),
+      )).limit(1);
+      const [interaction] = !response ? await tx.select({ id: issueThreadInteractions.id }).from(issueThreadInteractions).where(and(
+        eq(issueThreadInteractions.companyId, run.companyId), eq(issueThreadInteractions.issueId, issueId),
+        eq(issueThreadInteractions.sourceRunId, run.id), eq(issueThreadInteractions.createdByAgentId, run.agentId),
+        eq(issueThreadInteractions.status, "pending"),
+      )).limit(1) : [];
+      if (!response && !interaction) return false;
+      let channelScope: NativeChannelConversationScope;
+      try {
+        const [wake] = await tx.select({ authorUserId: issueComments.authorUserId }).from(issueComments).where(and(
+          eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId), eq(issueComments.id, sourceCommentId),
+        )).limit(1);
+        if (!wake?.authorUserId) return false;
+        channelScope = await readNativeChannelConversationScope(tx as unknown as Db, {
+          companyId: run.companyId, issueId, agentId: run.agentId, responsibleUserId: wake.authorUserId,
+          runId: run.id, sessionGeneration: generation, sourceCommentId, consumer: "settlement",
+        });
+      } catch { return false; }
+      const [wake] = await tx.select({ id: issueComments.id, createdAt: issueComments.createdAt }).from(issueComments).where(and(
+        eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId), eq(issueComments.id, sourceCommentId),
+      )).limit(1);
+      const [pending] = wake ? await tx.select({ id: issueComments.id }).from(issueComments).where(and(
+        eq(issueComments.companyId, run.companyId), eq(issueComments.issueId, issueId), isNull(issueComments.deletedAt),
+        sql`${issueComments.authorUserId} is not null`,
+        exists(tx.select({ one: sql`1` }).from(chatMessageLinks).where(and(
+          eq(chatMessageLinks.companyId, run.companyId), eq(chatMessageLinks.commentId, issueComments.id),
+          eq(chatMessageLinks.conversationId, channelScope.conversationId), eq(chatMessageLinks.direction, "inbound")))),
+        sql`(${issueComments.createdAt}, ${issueComments.id}) > (select cursor.created_at, cursor.id from issue_comments cursor where cursor.id = ${wake.id}::uuid)`,
+      )).limit(1) : [];
+      const status = pending ? "in_progress" : "in_review";
+      const state = pending ? "active" : "waiting";
+      if (issue.status !== status) await tx.update(issues).set({ status, statusVersion: sql`${issues.statusVersion} + 1`,
+        completedAt: null, cancelledAt: null, updatedAt: new Date() }).where(and(
+        eq(issues.companyId, run.companyId), eq(issues.id, issueId), eq(issues.executionRunId, run.id),
+      ));
+      await tx.update(chatConversations).set({ state, updatedAt: new Date() }).where(and(
+        eq(chatConversations.companyId, run.companyId), eq(chatConversations.id, channelScope.conversationId),
+        eq(chatConversations.sessionGeneration, generation),
+      ));
+      publication = (await persistActivity(tx as unknown as Db, {
+        companyId: issue.companyId, actorType: "system", actorId: "conversation", action: "issue.updated",
+        entityType: "issue", entityId: issue.id, runId: run.id, details: { status, channelConversationState: state, sessionGeneration: generation },
+      })).publication;
+      return true;
+    }
+    if (!isConversation(issue) || (issue.executionRunId && issue.executionRunId !== run.id)) return false;
     const [response] = await tx
       .select({ id: issueComments.id })
       .from(issueComments)
@@ -369,12 +449,25 @@ export async function conversationReplay(
   companyId: string,
   issueId: string,
   wakeCommentId: string | null,
+  channelScope?: NativeChannelConversationScope | null,
 ) {
   const [issue] = await db
     .select()
     .from(issues)
     .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)));
-  if (!isConversation(issue)) return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] };
+  if (!isConversation(issue) && !(issue?.originKind === "chat_channel" && channelScope &&
+      channelScope.companyId === companyId && channelScope.issueId === issueId && channelScope.sourceCommentId === wakeCommentId))
+    return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] };
+  if (channelScope) {
+    try {
+      const current = await readNativeChannelConversationScope(db, {
+        companyId, issueId, agentId: channelScope.agentId, responsibleUserId: channelScope.responsibleUserId,
+        runId: channelScope.runId, sessionGeneration: channelScope.sessionGeneration, sourceCommentId: channelScope.sourceCommentId, consumer: "history_replay",
+      });
+      if (current.conversationId !== channelScope.conversationId || current.deliveryId !== channelScope.deliveryId)
+        return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] };
+    } catch { return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] }; }
+  }
   const [boundary] = issue.conversationBoundaryCommentId
     ? await db
         .select()
@@ -405,6 +498,9 @@ export async function conversationReplay(
         eq(issueComments.companyId, companyId),
         eq(issueComments.issueId, issueId),
         isNull(issueComments.deletedAt),
+        channelScope ? exists(db.select({ one: sql`1` }).from(chatMessageLinks).where(and(
+          eq(chatMessageLinks.companyId, companyId), eq(chatMessageLinks.commentId, issueComments.id),
+          eq(chatMessageLinks.conversationId, channelScope.conversationId), inArray(chatMessageLinks.direction, ["inbound", "outbound"])))) : undefined,
         boundary
           ? sql`(${issueComments.createdAt}, ${issueComments.id}) > (select cursor.created_at, cursor.id from issue_comments cursor where cursor.id = ${boundary.id}::uuid)`
           : undefined,

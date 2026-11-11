@@ -1565,7 +1565,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
       "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
@@ -1669,7 +1669,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
       "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
@@ -2053,7 +2053,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
       "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
@@ -2061,7 +2061,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
       "rationale": "The chat-plan handoff instructions do not change export, deletion, retention, or managed-file cleanup behavior in this article. Existing user instructions and storage/provider boundaries remain accurate."
@@ -2677,7 +2677,7 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "fe95fac21d5cb75eb53491cccdea1277d08abc0e23d1bed6a7764abf5e8902f4",
+      "sourceSha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
       "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
@@ -2685,7 +2685,7 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "fe95fac21d5cb75eb53491cccdea1277d08abc0e23d1bed6a7764abf5e8902f4",
+      "sourceSha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
       "rationale": "Qualification now uses the same explicit stopped-binding states at credential issue and use. Current operator, Host, version, expiry and revocation checks remain mandatory; customer app connection and reconnect instructions remain unchanged."
@@ -2741,7 +2741,7 @@
     {
       "source": "server/src/services/agent-conversations.ts",
       "articleId": "create-and-track-work",
-      "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+      "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "updated",
       "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
@@ -2749,7 +2749,7 @@
     {
       "source": "server/src/services/agent-conversations.ts",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "077528117807154ed5f94d5d868840a1416683b216211d804414f2b50ec23e25",
+      "sourceSha256": "b20ae01f1974dd72d1b402f61938b74d4e5e496b1c2281fa4e555145d2f3d8f9",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "updated",
       "rationale": "The chat directive now says approval authorizes handoff only: ordinary assigned Tasks are created in Backlog with relevant approved plan content, while the Human reviews and starts the separate bounded execution plan."
@@ -2757,7 +2757,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
-      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
       "decision": "updated",
       "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
@@ -2765,7 +2765,7 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "1f38f2fc6863e4bc96d7986bf3d44071b7d47dacf2a1d9d24d38dee70ddfb1d9",
+      "sourceSha256": "fc482399e3412868a2b0eb1be49ed10c50a9e116b6c156afd42d99eb0c791760",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
       "decision": "updated",
       "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."

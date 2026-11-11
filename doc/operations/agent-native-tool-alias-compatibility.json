@@ -370,7 +370,7 @@
     },
     {
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "86064e23a513af3ee3bbff5071eb30ce4ed45f12439d30d87cf3eb99da396562"
+      "sha256": "68eb68e0c236b5f5b82b4c9edd495f8ddd95fab99645e7e6c40a91bf393f3480"
     },
     {
       "path": "server/src/services/native-runtime/managed-native-browser.fixture.ts",
@@ -382,11 +382,11 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "d486b076a1c9785535f3bad8f06d989a966ae49b00dd2a768a511593daf3d398"
+      "sha256": "45f31b38e32b6c50f30cdc2f00cc183cab7240f023c4ce7780644dc947b26a86"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "522afcb6d29755d86693c80c82ca8d9653533be9e8c86f191c8296363d1d96bc"
+      "sha256": "82e89ba1d0115f7ffa56ea057451b87727fee727ef1c1d0a7723d5ea78b2b023"
     },
     {
       "path": "server/src/services/notification-preference-proposals.ts",
@@ -394,7 +394,7 @@
     },
     {
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "de6e9ecda89439226f66c1b93715e367beb91bdf91d1891b0067559a01a019af"
+      "sha256": "40277285fead1579a69d896ac2c8dfbc442dd625587c39ea01337ee2a3fd5984"
     },
     {
       "path": "server/src/services/process-findings.ts",
@@ -410,11 +410,11 @@
     },
     {
       "path": "server/src/services/tool-access-policy.ts",
-      "sha256": "2e3cb44b7a832fbba6b6f35f709666eb121f89120ebdae76bb2f3aa873e9111b"
+      "sha256": "33ee5b1bbecc5ccc07254fedaf55896c9a78c61ebb4a380da087dbfaf8d5a5b8"
     },
     {
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "fe95fac21d5cb75eb53491cccdea1277d08abc0e23d1bed6a7764abf5e8902f4"
+      "sha256": "9659ba3e327ec79f89147d72e049d16e3edb1eda43bf70abe19cf88affd2c734"
     },
     {
       "path": "server/src/services/workflows/workflow-authoring-tools.ts",

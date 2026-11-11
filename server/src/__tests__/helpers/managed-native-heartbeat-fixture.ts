@@ -73,6 +73,7 @@ function managedModelRepositorySourceFrames(error: unknown): Array<{ sourceFile:
       "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
       "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts",
+      "server/src/services/native-runtime/native-opencode-managed-channel-conversation.integration.test.ts",
       "tests/e2e/fixtures/managed-connection-review.ts",
       "tests/e2e/fixtures/managed-connection-intent.ts"
 ];
@@ -902,11 +903,11 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   if (!input.managedTwoAgentSignoff && !input.managedOpenCodeConformance) await configureHostForAgent(agentId);
   const hostForAuthenticatedAgent = (authorization: string | undefined) => {
     const token = /^Bearer ([^\s]+)$/.exec(authorization ?? "")?.[1];
-    const scope = input.managedOpenCodeConformance ? "provider_conformance" : "worker_model";
-    const claims = token ? verifyRuntimeToolsToken(token, scope) : null;
-    const agentHost = claims?.scope === scope && (input.managedOpenCodeConformance
+    const scopes = input.managedOpenCodeConformance ? ["provider_conformance"] as const : ["worker_model", "conversation_model"] as const;
+    const claims = token ? scopes.map(scope => verifyRuntimeToolsToken(token, scope)).find(value => value !== null) : null;
+    const agentHost = claims && (input.managedOpenCodeConformance
       ? claims.provider_conformance?.profileId !== undefined
-      : claims.company_id === companyId)
+      : claims.company_id === companyId && ["worker_model", "conversation_model"].includes(claims.scope))
       ? hostsByAgent.get(claims.sub) : undefined;
     if (!agentHost) throw new Error("scheduler_fixture_authenticated_model_agent_unmapped");
     return agentHost;
@@ -1106,15 +1107,20 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
           responsibleUserId, bootstrapSourceClosure })
       : {};
     stage = "mint";
-    const minted = input.controlledNativeSessionBackendFactory
-      ? null
+    const [ownerRun] = await db.select({ contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, runId), eq(heartbeatRuns.agentId, currentAgentId))).limit(1);
+    const nativeConversation = ownerRun?.contextSnapshot?.conversationMode === true;
+    const minted = input.controlledNativeSessionBackendFactory ? null : nativeConversation
+      ? await gateway.issueForConversationRun({ companyId, agentId: currentAgentId, runId, responsibleUserId })
       : await gateway.issueForRun({ companyId, agentId: currentAgentId, runId, responsibleUserId });
     stage = "issuer";
     if (minted) {
-      const claims = verifyRuntimeToolsToken(minted.token, "worker_model");
-      if (!claims?.worker_model || claims.scope !== "worker_model") throw new Error("scheduler_fixture_issuer_scope_missing");
+      const claims = nativeConversation ? verifyRuntimeToolsToken(minted.token, "conversation_model")
+        : verifyRuntimeToolsToken(minted.token, "worker_model");
+      if (!claims || claims.scope !== (nativeConversation ? "conversation_model" : "worker_model"))
+        throw new Error("scheduler_fixture_issuer_scope_missing");
       issuerFacts.push({ scope: claims.scope, runId: claims.run_id,
-        manifestId: claims.worker_model.executionManifestId });
+        manifestId: nativeConversation ? claims.conversation_model!.executionManifestId : claims.worker_model!.executionManifestId });
     }
     return { PATH: `${dirname(input.opencodeBinary)}:${process.env.PATH ?? ""}`,
       OPENCODE_DISABLE_DEFAULT_PLUGINS: "true", OPENCODE_DISABLE_MODELS_FETCH: "true",

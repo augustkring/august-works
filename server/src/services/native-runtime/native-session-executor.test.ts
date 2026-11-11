@@ -285,6 +285,8 @@ import {
   createRunnerdBackend,
   createRunnerDiagnosticLogSink,
   executePaperclipNativeSession,
+  captureManagedOpenCodeAssignedMcpPending,
+  nativeAssignedMcpSourceCaptureReservationBytes,
   detachNativeSessionsForRestart,
   NativeControllerDetachedForRestartError,
   getNativeSessionSteeringState,
@@ -341,6 +343,43 @@ beforeEach(() => {
   state.resolveRunnerBinary.mockReset().mockReturnValue("/tmp/paperclip-runnerd");
   state.resolveCurrentWakeCommentsBinding.mockReset().mockResolvedValue(null);
   state.assertCurrentWakeCommentsRead.mockReset().mockResolvedValue(undefined);
+});
+
+describe("managed OpenCode assigned MCP pending capture", () => {
+  it("does not require an OpenCode receipt callback for Codex approval interactions", async () => {
+    const pending = { interactionId: "interaction", invocationId: "invocation" } as never;
+    const call = { tool: "app_railway_projects", callId: "provider.call:1", turnId: "codex-turn",
+      argumentsHash: "a".repeat(64) };
+    const onPending = vi.fn(async () => undefined);
+    await expect(captureManagedOpenCodeAssignedMcpPending({
+      managedCapturePresent: false, call, pending, onManagedOpenCodeToolPending: undefined,
+    })).resolves.toBeUndefined();
+    expect(onPending).not.toHaveBeenCalled();
+    await expect(captureManagedOpenCodeAssignedMcpPending({
+      managedCapturePresent: true, call, pending,
+    })).rejects.toThrow("managed_opencode_pending_tool_capture_unavailable");
+    await captureManagedOpenCodeAssignedMcpPending({
+      managedCapturePresent: true, call, pending, onManagedOpenCodeToolPending: onPending,
+    });
+    expect(onPending).toHaveBeenCalledWith({ ...call, pending });
+  });
+
+  it("reserves the duplicated large source set before a managed external tool call", () => {
+    // Structurally valid oversized source references are used only as a byte
+    // fixture. This test never persists or accepts them as source authority.
+    const source = { kind: "tool_result", runId: "11111111-1111-4111-8111-111111111111",
+      callId: "c".repeat(512), toolName: "t".repeat(512), invocationId: null, contentHash: "a".repeat(64) };
+    const sourceSet = { policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
+      inputs: Array.from({ length: 256 }, () => source) };
+    const outputCapture = { runId: "run", dispatch: { runId: "run" }, sourceSet,
+      managedOpenCodeToolUse: { callId: "provider.call:1", toolName: "app_example", argumentsHash: "b".repeat(64) },
+      consumedSourceComponents: [] } as never;
+    const previousReservation = Buffer.byteLength(JSON.stringify(outputCapture)) + 160 * 1024;
+    expect(nativeAssignedMcpSourceCaptureReservationBytes(outputCapture)).toBe(
+      previousReservation + Buffer.byteLength(JSON.stringify(sourceSet)));
+    expect(nativeAssignedMcpSourceCaptureReservationBytes(outputCapture)).toBeGreaterThan(previousReservation);
+    expect(nativeAssignedMcpSourceCaptureReservationBytes(outputCapture)).toBeGreaterThan(700 * 1024);
+  });
 });
 
 describe("managed OpenCode mode-aware tool completeness", () => {

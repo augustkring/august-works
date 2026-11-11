@@ -13,13 +13,15 @@ import { activityLog, agents, issues, projects, projectWorkspaces, issueRelation
   nativeRunResults, nativeRunFinalizations, workAssessments, statusDecisions, statusDecisionEffects, documents, orchestrationPlans, companySkills, companySkillVersions, playbookDocuments, rolePacks, rolePackVersions, rolePackItems,
   agentRolePackAssignments, issueThreadInteractions, agentWakeupRequests, issueTreeHolds, orchestrationWorkerAttempts,
   orchestrationWorkers, issuePlanDecompositions, type Db } from "@paperclipai/db";
-import { toolInvocations } from "@paperclipai/db";
+import { toolInvocations, toolMcpGateways, toolConnections, toolActionRequests, toolCatalogEntries } from "@paperclipai/db";
 import { nativePayloadSourceInputSchema, nativePayloadSourcePolicySchema, nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   unionNativePayloadSourceInputs, AUTHORED_AGENT_DEFINITION_KEY, conversationModelBindingSchema, reviewModelBindingSchema,
   type NativePayloadSourceInput, type NativePayloadSourcePolicy,
   type NativePayloadSourceSnapshot, type NativeRunInputSourceReceipt } from "@paperclipai/shared";
 import { HttpError, forbidden } from "../errors.js";
 import { assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
+import { readSignedToolArgumentsPayload, validateToolContent } from "./tool-content-guards.js";
+import { type AssignedMcpInvocationWitness, assignedMcpToolAlias } from "./native-runtime/assigned-mcp-tools.js";
 import { activeMemoryNativeSourceRowsScope, activeMemoryTemporalContexts, activeMemoryTemporalReadScopeIdentity,
   withReadPinnedNativeTaskSnapshot, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy,
   canActorReadPinnedIssuePrivacyBatch, canActorReadProjectPrivacy, authorizationService,
@@ -51,6 +53,7 @@ import { captureNativeReviewWakeWitness, getNativeReviewAssignment, getNativeRev
 import { assertV7Authorization } from "./v7-authorization.js";
 import { captureNativeExecutionStageTaskWakeSource } from "./native-stage-wake-source.js";
 import { isCurrentConversationModelRoot } from "./native-runtime/worker-conversation-root.js";
+import { readNativeChannelConversationScope } from "./native-runtime/native-channel-conversation-owner.js";
 import { issueTreeControlService, isVerifiedIssueTreeControlInteractionWake } from "./issue-tree-control.js";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 
@@ -1252,11 +1255,510 @@ async function assertNativeRuntimeInstructionsCurrent(db: Db | Transaction, comp
     throw forbidden("A Native runtime instruction source was erased");
   });
 }
+const NATIVE_MANAGED_PROVIDER_CALL_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
 function nativeProviderToolName(name: string): string {
   const stripped = name.replace(/^(?:paperclip__|paperclip_|paperclip\.)/, "");
   if (stripped === "self_remember") return "paperclip-self:remember";
   if (stripped === "self_read_context") return "read_context";
   return stripped;
+}
+
+function nativeAssignedMcpSourceBinding(capture: Record<string, unknown>, source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>,
+  profile: Record<string, unknown> | null): AssignedMcpInvocationWitness | null {
+  const raw = capture.assignedMcp;
+  if (raw === undefined) return null;
+  const witness = nativeSourceRecord(raw);
+  const keys = ["providerToolName", "mappedToolAlias", "gatewayToolName", "gatewayId", "gatewayPublicId", "gatewayProfileId",
+    "descriptorHash", "credentialSnapshotHash", "invocationId", "idempotencyKey", "argumentsHash", "resultHash", "connectionId",
+    "catalogEntryId", "catalogSchemaHash", "parametersSchemaHash", "providerType", "risk", "upstreamToolName",
+    "providerDefinitionHash", "selectorName", "providerArgumentsHash", "argumentsProjection", "workMode"].sort();
+  if (!isDeepStrictEqual(Object.keys(witness).sort(), keys) ||
+    !NATIVE_MANAGED_PROVIDER_CALL_ID.test(source.callId) ||
+    typeof capture.tool !== "string" || witness.providerToolName !== capture.tool ||
+    typeof witness.mappedToolAlias !== "string" || witness.gatewayToolName !== source.toolName ||
+    typeof witness.gatewayId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(witness.gatewayId) ||
+    typeof witness.gatewayProfileId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(witness.gatewayProfileId) ||
+    (witness.connectionId !== null && (typeof witness.connectionId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(witness.connectionId))) ||
+    (witness.catalogEntryId !== null && (typeof witness.catalogEntryId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(witness.catalogEntryId))) ||
+    (witness.catalogSchemaHash !== null && (typeof witness.catalogSchemaHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.catalogSchemaHash))) ||
+    typeof witness.parametersSchemaHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.parametersSchemaHash) ||
+    typeof witness.providerType !== "string" || typeof witness.risk !== "string" ||
+    (witness.upstreamToolName !== null && typeof witness.upstreamToolName !== "string") ||
+    typeof witness.gatewayPublicId !== "string" || !/^[A-Za-z0-9_-]{1,160}$/.test(witness.gatewayPublicId) ||
+    typeof witness.descriptorHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.descriptorHash) ||
+    typeof witness.credentialSnapshotHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.credentialSnapshotHash) ||
+    typeof witness.providerArgumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.providerArgumentsHash) ||
+    typeof witness.providerDefinitionHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.providerDefinitionHash) ||
+    (witness.selectorName !== null && typeof witness.selectorName !== "string") ||
+    !witness.argumentsProjection || typeof witness.argumentsProjection !== "object" || Array.isArray(witness.argumentsProjection) ||
+    Buffer.byteLength(JSON.stringify(witness.argumentsProjection), "utf8") > 64 * 1024 ||
+    !["standard", "planning", "ask"].includes(String(witness.workMode)) ||
+    typeof source.invocationId !== "string" || witness.invocationId !== source.invocationId ||
+    witness.idempotencyKey !== "aw-native-tool:" + source.runId + ":" + source.callId ||
+    typeof witness.argumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.argumentsHash) ||
+    typeof witness.resultHash !== "string" || witness.resultHash !== source.contentHash || capture.resultDigest !== source.contentHash)
+    return null;
+  const selectedAlias = assignedMcpToolAlias(source.toolName);
+  if (witness.mappedToolAlias !== selectedAlias) return null;
+  const authority = profile ? nativeSourceRecord(profile.nativeOpenCodeSourceAuthority) : {};
+  const schemas = authority.toolSchemas;
+  if (!Array.isArray(schemas) || authority.toolSchemasHash !== nativeSha256(schemas)) return null;
+  const registeredDefinitions = schemas.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
+    nativeSourceRecord(value).name === witness.providerToolName);
+  if (registeredDefinitions.length !== 1 || nativeSha256(registeredDefinitions[0]) !== witness.providerDefinitionHash) return null;
+  if (witness.selectorName === null) {
+    if (witness.providerToolName !== selectedAlias) return null;
+  } else if ((witness.providerToolName === "paperclip_call_assigned_tool" || witness.providerToolName === "call_assigned_tool") &&
+    witness.selectorName === selectedAlias) {
+    // The generic server wrapper's exact definition is pinned by the run
+    // authority and is checked against the actual request by the model gateway.
+  } else return null;
+  return witness as unknown as AssignedMcpInvocationWitness;
+}
+
+function nativeAssignedMcpSearchSourceBinding(capture: Record<string, unknown>,
+  source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>, profile: Record<string, unknown> | null) {
+  const raw = capture.assignedMcpSearch;
+  if (raw === undefined) return null;
+  const witness = nativeSourceRecord(raw);
+  const keys = ["providerToolName", "mappedToolAlias", "gatewayId", "gatewayPublicId", "gatewayProfileId", "workMode",
+    "sourceRunId", "argumentsHash", "resultHash", "providerDefinitionHash", "argumentsProjection",
+    "descriptorProjections"].sort();
+  if (!isDeepStrictEqual(Object.keys(witness).sort(), keys) || !NATIVE_MANAGED_PROVIDER_CALL_ID.test(source.callId) ||
+    typeof capture.tool !== "string" || witness.providerToolName !== capture.tool || witness.mappedToolAlias !== nativeProviderToolName(capture.tool) ||
+    source.toolName !== capture.tool || source.invocationId !== null || witness.sourceRunId !== source.runId ||
+    typeof witness.gatewayId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(witness.gatewayId) ||
+    typeof witness.gatewayProfileId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(witness.gatewayProfileId) ||
+    typeof witness.gatewayPublicId !== "string" || !/^[A-Za-z0-9_-]{1,160}$/.test(witness.gatewayPublicId) ||
+    !["standard", "planning", "ask"].includes(String(witness.workMode)) ||
+    typeof witness.argumentsHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.argumentsHash) ||
+    typeof witness.resultHash !== "string" || witness.resultHash !== source.contentHash ||
+    witness.resultHash !== capture.resultDigest || witness.argumentsHash !== capture.argumentsHash ||
+    typeof witness.providerDefinitionHash !== "string" || !/^[0-9a-f]{64}$/.test(witness.providerDefinitionHash) ||
+    !witness.argumentsProjection || typeof witness.argumentsProjection !== "object" || Array.isArray(witness.argumentsProjection) ||
+    !Array.isArray(witness.descriptorProjections) || witness.descriptorProjections.length > 20 ||
+    Buffer.byteLength(JSON.stringify(witness.argumentsProjection), "utf8") > 4 * 1024 ||
+    Buffer.byteLength(JSON.stringify(witness.descriptorProjections), "utf8") > 32 * 1024) return null;
+  const authority = profile ? nativeSourceRecord(profile.nativeOpenCodeSourceAuthority) : {};
+  const schemas = authority.toolSchemas;
+  if (!Array.isArray(schemas) || authority.toolSchemasHash !== nativeSha256(schemas)) return null;
+  const definitions = schemas.filter(value => nativeSourceRecord(value).name === witness.mappedToolAlias);
+  if (definitions.length !== 1 || nativeSha256(definitions[0]) !== witness.providerDefinitionHash) return null;
+  const refs = witness.descriptorProjections.map(nativeSourceRecord);
+  const refKeys = ["name", "descriptorHash", "parametersSchemaHash", "providerType", "risk", "connectionId",
+    "catalogEntryId", "catalogSchemaHash", "upstreamToolName", "credentialSnapshotHash"].sort();
+  if (refs.some(value => !isDeepStrictEqual(Object.keys(value).sort(), refKeys) ||
+    typeof value.name !== "string" || !/^[\x21-\x7e]{1,512}$/.test(value.name) ||
+    typeof value.descriptorHash !== "string" || !/^[0-9a-f]{64}$/.test(value.descriptorHash) ||
+    typeof value.parametersSchemaHash !== "string" || !/^[0-9a-f]{64}$/.test(value.parametersSchemaHash) ||
+    typeof value.providerType !== "string" || typeof value.risk !== "string" ||
+    (value.connectionId !== null && typeof value.connectionId !== "string") ||
+    (value.catalogEntryId !== null && typeof value.catalogEntryId !== "string") ||
+    (value.catalogSchemaHash !== null && typeof value.catalogSchemaHash !== "string") ||
+    typeof value.credentialSnapshotHash !== "string" || !/^[0-9a-f]{64}$/.test(value.credentialSnapshotHash) ||
+    (value.upstreamToolName !== null && typeof value.upstreamToolName !== "string")) ||
+    new Set(refs.map(value => value.name)).size !== refs.length) return null;
+  return witness;
+}
+
+/** Validate the one canonical approval-required Assigned MCP error. It is
+ * never a Native tool_result source; only its governed interaction is returned. */
+export async function assertNativeAssignedMcpApprovalErrorCurrent(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string; responsibleUserId: string;
+  providerToolName: string; callId: string; turnId: string; argumentsHash: string; messages: unknown;
+  actor: AuthorizationActor;
+}): Promise<{ source: Extract<NativePayloadSourceInput, { kind: "interaction" }>; pending: boolean }> {
+  const fail = (): never => { throw forbidden("A Native assigned MCP approval result changed"); };
+  if (!NATIVE_MANAGED_PROVIDER_CALL_ID.test(input.callId) || !/^[\x21-\x7e]{1,240}$/.test(input.turnId) ||
+    !/^[0-9a-f]{64}$/.test(input.argumentsHash) || !/^[A-Za-z0-9_.:-]{1,240}$/.test(input.providerToolName) ||
+    !Array.isArray(input.messages)) return fail();
+  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId),
+    eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"),
+    eq(heartbeatRuns.status, "running"))).limit(1).for("share");
+  if (!run || run.responsibleUserId !== input.responsibleUserId) return fail();
+  const currentProfile = nativeSourceRecord(run.runnerProfileJson);
+  const currentReceipt = nativeRunInputSourceReceiptSchema.safeParse(currentProfile.nativeInputSourceReceipt);
+  if (!currentReceipt.success || run.nativeInputSourceProtocolVersion !== 1 ||
+    currentReceipt.data.binding.companyId !== input.companyId || currentReceipt.data.binding.issueId !== input.issueId ||
+    currentReceipt.data.binding.agentId !== input.agentId || currentReceipt.data.binding.runId !== run.id ||
+    currentReceipt.data.binding.responsibleUserId !== (run.responsibleUserId ?? null)) return fail();
+  const sourceSets = [currentReceipt.data.bootstrap, ...currentReceipt.data.dispatches, ...currentReceipt.data.additionalInputs];
+  const allowedProducerRunIds = new Set([run.id, ...sourceSets.flatMap(set => [
+    ...set.policy.runIds,
+    ...set.inputs.flatMap(source => source.kind === "retained_run" ? [source.runId] : []),
+  ])]);
+  if (allowedProducerRunIds.size > 256) return fail();
+  const matches: Array<{ producer: typeof heartbeatRuns.$inferSelect; profile: Record<string, unknown>;
+    association: Record<string, unknown> }> = [];
+  for (const candidateRunId of allowedProducerRunIds) {
+    const [candidate] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.id, candidateRunId), eq(heartbeatRuns.agentId, input.agentId),
+      eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"))).limit(1).for("share");
+    if (!candidate) continue;
+    const candidateProfile = nativeSourceRecord(candidate.runnerProfileJson);
+    const associations = Array.isArray(candidateProfile.nativeToolCallDispatchAssociations)
+      ? candidateProfile.nativeToolCallDispatchAssociations.map(nativeSourceRecord) : [];
+    for (const association of associations) if (association.callId === input.callId && association.turnId === input.turnId &&
+      nativeProviderToolName(String(association.tool ?? "")) === nativeProviderToolName(input.providerToolName) &&
+      association.argumentsHash === input.argumentsHash && association.pendingMcpAction !== undefined) {
+      const candidateWitness = nativeSourceRecord(association.pendingMcpAction);
+      const candidateOutput = nativeSourceRecord(candidateWitness.outputCapture);
+      if (candidateWitness.sourceRunId === candidate.id && candidateOutput.runId === candidate.id)
+        matches.push({ producer: candidate, profile: candidateProfile, association });
+    }
+  }
+  if (matches.length !== 1) return fail();
+  const producerRun = matches[0]!.producer;
+  const profile = matches[0]!.profile;
+  const association = matches[0]!.association;
+  const pending = nativeSourceRecord(association.pendingMcpAction);
+  const outputCapture = nativeSourceRecord(pending.outputCapture) as unknown as NativeModelOutputCapture;
+  const keys = ["providerToolName", "mappedToolAlias", "gatewayToolName", "gatewayId", "gatewayPublicId", "gatewayProfileId",
+    "descriptorHash", "credentialSnapshotHash", "invocationId", "actionRequestId", "interactionId", "sourceRunId", "idempotencyKey", "argumentsHash",
+    "connectionId", "catalogEntryId", "catalogSchemaHash", "parametersSchemaHash", "providerType", "risk", "upstreamToolName",
+    "providerDefinitionHash", "selectorName", "providerArgumentsHash", "argumentsProjection", "workMode",
+    "errorMessage", "errorDigest", "pendingOwner", "outputCapture"].sort();
+  const witness = { ...pending };
+  delete witness.pendingOwner;
+  delete witness.outputCapture;
+  if (!isDeepStrictEqual(Object.keys(pending).sort(), keys) || pending.providerToolName !== input.providerToolName ||
+    pending.providerArgumentsHash !== input.argumentsHash ||
+    typeof pending.sourceRunId !== "string" || !/^[0-9a-f-]{36}$/i.test(pending.sourceRunId) ||
+    pending.idempotencyKey !== "aw-native-tool:" + pending.sourceRunId + ":" + input.callId ||
+    typeof pending.descriptorHash !== "string" || !/^[0-9a-f]{64}$/.test(pending.descriptorHash) ||
+    typeof pending.credentialSnapshotHash !== "string" || !/^[0-9a-f]{64}$/.test(pending.credentialSnapshotHash) ||
+    typeof pending.parametersSchemaHash !== "string" || !/^[0-9a-f]{64}$/.test(pending.parametersSchemaHash) ||
+    typeof pending.providerType !== "string" || typeof pending.risk !== "string" ||
+    (pending.upstreamToolName !== null && typeof pending.upstreamToolName !== "string") ||
+    typeof pending.providerDefinitionHash !== "string" || !/^[0-9a-f]{64}$/.test(pending.providerDefinitionHash) ||
+    !isDeepStrictEqual(Object.keys(witness).sort(), keys.filter(key => key !== "pendingOwner" && key !== "outputCapture")) ||
+    !["standard", "planning", "ask"].includes(String(pending.workMode)) ||
+    !outputCapture || outputCapture.runId !== pending.sourceRunId ||
+    outputCapture.managedOpenCodeToolUse?.callId !== input.callId ||
+    outputCapture.managedOpenCodeToolUse?.toolName !== input.providerToolName ||
+    outputCapture.managedOpenCodeToolUse?.argumentsHash !== input.argumentsHash ||
+    !["worker_model_dispatch", "conversation_model_dispatch"].includes(outputCapture.dispatch?.kind) ||
+    typeof pending.errorMessage !== "string" || pending.errorMessage.length > 2000 ||
+    nativeSha256({ type: "tool_result", tool_use_id: input.callId, is_error: true, content: pending.errorMessage }) !== pending.errorDigest)
+    return fail();
+  const authority = nativeSourceRecord(profile.nativeOpenCodeSourceAuthority);
+  const schemas = authority.toolSchemas;
+  if (!Array.isArray(schemas) || authority.toolSchemasHash !== nativeSha256(schemas)) return fail();
+  const definitions = schemas.filter(value => nativeSourceRecord(value).name === input.providerToolName);
+  if (definitions.length !== 1 || nativeSha256(definitions[0]) !== pending.providerDefinitionHash) return fail();
+  const selectedAlias = assignedMcpToolAlias(String(pending.gatewayToolName));
+  if (pending.mappedToolAlias !== selectedAlias ||
+    (pending.selectorName === null && pending.providerToolName !== selectedAlias) ||
+    (pending.selectorName !== null && (!(pending.providerToolName === "paperclip_call_assigned_tool" ||
+      pending.providerToolName === "call_assigned_tool") || pending.selectorName !== selectedAlias))) return fail();
+  let execution: ReturnType<typeof parseNativeExecutionInput>;
+  try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { return fail(); }
+  if (execution.task.workMode !== pending.workMode) return fail();
+  if (producerRun.id !== pending.sourceRunId || producerRun.responsibleUserId !== input.responsibleUserId) return fail();
+  if (producerRun.id !== run.id) {
+    const retainedSets = sourceSets.filter(set => set.inputs.some(source =>
+      source.kind === "retained_run" && source.runId === producerRun.id) && set.policy.runIds.includes(producerRun.id));
+    if (retainedSets.length < 1 || retainedSets.length > 64) return fail();
+    for (const sourceSet of retainedSets) await assertNativePayloadSourceSetCurrent(db, {
+      companyId: input.companyId, issueId: input.issueId, runId: run.id, actor: input.actor,
+      policy: sourceSet.policy, inputs: sourceSet.inputs });
+  }
+  const producerProfile = profile;
+  const producerUses = Array.isArray(producerProfile.nativeAwModelWireIntents)
+    ? producerProfile.nativeAwModelWireIntents.flatMap(value => {
+      const uses = nativeSourceRecord(value).responseToolUses;
+      return Array.isArray(uses) ? uses.map(nativeSourceRecord).filter(use => use.id === input.callId &&
+        typeof use.name === "string" && nativeProviderToolName(use.name) === nativeProviderToolName(input.providerToolName) &&
+        use.argumentsHash === input.argumentsHash) : [];
+    }) : [];
+  if (producerUses.length !== 1) return fail();
+  const [task] = await db.select({ identifier: issues.identifier }).from(issues).where(and(
+    eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).limit(1).for("share");
+  if (!task) return fail();
+  const expectedError = "A human approval card was posted on task " + (task.identifier ?? input.issueId) +
+    ". Do not retry this call now. Wrap up other work and end your run noting you are waiting on tool approval (status in_review). " +
+    "You will be woken when it is decided; if approved, the action runs automatically and your wake includes the result.";
+  if (pending.errorMessage !== expectedError) return fail();
+  const blocks: Array<Record<string, unknown>> = [];
+  for (const rawMessage of input.messages) {
+    const message = nativeSourceRecord(rawMessage);
+    const content = typeof message.content === "string" ? [{ type: "text", text: message.content }] :
+      Array.isArray(message.content) ? message.content.map(nativeSourceRecord) : [];
+    if (message.role === "user") for (const block of content)
+      if (block.type === "tool_result" && block.tool_use_id === input.callId) blocks.push(block);
+  }
+  if (blocks.length !== 1 || !isDeepStrictEqual(Object.keys(blocks[0]!).sort(),
+    ["content", "is_error", "tool_use_id", "type"].sort()) || blocks[0]!.type !== "tool_result" ||
+    blocks[0]!.tool_use_id !== input.callId || blocks[0]!.is_error !== true ||
+    blocks[0]!.content !== pending.errorMessage || nativeSha256(blocks[0]) !== pending.errorDigest) return fail();
+  const owner = nativeSourceRecord(pending.pendingOwner);
+  const ownerProjection = nativeSourceRecord(owner.projection);
+  const ownerSource = nativePayloadSourceInputSchema.safeParse(owner.source);
+  const ownerKeys = ["agentId", "companyId", "issueId", "projection", "runId", "source"].sort();
+  const projectionKeys = ["version", "companyId", "issueId", "interactionId", "sourceVersion", "kind", "status",
+    "sourceRunId", "sourceCommentId", "originCommentIds", "actionRequestId", "invocationId", "argumentsHash",
+    "requestStatus", "invocationStatus", "expiresAt"].sort();
+  if (!isDeepStrictEqual(Object.keys(owner).sort(), ownerKeys) ||
+    !isDeepStrictEqual(Object.keys(ownerProjection).sort(), projectionKeys) ||
+    owner.companyId !== input.companyId || owner.issueId !== input.issueId || owner.runId !== producerRun.id ||
+    owner.agentId !== input.agentId || !ownerSource.success || ownerSource.data.kind !== "interaction" ||
+    ownerSource.data.issueId !== input.issueId || ownerSource.data.interactionId !== pending.interactionId ||
+    ownerProjection.actionRequestId !== pending.actionRequestId || ownerProjection.invocationId !== pending.invocationId ||
+    ownerProjection.argumentsHash !== pending.argumentsHash || ownerProjection.sourceRunId !== producerRun.id ||
+    ownerProjection.status !== "pending") return fail();
+  const [interaction] = await db.select().from(issueThreadInteractions).where(and(
+    eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, input.issueId),
+    eq(issueThreadInteractions.id, String(pending.interactionId)))).limit(1).for("share");
+  if (!interaction) return fail();
+  let interactionSource: Extract<NativePayloadSourceInput, { kind: "interaction" }>;
+  let remainsPending = false;
+  let expectedRequestStatus = "pending";
+  let expectedInvocationStatus = "awaiting_approval";
+  let expectedApprovalState = "pending";
+  if (interaction.status === "pending") {
+    const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
+    const owners = await captureNativeGovernedPendingInteractions({ db: db as Db, companyId: input.companyId,
+      issueId: input.issueId, runId: input.runId, agentId: input.agentId, interactionIds: [String(pending.interactionId)],
+      reader: input.actor });
+    if (owners.length !== 1) return fail();
+    const expectedOwner: Record<string, unknown> = { ...owners[0]! };
+    const retainedOwner: Record<string, unknown> = { ...nativeSourceRecord(pending.pendingOwner) };
+    delete expectedOwner.runId;
+    delete retainedOwner.runId;
+    if (!isDeepStrictEqual(expectedOwner, retainedOwner)) return fail();
+    interactionSource = owners[0]!.source;
+    remainsPending = true;
+  } else {
+    // The original approval-required block remains in provider history after
+    // Human resolution. Reconstruct the terminal response from the canonical
+    // continuation owner; never reinterpret the old error as a successful MCP
+    // result and never require the interaction to remain pending.
+    const terminalCaptures: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
+    const currentSources: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
+    const { materializeNativeInteractionResponses } = await import("./native-runtime/native-interaction-bridge.js");
+    const responses = await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
+      runId: input.runId, agentId: input.agentId, interactionIds: [String(pending.interactionId)],
+      sourceReader: input.actor, includeSupersededOutcomes: true,
+      onSourceCapture: value => { currentSources.push(value); },
+      onContinuationSourceCapture: value => { terminalCaptures.push(value); } });
+    if (terminalCaptures.length === 1 && currentSources.length === 1) {
+      const terminal = terminalCaptures[0]!;
+      const terminalOwner = terminal.projection.owner;
+      if (terminal.companyId !== input.companyId || terminal.issueId !== input.issueId || terminal.runId !== input.runId ||
+        terminal.agentId !== input.agentId || terminal.nativeSource.interactionId !== pending.interactionId ||
+        terminalOwner.sourceRunId !== pending.sourceRunId || terminalOwner.actionRequestId !== pending.actionRequestId ||
+        terminalOwner.invocationId !== pending.invocationId || terminalOwner.argumentsHash !== pending.argumentsHash ||
+        !["executed", "failed", "rejected"].includes(terminalOwner.requestStatus) ||
+        !["succeeded", "failed", "denied"].includes(terminalOwner.invocationStatus)) return fail();
+      expectedRequestStatus = terminalOwner.requestStatus;
+      expectedInvocationStatus = terminalOwner.invocationStatus;
+      expectedApprovalState = terminalOwner.requestStatus === "rejected" ? "rejected" : "approved";
+      interactionSource = terminal.continuationSource;
+    } else if (terminalCaptures.length === 0 && currentSources.length === 1 && responses.length === 1 &&
+      interaction.status === "expired") {
+      // A newer agent request or a Human comment can supersede a pending
+      // confirmation. Bind that exact canonical transition before allowing
+      // the old error history to proceed.
+      const result = nativeSourceRecord(interaction.result);
+      const [request] = await db.select().from(toolActionRequests).where(and(
+        eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.id, String(pending.actionRequestId)),
+        eq(toolActionRequests.issueId, input.issueId), eq(toolActionRequests.interactionId, String(pending.interactionId)),
+        eq(toolActionRequests.invocationId, String(pending.invocationId)))).limit(1).for("share");
+      if (!request || request.status !== "expired" || request.canonicalArgumentsHash !== pending.argumentsHash) return fail();
+      expectedRequestStatus = "expired";
+      if (result.outcome === "superseded_by_comment" &&
+        isDeepStrictEqual(Object.keys(result).sort(), ["commentId", "outcome", "version"].sort()) && result.version === 1 &&
+        typeof result.commentId === "string" && interaction.resolvedByUserId &&
+        interaction.resolvedByUserId === request.resolvedByUserId && !interaction.resolvedByAgentId && !interaction.resolvedByRunId) {
+        const [comment] = await db.select().from(issueComments).where(and(eq(issueComments.companyId, input.companyId),
+          eq(issueComments.issueId, input.issueId), eq(issueComments.id, result.commentId), isNull(issueComments.deletedAt)))
+          .limit(1).for("share");
+        if (!comment || comment.authorUserId !== interaction.resolvedByUserId || comment.createdByRunId ||
+          comment.createdAt < interaction.createdAt) return fail();
+        interactionSource = currentSources[0]!;
+      } else if (result.outcome === "superseded_by_newer_request" &&
+        isDeepStrictEqual(Object.keys(result).sort(), ["outcome", "supersededByInteractionId", "version"].sort()) &&
+        result.version === 1 && typeof result.supersededByInteractionId === "string") {
+        const replacementId = result.supersededByInteractionId;
+        const [replacement] = await db.select().from(issueThreadInteractions).where(and(
+          eq(issueThreadInteractions.companyId, input.companyId), eq(issueThreadInteractions.issueId, input.issueId),
+          eq(issueThreadInteractions.id, replacementId), eq(issueThreadInteractions.kind, "request_confirmation")))
+          .limit(1).for("share");
+        if (!replacement || replacement.createdByAgentId !== input.agentId || replacement.createdAt < interaction.createdAt ||
+          interaction.resolvedByAgentId !== input.agentId || request.resolvedByAgentId !== input.agentId ||
+          interaction.resolvedByUserId || request.resolvedByUserId)
+          return fail();
+        if (replacement.status === "pending") {
+          const { captureNativeGovernedPendingInteractions } = await import("./native-runtime/native-interaction-bridge.js");
+          const replacementOwner = await captureNativeGovernedPendingInteractions({ db: db as Db, companyId: input.companyId,
+            issueId: input.issueId, runId: input.runId, agentId: input.agentId, interactionIds: [replacementId], reader: input.actor });
+          if (replacementOwner.length !== 1 || replacementOwner[0]!.projection.status !== "pending") return fail();
+          remainsPending = true;
+        } else {
+          const replacementTerminal: import("./native-runtime/native-interaction-bridge.js").NativeGovernedInteractionContinuationCapture[] = [];
+          const replacementSources: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
+          await materializeNativeInteractionResponses({ db: db as Db, companyId: input.companyId, issueId: input.issueId,
+            runId: input.runId, agentId: input.agentId, interactionIds: [replacementId], sourceReader: input.actor,
+            onSourceCapture: value => { replacementSources.push(value); },
+            onContinuationSourceCapture: value => { replacementTerminal.push(value); } });
+          if (replacementSources.length !== 1 || replacementTerminal.length !== 1 ||
+            replacementTerminal[0]!.projection.owner.sourceRunId !== replacement.sourceRunId) return fail();
+        }
+        interactionSource = currentSources[0]!;
+      } else return fail();
+    } else return fail();
+  }
+  const invocationRows = await db.select({ id: toolInvocations.id, companyId: toolInvocations.companyId,
+    agentId: toolInvocations.agentId, issueId: toolInvocations.issueId, runId: toolInvocations.runId,
+    gatewayId: toolInvocations.gatewayId, gatewayPublicId: toolInvocations.gatewayPublicId,
+    connectionId: toolInvocations.connectionId, catalogEntryId: toolInvocations.catalogEntryId,
+    catalogSchemaHash: toolInvocations.catalogSchemaHash, toolName: toolInvocations.toolName,
+    providerType: toolInvocations.providerType, riskLevel: toolInvocations.riskLevel,
+    upstreamToolName: toolInvocations.upstreamToolName,
+    status: toolInvocations.status, approvalState: toolInvocations.approvalState,
+    idempotencyKey: toolInvocations.idempotencyKey, argumentsHash: toolInvocations.argumentsHash,
+  }).from(toolInvocations).where(and(eq(toolInvocations.companyId, input.companyId),
+    eq(toolInvocations.id, String(pending.invocationId)), eq(toolInvocations.agentId, input.agentId),
+    eq(toolInvocations.issueId, input.issueId), eq(toolInvocations.runId, producerRun.id))).limit(2).for("share");
+  if (invocationRows.length !== 1) return fail();
+  const invocation = invocationRows[0]!;
+  if (invocation.status !== expectedInvocationStatus || invocation.approvalState !== expectedApprovalState ||
+    invocation.toolName !== pending.gatewayToolName || invocation.idempotencyKey !== pending.idempotencyKey ||
+    invocation.gatewayId !== pending.gatewayId || invocation.gatewayPublicId !== pending.gatewayPublicId ||
+    invocation.connectionId !== pending.connectionId || invocation.catalogEntryId !== pending.catalogEntryId ||
+    invocation.catalogSchemaHash !== pending.catalogSchemaHash || invocation.providerType !== pending.providerType ||
+    invocation.riskLevel !== pending.risk || invocation.upstreamToolName !== pending.upstreamToolName ||
+    invocation.argumentsHash !== pending.argumentsHash || invocation.runId !== pending.sourceRunId) return fail();
+  const requestRows = await db.select({ id: toolActionRequests.id, companyId: toolActionRequests.companyId,
+    issueId: toolActionRequests.issueId, interactionId: toolActionRequests.interactionId,
+    invocationId: toolActionRequests.invocationId, status: toolActionRequests.status,
+    canonicalArgumentsHash: toolActionRequests.canonicalArgumentsHash,
+    signedArguments: toolActionRequests.signedArguments }).from(toolActionRequests).where(and(
+    eq(toolActionRequests.companyId, input.companyId), eq(toolActionRequests.id, String(pending.actionRequestId)),
+    eq(toolActionRequests.issueId, input.issueId), eq(toolActionRequests.interactionId, String(pending.interactionId)),
+    eq(toolActionRequests.invocationId, String(pending.invocationId)))).limit(2).for("share");
+  if (requestRows.length !== 1) return fail();
+  const request = requestRows[0]!;
+  if (request.status !== expectedRequestStatus || request.canonicalArgumentsHash !== pending.argumentsHash ||
+    request.id !== pending.actionRequestId || request.invocationId !== pending.invocationId) return fail();
+  const signed = readSignedToolArgumentsPayload({ signedArguments: request.signedArguments,
+    invocationId: String(pending.invocationId), toolName: String(pending.gatewayToolName) });
+  if (!signed || !isDeepStrictEqual(signed.arguments, pending.argumentsProjection) ||
+    Buffer.byteLength(JSON.stringify(pending.argumentsProjection), "utf8") > 64 * 1024) return fail();
+  let validated: ReturnType<typeof validateToolContent>;
+  try { validated = validateToolContent({ value: pending.argumentsProjection, direction: "arguments",
+    sensitiveMode: "block", promptInjectionMode: "ignore" }); } catch { return fail(); }
+  if (!isDeepStrictEqual(validated.value, pending.argumentsProjection) || validated.summary.sizeBytes > 64 * 1024 ||
+    validated.summary.sha256 !== request.canonicalArgumentsHash || validated.summary.sha256 !== pending.argumentsHash)
+    return fail();
+  const providerArguments = pending.selectorName === null ? pending.argumentsProjection :
+    { name: pending.selectorName, arguments: pending.argumentsProjection };
+  if (nativeSha256(providerArguments) !== pending.providerArgumentsHash) return fail();
+  const { getNativeAssignedMcpDescriptorCurrent, nativeAssignedMcpDescriptorProjection } =
+    await import("./tool-gateway.js");
+  const currentDescriptor = await getNativeAssignedMcpDescriptorCurrent(db as Db, {
+    companyId: input.companyId, issueId: input.issueId, runId: String(pending.sourceRunId), agentId: input.agentId,
+    responsibleUserId: input.responsibleUserId, gatewayId: String(pending.gatewayId),
+    gatewayPublicId: String(pending.gatewayPublicId), gatewayProfileId: String(pending.gatewayProfileId),
+    descriptorName: String(pending.gatewayToolName), descriptorHash: String(pending.descriptorHash),
+    credentialSnapshotHash: String(pending.credentialSnapshotHash),
+    parametersSchemaHash: String(pending.parametersSchemaHash), providerType: String(pending.providerType),
+    risk: String(pending.risk), connectionId: pending.connectionId as string | null,
+    catalogEntryId: pending.catalogEntryId as string | null, catalogSchemaHash: pending.catalogSchemaHash as string | null,
+    upstreamToolName: pending.upstreamToolName as string | null,
+    arguments: pending.argumentsProjection as Record<string, unknown>,
+    workMode: pending.workMode as "standard" | "planning" | "ask",
+  });
+  if (!currentDescriptor || nativeSha256(nativeAssignedMcpDescriptorProjection(currentDescriptor)) !== pending.descriptorHash ||
+    nativeSha256(currentDescriptor.parametersSchema) !== pending.parametersSchemaHash) return fail();
+  await assertNativeModelOutputCaptureCurrent(db, input.companyId, input.issueId, outputCapture,
+    input.providerToolName, input.actor, producerRun.finishedAt ? "settled" : "live");
+  return { source: interactionSource, pending: remainsPending };
+}
+
+/** Reconstruct and compare a bounded on-demand Assigned MCP discovery result
+ * from the current DB-owned catalog. Used by both retained source readers and
+ * the managed Messages request validator with the actual parsed tool_result. */
+export async function assertNativeAssignedMcpSearchResultCurrent(db: Db | Transaction, input: {
+  companyId: string; issueId: string; runId: string; agentId: string; responsibleUserId: string;
+  actor: AuthorizationActor; capture: Record<string, unknown>;
+  source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>; result?: unknown;
+  conversationState?: "live" | "settled";
+}): Promise<void> {
+  const fail = (): never => { throw forbidden("A Native assigned MCP search source changed"); };
+  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId),
+    eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.agentId, input.agentId),
+    eq(heartbeatRuns.nativeIssueId, input.issueId), eq(heartbeatRuns.runtimeMode, "native"))).limit(1).for("share");
+  if (!run || run.responsibleUserId !== input.responsibleUserId) return fail();
+  const profile = nativeSourceRecord(run.runnerProfileJson);
+  const capture = input.capture;
+  const witness = nativeAssignedMcpSearchSourceBinding(capture, input.source, profile);
+  const outputCapture = nativeSourceRecord(capture.outputCapture) as unknown as NativeModelOutputCapture;
+  if (!witness || input.source.runId !== input.runId || input.source.callId !== capture.callId ||
+    input.source.contentHash !== witness.resultHash || capture.resultDigest !== witness.resultHash ||
+    outputCapture.runId !== input.runId || outputCapture.managedOpenCodeToolUse?.callId !== input.source.callId ||
+    outputCapture.managedOpenCodeToolUse?.toolName !== witness.providerToolName ||
+    outputCapture.managedOpenCodeToolUse?.argumentsHash !== capture.argumentsHash ||
+    !isDeepStrictEqual(capture.sourceSet, outputCapture.sourceSet) ||
+    !Array.isArray(outputCapture.consumedSourceComponents)) return fail();
+  const authority = nativeSourceRecord(profile.nativeOpenCodeSourceAuthority);
+  const schemas = authority.toolSchemas;
+  if (!Array.isArray(schemas) || authority.toolSchemasHash !== nativeSha256(schemas)) return fail();
+  const { assignedMcpSearchToolDefinition, assignedMcpToolAlias, buildAssignedMcpSearchResult } =
+    await import("./native-runtime/assigned-mcp-tools.js");
+  if (witness.providerDefinitionHash !== nativeSha256(assignedMcpSearchToolDefinition())) return fail();
+  const definitionRows = schemas.filter(value => nativeSourceRecord(value).name === witness.mappedToolAlias);
+  if (definitionRows.length !== 1 || !isDeepStrictEqual(definitionRows[0], assignedMcpSearchToolDefinition())) return fail();
+  const workMode = witness.workMode as "standard" | "planning" | "ask";
+  let execution: ReturnType<typeof parseNativeExecutionInput>;
+  try { execution = parseNativeExecutionInput(profile.nativeExecutionInput); } catch { return fail(); }
+  if (execution.task.workMode !== workMode) return fail();
+  let searchArgs: ReturnType<typeof validateToolContent>;
+  try { searchArgs = validateToolContent({ value: witness.argumentsProjection, direction: "arguments",
+    sensitiveMode: "block", promptInjectionMode: "ignore" }); }
+  catch { return fail(); }
+  if (!isDeepStrictEqual(searchArgs.value, witness.argumentsProjection) || searchArgs.summary.sizeBytes > 4 * 1024 ||
+    nativeSha256(searchArgs.value) !== witness.argumentsHash ||
+    witness.argumentsHash !== capture.argumentsHash) return fail();
+  const { getNativeAssignedMcpDescriptorsCurrent, nativeAssignedMcpDescriptorProjection } =
+    await import("./tool-gateway.js");
+  const currentDescriptors = await getNativeAssignedMcpDescriptorsCurrent(db as Db, {
+    companyId: input.companyId, issueId: input.issueId, runId: input.runId, agentId: input.agentId,
+    responsibleUserId: input.responsibleUserId, gatewayId: String(witness.gatewayId),
+    gatewayPublicId: String(witness.gatewayPublicId), gatewayProfileId: String(witness.gatewayProfileId),
+    workMode, arguments: {},
+  });
+  if (!currentDescriptors) return fail();
+  const entries = currentDescriptors.map(({ descriptor }) => ({ alias: assignedMcpToolAlias(descriptor.name), descriptor }));
+  const expectedResult = buildAssignedMcpSearchResult(searchArgs.value, entries, workMode);
+  if (nativeSha256(expectedResult) !== witness.resultHash ||
+    Object.hasOwn(input, "result") && !isDeepStrictEqual(input.result, expectedResult)) return fail();
+  const returnedNames = Array.isArray(nativeSourceRecord(expectedResult).tools)
+    ? (nativeSourceRecord(expectedResult).tools as unknown[]).map(value => nativeSourceRecord(value).name)
+      .filter((value): value is string => typeof value === "string")
+    : typeof nativeSourceRecord(expectedResult).name === "string" ? [nativeSourceRecord(expectedResult).name as string] : [];
+  const expectedRefs = [];
+  for (const alias of [...new Set(returnedNames)]) {
+    const currentEntry = currentDescriptors.find(value => assignedMcpToolAlias(value.descriptor.name) === alias);
+    const descriptor = currentEntry?.descriptor;
+    if (!currentEntry || !descriptor?.catalogEntryId) return fail();
+    const [catalog] = await db.select({ schemaHash: toolCatalogEntries.schemaHash }).from(toolCatalogEntries).where(and(
+      eq(toolCatalogEntries.companyId, input.companyId), eq(toolCatalogEntries.id, descriptor.catalogEntryId),
+      eq(toolCatalogEntries.status, "active"), isNull(toolCatalogEntries.quarantinedAt))).limit(1).for("share");
+    if (!catalog) return fail();
+    const projection = nativeAssignedMcpDescriptorProjection(descriptor);
+    if (workMode !== "standard" && descriptor.risk !== "read") return fail();
+    expectedRefs.push({ name: descriptor.name, descriptorHash: nativeSha256(projection),
+      parametersSchemaHash: nativeSha256(descriptor.parametersSchema), providerType: descriptor.providerType,
+      risk: descriptor.risk, connectionId: descriptor.connectionId ?? null, catalogEntryId: descriptor.catalogEntryId,
+      catalogSchemaHash: catalog.schemaHash ?? null, upstreamToolName: descriptor.upstreamToolName ?? null,
+      credentialSnapshotHash: currentEntry.credentialSnapshotHash });
+  }
+  if (!isDeepStrictEqual(witness.descriptorProjections, expectedRefs)) return fail();
+  await assertNativeModelOutputCaptureCurrent(db, input.companyId, input.issueId, outputCapture,
+    witness.providerToolName, input.actor, input.conversationState ?? (run.finishedAt ? "settled" : "live"));
 }
 
 function nativeToolResultReceiptCopies(receipt: NativeRunInputSourceReceipt, source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>) {
@@ -2799,16 +3301,23 @@ async function assertNativeConversationTaskResultCurrentInScope(db: Db | Transac
   if (wireIntents.length !== 1) fail("dispatch_wire");
   if (!binding.success) return fail("dispatch_binding");
   const currentBinding = binding.data;
-  const [conversationRoot] = await db.select({ conversationAgentId: issues.conversationAgentId,
-    conversationUserId: issues.conversationUserId, conversationState: issues.conversationState,
-    conversationSessionGeneration: issues.conversationSessionGeneration, conversationRetiredAt: issues.conversationRetiredAt,
-    parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId, executionRunId: issues.executionRunId,
+  const [conversationRoot] = await db.select({ originKind: issues.originKind,
+    conversationAgentId: issues.conversationAgentId, conversationUserId: issues.conversationUserId,
+    conversationState: issues.conversationState, conversationSessionGeneration: issues.conversationSessionGeneration,
+    conversationRetiredAt: issues.conversationRetiredAt, parentId: issues.parentId,
+    assigneeAgentId: issues.assigneeAgentId, executionRunId: issues.executionRunId,
     payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion, payloadSourceSnapshot: issues.payloadSourceSnapshot,
     payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
   }).from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).for("share");
+  const channelScope = conversationRoot?.originKind === "chat_channel"
+    ? await readNativeChannelConversationScope(db, { companyId: input.companyId, issueId: input.issueId,
+        agentId: input.run.agentId, responsibleUserId: input.run.responsibleUserId ?? "", runId: input.run.id,
+        sessionGeneration: currentBinding.conversationSessionGeneration,
+        sourceCommentId: typeof input.run.contextSnapshot?.wakeCommentId === "string" ? input.run.contextSnapshot.wakeCommentId : "", consumer: "retained_source" })
+    : null;
   if (!isCurrentConversationModelRoot({ root: conversationRoot, contextSnapshot: input.run.contextSnapshot,
     companyId: input.companyId, agentId: input.run.agentId, responsibleUserId: input.run.responsibleUserId,
-    runId: input.run.id, binding: currentBinding }) ||
+    runId: input.run.id, binding: currentBinding, channelScope }) ||
     association!.dispatchId !== modelTurn!.dispatchId ||
     modelTurn!.turnInputDigest !== wireIntent!.sourceDispatchDigest)
     fail("conversation_root");
@@ -4103,10 +4612,16 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         ? profile.nativeToolResultSourceCaptures.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
             (value as Record<string, unknown>).callId === source.callId &&
             typeof (value as Record<string, unknown>).tool === "string" &&
-            nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName &&
+            (nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName ||
+              nativeAssignedMcpSourceBinding(value as Record<string, unknown>, source, profile) !== null ||
+              nativeAssignedMcpSearchSourceBinding(value as Record<string, unknown>, source, profile) !== null) &&
             (value as Record<string, unknown>).resultDigest === source.contentHash &&
             isDeepStrictEqual((value as Record<string, unknown>).source, source)) as Record<string, unknown>[] : [];
       const capture = captures[0] ?? {};
+      const assignedMcpBinding = captures.length === 1 ? nativeAssignedMcpSourceBinding(capture, source, profile) : null;
+      const assignedMcpSearchBinding = captures.length === 1 ? nativeAssignedMcpSearchSourceBinding(capture, source, profile) : null;
+      const hasAssignedMcpWitness = Object.hasOwn(capture, "assignedMcp");
+      const hasAssignedMcpSearchWitness = Object.hasOwn(capture, "assignedMcpSearch");
       const producerEntry = receipt?.success ? receipt.data.additionalInputs.find(entry =>
         entry.inputs.some(value => value.kind === "tool_result" && isDeepStrictEqual(value, source))) : undefined;
       const producerClosures: NativePayloadSourceSet[] = producerEntry ? [producerEntry] : [];
@@ -4146,7 +4661,8 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         memoryTemporalIdentity: scope.context.memoryTemporalIdentity, source,
         captureHash: nativeSha256(capture), producerClosures })}`;
       if (scope.active.has(toolSourceVisitKey)) throw forbidden("The Native tool source graph contains a cycle");
-      const siblingProofKey = source.toolName !== "create_project" && source.toolName !== "call_api" &&
+      const siblingProofKey = assignedMcpBinding === null && assignedMcpSearchBinding === null &&
+        source.toolName !== "create_project" && source.toolName !== "call_api" &&
         producerClosureAvailable && nativeGraphProofInputsEligible(policy.data, inputs.data) &&
         producerClosures.every(set => nativeGraphProofInputsEligible(set.policy, set.inputs)) ? toolSourceVisitKey : null;
       let siblingProof = siblingProofKey && !scope.context.ancestry.graphProofsDisabled ? siblingToolSourceProofs.get(siblingProofKey) : undefined;
@@ -4207,10 +4723,13 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
         (source.toolName === "report_progress" || source.toolName === "request_human_input" ||
           source.toolName === "list_project_repositories");
       const nativeReadResultTool = ["get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric"].includes(source.toolName);
-      if ((source.invocationId === null && !projectApiResult && !stageCommentResult && !managedProjectCreateResult &&
-          !managedConversationTaskResult && !managedSemanticNoInvocationResult && !nativeReadResultTool) ||
-        (source.toolName === "call_api" && source.invocationId !== null) ||
-        (source.toolName === "create_project" && source.invocationId !== null))
+      const assignedMcpResult = assignedMcpBinding !== null;
+      const assignedMcpSearchResult = assignedMcpSearchBinding !== null;
+      if ((hasAssignedMcpWitness && !assignedMcpResult) || (hasAssignedMcpSearchWitness && !assignedMcpSearchResult) ||
+        (source.invocationId === null && !projectApiResult && !stageCommentResult && !managedProjectCreateResult &&
+          !managedConversationTaskResult && !managedSemanticNoInvocationResult && !nativeReadResultTool && !assignedMcpSearchResult) ||
+        (!assignedMcpResult && source.toolName === "call_api" && source.invocationId !== null) ||
+        (!assignedMcpResult && source.toolName === "create_project" && source.invocationId !== null))
         throw forbidden("A Native tool result requires its original succeeded invocation");
       const [invocation] = source.invocationId ? await db.select().from(toolInvocations).where(and(
         eq(toolInvocations.companyId, input.companyId), eq(toolInvocations.id, source.invocationId),
@@ -4220,13 +4739,89 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
       const matchingReceiptInputs = receipt?.success ? nativeToolResultReceiptCopies(receipt.data, source) : null;
       if (!producerRun || !sourceBindingCurrent || !receipt?.success || !matchingReceiptInputs || matchingReceiptInputs.exact < 1 || matchingReceiptInputs.conflicting ||
         matchingReceiptInputs.duplicateWithinEntry || captures.length !== 1 ||
-        (projectApiResult || stageCommentResult || managedProjectCreateResult || managedConversationTaskResult || managedSemanticNoInvocationResult || nativeReadResultTool ? invocation !== undefined : !invocation || invocation.issueId !== producerRun.nativeIssueId ||
+        (projectApiResult || stageCommentResult || managedProjectCreateResult || managedConversationTaskResult || managedSemanticNoInvocationResult ||
+          nativeReadResultTool || assignedMcpSearchResult ? invocation !== undefined : !invocation || invocation.issueId !== producerRun.nativeIssueId ||
           invocation.toolName !== source.toolName || invocation.idempotencyKey !== `aw-native-tool:${source.runId}:${source.callId}`))
         throw forbidden("A Native historical tool result changed");
+      if (assignedMcpResult) {
+        let workflowResultHash: string | undefined;
+        try {
+          workflowResultHash = validateToolContent({ value: invocation?.workflowResultJson, direction: "result",
+            sensitiveMode: "redact", promptInjectionMode: "block" }).summary.sha256;
+        } catch { /* fail closed below */ }
+        const assigned = assignedMcpBinding!;
+        if (!invocation || invocation.id !== assigned.invocationId || invocation.agentId !== producerRun.agentId ||
+          invocation.gatewayId !== assigned.gatewayId || invocation.gatewayPublicId !== assigned.gatewayPublicId ||
+          invocation.argumentsHash !== assigned.argumentsHash || invocation.resultHash !== assigned.resultHash ||
+          invocation.connectionId !== assigned.connectionId || invocation.catalogEntryId !== assigned.catalogEntryId ||
+          invocation.catalogSchemaHash !== assigned.catalogSchemaHash || invocation.upstreamToolName !== assigned.upstreamToolName ||
+          invocation.providerType !== assigned.providerType || invocation.riskLevel !== assigned.risk ||
+          workflowResultHash !== invocation.resultHash || !invocation.gatewayId)
+          throw forbidden("A Native assigned MCP invocation changed");
+        const canonicalArguments = assigned.argumentsProjection;
+        let validatedArguments: ReturnType<typeof validateToolContent>;
+        try { validatedArguments = validateToolContent({ value: canonicalArguments, direction: "arguments",
+          sensitiveMode: "block", promptInjectionMode: "ignore" }); }
+        catch { throw forbidden("A Native assigned MCP argument source changed"); }
+        if (!canonicalArguments || typeof canonicalArguments !== "object" || Array.isArray(canonicalArguments) ||
+          Buffer.byteLength(JSON.stringify(canonicalArguments), "utf8") > 64 * 1024 ||
+          !isDeepStrictEqual(validatedArguments.value, canonicalArguments) ||
+          validatedArguments.summary.sizeBytes > 64 * 1024 || validatedArguments.summary.sha256 !== invocation.argumentsHash)
+          throw forbidden("A Native assigned MCP argument source changed");
+        const providerArguments = assigned.selectorName === null ? canonicalArguments
+          : { name: assigned.selectorName, arguments: canonicalArguments };
+        if (nativeSha256(providerArguments) !== assigned.providerArgumentsHash ||
+          assigned.providerArgumentsHash !== capture.argumentsHash)
+          throw forbidden("A Native assigned MCP provider argument source changed");
+        const producerResponsibleUserId = producerRun.responsibleUserId;
+        if (!producerResponsibleUserId) throw forbidden("A Native assigned MCP authority owner changed");
+        let execution: ReturnType<typeof parseNativeExecutionInput>;
+        try { execution = parseNativeExecutionInput(profile?.nativeExecutionInput); }
+        catch { throw forbidden("A Native assigned MCP execution mode changed"); }
+        const workMode = execution.task.workMode;
+        if (assigned.workMode !== workMode || !["standard", "planning", "ask"].includes(workMode) ||
+          workMode !== "standard" && assigned.risk !== "read")
+          throw forbidden("A Native assigned MCP work mode changed");
+        const { getNativeAssignedMcpDescriptorCurrent, nativeAssignedMcpDescriptorProjection } =
+          await import("./tool-gateway.js");
+        const currentDescriptor = await getNativeAssignedMcpDescriptorCurrent(db as Db, {
+          companyId: input.companyId, issueId: producerRun.nativeIssueId!, runId: source.runId,
+          agentId: producerRun.agentId, responsibleUserId: producerResponsibleUserId,
+          gatewayId: assigned.gatewayId, gatewayPublicId: assigned.gatewayPublicId,
+          gatewayProfileId: assigned.gatewayProfileId, descriptorName: assigned.gatewayToolName,
+          descriptorHash: assigned.descriptorHash, parametersSchemaHash: assigned.parametersSchemaHash,
+          credentialSnapshotHash: assigned.credentialSnapshotHash,
+          providerType: assigned.providerType, risk: assigned.risk, connectionId: assigned.connectionId,
+          catalogEntryId: assigned.catalogEntryId, upstreamToolName: assigned.upstreamToolName,
+          catalogSchemaHash: assigned.catalogSchemaHash, arguments: canonicalArguments as Record<string, unknown>, workMode,
+        });
+        if (!currentDescriptor || nativeSha256(nativeAssignedMcpDescriptorProjection(currentDescriptor)) !== assigned.descriptorHash ||
+          nativeSha256(currentDescriptor.parametersSchema) !== assigned.parametersSchemaHash)
+          throw forbidden("A Native assigned MCP authority changed");
+        if (assigned.selectorName === null) {
+          const expectedProviderDefinition = { name: assigned.mappedToolAlias,
+            description: currentDescriptor.displayName + ": " + currentDescriptor.description,
+            inputSchema: currentDescriptor.parametersSchema };
+          if (assigned.providerDefinitionHash !== nativeSha256(expectedProviderDefinition))
+            throw forbidden("A Native assigned MCP provider definition changed");
+        }
+      }
+      if (assignedMcpSearchResult) {
+        const responsibleUserId = producerRun.responsibleUserId;
+        if (!responsibleUserId || invocation !== undefined)
+          throw forbidden("A Native assigned MCP search owner changed");
+        await assertNativeAssignedMcpSearchResultCurrent(db as Db, {
+          companyId: input.companyId, issueId: producerRun.nativeIssueId!, runId: source.runId,
+          agentId: producerRun.agentId, responsibleUserId, actor: input.actor, capture, source,
+          conversationState: producerRun.finishedAt ? "settled" : "live",
+        });
+      }
+      const expectedProviderTool = assignedMcpResult ? String(assignedMcpBinding!.providerToolName) : source.toolName;
+      const normalizedExpectedProviderTool = nativeProviderToolName(expectedProviderTool);
       const associations = Array.isArray(profile?.nativeToolCallDispatchAssociations)
         ? profile.nativeToolCallDispatchAssociations.filter(value => value && typeof value === "object" && !Array.isArray(value) &&
             (value as Record<string, unknown>).callId === source.callId && typeof (value as Record<string, unknown>).tool === "string" &&
-            nativeProviderToolName((value as Record<string, unknown>).tool as string) === source.toolName)
+            nativeProviderToolName((value as Record<string, unknown>).tool as string) === normalizedExpectedProviderTool)
         : [];
       const providerUses = Array.isArray(profile?.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.flatMap(value => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -4234,10 +4829,25 @@ async function assertNativePayloadSourceSetCurrentUncachedInScope(db: Db | Trans
           ? (value as Record<string, unknown>).responseToolUses as unknown[] : [];
         return uses.filter(use => use && typeof use === "object" && !Array.isArray(use) &&
           (use as Record<string, unknown>).id === source.callId && typeof (use as Record<string, unknown>).name === "string" &&
-          nativeProviderToolName((use as Record<string, unknown>).name as string) === source.toolName);
+          nativeProviderToolName((use as Record<string, unknown>).name as string) === normalizedExpectedProviderTool);
       }) : [];
       const nativeReadReturn = nativeReadResultTool && source.invocationId === null && captures.length === 1 &&
         captures[0]!.nativeReadResult === true && captures[0]!.managedOpenCode !== true;
+      if (assignedMcpResult) {
+        const output = nativeSourceRecord(capture.outputCapture);
+        const use = nativeSourceRecord(output.managedOpenCodeToolUse);
+        const outputSourceSet = nativeSourceRecord(output.sourceSet);
+        const captureSourceSet = nativeSourceRecord(capture.sourceSet);
+        if (!isDeepStrictEqual(Object.keys(outputSourceSet).sort(), ["inputs", "policy"]) ||
+          !isDeepStrictEqual(captureSourceSet, outputSourceSet) || output.runId !== source.runId ||
+          use.callId !== source.callId || use.toolName !== expectedProviderTool ||
+          use.argumentsHash !== capture.argumentsHash || !Array.isArray(output.consumedSourceComponents))
+          throw forbidden("A Native assigned MCP output capture changed");
+        await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, producerRun.nativeIssueId!,
+          capture.outputCapture as NativeModelOutputCapture, expectedProviderTool, scope,
+          Math.max(0, historicalDocumentDepthHint - 1), input.actor, producerRun.finishedAt ? "settled" : "live",
+          siblingToolSourceProofs, historicalTransition);
+      }
       if (associations.length !== 1 || providerUses.length > 1 ||
         (providerUses.length === 0 && !nativeReadReturn) ||
         (providerUses.length === 1 && !associations.some(value =>

@@ -1,3 +1,4 @@
+import type { NativeChannelConversationScope } from "./native-channel-conversation-owner.js";
 import {
   nativePayloadSourceSnapshotSchema,
   type ConversationModelBinding,
@@ -69,6 +70,7 @@ export function isCurrentConversationModelRoot(input: {
   responsibleUserId: string | null;
   runId: string;
   binding: ConversationModelBinding;
+  channelScope?: NativeChannelConversationScope | null;
 }): boolean {
   const root = input.root;
   if (!root || input.responsibleUserId === null || input.binding.issueId.length === 0 ||
@@ -79,18 +81,36 @@ export function isCurrentConversationModelRoot(input: {
   const context = input.contextSnapshot && typeof input.contextSnapshot === "object" && !Array.isArray(input.contextSnapshot)
     ? input.contextSnapshot as Record<string, unknown>
     : {};
+  const channelRetainedScope = input.channelScope?.kind === "chat_channel_conversation" && input.channelScope.consumer === "retained_source"
+    ? input.channelScope : null;
+  // Retained Native sources are already checked against the exact persisted
+  // inbound action, source comment, conversation generation, and current
+  // linked Human by the channel source owner. Historical cleanup may retire
+  // the conversation root or invalidate its operational payload snapshot;
+  // those fields cannot revoke an already captured source. Keep only the
+  // immutable issue/root identity and dispatch binding here. Live admissions
+  // continue through the full current-root snapshot checks below.
+  if (channelRetainedScope) return channelRetainedScope.companyId === input.companyId &&
+    channelRetainedScope.issueId === input.binding.issueId && channelRetainedScope.agentId === input.agentId &&
+    channelRetainedScope.responsibleUserId === input.responsibleUserId && channelRetainedScope.runId === input.runId &&
+    channelRetainedScope.sessionGeneration === input.binding.conversationSessionGeneration &&
+    root.parentId === null && input.binding.conversationSessionGeneration === context.conversationSessionGeneration;
   const snapshot = nativePayloadSourceSnapshotSchema.safeParse(root.payloadSourceSnapshot);
   if (!snapshot.success) return false;
 
   const sourceInputs = snapshot.data.inputs;
-  return root.conversationAgentId === input.agentId &&
-    root.conversationUserId === input.responsibleUserId &&
-    (root.conversationState === "active" || root.conversationState === "waiting") &&
-    root.conversationRetiredAt === null && root.parentId === null &&
+  const nativeConversationOwnerCurrent = input.channelScope
+    ? input.channelScope.kind === "chat_channel_conversation" &&
+      input.channelScope.companyId === input.companyId && input.channelScope.issueId === input.binding.issueId &&
+      input.channelScope.agentId === input.agentId && input.channelScope.responsibleUserId === input.responsibleUserId &&
+      input.channelScope.runId === input.runId && input.channelScope.sessionGeneration === input.binding.conversationSessionGeneration
+    : root.conversationAgentId === input.agentId && root.conversationUserId === input.responsibleUserId &&
+      (root.conversationState === "active" || root.conversationState === "waiting") && root.conversationRetiredAt === null &&
+      root.conversationSessionGeneration === context.conversationSessionGeneration;
+  return nativeConversationOwnerCurrent && root.conversationRetiredAt === null && root.parentId === null &&
     root.assigneeAgentId === input.agentId && root.executionRunId === input.runId &&
     root.payloadSourceProtocolVersion === 1 && root.payloadSourceSnapshotInvalidated === false &&
     typeof context.conversationSessionGeneration === "number" &&
-    root.conversationSessionGeneration === context.conversationSessionGeneration &&
     input.binding.conversationSessionGeneration === context.conversationSessionGeneration &&
     snapshot.data.owner.kind === "issue" && snapshot.data.owner.companyId === input.companyId &&
     snapshot.data.owner.id === input.binding.issueId &&
