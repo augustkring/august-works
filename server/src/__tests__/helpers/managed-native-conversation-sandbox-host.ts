@@ -3498,6 +3498,7 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
     assert.equal(qualificationToolResponses.length,5);
   };
   let expectedRunId: string | null = null;
+  let expectedLeaseIdForRun: string | null = null;
   let expectedIssueId: string | null = null;
   let expectedTaskRoot: string | null = null;
   let acquiredLeaseExpiresAt: string | null = null;
@@ -4304,10 +4305,16 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
   };
 
   const prepareHostForRunOnce = async (runId: string, expectedLeaseId: string) => {
-    if (expectedRunId === runId && expectedTaskRoot && acquiredLeaseExpiresAt) return;
+    if (expectedRunId === runId && expectedTaskRoot && acquiredLeaseExpiresAt) {
+      if (expectedLeaseIdForRun !== expectedLeaseId)
+        throw new Error("conversation_software_host_lease_changed");
+      return;
+    }
     if (expectedRunId !== null && expectedRunId !== runId)
       throw new Error("conversation_software_host_run_changed");
-    expectedRunId = runId;preparationStage="read_run";
+    expectedRunId = runId;
+    expectedLeaseIdForRun = expectedLeaseId;
+    preparationStage="read_run";
     const [run] = await db.select({ status: heartbeatRuns.status, runtimeMode: heartbeatRuns.runtimeMode,
       nativeIssueId: heartbeatRuns.nativeIssueId, responsibleUserId: heartbeatRuns.responsibleUserId,
       contextSnapshot: heartbeatRuns.contextSnapshot, runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns)
@@ -5149,6 +5156,32 @@ async function configureManagedSandboxRun(input: ManagedSandboxHostInput,
       if (!Number.isFinite(expiryAtMs) || expiryAtMs <= Date.now())
         throw new Error("conversation_software_host_lease_deadline_expired");
       return new Date(expiryAtMs);
+    },
+    writeWorkspaceCopybackFixtureFile: async (scope: { runId: string; leaseId: string; workspaceId: string }) => {
+      if (scope.runId !== expectedRunId || scope.leaseId !== expectedLeaseIdForRun || !expectedTaskRoot || !sessionOverlayUpperDir)
+        throw new Error("conversation_workspace_copyback_fixture_owner_mismatch");
+      const [run] = await db.select({ status: heartbeatRuns.status, profile: heartbeatRuns.runnerProfileJson })
+        .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, scope.runId))).limit(1);
+      const [lease] = await db.select({ status: environmentLeases.status, runId: environmentLeases.heartbeatRunId,
+        remoteCwd: sql<string>`${environmentLeases.metadata}->>'remoteCwd'` }).from(environmentLeases)
+        .where(and(eq(environmentLeases.companyId, companyId), eq(environmentLeases.id, scope.leaseId))).limit(1);
+      const profile = run?.profile && typeof run.profile === "object" ? run.profile as Record<string, any> : {};
+      const execution = profile.nativeExecutionInput && typeof profile.nativeExecutionInput === "object"
+        ? profile.nativeExecutionInput as Record<string, any> : {};
+      if (run?.status !== "running" || lease?.status !== "active" || lease.runId !== scope.runId ||
+          lease.remoteCwd !== expectedTaskRoot || execution.binding?.runId !== scope.runId ||
+          execution.binding?.executionWorkspaceId !== scope.workspaceId || execution.workspace?.cwd !== expectedTaskRoot)
+        throw new Error("conversation_workspace_copyback_fixture_current_owner_changed");
+      // This is test-only file I/O through the software Host's exact run/lease
+      // mapping. It does not execute a command or grant the model new tools.
+      const upperRoot = fixtureOverlayPath(expectedTaskRoot);
+      ensureRealDirectoryTree(upperRoot);
+      const upperDirectory = fixtureOverlayPath(posix.join(expectedTaskRoot, ".copyback-fault"));
+      ensureRealDirectoryTree(upperDirectory);
+      const outputPath = join(upperDirectory, "output.txt");
+      try { lstatSync(outputPath); throw new Error("conversation_workspace_copyback_fixture_output_exists"); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      writeFileSync(outputPath, "fixture filesystem output\n", { flag: "wx", mode: 0o600 });
     },
     sandboxExec: runtime.executeSandboxTask,
     executeManagedSandboxTask: executeSandboxTask,

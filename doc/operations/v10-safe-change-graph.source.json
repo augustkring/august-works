@@ -21,14 +21,14 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2034,
+    "sourceDeltaPathCount": 2040,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14491,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
+    "fullDiffPathCount": 14532,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys."
   },
   "requirementsCrosswalk": [
     {
@@ -16783,6 +16783,18 @@
           "sha256": "ae24cb0d7db40af86942b7f59fa33881e6268b9a5466e65473246db240830ae4"
         },
         {
+          "path": "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5f3144ea856ad27778f47de73eb542703b1d9df2abad2c427838fbaf69c3d59f"
+        },
+        {
+          "path": "packages/paperclip-runner/protocol/manifest.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "2276836975387e72296f2d1c38ac499f78378c62bb4d74740f161108c766ff24"
+        },
+        {
           "path": "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -16975,10 +16987,22 @@
           "sha256": "ea5088170d0b2435afaf18aabf7eeba113aa580845a312026af5b380bd30058d"
         },
         {
+          "path": "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5e6eda810c18838171feafa89601e4980027345c004132ca31294e0a94defa0d"
+        },
+        {
           "path": "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "24f367189e6f2fc9555807e9175f647f8874721f3119fe308390d61b81aa12b8"
+        },
+        {
+          "path": "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "b497f1446642d2d860aeea7effb74f8bf8a033db634e1e0b78e719eac5249dcd"
         },
         {
           "path": "packages/paperclip-runner/test/acpx-codex-package-contract.test.mjs",
@@ -17527,6 +17551,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -17875,6 +17905,8 @@
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
+        "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+        "packages/paperclip-runner/protocol/manifest.json",
         "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
@@ -17907,7 +17939,9 @@
         "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
         "packages/paperclip-runner/src/native-session-runtime.test.ts",
         "packages/paperclip-runner/src/native-session-runtime.ts",
+        "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
         "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
+        "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
         "packages/paperclip-runner/test/acpx-codex-package-contract.test.mjs",
         "packages/paperclip-runner/test/fixtures/fake-opencode-server.mjs",
         "packages/shared/src/agent-runtime-candidates.ts",
@@ -17999,6 +18033,7 @@
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
         "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+        "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
         "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
         "server/src/services/native-runtime/native-review-participant.ts",
         "server/src/services/native-runtime/native-run-finalizer.ts",
@@ -18084,6 +18119,8 @@
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
+        "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+        "packages/paperclip-runner/protocol/manifest.json",
         "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
@@ -18116,7 +18153,9 @@
         "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
         "packages/paperclip-runner/src/native-session-runtime.test.ts",
         "packages/paperclip-runner/src/native-session-runtime.ts",
+        "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
         "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
+        "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
         "packages/paperclip-runner/test/acpx-codex-package-contract.test.mjs",
         "packages/paperclip-runner/test/fixtures/fake-opencode-server.mjs",
         "packages/shared/src/agent-runtime-candidates.ts",
@@ -18208,6 +18247,7 @@
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
         "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+        "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
         "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
         "server/src/services/native-runtime/native-review-participant.ts",
         "server/src/services/native-runtime/native-run-finalizer.ts",
@@ -23118,6 +23158,12 @@
           "sha256": null
         },
         {
+          "path": "scripts/ci-install-managed-native-test-observers.sh",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "scripts/cli-command-migration.test.mjs",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -23258,6 +23304,7 @@
         "scripts/check-v10-169-migration-phase-register.mjs",
         "scripts/check-v10-169-migration-phase-register.test.mjs",
         "scripts/check-v10-safe-change-graph.mjs",
+        "scripts/ci-install-managed-native-test-observers.sh",
         "scripts/cli-command-migration.test.mjs",
         "scripts/create-github-release.sh",
         "scripts/e2e-shard-durations.json",
@@ -23305,6 +23352,7 @@
         "scripts/check-v10-169-migration-phase-register.mjs",
         "scripts/check-v10-169-migration-phase-register.test.mjs",
         "scripts/check-v10-safe-change-graph.mjs",
+        "scripts/ci-install-managed-native-test-observers.sh",
         "scripts/cli-command-migration.test.mjs",
         "scripts/create-github-release.sh",
         "scripts/e2e-shard-durations.json",
@@ -25677,7 +25725,7 @@
       "sourceReviewBoundary": "Candidate source inventory derived from branch diff and V10 register paths. It is not a behavior audit, test receipt, phase approval, or release claim."
     }
   ],
-  "sourceAfterGeneration": "Complete staged source inventory against base81, including the 57 reviewed source paths and their software-evidence checkpoint; source hashes do not promote historical requirement or migration-phase qualification.",
+  "sourceAfterGeneration": "Complete staged source inventory against base81, including the 28 frozen source paths and their recorded software-evidence checkpoint; source hashes do not promote historical requirement or migration-phase qualification.",
   "crosswalkLinkageBasis": "Only currentAssessment.sourceOwners, currentAssessment.scopedEvidence[*].paths, and explicit sourcePath fields are treated as requirement-to-source links. Nested generic path fields, review pins, and human reference strings are excluded. Links remain traceability only and do not close acceptance.",
   "currentSourceRecovery": {
     "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

@@ -15,7 +15,7 @@ import { execFile, execFileSync } from "node:child_process";
 import express, { type Express as ExpressApp, type Request as ExpressRequest } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { agents, agentExecutionManifests, authSessions, authUsers, companies, companyMemberships,
-  heartbeatRunEvents, heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
+  environmentLeases, heartbeatRunEvents, heartbeatRuns, issueComments, issueThreadInteractions, issues, toolInvocations,
   orchestrationModelReservations, orchestrationPlans, orchestrationWorkerAttempts, principalPermissionGrants, createDb } from "@paperclipai/db";
 import { workerModelProfileSchema, type WorkerModelProfile } from "../../services/orchestration/worker-model-profiles.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
@@ -148,6 +148,8 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   testBeforeNativeRunnerSpawn?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testBeforeNativeRunnerSpawn"]>;
   /** Observe a genuine persisted checkpoint from the Heartbeat-owned run. */
   afterPersistedNativeSessionCheckpoint?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testAfterPersistedNativeSessionCheckpoint"]>;
+  /** Inject a controlled local-filesystem fault immediately before actual Native workspace sync-out. */
+  beforeNativeWorkspaceSyncRestore?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["testBeforeNativeWorkspaceSyncRestore"]>;
   /** Original scheduler control-gate observer; no authority, Source or result is substituted. */
   beforeChatControlRecoveryCheck?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["beforeChatControlRecoveryCheck"]>;
   /** Private fixture observer before the real Native runtime selection; no Run state is mutated. */
@@ -850,6 +852,7 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
     attestModelProxyClient?: (client: Socket) => Promise<ModelChannel | null>;
     executeManagedSandboxTask?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["executeSandboxTask"];
     stopManagedSandboxRunLease?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["stopSandboxRunLease"];
+    writeWorkspaceCopybackFixtureFile?: (scope: { runId: string; leaseId: string; workspaceId: string }) => Promise<void>;
     modelRequestAuthenticated?: (body: unknown, signal: AbortSignal, authorization: string | undefined) =>
       ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
     configuredSandboxOperatorUserIds?: () => string[];
@@ -1058,6 +1061,19 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       : {}),
     ...(input.afterPersistedNativeSessionCheckpoint
       ? { testAfterPersistedNativeSessionCheckpoint: input.afterPersistedNativeSessionCheckpoint }
+      : {}),
+    ...(input.beforeNativeWorkspaceSyncRestore
+      ? { testBeforeNativeWorkspaceSyncRestore: async (scope) => {
+          const leases = await db.select({ id: environmentLeases.id }).from(environmentLeases).where(and(
+            eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, scope.runId),
+            eq(environmentLeases.status, "active"))).limit(2);
+          if (leases.length !== 1) throw new Error("scheduler_fixture_copyback_active_lease_missing_or_ambiguous");
+          const { host } = await hostForRun(scope.runId);
+          if (!host.writeWorkspaceCopybackFixtureFile)
+            throw new Error("scheduler_fixture_copyback_filesystem_owner_missing");
+          await host.writeWorkspaceCopybackFixtureFile({ runId: scope.runId, leaseId: leases[0]!.id, workspaceId: scope.workspaceId });
+          await input.beforeNativeWorkspaceSyncRestore!(scope);
+        } }
       : {}),
     testNativeRunnerEnvironment: async ({ execution, runId, issueId,
     agentId: currentAgentId, responsibleUserId, bootstrapSourceClosure }) => {

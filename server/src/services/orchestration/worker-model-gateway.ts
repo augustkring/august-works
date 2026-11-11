@@ -18,6 +18,7 @@ import {
   issues,
   issuePlanDecompositions,
   issueThreadInteractions,
+  issueComments,
   issueDocuments,
   documents,
   orchestrationPlans,
@@ -38,6 +39,7 @@ import {
   nativePayloadSourceInputSchema,
   unionNativePayloadSourceInputs,
   nativePayloadSourcePolicySchema,
+  nativePayloadSourceSnapshotSchema,
   modelProviderWireReceiptSchema,
   type WorkerModelBinding,
   type ReviewModelBinding,
@@ -75,7 +77,8 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
-import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent, assertNativeProjectSourceCurrent } from "../native-direct-input.js";
+import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent, assertNativeProjectSourceCurrent,
+  assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet } from "../native-direct-input.js";
 import { PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED } from "../native-local-process-stop.js";
 import { assertNativeManagedProjectCreateReceiptCurrent, type NativeProjectCreateReceipt } from "../native-project-output.js";
 import {
@@ -544,6 +547,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
     actualTools.some((tool) => !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
       "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric", "paperclip_finish", "paperclip_block",
+      ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress"] : []),
       ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
@@ -729,6 +733,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         if (matchingCaptures.length !== 1 || matchingAssociations.length !== 1 ||
           !["read_document", "write_document", "create_task", "create_project", "self_remember", "read_context", "call_api",
             "get_task_context", "get_task_history", "read_chat_attachment", "query_business_metric",
+            ...(claims.scope === "worker_model" || claims.scope === "conversation_model" ? ["report_progress"] : []),
             ...(claims.scope === "review_model" ? ["resolve_review"] : [])].includes(toolName))
         {
           if (process.env.PAPERCLIP_NATIVE_TEST_TOOL_RESULT_DIAGNOSTICS === "1") {
@@ -773,6 +778,47 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
         const sourceToolName = managedToolSourceName(toolName);
         if (source.callId !== block.tool_use_id || source.toolName !== sourceToolName)
           throw forbidden("managed_opencode_tool_result_identity_mismatch");
+        if (toolName === "report_progress") {
+          const progress = managedRecord(capture.progressComment);
+          const outputCapture = managedRecord(progress.outputCapture) as unknown as NativeModelOutputCapture;
+          const commentSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
+          const outputUse = managedRecord(outputCapture.managedOpenCodeToolUse);
+          const semanticReceipts = managedRecord(run.resultJson).semanticToolReceipts;
+          const matchingReceipts = Object.values(managedRecord(semanticReceipts)).map(managedRecord).filter(receipt => {
+            const receiptResult = managedRecord(receipt.result), dispatch = managedRecord(receipt.nativeInputDispatch),
+              receiptInput = managedRecord(receipt.input);
+            return receipt.operationId === "report_progress" && receiptResult.commentId === progress.commentId &&
+              nativeSha256(receipt.input) === providerUse.argumentsHash && typeof receiptInput.body === "string" &&
+              receiptResult.issueId === run.nativeIssueId && dispatch.callId === block.tool_use_id &&
+              dispatch.dispatchId === matchingAssociations[0]!.dispatchId &&
+              dispatch.turnId === matchingAssociations[0]!.turnId && dispatch.eventSeq === matchingAssociations[0]!.eventSeq &&
+              dispatch.attempt === matchingAssociations[0]!.attempt;
+          });
+          const [comment] = await db.select({ id: issueComments.id, body: issueComments.body, authorAgentId: issueComments.authorAgentId,
+            authorType: issueComments.authorType, createdByRunId: issueComments.createdByRunId,
+            payloadSourceProtocolVersion: issueComments.payloadSourceProtocolVersion,
+            payloadSourceSnapshot: issueComments.payloadSourceSnapshot,
+            payloadSourceSnapshotInvalidated: issueComments.payloadSourceSnapshotInvalidated,
+            contentHash: sql<string>`public.aw_native_payload_body_hash('comment',to_jsonb(${issueComments}))` })
+            .from(issueComments).where(and(eq(issueComments.companyId, claims.company_id),
+              eq(issueComments.issueId, String(run.nativeIssueId)), eq(issueComments.id, String(progress.commentId)),
+              isNull(issueComments.deletedAt)));
+          const snapshot = nativePayloadSourceSnapshotSchema.safeParse(comment?.payloadSourceSnapshot);
+          if (capture.managedOpenCode !== true || progress.callId !== block.tool_use_id ||
+            progress.argumentsHash !== providerUse.argumentsHash || progress.resultDigest !== contentHash ||
+            progress.commentId !== managedRecord(result).commentId || !outputCapture.runId || outputCapture.runId !== run.id ||
+            outputUse.callId !== block.tool_use_id || outputUse.toolName !== "report_progress" ||
+            outputUse.argumentsHash !== providerUse.argumentsHash || matchingReceipts.length !== 1 || !comment ||
+            comment.body !== String(managedRecord(matchingReceipts[0]?.input).body).trim() ||
+            comment.authorAgentId !== run.agentId || comment.authorType !== "agent" || comment.createdByRunId !== run.id ||
+            comment.payloadSourceProtocolVersion !== 1 || comment.payloadSourceSnapshotInvalidated || !snapshot.success ||
+            snapshot.data.owner.kind !== "comment" || snapshot.data.owner.companyId !== claims.company_id ||
+            snapshot.data.owner.id !== comment.id || snapshot.data.owner.contentHash !== comment.contentHash ||
+            !isDeepStrictEqual({ policy: snapshot.data.policy, inputs: snapshot.data.inputs }, commentSourceSet))
+            throw forbidden("Managed OpenCode progress result has no exact current comment source owner");
+          await assertNativeModelOutputCaptureCurrent(db, claims.company_id, run.nativeIssueId!, outputCapture,
+            "report_progress", sourceActor);
+        }
         // Only inspect the nested HTTP result after the exact provider envelope,
         // receipt digest, and current dispatch identity have all matched.
         const apiResult = toolName === "call_api" ? apiEnvelope.result : result;
@@ -1096,6 +1142,38 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           }, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
             issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
             assigneeAgentId: task.assigneeAgentId, assigneeUserId: null, status: task.status });
+          continue;
+        }
+        if (toolName === "report_progress" && source.invocationId === null) {
+          const progress = managedRecord(capture.progressComment);
+          const outputCapture = managedRecord(progress.outputCapture) as unknown as NativeModelOutputCapture;
+          const sourceSetValue = outputCapture.sourceSet;
+          const commentSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
+          const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue?.policy);
+          const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue?.inputs);
+          const expectedInputs = sourceInputs.success
+            ? unionNativePayloadSourceInputs([[source], commentSourceSet.inputs]) : [];
+          const expectedEntries = sourcePolicy.success && sourceInputs.success
+            ? receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
+              isDeepStrictEqual(entry.policy, commentSourceSet.policy) && isDeepStrictEqual(entry.inputs, expectedInputs)) : [];
+          const exactCopies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
+            value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
+          const conflictingCopies = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>
+            value.kind === "tool_result" && value.callId === source.callId && !isDeepStrictEqual(value, source)));
+          if (claims.scope !== "conversation_model" || outputCapture.dispatch.kind !== "conversation_model_dispatch" ||
+            source.kind !== "tool_result" || source.runId !== claims.run_id || source.toolName !== "report_progress" ||
+            source.callId !== block.tool_use_id || source.contentHash !== sourceResultDigest ||
+            progress.callId !== block.tool_use_id || progress.argumentsHash !== providerUse.argumentsHash ||
+            progress.resultDigest !== sourceResultDigest || sourcePolicy.success === false || sourceInputs.success === false ||
+            expectedEntries.length !== 1 || exactCopies !== 1 || conflictingCopies)
+            throw forbidden("Managed conversation progress has no exact no-plan semantic source receipt");
+          const unexpectedInvocation = await db.select({ id: toolInvocations.id }).from(toolInvocations).where(and(
+            eq(toolInvocations.companyId, claims.company_id), eq(toolInvocations.runId, claims.run_id),
+            eq(toolInvocations.agentId, claims.sub), eq(toolInvocations.idempotencyKey,
+              `aw-native-tool:${claims.run_id}:${block.tool_use_id}`), eq(toolInvocations.toolName, "report_progress")));
+          if (unexpectedInvocation.length) throw forbidden("Managed conversation progress unexpectedly has a plan charge");
+          consumedSourceComponents.push({ kind: "additional_input", responsibleUserId: expectedEntries[0]!.responsibleUserId,
+            policy: expectedEntries[0]!.policy, inputs: expectedEntries[0]!.inputs });
           continue;
         }
         if (typeof invocationId !== "string")

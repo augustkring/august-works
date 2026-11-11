@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { and, eq, sql } from "drizzle-orm";
@@ -538,6 +538,145 @@ it("accepts a real plan confirmation and executes its managed Native workspace r
       }
       expect(git(selected.repositoryRoot, "branch", "--show-current")).toBe("main");
       expect(git(selected.repositoryRoot, "rev-parse", "refs/heads/main")).toBe(baseMain);
+    },
+  });
+}, 600_000);
+
+
+it("retains a genuine Project Native run and recovery owner when physical workspace copy-back fails", async () => {
+  vi.stubEnv("PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS", "1");
+  const projectFixture = managedNativeProjectWorkspaceFixture({ root: home });
+  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, {
+    cwd, encoding: "utf8", timeout: 5_000, maxBuffer: 64 * 1024, stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+  let workspaceCwd: string | null = null;
+  let fixtureCopybackFailureInjected = false;
+  let baseMain: string | null = null;
+  await withManagedNativeHeartbeatFixture({
+    db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    prepareNativeRuntimeContext: projectFixture.prepareNativeRuntimeContext,
+    configureHeartbeat: projectFixture.configureHeartbeat,
+    providerReply: ({ body, callIndex, execution }) => {
+      const tools = body.tools as Array<{ name: string }>;
+      const tool = (name: string) => {
+        const found = tools.find(value => value.name === name || ["paperclip__", "paperclip_", "paperclip."]
+          .some(prefix => value.name === `${prefix}${name}`));
+        if (!found) throw new Error(`managed_project_fixture_tool_missing_${name}`);
+        return found.name;
+      };
+      if (callIndex === 1) {
+        return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "copyback-write-document",
+          name: tool("write_document"), input: { idempotencyKey: `copyback-fixture:${execution.binding.runId}`,
+            key: "copyback-evidence", title: "Copy-back failure evidence", body: "The real Native run reached completion before workspace export.", baseRevisionId: null } }] };
+      }
+      if (callIndex === 2) {
+        return { stop_reason: "tool_use", content: [{ type: "tool_use", id: "copyback-finish",
+          name: tool("paperclip_finish"), input: { schema: "paperclip.run_result.v1", reportedWorkDisposition: "done",
+            summary: "Completed the real Project-bound run; the workspace export fixture will fail afterward.",
+            completionClaim: { contractRevision: execution.completionContract.contract.revision, objectiveSatisfied: true,
+              criteria: execution.completionContract.contract.criteria.map(criterion => ({ criterionId: criterion.id,
+                status: "satisfied", evidenceRefs: [] })), remainingWork: [] },
+            evidence: [], verification: [], attentionRequests: [], artifacts: [] } }] };
+      }
+      return { stop_reason: "end_turn", content: [{ type: "text", text: "The workspace task is complete." }] };
+    },
+    beforeProviderResponse: async ({ companyId, run, sourceReceipt }) => {
+      const selected = projectFixture.project();
+      const execution = parseNativeExecutionInput(run.runnerProfileJson?.nativeExecutionInput);
+      const receipt = nativeRunInputSourceReceiptSchema.parse(sourceReceipt);
+      const workspaceSource = receipt.bootstrap.inputs.filter(source => source.kind === "workspace_metadata");
+      expect(workspaceSource).toHaveLength(1);
+      expect(workspaceSource[0]).toMatchObject({ origin: "execution_workspace", runId: run.id,
+        executionWorkspaceId: execution.binding.executionWorkspaceId });
+      expect(receipt.bootstrap.inputs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: "project", projectId: selected.projectId }),
+        expect.objectContaining({ kind: "project_workspace", projectId: selected.projectId,
+          workspaceId: selected.projectWorkspaceId }),
+      ]));
+      await db.transaction(tx => assertNativeWorkspaceMetadataSourcesCurrent(tx, companyId, workspaceSource));
+      workspaceCwd = execution.workspace.cwd;
+      if (!workspaceCwd || !execution.workspace.branchName || !execution.binding.executionWorkspaceId)
+        throw new Error("managed_project_copyback_workspace_binding_missing");
+      expect(git(workspaceCwd, "rev-parse", "--show-toplevel")).toBe(workspaceCwd);
+      expect(git(workspaceCwd, "branch", "--show-current")).toBe(execution.workspace.branchName);
+      // The source attestation stays the original Project/workspace owner;
+      // the controlled filesystem fault below is test-fixture state, not a
+      // claimed Native model filesystem capability.
+    },
+    beforeNativeWorkspaceSyncRestore: async ({ workspaceLocalDir }) => {
+      if (fixtureCopybackFailureInjected) return;
+      if (workspaceLocalDir !== workspaceCwd || !workspaceCwd)
+        throw new Error("managed_project_copyback_fault_owner_mismatch");
+      // The fixture helper already wrote one file through its exact run/lease
+      // mapped OpenShell overlay. This mutation affects only the local worktree.
+      const parent = join(workspaceLocalDir, ".copyback-fault");
+      const displaced = join(workspaceLocalDir, ".copyback-fault-original");
+      await rename(parent, displaced);
+      // This controlled physical fixture mutation turns the baseline directory
+      // into a file. The genuine sandbox output adds a child under that directory;
+      // restore's real merge then fails when it tries to create the parent.
+      await writeFile(parent, "controlled host-side copy-back obstruction\n");
+      fixtureCopybackFailureInjected = true;
+    },
+    driveScheduler: async ({ actor, companyId, agentId, heartbeat, facts }) => {
+      const selected = projectFixture.project();
+      // Ensure the physical worktree has this directory in its captured baseline.
+      const seedDir = join(selected.repositoryRoot, ".copyback-fault");
+      await mkdir(seedDir, { recursive: true });
+      await writeFile(join(seedDir, ".fixture-baseline"), "baseline directory for the restore-fault fixture\n");
+      git(selected.repositoryRoot, "add", ".copyback-fault/.fixture-baseline");
+      git(selected.repositoryRoot, "-c", "user.name=Managed fixture", "-c", "user.email=fixture@example.invalid",
+        "commit", "-m", "Seed copy-back fault directory");
+      baseMain = git(selected.repositoryRoot, "rev-parse", "refs/heads/main");
+      const task = await issueService(db).create(companyId, { projectId: selected.projectId,
+        projectWorkspaceId: selected.projectWorkspaceId, title: "Preserve a failed workspace copy-back", status: "todo",
+        description: "Run the actual managed Project workspace path and preserve recovery if export fails.",
+        responsibleUserId: actor.userId!, createdByUserId: actor.userId!, assigneeAgentId: agentId },
+        db, undefined, { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+      const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Complete a real Project-bound Native workspace run",
+          businessInvariants: ["The source Project main branch remains unchanged"] },
+        budgets: { maxModelCostMinor: 5, maxToolActions: 2 }, workers: [{ key: "writer", issueId: task.id }] });
+      expect(facts().providerCallCount).toBe(0);
+      await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
+        action: "start", rationale: "Exercise the real Native Project workspace copy-back owner" });
+      const wake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system", reason: "issue_assigned",
+        requestedByActorType: "user", requestedByActorId: actor.userId!, payload: { issueId: task.id },
+        contextSnapshot: { issueId: task.id, projectId: selected.projectId } });
+      expect(wake).not.toBeNull();
+      try {
+        await heartbeat.drainActiveRunExecutions();
+        expect(fixtureCopybackFailureInjected).toBe(true);
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake!.id));
+        const [workspace] = await db.select().from(executionWorkspaces).where(eq(executionWorkspaces.id,
+          parseNativeExecutionInput(run?.runnerProfileJson?.nativeExecutionInput).binding.executionWorkspaceId));
+        const [finalization] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, wake!.id));
+        const [currentTask] = await db.select().from(issues).where(eq(issues.id, task.id));
+        const [result] = await db.select().from(nativeRunResults).where(eq(nativeRunResults.id, finalization!.resultId!));
+        const [lease] = await db.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId),
+          eq(environmentLeases.heartbeatRunId, wake!.id)));
+        expect(run).toMatchObject({ runtimeMode: "native", status: "running" });
+        expect(finalization).toMatchObject({ phase: "retryable_failure", failureCode: "native_workspace_sync_out_failed",
+          attempt: 0, resultId: expect.any(String), nextAttemptAt: expect.any(Date), leaseOwner: null });
+        expect(finalization?.failureDetail).toMatchObject({ workspaceFinalizeAttempt: 1,
+          recoveryOwner: { kind: "agent", agentId } });
+        expect(result).toMatchObject({ runId: wake!.id, issueId: task.id, schemaStatus: "accepted" });
+        expect(workspace).toMatchObject({ projectId: selected.projectId, projectWorkspaceId: selected.projectWorkspaceId,
+          status: "active", cwd: workspaceCwd });
+        expect(currentTask?.status).not.toBe("done");
+        expect(lease).toMatchObject({ heartbeatRunId: wake!.id, status: "active" });
+        expect(lease?.providerLeaseId).toEqual(expect.any(String));
+        expect(lease?.metadata?.remoteCwd).toBe(workspaceCwd);
+        expect(lease?.expiresAt?.getTime()).toBeGreaterThan(Date.now());
+        expect(git(selected.repositoryRoot, "branch", "--show-current")).toBe("main");
+        expect(git(selected.repositoryRoot, "rev-parse", "refs/heads/main")).toBe(baseMain);
+      } finally {
+        if (workspaceCwd && fixtureCopybackFailureInjected) {
+          await rm(join(workspaceCwd, ".copyback-fault"), { force: true });
+          await rename(join(workspaceCwd, ".copyback-fault-original"), join(workspaceCwd, ".copyback-fault"));
+        }
+      }
     },
   });
 }, 600_000);

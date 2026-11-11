@@ -727,7 +727,49 @@ function buildTransaction(tx: Db, deps: WakeQueuePostgresAdapterDeps, db: Db, ru
   };
 }
 
-async function recordNativeTerminalRecoveryIfNeeded(tx: Db, run: HeartbeatRunRow, issue: IssueRow, now: Date): Promise<boolean> {
+async function hasCurrentIssueRunSuccessor(
+  tx: Db,
+  companyId: string,
+  run: HeartbeatRunRow,
+  issueId: string,
+  resumeStrandedQueue: boolean,
+): Promise<boolean> {
+  const [successor] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.companyId, companyId),
+    resumeStrandedQueue ? undefined : eq(heartbeatRuns.agentId, run.agentId),
+    resumeStrandedQueue ? undefined : sql`${heartbeatRuns.id} <> ${run.id}`,
+    or(eq(heartbeatRuns.nativeIssueId, issueId),
+      sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${issueId}`),
+    or(inArray(heartbeatRuns.status, ["queued", "running", "scheduled_retry"]),
+      resumeStrandedQueue ? sql`(${heartbeatRuns.createdAt}, ${heartbeatRuns.id}) > (
+        SELECT source.created_at, source.id FROM heartbeat_runs source
+        WHERE source.company_id = ${companyId} AND source.id = ${run.id})` : undefined),
+  )).limit(1);
+  return Boolean(successor);
+}
+
+async function nativeFailureRecoveryIssueOwner(
+  tx: Db,
+  run: HeartbeatRunRow,
+  contextIssueId: string | null,
+  resumeStrandedQueue: boolean,
+): Promise<IssueRow | null> {
+  if (!contextIssueId || run.nativeIssueId !== contextIssueId) return null;
+  const [issue] = await tx.select().from(issues).where(and(
+    eq(issues.companyId, run.companyId), eq(issues.id, contextIssueId),
+  )).limit(1);
+  if (!issue || issue.executionRunId !== run.id || issue.checkoutRunId !== run.id ||
+      await hasCurrentIssueRunSuccessor(tx, run.companyId, run, issue.id, resumeStrandedQueue)) return null;
+  return issue;
+}
+
+async function recordNativeTerminalRecoveryIfNeeded(
+  tx: Db,
+  run: HeartbeatRunRow,
+  issue: IssueRow,
+  now: Date,
+  retireFinalizationOwnership = true,
+): Promise<boolean> {
   const applies =
     run.runtimeMode === "native" &&
     ["failed", "timed_out", "interrupted", "cancelled"].includes(run.status) &&
@@ -751,7 +793,8 @@ async function recordNativeTerminalRecoveryIfNeeded(tx: Db, run: HeartbeatRunRow
     .limit(1);
   let nativeFailureBlock: { runId: string; statusVersion: number } | undefined;
   if (issue.status !== "blocked") {
-    const projected = await issueService(tx).update(issue.id, { status: "blocked" }, tx);
+    const projected = await issueService(tx).update(issue.id, { status: "blocked" }, tx, undefined, undefined,
+      retireFinalizationOwnership ? undefined : { nativeFailureRecoveryOwner: { runId: run.id, agentId: run.agentId } });
     if (projected) {
       nativeFailureBlock = { runId: run.id, statusVersion: projected.statusVersion };
       await tx.insert(activityLog).values({
@@ -771,24 +814,28 @@ async function recordNativeTerminalRecoveryIfNeeded(tx: Db, run: HeartbeatRunRow
     }
   }
   if (!existing.length) {
-    await tx
-      .update(nativeRunFinalizations)
-      .set({
-        phase: "terminal_failure",
-        leaseOwner: null,
-        leaseExpiresAt: null,
-        nextAttemptAt: null,
-        recoveryState: "blocked",
-        failureCode: "native_continuation_requires_reconciliation",
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(nativeRunFinalizations.companyId, issue.companyId),
-          eq(nativeRunFinalizations.runId, run.id),
-          isNull(nativeRunFinalizations.resultId),
-        ),
-      );
+    // When physical Native cleanup is still unknown, the Board recovery hold
+    // may be recorded, but this handler cannot retire the finalizer's lease.
+    if (retireFinalizationOwnership) {
+      await tx
+        .update(nativeRunFinalizations)
+        .set({
+          phase: "terminal_failure",
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          nextAttemptAt: null,
+          recoveryState: "blocked",
+          failureCode: "native_continuation_requires_reconciliation",
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(nativeRunFinalizations.companyId, issue.companyId),
+            eq(nativeRunFinalizations.runId, run.id),
+            isNull(nativeRunFinalizations.resultId),
+          ),
+        );
+    }
     await issueRecoveryActionService(tx).upsertSourceScoped({
       companyId: issue.companyId,
       sourceIssueId: issue.id,
@@ -1140,6 +1187,16 @@ export function createPostgresWakeQueueAdapter(db: Db, deps: WakeQueuePostgresAd
 
         if (run.runtimeMode === "native" &&
             !await nativeOwnerReleaseHasCleanupProof(tx, run, run.nativeIssueId ?? contextIssueId)) {
+          // Preserve execution pointers while the physical owner is unknown,
+          // but still surface failed Native work as a Board-owned reconciliation
+          // item. Do not clear an active finalizer claim until cleanup is proven.
+          if (contextIssueId && run.finishedAt &&
+              ["failed", "timed_out", "interrupted", "cancelled"].includes(run.status)) {
+            const issue = await nativeFailureRecoveryIssueOwner(
+              tx, run, contextIssueId, input.resumeStrandedQueue === true,
+            );
+            if (issue) await recordNativeTerminalRecoveryIfNeeded(tx, run, issue, input.now, false);
+          }
           return { outcome: { kind: "released" }, postCommitEffects: [], run: runSnapshot };
         }
 
@@ -1229,18 +1286,9 @@ export function createPostgresWakeQueueAdapter(db: Db, deps: WakeQueuePostgresAd
         // queued successor still owns the next turn, including during a late
         // finalization/stranded-queue retry under this issue lock. Another
         // agent's review participation retains its separate recovery path.
-        const [successor] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
-          eq(heartbeatRuns.companyId, input.companyId),
-          input.resumeStrandedQueue ? undefined : eq(heartbeatRuns.agentId, run.agentId),
-          input.resumeStrandedQueue ? undefined : sql`${heartbeatRuns.id} <> ${run.id}`,
-          or(eq(heartbeatRuns.nativeIssueId, issueRow.id),
-            sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${issueRow.id}`),
-          or(inArray(heartbeatRuns.status, ["queued", "running", "scheduled_retry"]),
-            input.resumeStrandedQueue ? sql`(${heartbeatRuns.createdAt}, ${heartbeatRuns.id}) > (
-              SELECT source.created_at, source.id FROM heartbeat_runs source
-              WHERE source.company_id = ${input.companyId} AND source.id = ${run.id})` : undefined),
-        )).limit(1);
-        if (successor) return { outcome: { kind: "released" }, postCommitEffects: [], run: runSnapshot };
+        if (await hasCurrentIssueRunSuccessor(
+          tx, input.companyId, run, issueRow.id, input.resumeStrandedQueue === true,
+        )) return { outcome: { kind: "released" }, postCommitEffects: [], run: runSnapshot };
 
         if (preDrain.kind === "blocked") {
           return {

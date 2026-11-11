@@ -9601,6 +9601,8 @@ export interface HeartbeatServiceOptions {
   testBeforeNativeRunnerSpawn?: (runId: string) => Promise<void>;
   /** Test-only observer after the canonical DB checkpoint write commits. */
   testAfterPersistedNativeSessionCheckpoint?: (input: { runId: string; snapshot: import("../vendor/paperclip-runner/index.js").PersistedNativeSession }) => Promise<void>;
+  /** Test-only physical workspace fault immediately before the real Native sync-out. */
+  testBeforeNativeWorkspaceSyncRestore?: (input: { runId: string; workspaceLocalDir: string; workspaceId: string }) => Promise<void>;
   /** Test-only, run-bound environment additions used by managed provider boundary fixtures. */
   testNativeRunnerEnvironment?: (input: {
     execution: NativeExecutionInput;
@@ -25871,6 +25873,8 @@ export function heartbeatService(
           // rather than silently leaving dependents stranded behind a missing
           // finalize row.
           if (nativeWorkspaceSync) {
+            await options.testBeforeNativeWorkspaceSyncRestore?.({ runId: run.id,
+              workspaceLocalDir: executionWorkspace.cwd, workspaceId: nativeWorkspaceSync.reference.workspaceId });
             await nativeWorkspaceSync.restoreWorkspace();
           }
           await db

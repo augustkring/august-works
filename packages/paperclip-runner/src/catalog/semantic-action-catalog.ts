@@ -166,6 +166,7 @@ const descriptors: readonly PaperclipSemanticActionDescriptor[] = [
     title: "Report durable progress",
     description: "Append a durable progress comment to the active task.",
     effect: "write",
+    allowedModes: WORK_MODES,
     inputSchema: object(
       { ...idempotency, body: text("Multiline progress update.") },
       ["idempotencyKey", "body"],

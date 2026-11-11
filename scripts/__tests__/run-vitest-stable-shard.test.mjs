@@ -378,6 +378,7 @@ const managedNativeSuitePaths = [
   "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"
@@ -598,4 +599,28 @@ require('node:fs').appendFileSync(process.env.PNPM_CAPTURE, JSON.stringify(proce
       rmSync(captured);
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("AWV4 server jobs share the qualified Native observer installer", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github", "workflows", "aw-v4-verification.yml"), "utf8");
+  const helper = readFileSync(path.join(repoRoot, "scripts", "ci-install-managed-native-test-observers.sh"), "utf8");
+  const job = (name) => {
+    const start = workflow.indexOf(`\n  ${name}:`);
+    assert.notEqual(start, -1, `expected ${name} job`);
+    const tail = workflow.slice(start + 3);
+    const nextJob = tail.search(/\n  [a-zA-Z][\w-]*:/);
+    return workflow.slice(start, nextJob === -1 ? undefined : start + 3 + nextJob);
+  };
+  assert.match(job("tests"), /if: startsWith\(matrix\.partition, 'server-'\)[\s\S]*?run: bash scripts\/ci-install-managed-native-test-observers\.sh/);
+  assert.match(job("security-regressions"), /if: contains\(needs\.security-regression-plan\.outputs\.selected_files_json, 'server\/'\)[\s\S]*?run: bash scripts\/ci-install-managed-native-test-observers\.sh/);
+
+  const sessionQualification = helper.lastIndexOf("scripts/fixtures/native-session-handle-observer-check.mjs");
+  const sessionFlag = helper.indexOf("PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1");
+  const socketQualification = helper.lastIndexOf("scripts/fixtures/native-model-socket-observer-check.mjs");
+  const socketFlag = helper.indexOf("PAPERCLIP_TEST_PRIVILEGED_MODEL_SOCKET_OBSERVER=1");
+  assert.match(helper, /^set -euo pipefail/m);
+  assert.ok(sessionQualification >= 0 && sessionQualification < sessionFlag,
+    "the session-observer flag follows its finite qualification control");
+  assert.ok(socketQualification >= 0 && socketQualification < socketFlag,
+    "the model-socket flag follows its owner-qualification control");
 });

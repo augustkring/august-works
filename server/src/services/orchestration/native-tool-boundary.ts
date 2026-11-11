@@ -127,6 +127,15 @@ async function scope(db: Db, b: Binding) {
   return null;
 }
 
+/** Prove the same no-plan scope used by `withOrchestrationNativeTool` for a
+ * Native conversation action whose durable semantic receipt is its owner.
+ * This never creates or substitutes a tool invocation. */
+export async function assertNativeConversationToolNoPlanScope(db: Db, b: {
+  companyId: string; issueId: string; agentId: string; runId: string;
+}): Promise<void> {
+  if (await scope(db, b)) throw forbidden("Native conversation action unexpectedly has a plan invocation scope");
+}
+
 /** Acquire source locks in the shared analytical -> Memory -> plan -> Task/run order. */
 export async function lockNativeToolPlan(db: Db, b: Binding) {
   await lockAnalyticalCompany(db, b.companyId);
@@ -483,6 +492,8 @@ export async function withOrchestrationNativeTool(
       draftWrites.has(call.tool),
     );
     if (!bound) throw forbidden("Native tool plan disappeared during dispatch");
+    if (call.tool === "report_progress" && bound.task.workMode === "ask")
+      throw forbidden("Progress comments are unavailable in ask mode");
     if (projectReadId && bound.task.projectId !== projectReadId)
       throw forbidden("Bounded Project reads require the current Task's exact Project");
     if (externallyMetered) return null;

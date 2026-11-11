@@ -11,14 +11,14 @@
   },
   "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2034,
+    "sourceDeltaPathCount": 2040,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14491,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
+    "fullDiffPathCount": 14532,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
@@ -4203,16 +4203,16 @@
         "identity": "full master base supplied by current build task"
       },
       "sourceInventoryBoundary": {
-        "sourceDeltaPathCount": 2034,
+        "sourceDeltaPathCount": 2040,
         "deletedSourcePathCount": 41,
         "untrackedSourceCandidateCount": 0,
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 14491,
-        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions."
+        "fullDiffPathCount": 14532,
+        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys."
       },
-      "sourceAfterGeneration": "Complete staged source inventory against base81, including the 57 reviewed source paths and their software-evidence checkpoint; source hashes do not promote historical requirement or migration-phase qualification."
+      "sourceAfterGeneration": "Complete staged source inventory against base81, including the 28 frozen source paths and their recorded software-evidence checkpoint; source hashes do not promote historical requirement or migration-phase qualification."
     },
     {
       "id": "SCR-V10-HOTSPOT-01",
@@ -4453,11 +4453,11 @@
         },
         {
           "path": "server/src/services/orchestration/native-tool-boundary.ts",
-          "sha256": "80c45e83976a2924690537d866ac57b76c49892610ab5e5c39202429482d2359"
+          "sha256": "5b4e1d43ffb4363df3cf7782ef2f3475ac36879b64b99c1311b281452ecad61d"
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "f80c961cc428ccd485b44433fe3ce91be736226ad5cfbbcf577d8dcc46a1b31c"
+          "sha256": "5a0d0b508fd7d42516d6d153b09d18b7c87fedf3093fb7dc4c3bf853b390e143"
         },
         {
           "path": "server/src/services/tool-gateway.ts",
@@ -5755,7 +5755,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07"
+          "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0"
         },
         {
           "path": "server/src/services/issue-assignment-wakeup.ts",
@@ -5763,7 +5763,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037"
+          "sha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a"
         },
         {
           "path": "server/src/services/native-execution-failure-log.test.ts",
@@ -5799,7 +5799,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "61aa206b5046a0fc41ced1a3d4021932e64c5b33c7a78fb47d888b7c8ca5a8a9"
+          "sha256": "8805cc8dcb7cf3b5a1e9968e18a3e883bdb9fb6aee80429dac3479d2dc61f16b"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -6243,7 +6243,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07"
+          "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0"
         },
         {
           "path": "server/src/services/native-runtime/runtime-context.ts",
@@ -7554,7 +7554,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "8d328bd0fab550847536aed2c5dcc38af016d46fe9f55d6ded9654ed6d91f07a"
+          "sha256": "e968f133e15764cfaf409fc176cc71ef95595ddd73ffea37c0cc47c390d2b2a5"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -7566,7 +7566,7 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "61aa206b5046a0fc41ced1a3d4021932e64c5b33c7a78fb47d888b7c8ca5a8a9"
+          "sha256": "8805cc8dcb7cf3b5a1e9968e18a3e883bdb9fb6aee80429dac3479d2dc61f16b"
         },
         {
           "path": "server/src/services/native-runtime/status-arbiter.test.ts",
@@ -9072,7 +9072,7 @@
         },
         {
           "path": "server/src/modules/wake-queue/adapters/postgres.ts",
-          "sha256": "cf2e6e18c9e9b16416e98e681b63e7119045e13dde134eb6917351fd8c7a25d8"
+          "sha256": "aa24c87e90fd109c09b0b82453a2bc7320a7b47036383d11cb4f8b40554ee19b"
         },
         {
           "path": "server/src/routes/issues.ts",
@@ -9128,7 +9128,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07"
+          "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0"
         },
         {
           "path": "server/src/services/issue-thread-interactions.ts",
@@ -9136,7 +9136,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037"
+          "sha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a"
         },
         {
           "path": "server/src/services/memory/memory-agent-tools.test.ts",
@@ -9148,7 +9148,7 @@
         },
         {
           "path": "server/src/services/native-direct-input.ts",
-          "sha256": "94724c905706b9e23dfd31e546782247150a7c62bb5ed2b78fc22a521e6ac90a"
+          "sha256": "7a49c327ca6008e8b26cbaff2cfc711ca64b6203ae5a047c7491ec5211aaa31a"
         },
         {
           "path": "server/src/services/native-project-output.ts",
@@ -9220,7 +9220,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "8d328bd0fab550847536aed2c5dcc38af016d46fe9f55d6ded9654ed6d91f07a"
+          "sha256": "e968f133e15764cfaf409fc176cc71ef95595ddd73ffea37c0cc47c390d2b2a5"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -9228,11 +9228,11 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "61aa206b5046a0fc41ced1a3d4021932e64c5b33c7a78fb47d888b7c8ca5a8a9"
+          "sha256": "8805cc8dcb7cf3b5a1e9968e18a3e883bdb9fb6aee80429dac3479d2dc61f16b"
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "e60c935386ba516524602387f17a606c13d82d10e25bb51f7565eb0237eb5947"
+          "sha256": "1727491d16b5046347f0822465d08318e61ac1a31c9624a62316e45cc936e8c3"
         },
         {
           "path": "server/src/services/native-runtime/status-decision-committer.ts",
@@ -10157,7 +10157,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07"
+          "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0"
         },
         {
           "path": "server/src/services/learning/learning-assets.ts",
@@ -10181,11 +10181,11 @@
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-          "sha256": "61aa206b5046a0fc41ced1a3d4021932e64c5b33c7a78fb47d888b7c8ca5a8a9"
+          "sha256": "8805cc8dcb7cf3b5a1e9968e18a3e883bdb9fb6aee80429dac3479d2dc61f16b"
         },
         {
           "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-          "sha256": "e60c935386ba516524602387f17a606c13d82d10e25bb51f7565eb0237eb5947"
+          "sha256": "1727491d16b5046347f0822465d08318e61ac1a31c9624a62316e45cc936e8c3"
         },
         {
           "path": "server/src/services/native-runtime/task-reassignment.test.ts",
@@ -10193,11 +10193,11 @@
         },
         {
           "path": "server/src/services/orchestration/native-tool-boundary.ts",
-          "sha256": "80c45e83976a2924690537d866ac57b76c49892610ab5e5c39202429482d2359"
+          "sha256": "5b4e1d43ffb4363df3cf7782ef2f3475ac36879b64b99c1311b281452ecad61d"
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
-          "sha256": "f80c961cc428ccd485b44433fe3ce91be736226ad5cfbbcf577d8dcc46a1b31c"
+          "sha256": "5a0d0b508fd7d42516d6d153b09d18b7c87fedf3093fb7dc4c3bf853b390e143"
         },
         {
           "path": "server/src/services/platform-skill-admission.ts",
@@ -10420,7 +10420,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07"
+          "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0"
         },
         {
           "path": "server/src/services/workspace-runtime.ts",
@@ -11281,7 +11281,7 @@
         },
         {
           "path": "server/src/services/heartbeat.ts",
-          "sha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07"
+          "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0"
         },
         {
           "path": "server/src/services/native-runtime/create-skill.integration.test.ts",
@@ -11616,7 +11616,7 @@
         },
         {
           "path": "server/src/services/issues.ts",
-          "sha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037"
+          "sha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a"
         },
         {
           "path": "server/src/services/memory/memory-privacy.ts",
@@ -13604,7 +13604,7 @@
       "sources": [
         {
           "path": ".github/workflows/aw-v4-verification.yml",
-          "sha256": "5a9b22cc400224d135e909164f82301be3eff4a415dc900417853d3888f1ab20"
+          "sha256": "b1f368b6b4f69b5a55ece6ba8697b987b104694a3fae4bc560aa50900e6cd2e1"
         },
         {
           "path": ".github/workflows/aw-v9-coverage.yml",
@@ -13668,7 +13668,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "3a9c927f7bc2a06d6045751059e7ad1a0eccbc237959d66c4008b03244ce87f6"
+          "sha256": "f37eb917dc7f843a85c579a9a7040356906ef4141f0592322c2b0d31cffe3175"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -14543,7 +14543,7 @@
       "sources": [
         {
           "path": ".github/workflows/pr-trusted.yml",
-          "sha256": "be738957bd1ada0cabf460befa755116e8aba88ef75b39b4b6d1c4cf6a922fc2"
+          "sha256": "a4fb415bf36e456b02ece6eb60efea6041f1e9600a7aa7e33747d6b6b4e69d4a"
         },
         {
           "path": "cli/src/__tests__/service-health-check.test.ts",
@@ -18042,7 +18042,7 @@
         },
         {
           "path": "server/src/modules/wake-queue/adapters/postgres.test.ts",
-          "sha256": "98417a9d1713b8616ff6850c36c349970a5bac00b7b00e35af7f9ce7c0853286"
+          "sha256": "918dd8c3706ad1042ed58071ec81b88259d604384ee138523fc9f5614a8833cc"
         },
         {
           "path": "server/src/modules/wake-queue/adapters/queued-comment-postgres.test.ts",
@@ -19871,7 +19871,7 @@
         },
         {
           "path": "packages/db/src/v5-identities-migration.test.ts",
-          "sha256": "1fb48795d0bfb504a0e3ef078552e9288f920d100c82350d1cd92a7a9f24082c"
+          "sha256": "6af2b0d7146f58973e42afa45496fed59c7d5ae91fd1bc967fa358ff0d8a549d"
         },
         {
           "path": "packages/db/src/work-signals.test.ts",
@@ -21937,7 +21937,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
-          "sha256": "8d5e704c7ef86db66d83d56182bfc1b93203a18a957544b8ba8a9d6e17684dd4"
+          "sha256": "032bc94b26fa07b88690d3b98e95a001ec05590956ee12c83db4d7299964cc12"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-project-workspace-fixture.ts",
@@ -22227,6 +22227,18 @@
           "sha256": "ae24cb0d7db40af86942b7f59fa33881e6268b9a5466e65473246db240830ae4"
         },
         {
+          "path": "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5f3144ea856ad27778f47de73eb542703b1d9df2abad2c427838fbaf69c3d59f"
+        },
+        {
+          "path": "packages/paperclip-runner/protocol/manifest.json",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "2276836975387e72296f2d1c38ac499f78378c62bb4d74740f161108c766ff24"
+        },
+        {
           "path": "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -22419,10 +22431,22 @@
           "sha256": "ea5088170d0b2435afaf18aabf7eeba113aa580845a312026af5b380bd30058d"
         },
         {
+          "path": "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "5e6eda810c18838171feafa89601e4980027345c004132ca31294e0a94defa0d"
+        },
+        {
           "path": "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "24f367189e6f2fc9555807e9175f647f8874721f3119fe308390d61b81aa12b8"
+        },
+        {
+          "path": "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "b497f1446642d2d860aeea7effb74f8bf8a033db634e1e0b78e719eac5249dcd"
         },
         {
           "path": "packages/paperclip-runner/test/acpx-codex-package-contract.test.mjs",
@@ -22971,6 +22995,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -23319,6 +23349,8 @@
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
+        "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+        "packages/paperclip-runner/protocol/manifest.json",
         "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
@@ -23351,7 +23383,9 @@
         "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
         "packages/paperclip-runner/src/native-session-runtime.test.ts",
         "packages/paperclip-runner/src/native-session-runtime.ts",
+        "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
         "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
+        "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
         "packages/paperclip-runner/test/acpx-codex-package-contract.test.mjs",
         "packages/paperclip-runner/test/fixtures/fake-opencode-server.mjs",
         "packages/shared/src/agent-runtime-candidates.ts",
@@ -23443,6 +23477,7 @@
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
         "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+        "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
         "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
         "server/src/services/native-runtime/native-review-participant.ts",
         "server/src/services/native-runtime/native-run-finalizer.ts",
@@ -23528,6 +23563,8 @@
         "packages/paperclip-runner/generated/capability/capabilities.yaml",
         "packages/paperclip-runner/generated/semantic-action-catalog.json",
         "packages/paperclip-runner/package.json",
+        "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+        "packages/paperclip-runner/protocol/manifest.json",
         "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
         "packages/paperclip-runner/scripts/qualify-opencode-runtime.test.mjs",
         "packages/paperclip-runner/spec/capability/capabilities.yaml",
@@ -23560,7 +23597,9 @@
         "packages/paperclip-runner/src/live/runnerd-codex-transport.ts",
         "packages/paperclip-runner/src/native-session-runtime.test.ts",
         "packages/paperclip-runner/src/native-session-runtime.ts",
+        "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
         "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
+        "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
         "packages/paperclip-runner/test/acpx-codex-package-contract.test.mjs",
         "packages/paperclip-runner/test/fixtures/fake-opencode-server.mjs",
         "packages/shared/src/agent-runtime-candidates.ts",
@@ -23652,6 +23691,7 @@
         "server/src/services/native-runtime/native-model-session-controller.integration.test.ts",
         "server/src/services/native-runtime/native-opencode-conformance-workspace.test.ts",
         "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+        "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
         "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
         "server/src/services/native-runtime/native-review-participant.ts",
         "server/src/services/native-runtime/native-run-finalizer.ts",
@@ -23866,11 +23906,19 @@
         },
         {
           "path": "packages/paperclip-runner/generated/semantic-action-catalog.json",
-          "sha256": "5cf3b60895801c29cefcf7087ebdd6676e518eceb70c60dc8f82e98289d926f0"
+          "sha256": "03653dbb32d029e6b98e654a06c2958916453f3bbd4720e2fb67f8f7f112d556"
         },
         {
           "path": "packages/paperclip-runner/package.json",
           "sha256": "dae589d7d800bc0e063f9e77b481a2d81090c10f660d5d704c3557e73a57329a"
+        },
+        {
+          "path": "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+          "sha256": "6974c4fe86fccad0328611fe725511e10427ab289a341c94736d0696be4e106e"
+        },
+        {
+          "path": "packages/paperclip-runner/protocol/manifest.json",
+          "sha256": "7af10d8c5043b1e6c9da9c77e89345f3959383e21a6d4ac8aec9c0bae7f298b0"
         },
         {
           "path": "packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
@@ -23906,7 +23954,7 @@
         },
         {
           "path": "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
-          "sha256": "ce4b2c002dbed0acecc8919d79de1fa08727b089adb3cc71c040c6a6f2b66592"
+          "sha256": "e862da84dd16fbdc4779374aeb8181746defd9898104b31aec76f3b422d190ee"
         },
         {
           "path": "packages/paperclip-runner/src/catalog/semantic-action-types.ts",
@@ -24001,8 +24049,16 @@
           "sha256": "d7abdf00b42fa00b02d21592dd89b35839a9413cb42933e588fc6649e1883fca"
         },
         {
+          "path": "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+          "sha256": "1e93303a5bccde43bab2706cf2c12df62c9aea4f58add7302570ed396e85615e"
+        },
+        {
           "path": "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
           "sha256": "56ead0ce6630126d368f76346f63c7a73071dcf04eb6c991a9e1b8601968dd76"
+        },
+        {
+          "path": "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
+          "sha256": "a3322414e3f01075a0d74117ea27edec67f2cadcd8003bde5f2cd3489c4f8e5d"
         },
         {
           "path": "packages/paperclip-runner/test/acpx-codex-package-contract.test.mjs",
@@ -24369,6 +24425,10 @@
           "sha256": "180584161d1a390e44eb27e7ff63ec6b77f3bbb35a6eea855cafab9097e51169"
         },
         {
+          "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+          "sha256": "e40b8256d532dd23201bafbb89aa54b747cec869e4a279a3e75fa4e672a35eff"
+        },
+        {
           "path": "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
           "sha256": "9644fe109ad625900e48b9e38874c213df7e33cd776dea6b6812564ba3d41018"
         },
@@ -24394,7 +24454,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.ts",
-          "sha256": "86e2d2984b5dec63ffd19b6d22313185100d6cb909341b3c743b7664ef01c81d"
+          "sha256": "6eb02d4fb69a37acf6963c9eab58f91ace7bf1aaefbf4d7e8d8884e15af300d4"
         },
         {
           "path": "server/src/services/native-runtime/native-workspace-branch-wake-source.test.ts",
@@ -31185,7 +31245,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-          "sha256": "ce4e7571d6f291b8e58c1efb845af0f6c81d8b761e22f8a965e0592ba6ea841f"
+          "sha256": "670a82c5ce2ee58690e850a3bd3e34fb5a9ea19cb1c187e37a4713e69fc5b0c5"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-infrastructure-cleanup.test.ts",
@@ -31514,6 +31574,12 @@
           "sha256": null
         },
         {
+          "path": "scripts/ci-install-managed-native-test-observers.sh",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "scripts/cli-command-migration.test.mjs",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -31654,6 +31720,7 @@
         "scripts/check-v10-169-migration-phase-register.mjs",
         "scripts/check-v10-169-migration-phase-register.test.mjs",
         "scripts/check-v10-safe-change-graph.mjs",
+        "scripts/ci-install-managed-native-test-observers.sh",
         "scripts/cli-command-migration.test.mjs",
         "scripts/create-github-release.sh",
         "scripts/e2e-shard-durations.json",
@@ -31701,6 +31768,7 @@
         "scripts/check-v10-169-migration-phase-register.mjs",
         "scripts/check-v10-169-migration-phase-register.test.mjs",
         "scripts/check-v10-safe-change-graph.mjs",
+        "scripts/ci-install-managed-native-test-observers.sh",
         "scripts/cli-command-migration.test.mjs",
         "scripts/create-github-release.sh",
         "scripts/e2e-shard-durations.json",
@@ -31764,7 +31832,7 @@
         },
         {
           "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-          "sha256": "adbac0011b195a6a0c6aa37a26b11975fdcc48ae3dcaa31aea32581c376ea9bc"
+          "sha256": "dd8abca8f579172fa3774963efab1e8695f3fcb1ca58a2f76578526b35759e15"
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
@@ -31804,7 +31872,7 @@
         },
         {
           "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-          "sha256": "f471e240d42585dc2f38e74cd651309190945a0c301ea18e8db816bb23881d19"
+          "sha256": "9bc77c165be697ee33894632792a21b1c0d55e11a64cf1d1a2d1e7f71f4b9332"
         },
         {
           "path": "scripts/assert-cloud-image-sentry.mjs",
@@ -31847,6 +31915,10 @@
           "sha256": "eccee6a01c5b798d2a384ecfcc64cfd175e3dbf59e3b486d901824fcbcc24551"
         },
         {
+          "path": "scripts/ci-install-managed-native-test-observers.sh",
+          "sha256": "867d24d9e66f2261ee1beaac4012f486c0392645f90014b91998dc3deff9bd7c"
+        },
+        {
           "path": "scripts/cli-command-migration.test.mjs",
           "sha256": "973361a8d155bb16190ae7f19bdb121c94e47038612b66d6c01b816fbbd5877b"
         },
@@ -31872,7 +31944,7 @@
         },
         {
           "path": "scripts/general-server-shard-durations.json",
-          "sha256": "cdedd191bec55537aaaddd4cc3e57d787f7f104531b4eda76b09fdd2c11818f4"
+          "sha256": "816a74512ab3416344217d932838f9a46b7057d1a53b804de4811f037c9ff77f"
         },
         {
           "path": "scripts/generate-feature-catalog.ts",
@@ -31900,7 +31972,7 @@
         },
         {
           "path": "scripts/run-vitest-stable.mjs",
-          "sha256": "f2a06b49ac8d8b24c12ccb897fa1fd5f8fb72e014ae4a0b7007853f584abd211"
+          "sha256": "970f6ba384bcdb8b7f633bc2c1aa312c10cb187d760684e093bdf70b75248d08"
         },
         {
           "path": "scripts/server-boot-smoke.sh",
@@ -45987,7 +46059,7 @@
       "id": "source:server/src/services/orchestration/native-tool-boundary.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-tool-boundary.ts",
-      "sha256": "80c45e83976a2924690537d866ac57b76c49892610ab5e5c39202429482d2359",
+      "sha256": "5b4e1d43ffb4363df3cf7782ef2f3475ac36879b64b99c1311b281452ecad61d",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -46003,7 +46075,7 @@
       "id": "source:server/src/services/orchestration/worker-model-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/worker-model-gateway.ts",
-      "sha256": "f80c961cc428ccd485b44433fe3ce91be736226ad5cfbbcf577d8dcc46a1b31c",
+      "sha256": "5a0d0b508fd7d42516d6d153b09d18b7c87fedf3093fb7dc4c3bf853b390e143",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -47212,7 +47284,7 @@
       "id": "source:server/src/services/heartbeat.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/heartbeat.ts",
-      "sha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
+      "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-03",
@@ -47247,7 +47319,7 @@
       "id": "source:server/src/services/issues.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/issues.ts",
-      "sha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
+      "sha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
@@ -47393,7 +47465,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
-      "sha256": "61aa206b5046a0fc41ced1a3d4021932e64c5b33c7a78fb47d888b7c8ca5a8a9",
+      "sha256": "8805cc8dcb7cf3b5a1e9968e18a3e883bdb9fb6aee80429dac3479d2dc61f16b",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",
@@ -48700,7 +48772,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "8d328bd0fab550847536aed2c5dcc38af016d46fe9f55d6ded9654ed6d91f07a",
+      "sha256": "e968f133e15764cfaf409fc176cc71ef95595ddd73ffea37c0cc47c390d2b2a5",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -49481,7 +49553,7 @@
       "id": "source:server/src/modules/wake-queue/adapters/postgres.ts",
       "kind": "current_source_owner",
       "path": "server/src/modules/wake-queue/adapters/postgres.ts",
-      "sha256": "cf2e6e18c9e9b16416e98e681b63e7119045e13dde134eb6917351fd8c7a25d8",
+      "sha256": "aa24c87e90fd109c09b0b82453a2bc7320a7b47036383d11cb4f8b40554ee19b",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -49663,7 +49735,7 @@
       "id": "source:server/src/services/native-direct-input.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-direct-input.ts",
-      "sha256": "94724c905706b9e23dfd31e546782247150a7c62bb5ed2b78fc22a521e6ac90a",
+      "sha256": "7a49c327ca6008e8b26cbaff2cfc711ca64b6203ae5a047c7491ec5211aaa31a",
       "changeIds": [
         "SCR-V10-HOTSPOT-06"
       ],
@@ -49845,7 +49917,7 @@
       "id": "source:server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
-      "sha256": "e60c935386ba516524602387f17a606c13d82d10e25bb51f7565eb0237eb5947",
+      "sha256": "1727491d16b5046347f0822465d08318e61ac1a31c9624a62316e45cc936e8c3",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-07"
@@ -51429,7 +51501,7 @@
       "id": "source:.github/workflows/aw-v4-verification.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/aw-v4-verification.yml",
-      "sha256": "5a9b22cc400224d135e909164f82301be3eff4a415dc900417853d3888f1ab20",
+      "sha256": "b1f368b6b4f69b5a55ece6ba8697b987b104694a3fae4bc560aa50900e6cd2e1",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -51669,7 +51741,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "3a9c927f7bc2a06d6045751059e7ad1a0eccbc237959d66c4008b03244ce87f6",
+      "sha256": "f37eb917dc7f843a85c579a9a7040356906ef4141f0592322c2b0d31cffe3175",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -52404,7 +52476,7 @@
       "id": "source:.github/workflows/pr-trusted.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/pr-trusted.yml",
-      "sha256": "be738957bd1ada0cabf460befa755116e8aba88ef75b39b4b6d1c4cf6a922fc2",
+      "sha256": "a4fb415bf36e456b02ece6eb60efea6041f1e9600a7aa7e33747d6b6b4e69d4a",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -56863,7 +56935,7 @@
       "id": "source:server/src/modules/wake-queue/adapters/postgres.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/modules/wake-queue/adapters/postgres.test.ts",
-      "sha256": "98417a9d1713b8616ff6850c36c349970a5bac00b7b00e35af7f9ce7c0853286",
+      "sha256": "918dd8c3706ad1042ed58071ec81b88259d604384ee138523fc9f5614a8833cc",
       "changeIds": [
         "SCR-V10-CONNECTOR-PROVIDER-LIFECYCLE"
       ],
@@ -57973,7 +58045,7 @@
       "id": "source:packages/db/src/v5-identities-migration.test.ts",
       "kind": "current_source_owner",
       "path": "packages/db/src/v5-identities-migration.test.ts",
-      "sha256": "1fb48795d0bfb504a0e3ef078552e9288f920d100c82350d1cd92a7a9f24082c",
+      "sha256": "6af2b0d7146f58973e42afa45496fed59c7d5ae91fd1bc967fa358ff0d8a549d",
       "changeIds": [
         "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
       ],
@@ -59893,7 +59965,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
-      "sha256": "8d5e704c7ef86db66d83d56182bfc1b93203a18a957544b8ba8a9d6e17684dd4",
+      "sha256": "032bc94b26fa07b88690d3b98e95a001ec05590956ee12c83db4d7299964cc12",
       "changeIds": [
         "SCR-V10-PROJECT-REPOSITORY-SOURCE"
       ],
@@ -60568,7 +60640,7 @@
       "id": "source:packages/paperclip-runner/generated/semantic-action-catalog.json",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/generated/semantic-action-catalog.json",
-      "sha256": "5cf3b60895801c29cefcf7087ebdd6676e518eceb70c60dc8f82e98289d926f0",
+      "sha256": "03653dbb32d029e6b98e654a06c2958916453f3bbd4720e2fb67f8f7f112d556",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -60592,6 +60664,36 @@
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "present_at_base",
         "sha256": "ae24cb0d7db40af86942b7f59fa33881e6268b9a5466e65473246db240830ae4"
+      }
+    },
+    {
+      "id": "source:packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+      "kind": "current_source_owner",
+      "path": "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+      "sha256": "6974c4fe86fccad0328611fe725511e10427ab289a341c94736d0696be4e106e",
+      "changeIds": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "sourceBeforePin": {
+        "path": "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "5f3144ea856ad27778f47de73eb542703b1d9df2abad2c427838fbaf69c3d59f"
+      }
+    },
+    {
+      "id": "source:packages/paperclip-runner/protocol/manifest.json",
+      "kind": "current_source_owner",
+      "path": "packages/paperclip-runner/protocol/manifest.json",
+      "sha256": "7af10d8c5043b1e6c9da9c77e89345f3959383e21a6d4ac8aec9c0bae7f298b0",
+      "changeIds": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "sourceBeforePin": {
+        "path": "packages/paperclip-runner/protocol/manifest.json",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "2276836975387e72296f2d1c38ac499f78378c62bb4d74740f161108c766ff24"
       }
     },
     {
@@ -60718,7 +60820,7 @@
       "id": "source:packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
-      "sha256": "ce4b2c002dbed0acecc8919d79de1fa08727b089adb3cc71c040c6a6f2b66592",
+      "sha256": "e862da84dd16fbdc4779374aeb8181746defd9898104b31aec76f3b422d190ee",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -61075,6 +61177,21 @@
       }
     },
     {
+      "id": "source:packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+      "kind": "current_source_owner",
+      "path": "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+      "sha256": "1e93303a5bccde43bab2706cf2c12df62c9aea4f58add7302570ed396e85615e",
+      "changeIds": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "sourceBeforePin": {
+        "path": "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "5e6eda810c18838171feafa89601e4980027345c004132ca31294e0a94defa0d"
+      }
+    },
+    {
       "id": "source:packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
@@ -61087,6 +61204,21 @@
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "present_at_base",
         "sha256": "24f367189e6f2fc9555807e9175f647f8874721f3119fe308390d61b81aa12b8"
+      }
+    },
+    {
+      "id": "source:packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
+      "kind": "current_source_owner",
+      "path": "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
+      "sha256": "a3322414e3f01075a0d74117ea27edec67f2cadcd8003bde5f2cd3489c4f8e5d",
+      "changeIds": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "sourceBeforePin": {
+        "path": "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "b497f1446642d2d860aeea7effb74f8bf8a033db634e1e0b78e719eac5249dcd"
       }
     },
     {
@@ -62455,6 +62587,21 @@
       }
     },
     {
+      "id": "source:server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+      "sha256": "e40b8256d532dd23201bafbb89aa54b747cec869e4a279a3e75fa4e672a35eff",
+      "changeIds": [
+        "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
       "id": "source:server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-provider-capacity.integration.test.ts",
@@ -62548,7 +62695,7 @@
       "id": "source:server/src/services/native-runtime/native-session-resume.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-resume.ts",
-      "sha256": "86e2d2984b5dec63ffd19b6d22313185100d6cb909341b3c743b7664ef01c81d",
+      "sha256": "6eb02d4fb69a37acf6963c9eab58f91ace7bf1aaefbf4d7e8d8884e15af300d4",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -70483,7 +70630,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
-      "sha256": "ce4e7571d6f291b8e58c1efb845af0f6c81d8b761e22f8a965e0592ba6ea841f",
+      "sha256": "670a82c5ce2ee58690e850a3bd3e34fb5a9ea19cb1c187e37a4713e69fc5b0c5",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -71098,7 +71245,7 @@
       "id": "source:doc/operations/agent-native-tool-alias-compatibility.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-tool-alias-compatibility.json",
-      "sha256": "adbac0011b195a6a0c6aa37a26b11975fdcc48ae3dcaa31aea32581c376ea9bc",
+      "sha256": "dd8abca8f579172fa3774963efab1e8695f3fcb1ca58a2f76578526b35759e15",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -71248,7 +71395,7 @@
       "id": "source:scripts/__tests__/run-vitest-stable-shard.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-      "sha256": "f471e240d42585dc2f38e74cd651309190945a0c301ea18e8db816bb23881d19",
+      "sha256": "9bc77c165be697ee33894632792a21b1c0d55e11a64cf1d1a2d1e7f71f4b9332",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -71410,6 +71557,21 @@
       }
     },
     {
+      "id": "source:scripts/ci-install-managed-native-test-observers.sh",
+      "kind": "current_source_owner",
+      "path": "scripts/ci-install-managed-native-test-observers.sh",
+      "sha256": "867d24d9e66f2261ee1beaac4012f486c0392645f90014b91998dc3deff9bd7c",
+      "changeIds": [
+        "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+      ],
+      "sourceBeforePin": {
+        "path": "scripts/ci-install-managed-native-test-observers.sh",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
       "id": "source:scripts/cli-command-migration.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/cli-command-migration.test.mjs",
@@ -71503,7 +71665,7 @@
       "id": "source:scripts/general-server-shard-durations.json",
       "kind": "current_source_owner",
       "path": "scripts/general-server-shard-durations.json",
-      "sha256": "cdedd191bec55537aaaddd4cc3e57d787f7f104531b4eda76b09fdd2c11818f4",
+      "sha256": "816a74512ab3416344217d932838f9a46b7057d1a53b804de4811f037c9ff77f",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -71608,7 +71770,7 @@
       "id": "source:scripts/run-vitest-stable.mjs",
       "kind": "current_source_owner",
       "path": "scripts/run-vitest-stable.mjs",
-      "sha256": "f2a06b49ac8d8b24c12ccb897fa1fd5f8fb72e014ae4a0b7007853f584abd211",
+      "sha256": "970f6ba384bcdb8b7f633bc2c1aa312c10cb187d760684e093bdf70b75248d08",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -87104,6 +87266,16 @@
     },
     {
       "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+      "to": "source:packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+      "to": "source:packages/paperclip-runner/protocol/manifest.json",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
       "to": "source:packages/paperclip-runner/runner/crates/runner-core/src/codex_provider.rs",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
@@ -87264,7 +87436,17 @@
     },
     {
       "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+      "to": "source:packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
       "to": "source:packages/paperclip-runner/src/semantic-tools/paperclip-discovery.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+      "to": "source:packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {
@@ -87720,6 +87902,11 @@
     {
       "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
       "to": "source:server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
+      "to": "source:server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {
@@ -90725,6 +90912,11 @@
     {
       "from": "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE",
       "to": "source:scripts/check-v10-safe-change-graph.mjs",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE",
+      "to": "source:scripts/ci-install-managed-native-test-observers.sh",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {

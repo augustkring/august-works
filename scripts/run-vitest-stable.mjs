@@ -119,6 +119,7 @@ const managedNativeSuites = [
   "server/src/services/native-runtime/native-opencode-conversation-task-erasure.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-browser.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-conversation-frame.integration.test.ts",
+  "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-project-create-wait.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-project-create.integration.test.ts",
   "server/src/services/native-runtime/native-opencode-managed-source.integration.test.ts"

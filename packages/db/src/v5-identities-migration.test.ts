@@ -63,6 +63,13 @@ describe.skipIf(!support.supported)("V5 identity migration", () => {
         if (statement.trim()) await sql.unsafe(statement);
       }
       for (const dependent of scopeRequestDependents) await sql`ALTER TABLE ${sql(dependent.table_name)} ADD CONSTRAINT ${sql(dependent.constraint_name)} ${sql.unsafe(dependent.definition)}`;
+      // The disposable V5 replay does not replay migration 0576, which adds
+      // this exact candidate key before its Native reservation FK can exist.
+      // Restore the canonical key so retained current-schema FKs are reattached
+      // against the same target identity as in the production migration chain.
+      await sql`ALTER TABLE agent_execution_manifests
+        ADD CONSTRAINT agent_execution_manifests_company_agent_run_manifest_uq
+        UNIQUE (company_id, agent_id, run_id, id)`;
       for (const dependent of manifestDependents) await sql`ALTER TABLE ${sql(dependent.table_name)} ADD CONSTRAINT ${sql(dependent.constraint_name)} ${sql.unsafe(dependent.definition)}`;
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET DEFAULT NULL`;
       await sql`ALTER TABLE agents ALTER COLUMN agent_identity_id SET NOT NULL`;

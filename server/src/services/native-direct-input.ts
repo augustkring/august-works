@@ -1799,6 +1799,19 @@ export interface NativeIssueEffectPrefix {
   readonly runId: string;
 }
 
+/** Compose the sealed comment source from the exact model input closure and its separately registered output dispatch. The dispatch is not part of `capture.sourceSet`; a later persisted tool_result is added by the result recorder. */
+export function nativeManagedProgressCommentSourceSet(capture: NativeModelOutputCapture): NativePayloadSourceSet {
+  const dispatchCopies = capture.sourceSet.inputs.filter(source => source.kind === capture.dispatch.kind &&
+    isDeepStrictEqual(source, capture.dispatch)).length;
+  if (dispatchCopies !== 0 || !capture.sourceSet.policy.runIds.includes(capture.runId))
+    throw forbidden("Managed progress capture does not separate its registered dispatch from consumed inputs");
+  const inputs = unionNativePayloadSourceInputs([[capture.dispatch], capture.sourceSet.inputs]);
+  // One bounded slot is reserved for the provider-settled tool_result marker.
+  if (inputs.length !== capture.sourceSet.inputs.length + 1 || inputs.length > 255)
+    throw forbidden("Managed progress comment source closure exceeds its bound");
+  return { policy: capture.sourceSet.policy, inputs };
+}
+
 /** Validate the server-only provider/tool output carrier against the settled
  * Messages response, recorded tool-use block, dispatch association, and exact
  * run receipt source set. The caller never supplies this object. */
@@ -6720,11 +6733,11 @@ export async function captureNativeTemporalContext(db: Db, companyId: string, ru
 
 /** Bind an effect owner's source-policy facts to its actual body hash. The
  * caller must build inputs/policy from locked native source owners. */
-export function nativePayloadSnapshotSql(kind: "issue" | "memory_record", policy: NativePayloadSourcePolicy,
+export function nativePayloadSnapshotSql(kind: "issue" | "memory_record" | "comment", policy: NativePayloadSourcePolicy,
   inputs: NativePayloadSourceInput[]) {
-  const ownerId = kind === "issue" ? issues.id : sql`memory_records.id`;
-  const companyId = kind === "issue" ? issues.companyId : sql`memory_records.company_id`;
-  const body = kind === "issue" ? sql`to_jsonb(${issues})` : sql`to_jsonb(memory_records)`;
+  const ownerId = kind === "issue" ? issues.id : kind === "comment" ? issueComments.id : sql`memory_records.id`;
+  const companyId = kind === "issue" ? issues.companyId : kind === "comment" ? issueComments.companyId : sql`memory_records.company_id`;
+  const body = kind === "issue" ? sql`to_jsonb(${issues})` : kind === "comment" ? sql`to_jsonb(${issueComments})` : sql`to_jsonb(memory_records)`;
   const policyJson = JSON.stringify(policy), inputsJson = JSON.stringify(inputs);
   return sql<NativePayloadSourceSnapshot>`(
     with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(

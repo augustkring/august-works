@@ -1336,6 +1336,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       .from(activityLog)
       .where(and(eq(activityLog.entityId, issueId), eq(activityLog.action, "issue.comment_added")));
     expect(progressActivity).toHaveLength(1);
+    expect(progressActivity[0]?.details).not.toHaveProperty("bodySnippet");
     expect(progressActivity[0]).toMatchObject({
       action: "issue.comment_added",
       actorType: "agent",
@@ -1345,7 +1346,6 @@ describe("PaperclipRunnerToolAuthority", () => {
       entityType: "issue",
       entityId: issueId,
       details: expect.objectContaining({
-        bodySnippet: "Runner progress",
         identifier: "RNT-1",
         issueTitle: "Exercise real runner tools",
         source: "paperclip_runner_protocol",

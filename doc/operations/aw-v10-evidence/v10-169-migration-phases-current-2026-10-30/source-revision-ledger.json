@@ -4044,5 +4044,494 @@
       "publicationSha256": "246602b9f25bd002975125cd48257d723fc5021667048fb2f480b1f3566fa6f8",
       "reason": "Removed one trailing whitespace character outside SQL literals; statement behavior and generated schema are unchanged. Original test evidence hashes are retained."
     }
+  },
+  "nativeProgressConversationCheckpoint57909": {
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "All 28 exact reviewed source paths are staged with metadata and software evidence. The source parent is recorded separately; this checkpoint does not establish full V10, actual SDK/Host/provider, browser, or merge readiness.",
+    "changes": [
+      {
+        "path": ".github/workflows/aw-v4-verification.yml",
+        "sha256": "b1f368b6b4f69b5a55ece6ba8697b987b104694a3fae4bc560aa50900e6cd2e1",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "2a7c0e01ab839055d3143b90301032839239b51394e772dfe463e06bb774c503"
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": ".github/workflows/pr-trusted.yml",
+        "sha256": "a4fb415bf36e456b02ece6eb60efea6041f1e9600a7aa7e33747d6b6b4e69d4a",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "e0d67c4f76056bef0a6162a3a157ebe1f6f9d362a2ba2207fe6f5b324a53cc15"
+        },
+        "ownerGroups": [
+          "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
+        ]
+      },
+      {
+        "path": "packages/db/src/v5-identities-migration.test.ts",
+        "sha256": "6af2b0d7146f58973e42afa45496fed59c7d5ae91fd1bc967fa358ff0d8a549d",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "463c2493ce725fa1bfed3b024f39e32c28623ffc5fc38dba3d7180bba693a2c5"
+        },
+        "ownerGroups": [
+          "SCR-V10-DATABASE-SCHEMA-AND-MIGRATIONS"
+        ]
+      },
+      {
+        "path": "packages/paperclip-runner/generated/semantic-action-catalog.json",
+        "sha256": "03653dbb32d029e6b98e654a06c2958916453f3bbd4720e2fb67f8f7f112d556",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "c9f1331a85da792d6b2dc6c859d8a07abbd488506fabc938063e18aa6c8b8b4a"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json",
+        "sha256": "6974c4fe86fccad0328611fe725511e10427ab289a341c94736d0696be4e106e",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "5f3144ea856ad27778f47de73eb542703b1d9df2abad2c427838fbaf69c3d59f"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "packages/paperclip-runner/protocol/manifest.json",
+        "sha256": "7af10d8c5043b1e6c9da9c77e89345f3959383e21a6d4ac8aec9c0bae7f298b0",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "2276836975387e72296f2d1c38ac499f78378c62bb4d74740f161108c766ff24"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "packages/paperclip-runner/src/catalog/semantic-action-catalog.ts",
+        "sha256": "e862da84dd16fbdc4779374aeb8181746defd9898104b31aec76f3b422d190ee",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "28a1b922f9c34a8cd254625dc2a9022a0bde43ff08537b98ddacffba2482da05"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "packages/paperclip-runner/src/protocol-actions/report-progress.ts",
+        "sha256": "1e93303a5bccde43bab2706cf2c12df62c9aea4f58add7302570ed396e85615e",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "5e6eda810c18838171feafa89601e4980027345c004132ca31294e0a94defa0d"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts",
+        "sha256": "a3322414e3f01075a0d74117ea27edec67f2cadcd8003bde5f2cd3489c4f8e5d",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "b497f1446642d2d860aeea7effb74f8bf8a033db634e1e0b78e719eac5249dcd"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
+        "sha256": "9bc77c165be697ee33894632792a21b1c0d55e11a64cf1d1a2d1e7f71f4b9332",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "6056ed89191c7533521fc68ba67a041aa55b59f20ba5b9738412ad1c318600ba"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "scripts/ci-install-managed-native-test-observers.sh",
+        "sha256": "867d24d9e66f2261ee1beaac4012f486c0392645f90014b91998dc3deff9bd7c",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "scripts/general-server-shard-durations.json",
+        "sha256": "816a74512ab3416344217d932838f9a46b7057d1a53b804de4811f037c9ff77f",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "2dc35ea1b59bb36e3369017b9e663a4334f139a74fa26d0d7f7174525beda883"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "scripts/run-vitest-stable.mjs",
+        "sha256": "970f6ba384bcdb8b7f633bc2c1aa312c10cb187d760684e093bdf70b75248d08",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "645adcb1db63b03b4ed1ac2e371bccca80b6684430a22abba1f987c23678ab5b"
+        },
+        "ownerGroups": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/heartbeat-managed-project-workspace.integration.test.ts",
+        "sha256": "032bc94b26fa07b88690d3b98e95a001ec05590956ee12c83db4d7299964cc12",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PROJECT-REPOSITORY-SOURCE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "sha256": "670a82c5ce2ee58690e850a3bd3e34fb5a9ea19cb1c187e37a4713e69fc5b0c5",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
+        "sha256": "f37eb917dc7f843a85c579a9a7040356906ef4141f0592322c2b0d31cffe3175",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+        ]
+      },
+      {
+        "path": "server/src/modules/wake-queue/adapters/postgres.test.ts",
+        "sha256": "918dd8c3706ad1042ed58071ec81b88259d604384ee138523fc9f5614a8833cc",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "bd30a752922fb60a8f49e7a81efcd40e6fe00051b3d19bf452b94f30714b21f0"
+        },
+        "ownerGroups": [
+          "SCR-V10-CONNECTOR-PROVIDER-LIFECYCLE"
+        ]
+      },
+      {
+        "path": "server/src/modules/wake-queue/adapters/postgres.ts",
+        "sha256": "aa24c87e90fd109c09b0b82453a2bc7320a7b47036383d11cb4f8b40554ee19b",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "0ab9bf3732547afd44d0a5abb6fcc7fa0e809aeda3ec24364615cc38af562cfc"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/heartbeat.ts",
+        "sha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "24769d49ec221f329c6b069041ce85a957cc2e3267cdeda370e6e737ba01c9f9"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-03",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07",
+          "SCR-V10-HOTSPOT-08",
+          "SCR-V10-HOTSPOT-11"
+        ]
+      },
+      {
+        "path": "server/src/services/issues.ts",
+        "sha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "233d26f49f2925c60215ebde1545934e1e7f61a4ff4d82aaf108e7a5dfc3c9c9"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-12"
+        ]
+      },
+      {
+        "path": "server/src/services/native-direct-input.ts",
+        "sha256": "7a49c327ca6008e8b26cbaff2cfc711ca64b6203ae5a047c7491ec5211aaa31a",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts",
+        "sha256": "e40b8256d532dd23201bafbb89aa54b747cec869e4a279a3e75fa4e672a35eff",
+        "worktreeState": "untracked",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "sha256": "e968f133e15764cfaf409fc176cc71ef95595ddd73ffea37c0cc47c390d2b2a5",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "b8d7ae5a0360d6d3dd9fada6fe45edbae0c435169fef84e48a978c1cac8f205d"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-resume.ts",
+        "sha256": "6eb02d4fb69a37acf6963c9eab58f91ace7bf1aaefbf4d7e8d8884e15af300d4",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "a219a9e945637e4164e89aed330d455ceb47b6da868add79263b1dffa8c6dbcd"
+        },
+        "ownerGroups": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts",
+        "sha256": "8805cc8dcb7cf3b5a1e9968e18a3e883bdb9fb6aee80429dac3479d2dc61f16b",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "20870009588481a676285f049f06823a8e1acd9c183a8ed4bcd68c4ea36a3e49"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02",
+          "SCR-V10-HOTSPOT-05",
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+        "sha256": "1727491d16b5046347f0822465d08318e61ac1a31c9624a62316e45cc936e8c3",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "ae38465108573d9691013f8853254ea909038928b8a60f3f0836b70c3ab145eb"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/orchestration/native-tool-boundary.ts",
+        "sha256": "5b4e1d43ffb4363df3cf7782ef2f3475ac36879b64b99c1311b281452ecad61d",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "5de08bc964a284dd801d5c51e3fc6f2359b5c1fdaf1d83b6dd3f7d1e28d09f29"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      },
+      {
+        "path": "server/src/services/orchestration/worker-model-gateway.ts",
+        "sha256": "5a0d0b508fd7d42516d6d153b09d18b7c87fedf3093fb7dc4c3bf853b390e143",
+        "worktreeState": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "2fd8c76c01468ae8ce244fd7ed01054a3499cfb4923823e4106933fe1a56d9bb"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-01",
+          "SCR-V10-HOTSPOT-07"
+        ]
+      }
+    ],
+    "inventory": {
+      "previousSourceDeltaPathCount": 2034,
+      "currentSourceDeltaPathCount": 2040,
+      "deletedSourcePathCount": 41,
+      "fullDiffPathCount": 14532,
+      "untrackedSourceCandidateCount": 0,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "newPathGroupAssignments": {
+        "packages/paperclip-runner/protocol/fixtures/evals/native-execution-seeded.json": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "packages/paperclip-runner/protocol/manifest.json": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "packages/paperclip-runner/src/protocol-actions/report-progress.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "packages/paperclip-runner/src/tools/capability-semantic-tools.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ],
+        "scripts/ci-install-managed-native-test-observers.sh": [
+          "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
+        ],
+        "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts": [
+          "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
+        ]
+      }
+    },
+    "metadataPinsRefreshed": {
+      "phase": [
+        [
+          "server/src/services/native-runtime/native-session-executor.ts",
+          "8d328bd0fab550847536aed2c5dcc38af016d46fe9f55d6ded9654ed6d91f07a",
+          "e968f133e15764cfaf409fc176cc71ef95595ddd73ffea37c0cc47c390d2b2a5"
+        ]
+      ],
+      "alias": [
+        [
+          "server/src/services/issues.ts",
+          "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
+          "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a"
+        ],
+        [
+          "server/src/services/native-direct-input.ts",
+          "94724c905706b9e23dfd31e546782247150a7c62bb5ed2b78fc22a521e6ac90a",
+          "7a49c327ca6008e8b26cbaff2cfc711ca64b6203ae5a047c7491ec5211aaa31a"
+        ],
+        [
+          "server/src/services/native-runtime/native-session-executor.ts",
+          "8d328bd0fab550847536aed2c5dcc38af016d46fe9f55d6ded9654ed6d91f07a",
+          "e968f133e15764cfaf409fc176cc71ef95595ddd73ffea37c0cc47c390d2b2a5"
+        ],
+        [
+          "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
+          "e60c935386ba516524602387f17a606c13d82d10e25bb51f7565eb0237eb5947",
+          "1727491d16b5046347f0822465d08318e61ac1a31c9624a62316e45cc936e8c3"
+        ],
+        [
+          "server/src/services/orchestration/worker-model-gateway.ts",
+          "f80c961cc428ccd485b44433fe3ce91be736226ad5cfbbcf577d8dcc46a1b31c",
+          "5a0d0b508fd7d42516d6d153b09d18b7c87fedf3093fb7dc4c3bf853b390e143"
+        ]
+      ]
+    },
+    "rootReviewedHelpPairs": [
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "recovering-work",
+        "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+        "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+        "decision": "no_change",
+        "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      },
+      {
+        "source": "server/src/services/issues.ts",
+        "articleId": "recovering-work",
+        "sourceSha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
+        "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
+        "decision": "no_change",
+        "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "recovering-work-da",
+        "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+        "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+        "decision": "no_change",
+        "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      },
+      {
+        "source": "server/src/services/issues.ts",
+        "articleId": "recovering-work-da",
+        "sourceSha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
+        "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
+        "decision": "no_change",
+        "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "export-and-delete",
+        "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+        "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
+        "decision": "no_change",
+        "rationale": "Root reviewed the complete English and Danish export/delete guidance. Confirmed storage cleanup behavior is unchanged; setup-container occupancy settlement does not claim Native process stop, provider erasure, or storage removal. Existing user instructions remain accurate."
+      },
+      {
+        "source": "server/src/services/heartbeat.ts",
+        "articleId": "export-and-delete-da",
+        "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
+        "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
+        "decision": "no_change",
+        "rationale": "Root reviewed the complete English and Danish export/delete guidance. Confirmed storage cleanup behavior is unchanged; setup-container occupancy settlement does not claim Native process stop, provider erasure, or storage removal. Existing user instructions remain accurate."
+      }
+    ],
+    "observedRunFactsAndBoundaries": {
+      "rootCheckpoint": "Root declares source frozen at HEAD 57909d1 after all Root checks closed; full server TSC PASS 102.66s, peak 6279516160 bytes, stable SHA/mtime and no OOM.",
+      "queueOrdering": "Six selected actual PostgreSQL regressions passed (r461): exact unknown-cleanup ownership and finalizer claim retained, one Board action, foreign/newer owner protected. No actual SDK/Host qualification follows from those component fixtures.",
+      "copyback": "Copyback/progress source ownership does not add user action; Host fixture IO remains unqualified.",
+      "humanInput": "Human-input changes not applied to this checkpoint.",
+      "qualificationBoundary": "No V10-wide promotion, GA, physical-host, paid-provider, production deployment, or merge qualification claim.",
+      "rootBuild": "Required root pnpm build passed (r464), 187.89 seconds, peak process-group RSS 6380298240 bytes, stable SHA/mtime and no OOM."
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "historical169RequirementStatusesPreserved": true,
+      "existingPhaseStatusesPreserved": true,
+      "sourceHashRefreshIsNotQualification": true
+    },
+    "sourceParentCommit": "57909d18e090df7295fb0ab64365a5cda3f666e4",
+    "softwareEvidence": "doc/operations/aw-v10-evidence/managed-progress-and-recovery-20261111/README.md"
   }
 }

@@ -1,4 +1,5 @@
-import { captureNativeBlockedHumanInteraction, NATIVE_BLOCKED_INTERACTION_READ_TOOLS, type NativeBlockedHumanInteraction } from "../native-direct-input.js";
+import { assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet, captureNativeBlockedHumanInteraction, nativePayloadSnapshotSql,
+  NATIVE_BLOCKED_INTERACTION_READ_TOOLS, type NativeBlockedHumanInteraction } from "../native-direct-input.js";
 import { nativeStageCommentApiCallSchema, nativeStageCommentApiDecisionCurrent, readNativeManagedStageCommentCapture, type NativeManagedStageCommentCapture } from "../native-stage-comment-api.js";
 import { nativeRunInputSourceReceiptSchema } from "@paperclipai/shared";
 import { publicChatTaskUrl } from "../chat-task-url.js";
@@ -7,7 +8,8 @@ import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,execut
 import {assertAnalyticalContextPayloadAccess,assertNativeAnalyticalRunPayloadAccess} from "../analytical-context-authority.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
+import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent,
+  assertNativeConversationToolNoPlanScope } from "../orchestration/native-tool-boundary.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
 import { authorizationService, issueReadSqlCondition, type AuthorizationActor } from "../authorization.js";
@@ -560,6 +562,8 @@ export class PaperclipRunnerToolAuthority {
     onNativeInputToolResult?: (source: NativeInputToolResultSource) => Promise<void>;
     onManagedProjectCreateToolResult?: (capture: NativeManagedProjectCreateCapture) => Promise<void>;
     onManagedStageCommentToolResult?: (capture: NativeManagedStageCommentCapture) => Promise<void>;
+    onManagedProgressCommentToolResult?: (capture: { callId: string; argumentsHash: string; resultDigest: string;
+      commentId: string; outputCapture: NativeModelOutputCapture }) => Promise<void>;
     nativeToolCallIdentity?: NativeBackendToolCallIdentity;
   } = {}): Promise<unknown> {
     const dependencyInteraction = await captureNativeBlockedHumanInteraction(this.db, this.binding, this.binding.blockedHumanInteraction);
@@ -573,13 +577,15 @@ export class PaperclipRunnerToolAuthority {
     if (this.binding.nativeModelOutputCapture) {
       const capture = this.binding.nativeModelOutputCapture.value;
       const use = capture?.managedOpenCodeToolUse;
-      if (["write_document", "create_task", "create_project", MANAGED_NATIVE_REMEMBER_TOOL].includes(call.tool) && !use)
+      if (["write_document", "create_task", "create_project", "report_progress", MANAGED_NATIVE_REMEMBER_TOOL].includes(call.tool) && !use)
         throw forbidden("Managed OpenCode output effect has no settled provider tool-use capture");
       const captureToolName = call.tool === MANAGED_NATIVE_REMEMBER_TOOL
         ? MANAGED_NATIVE_REMEMBER_GATEWAY_TOOL : call.tool;
       if (use && (use.callId !== call.callId || use.toolName !== captureToolName ||
         use.argumentsHash !== nativeSha256(call.arguments)))
         throw forbidden("Managed OpenCode output effect does not match its exact provider tool use");
+      if (use && call.tool === "report_progress" && !options.onManagedProgressCommentToolResult)
+        throw forbidden("Managed progress comment has no result source capture owner");
     }
     return nativeBackendToolCallIdentity.run(boundNativeCall, async () => {
       this.binding.authoritySignal?.throwIfAborted();
@@ -658,6 +664,19 @@ export class PaperclipRunnerToolAuthority {
         await options.onManagedStageCommentToolResult(managedStageCommentCapture.value);
       if (managedProjectCreateCapture.value && options.onManagedProjectCreateToolResult)
         await options.onManagedProjectCreateToolResult(managedProjectCreateCapture.value);
+      if (call.tool === "report_progress" && options.onManagedProgressCommentToolResult) {
+        const capture = this.binding.nativeModelOutputCapture?.value;
+        if (!capture || !boundNativeCall || !capture.managedOpenCodeToolUse ||
+          capture.managedOpenCodeToolUse.callId !== call.callId || capture.managedOpenCodeToolUse.toolName !== call.tool ||
+          capture.managedOpenCodeToolUse.argumentsHash !== nativeSha256(call.arguments))
+          throw forbidden("Managed progress comment has no exact provider output capture");
+        const resultRecord = record(result);
+        if (typeof resultRecord.commentId !== "string" || resultRecord.issueId !== this.binding.issueId)
+          throw forbidden("Managed progress comment result is unavailable");
+        await options.onManagedProgressCommentToolResult({ callId: call.callId,
+          argumentsHash: capture.managedOpenCodeToolUse.argumentsHash, resultDigest: nativeSha256(result),
+          commentId: resultRecord.commentId, outputCapture: capture });
+      }
       return result;
     });
   }
@@ -1638,19 +1657,76 @@ export class PaperclipRunnerToolAuthority {
     const body = typeof input.body === "string" ? input.body.trim() : "";
     const idempotencyKey = typeof input.idempotencyKey === "string" ? input.idempotencyKey.trim() : "";
     if (!body || !idempotencyKey) throw new Error("paperclip_runner_tool_input_invalid");
+    const outputCapture = this.binding.nativeModelOutputCapture?.value ?? null;
+    const managedUse = outputCapture?.managedOpenCodeToolUse;
+    if (managedUse && (managedUse.toolName !== "report_progress" ||
+        managedUse.argumentsHash !== nativeSha256(input)))
+      throw forbidden("Managed progress comment does not match its exact provider tool use");
     let publication: Awaited<ReturnType<typeof persistActivity>>["publication"] | null = null;
     const result = await this.#withMutationReceipt(
       "report_progress",
       idempotencyKey,
       input,
       async (tx, context) => {
+        if (context.issue.workMode === "ask") throw forbidden("Progress comments are unavailable in ask mode");
+        const outputActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+          agentId: this.binding.agentId, runId: this.binding.runId,
+          onBehalfOfUserId: context.run.responsibleUserId ?? undefined };
+        if (managedUse && outputCapture) {
+          if (outputCapture.runId !== context.run.id || outputCapture.dispatch.runId !== context.run.id ||
+            !["worker_model_dispatch", "conversation_model_dispatch"].includes(outputCapture.dispatch.kind) ||
+            !outputCapture.sourceSet.policy.runIds.includes(context.run.id))
+            throw forbidden("Managed progress comment source does not belong to this Native run");
+          if (outputCapture.dispatch.kind === "conversation_model_dispatch") {
+            if (outputCapture.dispatch.issueId !== this.binding.issueId || outputCapture.dispatch.agentId !== this.binding.agentId ||
+              outputCapture.dispatch.conversationSessionGeneration !== context.issue.conversationSessionGeneration)
+              throw forbidden("Managed conversation progress is outside its bound conversation generation");
+            const invocationKey = `aw-native-tool:${this.binding.runId}:${String(nativeBackendToolCallIdentity.getStore()?.callId ?? "")}`;
+            const matchingInvocations = await tx.select().from(toolInvocations).where(and(
+              eq(toolInvocations.companyId, this.binding.companyId), eq(toolInvocations.runId, this.binding.runId),
+              eq(toolInvocations.issueId, this.binding.issueId), eq(toolInvocations.agentId, this.binding.agentId),
+              eq(toolInvocations.idempotencyKey, invocationKey), eq(toolInvocations.toolName, "report_progress")));
+            if (matchingInvocations.length) {
+              if (matchingInvocations.length !== 1 || matchingInvocations[0]!.status !== "executing" ||
+                matchingInvocations[0]!.argumentsHash !== nativeSha256(input))
+                throw forbidden("Managed planned conversation progress has no exact budgeted tool invocation");
+              const plan = await assertNativeToolPlanCurrent(tx as unknown as Db, this.binding, true);
+              if (!plan) throw forbidden("Managed planned conversation progress has no current plan scope");
+            } else {
+              await assertNativeConversationToolNoPlanScope(tx as unknown as Db, this.binding);
+            }
+          }
+          await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, this.binding.companyId,
+            this.binding.issueId, outputCapture, "report_progress", outputActor);
+        }
         const comment = await issueService(tx).addComment(
           this.binding.issueId,
           body,
           { agentId: this.binding.agentId, runId: this.binding.runId },
           { authorizationReason: this.#sourceChannel() },
           tx,
+          managedUse ? 1 : undefined,
         );
+        if (managedUse && outputCapture) {
+          const commentSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
+          // Keep the original consumed sourceSet intact and compose the separately
+          // registered dispatch into the comment output owner.
+          const snapshot = nativePayloadSnapshotSql("comment", commentSourceSet.policy, commentSourceSet.inputs);
+          const [sealed] = await tx.update(issueComments).set({ payloadSourceProtocolVersion: 1,
+            payloadSourceSnapshot: snapshot }).where(and(eq(issueComments.companyId, this.binding.companyId),
+              eq(issueComments.issueId, this.binding.issueId), eq(issueComments.id, comment.id),
+              eq(issueComments.createdByRunId, this.binding.runId), eq(issueComments.authorAgentId, this.binding.agentId),
+              eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
+              eq(issueComments.payloadSourceSnapshotInvalidated, false)))
+            .returning({ id: issueComments.id, payloadSourceProtocolVersion: issueComments.payloadSourceProtocolVersion,
+              payloadSourceSnapshot: issueComments.payloadSourceSnapshot });
+          const parsedSnapshot = nativePayloadSourceSnapshotSchema.safeParse(sealed?.payloadSourceSnapshot);
+          if (!sealed || sealed.payloadSourceProtocolVersion !== 1 || !parsedSnapshot.success ||
+            !isDeepStrictEqual({ policy: parsedSnapshot.data.policy, inputs: parsedSnapshot.data.inputs }, commentSourceSet))
+            throw forbidden("Managed progress comment source seal could not be retained");
+          await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, this.binding.companyId,
+            this.binding.issueId, outputCapture, "report_progress", outputActor);
+        }
         const result = { commentId: comment.id, issueId: this.binding.issueId, disposition: "applied" };
         const activity = await persistActivity(tx, {
           companyId: this.binding.companyId,
@@ -1664,7 +1740,6 @@ export class PaperclipRunnerToolAuthority {
           entityId: this.binding.issueId,
           details: {
             commentId: comment.id,
-            bodySnippet: comment.body.slice(0, 120),
             identifier: context.issue.identifier,
             issueTitle: context.issue.title,
             authorizationReason: this.#sourceChannel(),
@@ -1675,6 +1750,22 @@ export class PaperclipRunnerToolAuthority {
         return result;
       },
     );
+    if (managedUse && outputCapture) {
+      const resultRecord = record(result);
+      const commentSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
+      const [comment] = await this.db.select({ payloadSourceProtocolVersion: issueComments.payloadSourceProtocolVersion,
+        payloadSourceSnapshot: issueComments.payloadSourceSnapshot, invalidated: issueComments.payloadSourceSnapshotInvalidated,
+        authorType: issueComments.authorType, authorAgentId: issueComments.authorAgentId, createdByRunId: issueComments.createdByRunId })
+        .from(issueComments).where(and(eq(issueComments.companyId, this.binding.companyId),
+          eq(issueComments.issueId, this.binding.issueId), eq(issueComments.id, String(resultRecord.commentId)),
+          isNull(issueComments.deletedAt)));
+      const snapshot = nativePayloadSourceSnapshotSchema.safeParse(comment?.payloadSourceSnapshot);
+      if (!comment || comment.invalidated || comment.payloadSourceProtocolVersion !== 1 ||
+        comment.authorType !== "agent" ||
+        comment.authorAgentId !== this.binding.agentId || comment.createdByRunId !== this.binding.runId ||
+        !snapshot.success || !isDeepStrictEqual({ policy: snapshot.data.policy, inputs: snapshot.data.inputs }, commentSourceSet))
+        throw forbidden("Managed progress comment replay is not bound to this exact consumed source closure");
+    }
     if (publication) publishActivity(publication);
     return result;
   }

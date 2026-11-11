@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
+      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Reviewed complete English/Danish article against exact failed-chat retry authority, original Human/comment Source revalidation, explicit operator interruption and cleanup-gated pending-comment promotion. The existing original-Task/current-status/current-requirements/stop-pending guidance remains accurate; no silent replacement or replay is promised. New SDK journeys remain unqualified until actual tests pass."
+      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1581,10 +1581,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
+      "sourceSha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "Verified linked, non-bot channel Humans now receive atomic Task and comment source snapshots. Guest, bot, revoked and unrelated-user cases do not gain source authority. The article still correctly requires the current task state and an available retry action; it promises no bypass of source or owner requirements."
+      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
+      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "Reviewed complete English/Danish article against exact failed-chat retry authority, original Human/comment Source revalidation, explicit operator interruption and cleanup-gated pending-comment promotion. The existing original-Task/current-status/current-requirements/stop-pending guidance remains accurate; no silent replacement or replay is promised. New SDK journeys remain unqualified until actual tests pass."
+      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1685,10 +1685,10 @@
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "6c4de3279df375ecb6cebc3f88a569679eed2959fb6642a14bc2445afc391037",
+      "sourceSha256": "015d49a2eda6f58bcbbe828b8cedf8e221ee8c6af77f165b93f177393672a39a",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "En verificeret, tilknyttet kanalbruger f\u00e5r nu atomiske kildesnapshots for opgaven og kommentaren. G\u00e6ster, bots samt tilbagekaldte og andre brugere f\u00e5r ikke ny kildeadgang. Vejledningens krav om aktuel opgavestatus, kildeadgang og en vist handling til nyt fors\u00f8g er fortsat korrekte."
+      "rationale": "Root reviewed the complete English and Danish recovery guidance. Current queue preservation and copyback/progress source ownership retain the original Task/comment authority; this adds no user action or new retry promise. Existing stop and recovery guidance remains accurate."
     },
     {
       "source": "server/src/services/managed-repository-checkout.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
+      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
-      "rationale": "Reviewed complete English/Danish article against typed prelaunch container Stop and derived occupancy settlement. Resource settlement never writes a Native process-stop projection and does not assert provider erasure or storage removal; existing pending process/storage and Memory/provider limits remain accurate."
+      "rationale": "Root reviewed the complete English and Danish export/delete guidance. Confirmed storage cleanup behavior is unchanged; setup-container occupancy settlement does not claim Native process stop, provider erasure, or storage removal. Existing user instructions remain accurate."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "b9c4500fd8b32513370c06fe29d87a691a39de049dd9278b55936371b3134e07",
+      "sourceSha256": "f1296f3dbb47c2e7c5d270f548af4becfab7b832a8c4b75991f7eab499b739b0",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
-      "rationale": "Reviewed complete English/Danish article against typed prelaunch container Stop and derived occupancy settlement. Resource settlement never writes a Native process-stop projection and does not assert provider erasure or storage removal; existing pending process/storage and Memory/provider limits remain accurate."
+      "rationale": "Root reviewed the complete English and Danish export/delete guidance. Confirmed storage cleanup behavior is unchanged; setup-container occupancy settlement does not claim Native process stop, provider erasure, or storage removal. Existing user instructions remain accurate."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",

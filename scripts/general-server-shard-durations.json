@@ -651,6 +651,7 @@
     "server/src/services/workspace-runtime-ready-comment.test.ts": 2176,
     "server/src/shutdown.test.ts": 331,
     "server/src/url-utils.test.ts": 183,
-    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts": 199747
+    "server/src/__tests__/v7-worker-model-gateway.integration.test.ts": 199747,
+    "server/src/services/native-runtime/native-opencode-managed-progress-conversation.integration.test.ts": 723529
   }
 }

@@ -26,7 +26,7 @@ export function nativeToolContractFingerprintForTarget(
   return `sha256:${createHash("sha256")
     .update(
       JSON.stringify({
-        schema: "paperclip.native-tool-contract.v14",
+        schema: "paperclip.native-tool-contract.v15",
         executionTargetKind,
         advertisementPolicy: {
           // Direct provider threads retain declarations from thread/start.
@@ -41,6 +41,7 @@ export function nativeToolContractFingerprintForTarget(
             "always_advertised_run_issue_agent_binding_gated_current_task_description.v2",
           semanticCompletion: "finish_accessible_deliverable_evidence.v4",
           nativeCompletionReview: "exact_assigned_review_resolve_review.v1",
+          managedProgressComments: "exact_provider_capture_semantic_receipt_comment_snapshot_and_chat_history.v1",
           connectorTools: "assigned_resources_and_pinned_skill_bundle.v1",
           ...(executionTargetKind === "remote"
             ? { assignedMcpTools: "codex_server_gateway_prp_relay.v1" }
@@ -69,6 +70,7 @@ export function nativeToolContractFingerprintForTarget(
             version: 1,
           },
           { name: "request_human_input", version: 1 },
+          { name: "report_progress", semanticContract: "paperclip.native-managed-progress-comment.v1", version: 1 },
         ],
       }),
     )

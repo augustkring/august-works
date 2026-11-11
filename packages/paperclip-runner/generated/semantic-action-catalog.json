@@ -383,7 +383,6 @@
   {
     "allowedModes": [
       "standard",
-      "ask",
       "planning",
       "skill_test"
     ],

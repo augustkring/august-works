@@ -7,6 +7,7 @@ import { documentService } from "./documents.js";
 import { parseTaskSearch, taskSearchCtes, taskSearchScore } from "./task-search.js";
 import { createdFromIssueCondition } from "./issue-creation-origin.js";
 import { executionProjectionsForRuns } from "./execution-projection.js";
+import { hasPendingRunCleanup } from "./execution-blocker.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
 import { isDeepStrictEqual } from "node:util";
@@ -11843,7 +11844,8 @@ export function issueService(db: Db) {
       dbOrTx: any = db,
       postCommitActivityPublications?: ActivityPublication[],
       postCommitActions?: IssuePostCommitAction[],
-      options: { bindRuntimeSharedWorkspace?: boolean; nativeStagePolicySourceTransform?: import("./native-stage-task-body-source.js").NativeStageTaskBodyOwner; workspaceBindingSourceTransform?: {
+      options: { bindRuntimeSharedWorkspace?: boolean; nativeFailureRecoveryOwner?: { runId: string; agentId: string };
+        nativeStagePolicySourceTransform?: import("./native-stage-task-body-source.js").NativeStageTaskBodyOwner; workspaceBindingSourceTransform?: {
         agentId: string; runId: string; workspaceId: string; expectedPreviousSnapshotDigest: string;
         preparingControllerBootId?: string;
       } } = {},
@@ -12144,17 +12146,19 @@ export function issueService(db: Db) {
       if (issueData.status && issueData.status !== "cancelled") {
         patch.cancelledAt = null;
       }
-      if (issueData.status && issueData.status !== "in_progress") {
+      if (issueData.status && issueData.status !== "in_progress" && !options.nativeFailureRecoveryOwner) {
         patch.checkoutRunId = null;
         patch.executionRunId = null;
         patch.executionAgentNameKey = null;
         patch.executionLockedAt = null;
       }
       if (
-        (issueData.assigneeAgentId !== undefined &&
-          issueData.assigneeAgentId !== existing.assigneeAgentId) ||
-        (issueData.assigneeUserId !== undefined &&
-          issueData.assigneeUserId !== existing.assigneeUserId)
+        !options.nativeFailureRecoveryOwner && (
+          (issueData.assigneeAgentId !== undefined &&
+            issueData.assigneeAgentId !== existing.assigneeAgentId) ||
+          (issueData.assigneeUserId !== undefined &&
+            issueData.assigneeUserId !== existing.assigneeUserId)
+        )
       ) {
         patch.checkoutRunId = null;
         patch.executionRunId = null;
@@ -12176,6 +12180,38 @@ export function issueService(db: Db) {
           .for("update")
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!receiptExisting) return null;
+        const nativeFailureRecoveryOwner = options.nativeFailureRecoveryOwner;
+        if (nativeFailureRecoveryOwner) {
+          if (issueData.status !== "blocked" || issueData.assigneeAgentId !== undefined ||
+              issueData.assigneeUserId !== undefined || issueData.executionRunId !== undefined ||
+              issueData.checkoutRunId !== undefined || receiptExisting.executionRunId !== nativeFailureRecoveryOwner.runId ||
+              receiptExisting.checkoutRunId !== nativeFailureRecoveryOwner.runId ||
+              receiptExisting.assigneeAgentId !== nativeFailureRecoveryOwner.agentId) {
+            throw conflict("Native recovery owner changed before the issue block was recorded", { issueId: id });
+          }
+          const [ownerRun] = await tx.select({ companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId,
+            status: heartbeatRuns.status, finishedAt: heartbeatRuns.finishedAt, runtimeMode: heartbeatRuns.runtimeMode,
+            nativeIssueId: heartbeatRuns.nativeIssueId, contextSnapshot: heartbeatRuns.contextSnapshot,
+            nativeProcessCleanupPending: heartbeatRuns.nativeProcessCleanupPending,
+          }).from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.id, nativeFailureRecoveryOwner.runId),
+            eq(heartbeatRuns.companyId, receiptExisting.companyId),
+            eq(heartbeatRuns.agentId, nativeFailureRecoveryOwner.agentId),
+          )).limit(1);
+          const runIssueId = parseObject(ownerRun?.contextSnapshot).issueId;
+          const terminalNativeRun = ownerRun?.runtimeMode === "native" &&
+            ownerRun.nativeIssueId === receiptExisting.id && runIssueId === receiptExisting.id &&
+            ownerRun.finishedAt !== null &&
+            ["failed", "timed_out", "interrupted", "cancelled"].includes(ownerRun.status);
+          const pendingLiability = ownerRun
+            ? await hasPendingRunCleanup(tx as unknown as Db, receiptExisting.companyId, nativeFailureRecoveryOwner.runId)
+            : true;
+          const cleanupUnknown = Boolean(ownerRun &&
+            (ownerRun.nativeProcessCleanupPending !== false || pendingLiability));
+          if (!terminalNativeRun || !cleanupUnknown) {
+            throw conflict("Native recovery cleanup state changed before the issue block was recorded", { issueId: id });
+          }
+        }
         if (privateWorkAdmission === "owned_conversation_work_mode") {
           const modeOnly = Object.keys(issueData).length === 1 && Object.hasOwn(issueData, "workMode") &&
             ISSUE_WORK_MODES.includes(issueData.workMode as typeof ISSUE_WORK_MODES[number]);
@@ -13799,7 +13835,7 @@ export function issueService(db: Db) {
         onManualInputSourcePublication?: (publication: ActivityPublication) => void;
       },
       dbOrTx: any = db,
-      manualInputProtocol?: 1,
+      sourceProtocolVersion?: 1,
     ): Promise<IssueComment> {
       const candidate = options?.manualInputActor;
       const verifiedChatHumanInput = options?.verifiedChatHumanInput ?? null;
@@ -14218,7 +14254,7 @@ export function issueService(db: Db) {
             authorType,
             createdByRunId,
             body: redactedBody,
-            ...(manualInputProtocol ? { payloadSourceProtocolVersion: manualInputProtocol } : {}),
+            ...(sourceProtocolVersion ? { payloadSourceProtocolVersion: sourceProtocolVersion } : {}),
             clientRequestId: options?.clientRequestId ?? null,
             presentation,
             metadata,
@@ -14354,7 +14390,7 @@ export function issueService(db: Db) {
           (attachment: CommentAttachmentRow) =>
             attachment.issueCommentId === null ? [attachment.id] : [],
         );
-        const recaptureHumanUploads = manualInputProtocol === 1 && authorType === "user" &&
+        const recaptureHumanUploads = sourceProtocolVersion === 1 && authorType === "user" &&
           typeof actor.userId === "string" && !actor.agentId && !createdByRunId && attachmentRows.every((attachment: CommentAttachmentRow) =>
             attachment.createdByUserId === actor.userId && attachment.createdByAgentId === null &&
             attachment.originatingRunId === null && attachment.payloadSourceProtocolVersion === 1 &&
