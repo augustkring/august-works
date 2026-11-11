@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import type { StorageService, StorageProvider, StorageAccounting, PutFileInput, PutFileResult } from "./types.js";
-import { badRequest, forbidden, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, unprocessable } from "../errors.js";
 
 const MAX_SEGMENT_LENGTH = 120;
 
@@ -89,7 +89,7 @@ function assertPutFileInput(input: PutFileInput): void {
 
 export function createStorageService(provider: StorageProvider, accounting?: StorageAccounting): StorageService {
   const scopeId = provider.scopeId;
-  return {
+  const service: StorageService = {
     provider: provider.id,
     scopeId,
 
@@ -98,7 +98,14 @@ export function createStorageService(provider: StorageProvider, accounting?: Sto
       const objectKey = buildObjectKey(input.companyId, input.namespace, input.originalFilename);
       const byteSize = input.body.length;
       const contentType = input.contentType.trim().toLowerCase();
-      await input.onAllocated?.(objectKey);
+      try {
+        await input.onAllocated?.(objectKey);
+      } catch (error) {
+        // Allocation refusal occurs before any provider call. Let the same
+        // durable owner clear its reservation with explicit no-write proof.
+        await input.onWritePrevented?.(objectKey);
+        throw error;
+      }
       try {
         await accounting?.reserve(input.companyId, objectKey, byteSize);
       } catch (error) {
@@ -150,4 +157,21 @@ export function createStorageService(provider: StorageProvider, accounting?: Sto
       }
     },
   };
+
+  if (provider.eraseObject) {
+    service.eraseObject = async (companyId, objectKey) => {
+      ensureCompanyPrefix(companyId, objectKey);
+      await accounting?.deleting(companyId, objectKey);
+      try {
+        await provider.eraseObject!({ objectKey });
+      } catch (error) {
+        const details = error && typeof error === "object" && "details" in error
+          ? (error as { details?: { code?: unknown } }).details : null;
+        if (details?.code === "storage_object_erasure_pending") throw error;
+        throw conflict("Storage object erasure is awaiting physical confirmation", { code: "storage_object_erasure_pending" });
+      }
+      await accounting?.deleted(companyId, objectKey);
+    };
+  }
+  return service;
 }

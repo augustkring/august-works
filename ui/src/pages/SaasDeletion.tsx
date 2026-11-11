@@ -58,6 +58,7 @@ function SaasDeletionForm() {
     offboarding_stage_invalid: "stageRepair",
     offboarding_provider_access_denied: "providerAccess",
     offboarding_provider_invalid_request: "providerRequest",
+    company_export_storage_scope_changed: "exportStorage",
     secret_provider_erasure_pending: "providerPending",
     managed_provider_erasure_pending: "runtimePending",
     legacy_runtime_asset_erasure_pending: "runtimePending",

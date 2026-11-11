@@ -82,6 +82,8 @@ import {
   sweepAbandonedImportTransferSpools,
 } from "./services/company-import-transfers.js";
 import { companyTransferRunService } from "./services/company-transfer-runs.js";
+import { companyExportTransferService, drainCompanyExportWorkers, scheduleCompanyExportRecovery } from "./services/company-export-transfers.js";
+import { companyPortabilityService } from "./services/company-portability.js";
 import { healthRoutes } from "./routes/health.js";
 import { cloudRuntimeIdentityMiddleware } from "./middleware/cloud-runtime-identity.js";
 import { cloudControlMiddleware } from "./middleware/cloud-control.js";
@@ -1444,6 +1446,13 @@ export async function createApp(
     () => companyImportJobService(db).recoverInterrupted(),
     () => logger.error("interrupted durable import status could not be reconciled"),
   );
+  const durableCompanyExports = companyExportTransferService(db, scopedStorage,
+    companyPortabilityService(db, scopedStorage));
+  let stopCompanyExportRecovery: (() => Promise<void>) | null = scheduleCompanyExportRecovery(
+    () => durableCompanyExports.recoverBatch(),
+    (err) => logger.error({ err }, "durable company export recovery failed"),
+    () => drainCompanyExportWorkers(db),
+  );
   void companyTransferRunService
     .recoverStrandedApplyingRuns(db)
     .then((recovered) => {
@@ -1553,6 +1562,11 @@ export async function createApp(
       if (stopImportJobRecovery) {
         const stopRecovery = stopImportJobRecovery;
         stopImportJobRecovery = null;
+        await stopRecovery();
+      }
+      if (stopCompanyExportRecovery) {
+        const stopRecovery = stopCompanyExportRecovery;
+        stopCompanyExportRecovery = null;
         await stopRecovery();
       }
       devWatcher?.close();

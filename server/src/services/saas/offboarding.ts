@@ -24,6 +24,7 @@ import { companyDeletionRecoveryRequestSchema, companyDeletionRequestSchema } fr
 import { conflict, forbidden, notFound, HttpError } from "../../errors.js";
 import { purgeCompanyContent } from "./company-purge.js";
 import type { companyObjectErasure } from "./object-erasure.js";
+import { companyTransferRunService } from "../company-transfer-runs.js";
 import { companyService } from "../companies.js";
 import type { billingService } from "../billing/billing.js";
 import type { runtimeControlService } from "../runtime/control.js";
@@ -40,7 +41,7 @@ function offboardingFailure(error: unknown) {
   if (error instanceof HttpError && error.details && typeof error.details === "object" && "code" in error.details) {
     const code = error.details.code;
     if (code === "secret_provider_erasure_identity_unresolved" || code === "runtime_erasure_attempts_exhausted" ||
-        code === "offboarding_stage_invalid") return { code, recoveryRequired: true };
+        code === "offboarding_stage_invalid" || code === "company_export_storage_scope_changed") return { code, recoveryRequired: true };
     if (code === "secret_provider_erasure_pending" || code === "feedback_retention_hold_pending" ||
         code === "feedback_image_erasure_pending") return { code, recoveryRequired: false };
   }
@@ -60,6 +61,7 @@ export function saasOffboardingService(
   retireHost?: (hostId: string) => Promise<unknown>,
   removeFeedbackImages?: (companyId: string) => Promise<unknown>,
   operatorUserIds: readonly string[] = [],
+  artifactStorageScopeId?: string,
 ) {
   async function request(
     companyId: string,
@@ -494,11 +496,15 @@ export function saasOffboardingService(
         const secrets = secretService(db);
         for (const secret of remoteSecrets) await secrets.remove(secret.id);
         await assertCompanyManagedSecretErasureComplete(db, operation.companyId);
+        // The persisted running/allocation pins fence every replica. A pending
+        // transport must not block this scheduler from checking other companies.
+        await companyTransferRunService.prepareCompanyExportErasure(db, operation.companyId, artifactStorageScopeId);
         const objectEvidence = await objects.erase(
           operation.companyId,
           now,
           operation.evidence.storageTargets,
         );
+        await companyTransferRunService.confirmCompanyExportPrefixErased(db, operation.companyId, artifactStorageScopeId);
         const databaseEvidence = await purgeCompanyContent(
           db,
           operation.companyId,

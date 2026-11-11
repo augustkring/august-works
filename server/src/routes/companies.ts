@@ -1,3 +1,4 @@
+import { companyExportRequestIdSchema, companyExportTransferReceiptSchema, companyExportTransferAcceptedSchema } from "@paperclipai/shared/company-export-transfer";
 import { createHash, randomUUID } from "node:crypto";
 import { canonicalJson } from "@paperclipai/shared/portability-hash";
 import { companyImportJobService, companyImportOperationReceipt, type CompanyImportJob } from "../services/company-import-jobs.js";
@@ -56,6 +57,7 @@ import {
   writeImportTransferPart,
 } from "../services/company-import-transfers.js";
 import { companyTransferRunService } from "../services/company-transfer-runs.js";
+import { companyExportTransferService } from "../services/company-export-transfers.js";
 import { agentInstructionsBundleMode } from "../services/agent-instructions.js";
 import { resolvePortableExportAgentSelection } from "../services/company-portability-agent-selection.js";
 import { ImportCancellationError } from "../services/company-portability.js";
@@ -290,6 +292,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   const responsibilityContacts = companyResponsibilityContactsService(db);
   const agents = agentService(db);
   const portability = companyPortabilityService(db, storage);
+  const exportTransfers = companyExportTransferService(db, storage, portability);
   const access = accessService(db);
   const budgets = budgetService(db);
   const artifacts = companyArtifactsService(db, storage);
@@ -1288,6 +1291,56 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     }
   });
 
+  // Durable export admits exact, revalidated Board and selected Agent
+  // authority. Profiles without transferable source authority remain on the
+  // synchronous route until their canonical owner can revalidate them.
+  router.use("/:companyId/exports/transfers", (_req, res, next) => {
+    res.set("Cache-Control", "private, no-store"); next();
+  });
+  router.post("/:companyId/exports/transfers", async (req, res) => {
+    const companyId = z.string().uuid().parse(req.params.companyId);
+    await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
+    const boardAuthority = req.actor.type === "board" && !!req.actor.userId
+      && (req.actor.source === "session" || req.actor.source === "board_key");
+    const agentKeyAuthority = req.actor.type === "agent" && req.actor.source === "agent_key"
+      && req.actor.companyId === companyId && !req.actor.runId;
+    const agentRunAuthority = req.actor.type === "agent" && req.actor.source === "agent_jwt"
+      && req.actor.companyId === companyId && !!req.actor.runId && !!req.actor.identityContextId && !req.actor.nativeToolEffect;
+    if (!boardAuthority && !agentKeyAuthority && !agentRunAuthority)
+      throw forbidden("This durable export authority profile is not supported yet", { code: "company_export_authority_profile_not_supported_yet" });
+    const request = companyPortabilityExportSchema.parse(req.body);
+    if ((agentKeyAuthority || agentRunAuthority) && (request.includeV7State || request.include?.supportCases))
+      throw forbidden("This Agent key profile cannot export Board account or support-case data", { code: "company_export_authority_profile_not_supported_yet" });
+    assertSupportCaseExportAccess(req, request);
+    if (request.includeV7State && (typeof request.expectedUserId !== "string" || req.actor.userId !== request.expectedUserId))
+      throw conflict("Account changed; reload the export page", { code: "ACCOUNT_CHANGED" });
+    const requestId = companyExportRequestIdSchema.parse(req.header("Idempotency-Key"));
+    // Validate any external-instruction eligibility now; the worker independently
+    // rebinds this to the exact current Board credential before generation.
+    await assertExternalInstructionExportAllowed(req, companyId, request);
+    const accepted = await exportTransfers.admit({ companyId, requestId, actorKey: companyExportActorKey(req), actor: req.actor, request });
+    res.set("Cache-Control", "private, no-store").status(202).json(companyExportTransferAcceptedSchema.parse(accepted));
+  });
+
+  router.get("/:companyId/exports/transfers/:transferId", async (req, res) => {
+    const companyId = z.string().uuid().parse(req.params.companyId);
+    assertExportTransferActor(req, companyId);
+    const receipt = await exportTransfers.getForActor(companyId, z.string().uuid().parse(req.params.transferId), companyExportActorKey(req), req.actor);
+    res.set("Cache-Control", "private, no-store").json(companyExportTransferReceiptSchema.parse(receipt));
+  });
+
+  router.get("/:companyId/exports/transfers/:transferId/download", async (req, res) => {
+    const companyId = z.string().uuid().parse(req.params.companyId);
+    assertExportTransferActor(req, companyId);
+    const transferId = z.string().uuid().parse(req.params.transferId);
+    const result = await exportTransfers.download(companyId, transferId, companyExportActorKey(req), req.actor);
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("Content-Disposition", `attachment; filename="company-export-${transferId}.json"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("ETag", `"${result.sha256}"`);
+    res.send(result.bytes);
+  });
+
   router.post("/:companyId/exports/preview", async (req, res) => {
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
@@ -1630,6 +1683,27 @@ function cloudTenantRequestKey(req: Request) {
  * keyed by its user id. The distinct prefixes keep the two namespaces
  * disjoint, so crafted tenant headers can never collide with a board key.
  */
+function assertExportTransferActor(req: Request, companyId: string) {
+  const board = req.actor.type === "board" && !!req.actor.userId
+    && (req.actor.source === "session" || req.actor.source === "board_key");
+  const agentKey = req.actor.type === "agent" && req.actor.source === "agent_key"
+    && req.actor.companyId === companyId && !req.actor.runId;
+  const agentRun = req.actor.type === "agent" && req.actor.source === "agent_jwt"
+    && req.actor.companyId === companyId && !!req.actor.runId && !!req.actor.identityContextId && !req.actor.nativeToolEffect;
+  if (!board && !agentKey && !agentRun) throw forbidden("This durable export authority profile is not supported yet",
+    { code: "company_export_authority_profile_not_supported_yet" });
+}
+
+function companyExportActorKey(req: Request) {
+  if (req.actor.type === "agent" && req.actor.source === "agent_key" && req.actor.agentId
+    && req.actor.companyId && req.actor.keyId && req.actor.authenticatedKeyHash)
+    return `agent-key:${req.actor.companyId}:${req.actor.agentId}:${req.actor.keyId}:${req.actor.authenticatedKeyHash}`;
+  if (req.actor.type === "agent" && req.actor.source === "agent_jwt" && req.actor.agentId
+    && req.actor.companyId && req.actor.runId && req.actor.identityContextId)
+    return `agent-run:${req.actor.companyId}:${req.actor.agentId}:${req.actor.runId}:${req.actor.identityContextId}`;
+  return importJobActorKey(req);
+}
+
 function importJobActorKey(req: Request) {
   if (req.actor.source === "cloud_tenant") {
     return `cloud-tenant:${cloudTenantRequestKey(req)}`;

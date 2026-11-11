@@ -7504,7 +7504,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -7528,7 +7528,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -7570,7 +7570,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -7594,7 +7594,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -7631,7 +7631,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -7655,7 +7655,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -7692,7 +7692,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -7716,7 +7716,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -7758,7 +7758,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -7782,7 +7782,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -7870,7 +7870,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -7894,7 +7894,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -11678,32 +11678,32 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/services/companies.ts",
-            "line": 325,
+            "line": 326,
             "claim": "create: async (data: typeof companies.$inferInsert) => {"
           }
         ]
@@ -11712,32 +11712,32 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 325,
+          "line": 326,
           "claim": "create: async (data: typeof companies.$inferInsert) => {"
         }
       ]
@@ -18748,32 +18748,32 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/services/companies.ts",
-            "line": 325,
+            "line": 326,
             "claim": "create: async (data: typeof companies.$inferInsert) => {"
           }
         ]
@@ -18782,32 +18782,32 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 325,
+          "line": 326,
           "claim": "create: async (data: typeof companies.$inferInsert) => {"
         }
       ]
@@ -30175,12 +30175,12 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1403,
+            "line": 1456,
             "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1412,
+            "line": 1465,
             "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
@@ -30199,12 +30199,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1418,
+          "line": 1471,
           "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 337,
+          "line": 338,
           "claim": "The company service owns the canonical update effect."
         }
       ],
@@ -30231,32 +30231,32 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/services/companies.ts",
-            "line": 545,
+            "line": 546,
             "claim": "remove: (id: string) =>"
           }
         ]
@@ -30265,32 +30265,32 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 545,
+          "line": 546,
           "claim": "remove: (id: string) =>"
         }
       ]
@@ -30314,17 +30314,17 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1403,
+            "line": 1456,
             "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1412,
+            "line": 1465,
             "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1415,
+            "line": 1468,
             "claim": "Board requests use the broader updateCompanySchema."
           },
           {
@@ -30343,12 +30343,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1418,
+          "line": 1471,
           "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 337,
+          "line": 338,
           "claim": "The company service owns the canonical update effect."
         }
       ]
@@ -32389,47 +32389,47 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 419,
+            "line": 422,
             "claim": "assertSameCompanyCeoAgentOrBoard delegates to authorization.assertCompanyCeoAgentOrBoard."
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 118,
+            "line": 120,
             "claim": "allows only same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 594,
+            "line": 597,
             "claim": "and 1271-1278 export handlers call CEO/Board guard; assertSupportCaseExportAccess and V7 expectedUserId gate restrict Human-only variants."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1271,
+            "line": 1274,
             "claim": "router.post(\"/:companyId/exports/preview\", async (req, res) => {"
           },
           {
@@ -32443,47 +32443,47 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 419,
+          "line": 422,
           "claim": "assertSameCompanyCeoAgentOrBoard delegates to authorization.assertCompanyCeoAgentOrBoard."
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 118,
+          "line": 120,
           "claim": "allows only same-company CEO Agent or Board."
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 594,
+          "line": 597,
           "claim": "and 1271-1278 export handlers call CEO/Board guard; assertSupportCaseExportAccess and V7 expectedUserId gate restrict Human-only variants."
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1271,
+          "line": 1274,
           "claim": "router.post(\"/:companyId/exports/preview\", async (req, res) => {"
         }
       ],
@@ -32510,47 +32510,47 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 419,
+            "line": 422,
             "claim": "assertSameCompanyCeoAgentOrBoard delegates to authorization.assertCompanyCeoAgentOrBoard."
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 118,
+            "line": 120,
             "claim": "allows only same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 594,
+            "line": 597,
             "claim": "and 1271-1278 export handlers call CEO/Board guard; assertSupportCaseExportAccess and V7 expectedUserId gate restrict Human-only variants."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 592,
+            "line": 595,
             "claim": "router.post(\"/:companyId/export\", async (req, res) => {"
           },
           {
@@ -32564,47 +32564,47 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 419,
+          "line": 422,
           "claim": "assertSameCompanyCeoAgentOrBoard delegates to authorization.assertCompanyCeoAgentOrBoard."
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 118,
+          "line": 120,
           "claim": "allows only same-company CEO Agent or Board."
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 594,
+          "line": 597,
           "claim": "and 1271-1278 export handlers call CEO/Board guard; assertSupportCaseExportAccess and V7 expectedUserId gate restrict Human-only variants."
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 592,
+          "line": 595,
           "claim": "router.post(\"/:companyId/export\", async (req, res) => {"
         }
       ],
@@ -32672,27 +32672,27 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
@@ -32706,27 +32706,27 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         }
       ]
@@ -32750,27 +32750,27 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
@@ -32784,27 +32784,27 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         }
       ]
@@ -32828,27 +32828,27 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
@@ -32862,27 +32862,27 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         }
       ]
@@ -32906,27 +32906,27 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
@@ -32940,27 +32940,27 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         }
       ]
@@ -32984,37 +32984,37 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 646,
+            "line": 649,
             "claim": "assertBoard(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 645,
+            "line": 648,
             "claim": "router.post(\"/import/preview\", async (req, res) => {"
           },
           {
@@ -33028,37 +33028,37 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 646,
+          "line": 649,
           "claim": "assertBoard(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 645,
+          "line": 648,
           "claim": "router.post(\"/import/preview\", async (req, res) => {"
         }
       ]
@@ -33082,32 +33082,32 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 592,
+            "line": 595,
             "claim": "router.post(\"/:companyId/export\", async (req, res) => {"
           },
           {
@@ -33121,32 +33121,32 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 592,
+          "line": 595,
           "claim": "router.post(\"/:companyId/export\", async (req, res) => {"
         }
       ]
@@ -33170,27 +33170,27 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
@@ -33204,27 +33204,27 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         }
       ]
@@ -33248,37 +33248,37 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 646,
+            "line": 649,
             "claim": "assertBoard(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 645,
+            "line": 648,
             "claim": "router.post(\"/import/preview\", async (req, res) => {"
           },
           {
@@ -33292,37 +33292,37 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 646,
+          "line": 649,
           "claim": "assertBoard(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 645,
+          "line": 648,
           "claim": "router.post(\"/import/preview\", async (req, res) => {"
         }
       ]
@@ -33346,37 +33346,37 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 728,
+            "line": 731,
             "claim": "assertBoard(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 727,
+            "line": 730,
             "claim": "router.post(\"/import/jobs/:jobId/cancel\", async (req, res) => {"
           },
           {
@@ -33390,37 +33390,37 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 728,
+          "line": 731,
           "claim": "assertBoard(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 727,
+          "line": 730,
           "claim": "router.post(\"/import/jobs/:jobId/cancel\", async (req, res) => {"
         }
       ]
@@ -33595,32 +33595,32 @@
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1514,
+            "line": 1567,
             "claim": "The PATCH handler checks the current Human company owner/admin gate before eligibility validation or persistence."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 439,
+            "line": 442,
             "claim": "The dedicated contact gate denies Agent actors and non-session Board credentials before company-defaults authorization."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 450,
+            "line": 453,
             "claim": "After Human identity/account checks, the route applies current company-defaults owner/admin authorization."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 431,
+            "line": 434,
             "claim": "The underlying company gate requires active owner/admin membership unless the existing local-trusted or instance-admin exception applies."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 444,
+            "line": 447,
             "claim": "The optional expected-user header is checked against the current named Human or explicit local-board identity."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 447,
+            "line": 450,
             "claim": "The optional expected-session header is checked against the current session."
           }
         ]
@@ -33629,12 +33629,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1518,
+          "line": 1571,
           "claim": "The route persists only the security and support contact labels."
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1522,
+          "line": 1575,
           "claim": "The audit event is scoped to responsibility-contact changes."
         },
         {
@@ -33663,17 +33663,17 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1403,
+            "line": 1456,
             "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1412,
+            "line": 1465,
             "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1415,
+            "line": 1468,
             "claim": "Board requests use the broader updateCompanySchema."
           },
           {
@@ -33692,12 +33692,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1418,
+          "line": 1471,
           "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 337,
+          "line": 338,
           "claim": "The company service owns the canonical update effect."
         }
       ]
@@ -33721,17 +33721,17 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1403,
+            "line": 1456,
             "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1412,
+            "line": 1465,
             "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1415,
+            "line": 1468,
             "claim": "Board requests use the broader updateCompanySchema."
           },
           {
@@ -33750,12 +33750,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1418,
+          "line": 1471,
           "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 337,
+          "line": 338,
           "claim": "The company service owns the canonical update effect."
         }
       ]
@@ -33779,17 +33779,17 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1403,
+            "line": 1456,
             "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1412,
+            "line": 1465,
             "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1415,
+            "line": 1468,
             "claim": "Board requests use the broader updateCompanySchema."
           },
           {
@@ -33808,12 +33808,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1418,
+          "line": 1471,
           "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 337,
+          "line": 338,
           "claim": "The company service owns the canonical update effect."
         }
       ]
@@ -33898,12 +33898,12 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1403,
+            "line": 1456,
             "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1412,
+            "line": 1465,
             "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
@@ -33922,12 +33922,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1418,
+          "line": 1471,
           "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 337,
+          "line": 338,
           "claim": "The company service owns the canonical update effect."
         }
       ],
@@ -33954,12 +33954,12 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1403,
+            "line": 1456,
             "claim": "The shared route admits a same-company CEO Agent or Board."
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1412,
+            "line": 1465,
             "claim": "Agent requests are parsed by updateCompanyBrandingSchema."
           },
           {
@@ -33978,12 +33978,12 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1418,
+          "line": 1471,
           "claim": "The route loads the company before applying the accepted update."
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 337,
+          "line": 338,
           "claim": "The company service owns the canonical update effect."
         }
       ],
@@ -34010,47 +34010,47 @@
         "sourceEvidence": [
           {
             "path": "server/src/routes/companies.ts",
-            "line": 392,
-            "claim": "assertInstanceAdmin(req);"
-          },
-          {
-            "path": "server/src/routes/companies.ts",
-            "line": 413,
+            "line": 395,
             "claim": "assertInstanceAdmin(req);"
           },
           {
             "path": "server/src/routes/companies.ts",
             "line": 416,
+            "claim": "assertInstanceAdmin(req);"
+          },
+          {
+            "path": "server/src/routes/companies.ts",
+            "line": 419,
             "claim": "assertCompanyAccess(req, target.companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 420,
+            "line": 423,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 426,
+            "line": 429,
             "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1539,
+            "line": 1592,
             "claim": "assertCompanyAccess(req, companyId);"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1540,
+            "line": 1593,
             "claim": "assertBoard(req);"
           },
           {
             "path": "server/src/services/companies.ts",
-            "line": 503,
+            "line": 504,
             "claim": "archive: async (id: string, actor: CompanyActivityActor = SYSTEM_COMPANY_ACTOR) => {"
           },
           {
             "path": "server/src/routes/companies.ts",
-            "line": 1537,
+            "line": 1590,
             "claim": "router.post(\"/:companyId/archive\", async (req, res) => {"
           }
         ]
@@ -34059,47 +34059,47 @@
       "materialityEvidence": [
         {
           "path": "server/src/routes/companies.ts",
-          "line": 392,
-          "claim": "assertInstanceAdmin(req);"
-        },
-        {
-          "path": "server/src/routes/companies.ts",
-          "line": 413,
+          "line": 395,
           "claim": "assertInstanceAdmin(req);"
         },
         {
           "path": "server/src/routes/companies.ts",
           "line": 416,
+          "claim": "assertInstanceAdmin(req);"
+        },
+        {
+          "path": "server/src/routes/companies.ts",
+          "line": 419,
           "claim": "assertCompanyAccess(req, target.companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 420,
+          "line": 423,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 426,
+          "line": 429,
           "claim": "if (req.actor.type !== \"board\" || req.actor.source === \"local_implicit\" || req.actor.isInstanceAdmin) return;"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1539,
+          "line": 1592,
           "claim": "assertCompanyAccess(req, companyId);"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1540,
+          "line": 1593,
           "claim": "assertBoard(req);"
         },
         {
           "path": "server/src/services/companies.ts",
-          "line": 503,
+          "line": 504,
           "claim": "archive: async (id: string, actor: CompanyActivityActor = SYSTEM_COMPANY_ACTOR) => {"
         },
         {
           "path": "server/src/routes/companies.ts",
-          "line": 1537,
+          "line": 1590,
           "claim": "router.post(\"/:companyId/archive\", async (req, res) => {"
         }
       ]
@@ -36776,7 +36776,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -36800,7 +36800,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -36842,7 +36842,7 @@
           },
           {
             "path": "server/src/services/authorization.ts",
-            "line": 4816,
+            "line": 4818,
             "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
           },
           {
@@ -36866,7 +36866,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "line": 4816,
+          "line": 4818,
           "claim": "decision_queue:manage/decision_triage:manage allows active standard-scope same-company Agent actors."
         },
         {
@@ -52145,12 +52145,12 @@
           },
           {
             "path": "server/src/services/saas/offboarding.ts",
-            "line": 76,
+            "line": 78,
             "claim": "The offboarding transaction requires an active owner membership for the exact target company."
           },
           {
             "path": "server/src/services/saas/offboarding.ts",
-            "line": 90,
+            "line": 92,
             "claim": "The service requires the Human to confirm the exact company name before creating offboarding."
           }
         ]
@@ -52159,17 +52159,17 @@
       "materialityEvidence": [
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "line": 119,
+          "line": 121,
           "claim": "The original offboarding transaction archives the company and records the deletion request."
         },
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "line": 137,
+          "line": 139,
           "claim": "The transaction pauses company Agents and revokes their company API keys."
         },
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "line": 159,
+          "line": 161,
           "claim": "The same transaction revokes current support sessions for the company."
         }
       ]

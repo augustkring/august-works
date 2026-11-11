@@ -159,7 +159,7 @@ export const companyDeletionRequestSchema = z
 export const companyDeletionRecoveryRequestSchema = z.object({
   operationId: z.string().uuid(),
   errorCode: z.enum(["secret_provider_erasure_identity_unresolved", "runtime_erasure_attempts_exhausted",
-    "offboarding_stage_invalid", "offboarding_provider_access_denied", "offboarding_provider_invalid_request"]),
+    "offboarding_stage_invalid", "offboarding_provider_access_denied", "offboarding_provider_invalid_request", "company_export_storage_scope_changed"]),
   failedAt: z.string().datetime(),
 }).strict();
 export const companyDeletionRecoveryResultSchema = z.object({

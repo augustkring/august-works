@@ -41,7 +41,7 @@ type JobTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type AcceptedPlan = NonNullable<CompanyImportJob["acceptedPlan"]>;
 type ImportEffectCheckpoint = NonNullable<CompanyImportJob["effectCheckpoint"]>;
 
-async function pinImportCredential(tx: JobTransaction, actor?: AuthorizationActor) {
+export async function pinImportCredential(tx: JobTransaction, actor?: AuthorizationActor) {
   if (!actor || actor.source === "local_implicit") return null;
   if (actor.type !== "board") throw forbidden("The original import requester is required");
   if (actor.authenticatedCredentialExpiresAt != null && !Number.isFinite(actor.authenticatedCredentialExpiresAt))
@@ -56,7 +56,7 @@ async function pinImportCredential(tx: JobTransaction, actor?: AuthorizationActo
   return pinned;
 }
 
-async function finishImportCredential(tx: JobTransaction, pinned: Awaited<ReturnType<typeof pinImportCredential>>) {
+export async function finishImportCredential(tx: JobTransaction, pinned: Awaited<ReturnType<typeof pinImportCredential>>) {
   if (!pinned) return;
   const [current] = await tx.execute<{ active: boolean }>(sql`select
     not exists(select 1 from account_deletion_operations where user_id=${pinned.actor.userId})

@@ -8,6 +8,7 @@ import { customerFeedback, customerFeedbackExperienceMeasures, supportCases, pro
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../memory/memory-privacy.js";
+import { companyTransferRunService } from "../company-transfer-runs.js";
 
 // Minimal ownership/billing/erasure receipts survive content deletion. Never physically drop the company tombstone.
 const retained = new Set([
@@ -48,6 +49,7 @@ export async function purgeCompanyContent(
     await tx.execute(sql`set local statement_timeout='8s'`);
     await lockAnalyticalCompany(tx,companyId);
     await lockMemoryPrivacy(tx as unknown as Db,companyId);
+    await companyTransferRunService.assertCompanyExportErasureComplete(tx as unknown as Db, companyId);
     await assertCompanyManagedSecretErasureComplete(tx, companyId);
     await assertCompanyManagedOpenCodeRuntimeDataErased(tx as unknown as Db, companyId, options.operationId);
     let platformModelFunding: Record<string, string> | undefined;

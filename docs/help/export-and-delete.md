@@ -27,7 +27,7 @@ Open **Company settings → Deletion** to review the organization deletion reque
 
 Deletion may remain in a retention state while managed backups reach their deletion date. Financial records and a minimal deletion receipt may be retained where required. Follow the status and stage shown on the deletion page; a submitted request is not proof that final erasure has completed.
 
-If the page says **requires support**, erasure is incomplete. Contact human support at [privacy@blentera.com](mailto:privacy@blentera.com) with the displayed request ID. An operator must repair the failed step before the same request can continue. Do not submit a second request. Pending automatic reconciliation shows its earliest next check time; failed steps pause automatic retries until an operator repairs them. You can still check an accepted request when new deletion requests are temporarily unavailable.
+If the page says **requires support**, erasure is incomplete. Contact human support at [privacy@blentera.com](mailto:privacy@blentera.com) with the displayed request ID. An operator must repair the failed step before the same request can continue. Do not submit a second request. Pending automatic reconciliation shows its earliest next check time; failed steps pause automatic retries until an operator repairs them. You can still check an accepted request when new deletion requests are temporarily unavailable. If the original export storage needs repair, support must reconcile that storage before organization erasure can continue.
 
 ## Request personal account deletion
 

@@ -4269,7 +4269,8 @@
       "backupPending": "Bevarede sikkerhedskopier har endnu ikke nået deres slettefrist.",
       "retentionHold": "Et opbevaringspåbud skal gennemgås af den udpegede ansvarlige.",
       "imagePending": "Sletning af administrerede billeder er endnu ikke bekræftet.",
-      "reconciliationPending": "Den sletteansvarlige afklarer et ubekræftet resultat."
+      "reconciliationPending": "Den sletteansvarlige afklarer et ubekræftet resultat.",
+      "exportStorage": "Det oprindelige eksportlager kræver operatørens afklaring."
     }
   }
 }

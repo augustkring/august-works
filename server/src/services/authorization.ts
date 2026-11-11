@@ -91,6 +91,8 @@ export type AuthorizationActor =
     ignoreInstanceAdmin?: boolean;
     agentId?: string | null;
     companyId?: string | null;
+    /** Current verified NativeRun identity binding carried by agent JWT auth. */
+    identityContextId?: string | null;
     keyId?: string | null;
     /** Fingerprint retained by the original credential verifier, never client input. */
     authenticatedKeyHash?: string | null;
@@ -5056,7 +5058,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     }
     if (actor.type !== "agent" || !actor.agentId || actor.companyId !== companyId || !actor.onBehalfOfUserId?.trim()) return null;
     const agent = await loadAgent(actor.agentId);
-    if (!agent || agent.companyId !== companyId) return null;
+    if (!agent || agent.companyId !== companyId || agent.status === "terminated" || agent.status === "pending_approval") return null;
     if (actor.runId) {
       const [run] = await db.select({ companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId })
         .from(heartbeatRuns).where(eq(heartbeatRuns.id, actor.runId)).for("share", { noWait: true });
@@ -5065,7 +5067,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     let keyScope = actor.keyScope;
     if (actor.keyId) {
       const [key] = await db.select().from(agentApiKeys).where(eq(agentApiKeys.id, actor.keyId)).for("share", { noWait: true });
-      if (!key || key.keyHash !== actor.authenticatedKeyHash || key.companyId !== companyId || key.agentId !== actor.agentId || key.revokedAt || key.responsibleUserId !== actor.onBehalfOfUserId) return null;
+      if (!key || key.keyHash !== actor.authenticatedKeyHash || key.companyId !== companyId || key.agentId !== actor.agentId || key.revokedAt || key.responsibleUserId !== actor.onBehalfOfUserId || (actor.authenticatedCredentialExpiresAt != null && actor.authenticatedCredentialExpiresAt <= Date.now())) return null;
       const parsed = agentApiKeyScopeSchema.safeParse(key.scopeConfig ?? { kind: "standard" });
       if (!parsed.success) return null;
       // Keep the original authenticated request ceiling after Source row waits;

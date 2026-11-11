@@ -56,6 +56,7 @@ import { environmentService } from "./environments.js";
 import { heartbeatService } from "./heartbeat.js";
 import { logActivity } from "./activity-log.js";
 import { builtInAgentService } from "./built-in-agents.js";
+import { companyTransferRunService } from "./company-transfer-runs.js";
 
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -642,6 +643,7 @@ export function companyService(db: Db) {
         // Preserve its original semantics only after protected images have
         // settled; it cannot report completion while leaving their objects.
         await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).for("update");
+        await companyTransferRunService.assertCompanyExportErasureComplete(tx as unknown as Db, id);
         await assertCompanyManagedSecretErasureComplete(tx, id);
         const holds = await tx.select({ id: customerFeedbackRetention.id }).from(customerFeedbackRetention).where(and(
           eq(customerFeedbackRetention.companyId, id), eq(customerFeedbackRetention.legalHold, true),

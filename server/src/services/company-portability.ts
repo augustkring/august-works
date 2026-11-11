@@ -1,6 +1,7 @@
 import { logger } from "../middleware/logger.js";
+import { isSaasDeployment } from "../deployment-profile.js";
 import { exportCompanyStateV7 } from "./enterprise/portability.js";
-import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, pinCurrentBoardActor, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
+import { assertCompanyCeoAgentOrBoard, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, hasCurrentInstanceAdminRole, issueReadSqlCondition, pinCurrentBoardActor, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
 import { assertAnalyticalContextPayloadAccess, assertAnalyticalContextPayloadAccessBatch } from "./analytical-context-authority.js";
 import { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
 import { withCurrentTaskSourceRead } from "./task-source-read-scope.js";
@@ -4106,7 +4107,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
   async function exportBundle(
     companyId: string,
     input: CompanyPortabilityExport,
-    options: { preview?: boolean; allowExternalInstructions?: boolean; actor?: AuthorizationActor } = {},
+    options: { preview?: boolean; allowExternalInstructions?: boolean; actor?: AuthorizationActor;
+      requireCurrentExternalInstructionAuthority?: boolean } = {},
   ): Promise<CompanyPortabilityExportResult> {
     if (input.include?.supportCases) {
       if (!options.actor || !input.expectedUserId) {
@@ -4197,6 +4199,15 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
     const allAgentRows = include.agents ? await agents.list(companyId, { includeTerminated: true }) : [];
     const agentSelection = resolvePortableExportAgentSelection(allAgentRows, input.agents, include.agents);
+    const externalInstructionsSelected = agentSelection.agents.some((agent) => agentInstructionsBundleMode(agent) === "external");
+    if (options.requireCurrentExternalInstructionAuthority && externalInstructionsSelected) {
+      const localInstanceAdmin = options.actor?.type === "board" && options.actor.source === "local_implicit" && !isSaasDeployment();
+      if (!options.allowExternalInstructions || options.actor?.type !== "board"
+        || (!localInstanceAdmin && !(await hasCurrentInstanceAdminRole(db, options.actor.userId))))
+        throw forbidden("External agent instructions require a current instance administrator", {
+          code: "company_export_external_instructions_authority_changed",
+        });
+    }
     const companySkillRowsRaw = include.skills ? await companySkills.listFull(companyId) : [];
     const managedSkillRows = companySkillRowsRaw.filter((skill) => managedSkillIds.has(skill.id));
     const companySkillRows = companySkillRowsRaw.filter((skill) => !managedSkillIds.has(skill.id));
@@ -7193,8 +7204,67 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
   }
 
+  async function assertExternalInstructionsAllowed(
+    companyId: string,
+    input: CompanyPortabilityExport,
+    actor: AuthorizationActor,
+  ): Promise<boolean> {
+    const instanceAdmin = actor.type === "board" && (actor.source === "local_implicit" && !isSaasDeployment()
+      || await hasCurrentInstanceAdminRole(db, actor.userId));
+    const includesAgents = input.agents && input.agents.length > 0 ? true : input.include?.agents ?? true;
+    if (!includesAgents) return instanceAdmin;
+    const companyAgents = await agents.list(companyId, { includeTerminated: true });
+    const selection = resolvePortableExportAgentSelection(companyAgents, input.agents, includesAgents);
+    if (selection.agents.some((agent) => agentInstructionsBundleMode(agent) === "external") && !instanceAdmin)
+      throw forbidden("External agent instructions require a current instance administrator", {
+        code: "company_export_external_instructions_authority_changed",
+      });
+    return instanceAdmin;
+  }
+
+  async function assertExportDownloadAccess(
+    companyId: string,
+    actor: AuthorizationActor,
+    input: CompanyPortabilityExport,
+    accepted: CompanyPortabilityExportResult,
+    allowExternalInstructions = false,
+  ): Promise<void> {
+    // Re-run the original bounded selection through the existing export owner.
+    // This re-applies current ACL, source-scope, document-revision and support-case
+    // checks; identical selected file content proves the accepted artifact still
+    // represents the currently authorized source snapshot.
+    const current = await exportBundle(companyId, input, { actor, allowExternalInstructions,
+      requireCurrentExternalInstructionAuthority: true });
+    const normalized = (value: CompanyPortabilityExportResult) => {
+      const files = { ...value.files };
+      const supportPath = "blentera-support-cases-v1.json";
+      const support = files[supportPath];
+      if (typeof support === "string") {
+        try {
+          const archive = JSON.parse(support) as Record<string, unknown>;
+          // This timestamp is generated by the existing support-case export
+          // owner per read; source events and case content remain compared.
+          delete archive.exportedAt;
+          files[supportPath] = JSON.stringify(archive, null, 2) + "\n";
+        } catch { throw notFound("Export source changed or is no longer available"); }
+      }
+      return {
+        rootPath: value.rootPath,
+        manifest: { ...value.manifest, generatedAt: null },
+        files,
+        warnings: value.warnings,
+        paperclipExtensionPath: value.paperclipExtensionPath,
+      };
+    };
+    const currentHash = createHash("sha256").update(canonicalJson(normalized(current)) ?? "").digest("hex");
+    const acceptedHash = createHash("sha256").update(canonicalJson(normalized(accepted)) ?? "").digest("hex");
+    if (currentHash !== acceptedHash) throw notFound("Export source changed or is no longer available");
+  }
+
   return {
     exportBundle,
+    assertExternalInstructionsAllowed,
+    assertExportDownloadAccess,
     previewExport,
     previewImport,
     importBundle,

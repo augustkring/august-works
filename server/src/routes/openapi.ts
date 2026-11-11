@@ -1,3 +1,5 @@
+import { companyExportRequestIdSchema, companyExportTransferReceiptSchema, companyExportTransferAcceptedSchema } from "@paperclipai/shared/company-export-transfer";
+import { portabilityManifestSchema, portabilityFileEntrySchema } from "@paperclipai/shared/validators/company-portability";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { insightExperimentSummarySchema, insightManagementSummarySchema, serviceHealthProjectionSchema } from "@paperclipai/shared";
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
@@ -2673,6 +2675,38 @@ registry.registerPath({
   summary: "Export company data",
   request: { params: z.object({ companyId: z.string() }) },
   responses: { 200: r.ok(), 401: r.unauthorized },
+});
+
+// Private durable exports reuse the original company transfer and source owners.
+const companyExportTransferParams = z.object({ companyId: z.string().uuid(), transferId: z.string().uuid() });
+const companyExportPrivateHeaders = { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } };
+registry.registerPath({
+  method: "post", path: "/api/companies/{companyId}/exports/transfers", tags: ["companies"],
+  summary: "Request a durable company export",
+  description: "Requires current company CEO Agent or Board authority. The worker and every read recheck the original exact session, key or supported company-scope Native Run. Cloud and local implicit profiles require their own durable authority owner and are refused here. Agent export cannot include Human account or support-case data. An accepted operation is not a completed export. Replay the same Idempotency-Key and selection; it never extends the first accepted credential or artifact deadline.",
+  request: { params: z.object({ companyId: z.string().uuid() }),
+    headers: z.object({ "Idempotency-Key": companyExportRequestIdSchema }), body: jsonBody(companyPortabilityExportSchema) },
+  responses: { 202: { ...r.ok(companyExportTransferAcceptedSchema), headers: companyExportPrivateHeaders },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
+});
+registry.registerPath({
+  method: "get", path: "/api/companies/{companyId}/exports/transfers/{transferId}", tags: ["companies"],
+  summary: "Read the original private export status",
+  description: "Requires the same original credential identity and current company authority. Reports the stored transfer and availability only. Failed or unknown storage outcomes do not authorize regeneration. No artifact content, object key or credential reference is exposed.",
+  request: { params: companyExportTransferParams },
+  responses: { 200: { ...r.ok(companyExportTransferReceiptSchema), headers: companyExportPrivateHeaders },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
+});
+registry.registerPath({
+  method: "get", path: "/api/companies/{companyId}/exports/transfers/{transferId}/download", tags: ["companies"],
+  summary: "Download a current authorized private company export",
+  description: "The server proxies the exact integrity-checked JSON artifact only after original credential, current source selection and expiry checks. No signed provider URL is returned. Availability expiry is not authorization; an expired artifact returns 410 and cannot regenerate under the original request key.",
+  request: { params: companyExportTransferParams },
+  responses: { 200: { ...r.ok(z.strictObject({ rootPath: z.string(), manifest: portabilityManifestSchema,
+      files: z.record(z.string(), portabilityFileEntrySchema), warnings: z.array(z.string()), paperclipExtensionPath: z.string() })),
+      headers: { ...companyExportPrivateHeaders, ETag: { schema: { type: "string" }, description: "Quoted SHA-256 of the returned artifact bytes." } } },
+    400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict,
+    410: { ...r.notFound, description: "The private artifact has expired; create an explicit new request." } },
 });
 
 registry.registerPath({

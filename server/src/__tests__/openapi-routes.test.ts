@@ -160,6 +160,7 @@ it("documents accepted company-erasure recovery with distinct current and recent
   expect(body.additionalProperties).toBe(false);
   expect(Object.keys(body.properties).sort()).toEqual(["errorCode", "failedAt", "operationId"]);
   expect(body.properties.errorCode.enum).toContain("offboarding_provider_access_denied");
+  expect(body.properties.errorCode.enum).toContain("company_export_storage_scope_changed");
   expect(retry.responses[202].content["application/json"].schema.properties.status.enum).toEqual(["processing"]);
 });
 
@@ -1631,4 +1632,23 @@ it("documents the scoped Human literal Task, conversation upload and interaction
     expect(operation?.responses).toHaveProperty("403");
     expect(operation?.responses).toHaveProperty("409");
   }
+});
+
+
+it("documents private durable export receipts and exact request identity", () => {
+  const paths = buildOpenApiSpec().paths, base = "/api/companies/{companyId}/exports/transfers";
+  const accepted = paths[base].post;
+  expect(accepted.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", in: "header", required: true,
+    schema: expect.objectContaining({ format: "uuid" }) }));
+  const body = accepted.responses[202].content["application/json"].schema;
+  expect(body.additionalProperties).toBe(false);
+  expect(body.required).toContain("alreadyCompleted");
+  expect(body.properties.status.enum).not.toContain("outcome_unknown");
+  for (const operation of [accepted, paths[base + "/{transferId}"].get, paths[base + "/{transferId}/download"].get]) {
+    const response = operation.responses[operation === accepted ? 202 : 200];
+    expect(response.headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(operation.responses[403]).toBeTruthy();
+  }
+  expect(paths[base + "/{transferId}/download"].get.responses[410]).toBeTruthy();
+  expect(paths[base + "/{transferId}"].get.responses[200].content["application/json"].schema.properties).not.toHaveProperty("objectKey");
 });

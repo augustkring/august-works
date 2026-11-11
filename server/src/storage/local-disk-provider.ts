@@ -2,7 +2,7 @@ import { createReadStream, promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { StorageProvider, GetObjectResult, HeadObjectResult } from "./types.js";
-import { notFound, badRequest } from "../errors.js";
+import { notFound, badRequest, conflict } from "../errors.js";
 import { storageScopeIdentity } from "./object-scope.js";
 
 function normalizeObjectKey(objectKey: string): string {
@@ -40,6 +40,35 @@ async function statOrNull(filePath: string) {
 
 export function createLocalDiskStorageProvider(baseDir: string): StorageProvider {
   const root = path.resolve(baseDir);
+  async function deleteExactObject(objectKey: string) {
+    const filePath = resolveWithin(root, objectKey);
+    // Include copies left by an interrupted process and the legacy writer.
+    // Match only this exact allocated filename; never recurse or erase a
+    // neighboring object. The protected-feedback owner separately requires
+    // transport quiescence before it can authorize this deletion.
+    const directory = path.dirname(filePath);
+    let names: string[];
+    try {
+      names = await fs.readdir(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    const temporaryPrefix = `${path.basename(filePath)}.tmp-`;
+    for (const name of names) {
+      if (!name.startsWith(temporaryPrefix)) continue;
+      try { await fs.unlink(path.join(directory, name)); }
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+    }
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      // Only actual absence is an idempotent deletion acknowledgement.
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
 
   return {
     id: "local_disk",
@@ -98,33 +127,22 @@ export function createLocalDiskStorageProvider(baseDir: string): StorageProvider
     },
 
     async deleteObject(input): Promise<void> {
+      await deleteExactObject(input.objectKey);
+    },
+
+    async eraseObject(input): Promise<void> {
       const filePath = resolveWithin(root, input.objectKey);
-      // Include copies left by an interrupted process and the legacy writer.
-      // Match only this exact allocated filename; never recurse or erase a
-      // neighboring object. The protected-feedback owner separately requires
-      // transport quiescence before it can authorize this deletion.
-      const directory = path.dirname(filePath);
+      await deleteExactObject(input.objectKey);
+      if (await statOrNull(filePath))
+        throw conflict("Object erasure is unconfirmed", { code: "storage_object_erasure_pending" });
       let names: string[];
-      try {
-        names = await fs.readdir(directory);
-      } catch (error) {
+      try { names = await fs.readdir(path.dirname(filePath)); }
+      catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
         throw error;
       }
-      const temporaryPrefix = `${path.basename(filePath)}.tmp-`;
-      for (const name of names) {
-        if (!name.startsWith(temporaryPrefix)) continue;
-        try { await fs.unlink(path.join(directory, name)); }
-        catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        }
-      }
-      try {
-        await fs.unlink(filePath);
-      } catch (error) {
-        // Only actual absence is an idempotent deletion acknowledgement.
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
+      if (names.some(name => name.startsWith(`${path.basename(filePath)}.tmp-`)))
+        throw conflict("Object temporary-copy erasure is unconfirmed", { code: "storage_object_erasure_pending" });
     },
   };
 }

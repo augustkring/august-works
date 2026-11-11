@@ -4269,7 +4269,8 @@
       "backupPending": "Retained backups have not yet reached their deletion date.",
       "retentionHold": "A retention hold must be reviewed by its designated owner.",
       "imagePending": "Managed image erasure has not yet been confirmed.",
-      "reconciliationPending": "The deletion owner is reconciling an unconfirmed result."
+      "reconciliationPending": "The deletion owner is reconciling an unconfirmed result.",
+      "exportStorage": "The original export storage needs operator reconciliation."
     }
   }
 }

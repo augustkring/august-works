@@ -27,7 +27,7 @@ Blentera har særskilte handlinger til at eksportere en virksomhed, slette en or
 
 Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerhedskopier når deres slettefrist. Finansielle poster og en minimal kvittering for sletning kan blive gemt, hvor det kræves. Følg status og trin på sletningssiden. En indsendt anmodning beviser ikke, at den endelige sletning er gennemført.
 
-Hvis siden viser **kræver support**, er sletningen ikke gennemført. Kontakt menneskelig support på [privacy@blentera.com](mailto:privacy@blentera.com) med det viste anmodnings-ID. En operatør skal rette det fejlede trin, før den samme anmodning kan fortsætte. Indsend ikke en ny anmodning. Ved automatisk afklaring viser siden det tidligste tidspunkt for næste kontrol. Fejlede trin sætter automatiske genforsøg på pause, indtil en operatør har rettet dem. Du kan stadig følge en accepteret anmodning, når nye sletteanmodninger midlertidigt er utilgængelige.
+Hvis siden viser **kræver support**, er sletningen ikke gennemført. Kontakt menneskelig support på [privacy@blentera.com](mailto:privacy@blentera.com) med det viste anmodnings-ID. En operatør skal rette det fejlede trin, før den samme anmodning kan fortsætte. Indsend ikke en ny anmodning. Ved automatisk afklaring viser siden det tidligste tidspunkt for næste kontrol. Fejlede trin sætter automatiske genforsøg på pause, indtil en operatør har rettet dem. Du kan stadig følge en accepteret anmodning, når nye sletteanmodninger midlertidigt er utilgængelige. Hvis det oprindelige eksportlager skal repareres, skal support afklare dette lager, før organisationssletningen kan fortsætte.
 
 ## Anmod om sletning af personlig konto
 

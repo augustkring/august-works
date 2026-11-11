@@ -838,7 +838,7 @@
     },
     {
       "path": "doc/operations/aw-v6-runtime.md",
-      "sha256": "a96c4276fcc2385eb8f6ffc35bf47fc47dec5fd76bc754ef2f4bd7c4c6c2b32e"
+      "sha256": "75a4c671850a8e86b6ba0ea1ae5ffeb82785130c610233525b13b1951569e56c"
     },
     {
       "path": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
@@ -1390,7 +1390,7 @@
     },
     {
       "path": "server/src/routes/companies.ts",
-      "sha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a"
+      "sha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6"
     },
     {
       "path": "server/src/services/agents/authoring-model-migration-monitor.ts",
@@ -1402,7 +1402,7 @@
     },
     {
       "path": "server/src/services/authorization.ts",
-      "sha256": "af15a771e0b53366c5f40024d5815f8a4e42aa8b29c0f2616b492d5dc01a136c"
+      "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
     },
     {
       "path": "server/src/services/board-auth.ts",
@@ -1510,7 +1510,7 @@
     },
     {
       "path": "server/src/services/saas/platform.ts",
-      "sha256": "129877cf13d924cbd89c9658fb017968d8be1fb35ce31de93302b0fd3c2263c8"
+      "sha256": "a3fd740270f0c69c609ca87a0ee9e9b51e19d9f21cd898a370514b15fa454394"
     },
     {
       "path": "ui/src/api/companies.ts",

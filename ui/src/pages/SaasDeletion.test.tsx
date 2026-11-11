@@ -196,6 +196,15 @@ describe("Organization deletion consent scope", () => {
     expect(container.textContent).toContain("New organization deletion requests are not available");
   });
 
+  it("explains that the original export storage requires repair before erasure can continue", async () => {
+    fixture.deletion.mockResolvedValue({ id: "original-deletion-request", status: "failed", stage: "purge",
+      errorCode: "company_export_storage_scope_changed" });
+    await render();
+    expect(container.textContent).toContain("The original export storage needs operator reconciliation.");
+    expect(container.textContent).toContain("Erasure is incomplete");
+    expect(container.querySelector("form")).toBeNull();
+  });
+
   it("shows pending erasure and its earliest reconciliation time without claiming completion", async () => {
     fixture.deletion.mockResolvedValue({
       id: "pending-original-request", companyId: fixture.companyId, status: "processing",

@@ -11,14 +11,14 @@
   },
   "sourceManifest": "doc/operations/v10-safe-change-graph.source.json",
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2085,
+    "sourceDeltaPathCount": 2096,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14916,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted. R88 forwards exact persisted wake comments through the existing Runtime Control, remote attachment and Host workspace-scope readers; component fixtures retain current linked-Human source proofs and all original workspace boundaries. No Host/SDK or release status is promoted. R89 registers five exact provider-confirmed managed-secret erasure and company-purge source paths under the existing private-data-erasure owner. Existing ownership, crosswalk, and requirement/phase qualification remain unchanged; no live provider or Human proof is implied. P2 adds only the official0579 SQL/snapshot under the database owner and the new personal account receipt component/test under the existing auth-identity owner. Historical assessments/statuses remain unchanged; receipt visibility does not assert provider erasure or fleet qualification. R91 refreshes exact Native input dispatch and managed pipeline source pins within their existing owners. Component outcomes and collection-only Host/browser evidence remain distinct from actual Host or provider execution. No historical requirement or phase status is promoted. R92 registers only the existing SaaS deletion status type under the shared-contract owner and refreshes current deletion recovery source hashes. Scoped PostgreSQL/UI/compiler evidence does not promote any requirement or phase status."
+    "fullDiffPathCount": 14949,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted. R88 forwards exact persisted wake comments through the existing Runtime Control, remote attachment and Host workspace-scope readers; component fixtures retain current linked-Human source proofs and all original workspace boundaries. No Host/SDK or release status is promoted. R89 registers five exact provider-confirmed managed-secret erasure and company-purge source paths under the existing private-data-erasure owner. Existing ownership, crosswalk, and requirement/phase qualification remain unchanged; no live provider or Human proof is implied. P2 adds only the official0579 SQL/snapshot under the database owner and the new personal account receipt component/test under the existing auth-identity owner. Historical assessments/statuses remain unchanged; receipt visibility does not assert provider erasure or fleet qualification. R91 refreshes exact Native input dispatch and managed pipeline source pins within their existing owners. Component outcomes and collection-only Host/browser evidence remain distinct from actual Host or provider execution. No historical requirement or phase status is promoted. R92 registers only the existing SaaS deletion status type under the shared-contract owner and refreshes current deletion recovery source hashes. Scoped PostgreSQL/UI/compiler evidence does not promote any requirement or phase status. R93 registers eleven export/storage implementation and test paths under their existing durable-operation and private-erasure owners; no requirement or migration status promotion."
   },
   "qualificationBoundary": "Source hashes identify current candidate bytes and exact base comparisons. Requirement edges are source links, not closure. The inventory does not prove full behavior review, compatibility, rollback, Human approval, provider/hosted behavior, or release acceptance. Unknown owners and external facts remain open.",
   "migrationJournal": {
@@ -4203,16 +4203,16 @@
         "identity": "full master base supplied by current build task"
       },
       "sourceInventoryBoundary": {
-        "sourceDeltaPathCount": 2085,
+        "sourceDeltaPathCount": 2096,
         "deletedSourcePathCount": 41,
         "untrackedSourceCandidateCount": 0,
         "ownerGroupCount": 50,
         "hotspotRegisterCount": 25,
         "requirementCrosswalkCount": 169,
-        "fullDiffPathCount": 14916,
-        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted. R88 forwards exact persisted wake comments through the existing Runtime Control, remote attachment and Host workspace-scope readers; component fixtures retain current linked-Human source proofs and all original workspace boundaries. No Host/SDK or release status is promoted. R89 registers five exact provider-confirmed managed-secret erasure and company-purge source paths under the existing private-data-erasure owner. Existing ownership, crosswalk, and requirement/phase qualification remain unchanged; no live provider or Human proof is implied. P2 adds only the official0579 SQL/snapshot under the database owner and the new personal account receipt component/test under the existing auth-identity owner. Historical assessments/statuses remain unchanged; receipt visibility does not assert provider erasure or fleet qualification. R91 refreshes exact Native input dispatch and managed pipeline source pins within their existing owners. Component outcomes and collection-only Host/browser evidence remain distinct from actual Host or provider execution. No historical requirement or phase status is promoted. R92 registers only the existing SaaS deletion status type under the shared-contract owner and refreshes current deletion recovery source hashes. Scoped PostgreSQL/UI/compiler evidence does not promote any requirement or phase status."
+        "fullDiffPathCount": 14949,
+        "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted. R88 forwards exact persisted wake comments through the existing Runtime Control, remote attachment and Host workspace-scope readers; component fixtures retain current linked-Human source proofs and all original workspace boundaries. No Host/SDK or release status is promoted. R89 registers five exact provider-confirmed managed-secret erasure and company-purge source paths under the existing private-data-erasure owner. Existing ownership, crosswalk, and requirement/phase qualification remain unchanged; no live provider or Human proof is implied. P2 adds only the official0579 SQL/snapshot under the database owner and the new personal account receipt component/test under the existing auth-identity owner. Historical assessments/statuses remain unchanged; receipt visibility does not assert provider erasure or fleet qualification. R91 refreshes exact Native input dispatch and managed pipeline source pins within their existing owners. Component outcomes and collection-only Host/browser evidence remain distinct from actual Host or provider execution. No historical requirement or phase status is promoted. R92 registers only the existing SaaS deletion status type under the shared-contract owner and refreshes current deletion recovery source hashes. Scoped PostgreSQL/UI/compiler evidence does not promote any requirement or phase status. R93 registers eleven export/storage implementation and test paths under their existing durable-operation and private-erasure owners; no requirement or migration status promotion."
       },
-      "sourceAfterGeneration": "R92 preserves all historical requirement assessments and erasure owners while adding same-operation company deletion repair, safe failure/reconciliation status, private accepted status and EN/DA guidance. Actual provider/passkey/Host, full CI and release qualification remain separate."
+      "sourceAfterGeneration": "R93 adds internal original-actor company export transfers with scoped artifact ownership and physical erasure. Current UI/CLI callers, historical assessments and release qualification remain separately scoped."
     },
     {
       "id": "SCR-V10-HOTSPOT-01",
@@ -4461,7 +4461,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e"
+          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
         },
         {
           "path": "server/src/routes/agents.ts",
@@ -4481,7 +4481,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "af15a771e0b53366c5f40024d5815f8a4e42aa8b29c0f2616b492d5dc01a136c"
+          "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
         },
         {
           "path": "server/src/services/chat-channels.ts",
@@ -5799,7 +5799,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e"
+          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
         },
         {
           "path": "server/src/routes/access.ts",
@@ -5827,7 +5827,7 @@
         },
         {
           "path": "server/src/services/companies.ts",
-          "sha256": "d3520403083566fcb8e6bb049109de890e0cd1876d5d1a57f87401e5e52d16fe"
+          "sha256": "4ddbd2bf2e89fdfb7c573c1e898bf9e15fa9a5c8f771afced9f8ab94d1a14785"
         },
         {
           "path": "server/src/services/company-skills.ts",
@@ -5951,7 +5951,7 @@
         },
         {
           "path": "server/src/services/saas/platform.ts",
-          "sha256": "129877cf13d924cbd89c9658fb017968d8be1fb35ce31de93302b0fd3c2263c8"
+          "sha256": "a3fd740270f0c69c609ca87a0ee9e9b51e19d9f21cd898a370514b15fa454394"
         },
         {
           "path": "server/src/services/tool-access.ts",
@@ -6331,7 +6331,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e"
+          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
         },
         {
           "path": "server/src/routes/access.ts",
@@ -7247,7 +7247,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e"
+          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
         },
         {
           "path": "server/src/routes/issues.ts",
@@ -9232,7 +9232,7 @@
         },
         {
           "path": "server/src/services/company-portability.ts",
-          "sha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a"
+          "sha256": "8a954b5c29a1f3d765e3e0e7aa7d639ea11e58fd653b04734c95537f0b3dc437"
         },
         {
           "path": "server/src/services/context/context-engine-integration.test.ts",
@@ -10265,7 +10265,7 @@
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e"
+          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
         },
         {
           "path": "server/src/routes/plugins.ts",
@@ -10293,7 +10293,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "af15a771e0b53366c5f40024d5815f8a4e42aa8b29c0f2616b492d5dc01a136c"
+          "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
         },
         {
           "path": "server/src/services/capability-resolver.test.ts",
@@ -10820,11 +10820,11 @@
         },
         {
           "path": "server/src/__tests__/openapi-routes.test.ts",
-          "sha256": "6093928228bda46b0900833a5a3b641abcaac3f531a9ef4194e7ae4a0ffbd772"
+          "sha256": "7e0af49d07a042bf8be767fc1de31aac10fbf0cd1c426cf1771dcda5631a971e"
         },
         {
           "path": "server/src/app.ts",
-          "sha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e"
+          "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7"
         },
         {
           "path": "server/src/middleware/auth.ts",
@@ -10836,7 +10836,7 @@
         },
         {
           "path": "server/src/routes/openapi.ts",
-          "sha256": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17"
+          "sha256": "78422b7d184bf97a041b8ca91a232fc3b51c2ccb04ea79898f2c0b3611ebd52a"
         },
         {
           "path": "server/src/services/agent-api-rate-limit.integration.test.ts",
@@ -11461,7 +11461,7 @@
         },
         {
           "path": "server/src/services/company-portability.ts",
-          "sha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a"
+          "sha256": "8a954b5c29a1f3d765e3e0e7aa7d639ea11e58fd653b04734c95537f0b3dc437"
         },
         {
           "path": "server/src/services/company-search.ts",
@@ -12062,15 +12062,15 @@
         },
         {
           "path": "server/src/routes/companies.ts",
-          "sha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a"
+          "sha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6"
         },
         {
           "path": "server/src/services/company-import-jobs.ts",
-          "sha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca"
+          "sha256": "a0de7f32405f7153268aaccf04e83d3b5fb565bcfbbd50ccd7b53e6fd2f7fff1"
         },
         {
           "path": "server/src/services/company-portability.ts",
-          "sha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a"
+          "sha256": "8a954b5c29a1f3d765e3e0e7aa7d639ea11e58fd653b04734c95537f0b3dc437"
         },
         {
           "path": "server/src/services/saas/account-deletion.ts",
@@ -13190,7 +13190,7 @@
         },
         {
           "path": "server/src/services/company-import-jobs.ts",
-          "sha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca"
+          "sha256": "a0de7f32405f7153268aaccf04e83d3b5fb565bcfbbd50ccd7b53e6fd2f7fff1"
         }
       ],
       "kind": "safe_change_record",
@@ -13908,7 +13908,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "522ea090f6536f6781e6247d465d2e04daecbfc36b77980fe9e9c56e5dadb4e2"
+          "sha256": "4ce0d73293a0ac6fb60e0a2242c5b1299a4b105739cee13a69276f3f95155f20"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -16302,7 +16302,7 @@
         },
         {
           "path": "server/src/services/authorization.ts",
-          "sha256": "af15a771e0b53366c5f40024d5815f8a4e42aa8b29c0f2616b492d5dc01a136c"
+          "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
         },
         {
           "path": "server/src/services/board-auth.test.ts",
@@ -16346,7 +16346,7 @@
         },
         {
           "path": "server/src/services/saas/offboarding.ts",
-          "sha256": "f14b60703ce7801a7baed34d2c7b6496f14d0fc1c698eca691dfce1f6c7e8aa1"
+          "sha256": "c8e81010a5a43b1243c861205babbdebc587be5d7c01f37de5bf26e95ca12f98"
         },
         {
           "path": "server/src/services/slack-board-authority.ts",
@@ -20438,6 +20438,18 @@
           "sha256": "ab9c9536ee144d9211bb8a205dd2e57ff928360de6ea695af74afd749e9652be"
         },
         {
+          "path": "server/src/__tests__/storage-local-provider.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "4dabfa9304be918cbb940d64b323fde8317eef9f629d376044593b7f67353b2b"
+        },
+        {
+          "path": "server/src/__tests__/storage-s3-erasure.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -20690,10 +20702,46 @@
           "sha256": "84b86e3dbbfa0783341fa27911ae86df578f62cb263906f3a392a9bfa19a7074"
         },
         {
+          "path": "server/src/services/saas/object-erasure.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "a494fa1a00bbcfae4a2ad6250a0f81de889a5f5c858e0afb4394844e6ddd2cde"
+        },
+        {
           "path": "server/src/services/secrets.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "d8226e048e1f313f411ead88574acf8c26285dc3965ecf626c98604196241529"
+        },
+        {
+          "path": "server/src/storage/local-disk-provider.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "9a5ed62548ca4e58a539066bbc3e99e22352560f20407b02635a34e771fed596"
+        },
+        {
+          "path": "server/src/storage/s3-erasure.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
+          "path": "server/src/storage/s3-provider.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "03da3d9b9a94c6b7919452d512c2a9f215d2cb946b596870f6402c3aca0e21a9"
+        },
+        {
+          "path": "server/src/storage/service.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ea24b62d002f1ac3cfd52497e273f425841e4a96e310644ff6d12ce164e753a5"
+        },
+        {
+          "path": "server/src/storage/types.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "c00cca8ebd7a80f60002a7d1b714fb726d664fe99a0fc04db6a197e809597b82"
         },
         {
           "path": "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
@@ -20809,6 +20857,8 @@
         "server/src/__tests__/redact-sensitive.test.ts",
         "server/src/__tests__/run-secret-redaction.test.ts",
         "server/src/__tests__/secrets-service.test.ts",
+        "server/src/__tests__/storage-local-provider.test.ts",
+        "server/src/__tests__/storage-s3-erasure.test.ts",
         "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
         "server/src/__tests__/v10-private-payload.integration.test.ts",
         "server/src/__tests__/v6-company-purge.integration.test.ts",
@@ -20851,7 +20901,13 @@
         "server/src/services/native-runtime/runtime-asset-erasure-errors.ts",
         "server/src/services/run-secret-redaction.ts",
         "server/src/services/saas/company-purge.ts",
+        "server/src/services/saas/object-erasure.ts",
         "server/src/services/secrets.ts",
+        "server/src/storage/local-disk-provider.ts",
+        "server/src/storage/s3-erasure.ts",
+        "server/src/storage/s3-provider.ts",
+        "server/src/storage/service.ts",
+        "server/src/storage/types.ts",
         "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v2/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v3/references/memory-and-learning.md",
@@ -20902,6 +20958,8 @@
         "server/src/__tests__/redact-sensitive.test.ts",
         "server/src/__tests__/run-secret-redaction.test.ts",
         "server/src/__tests__/secrets-service.test.ts",
+        "server/src/__tests__/storage-local-provider.test.ts",
+        "server/src/__tests__/storage-s3-erasure.test.ts",
         "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
         "server/src/__tests__/v10-private-payload.integration.test.ts",
         "server/src/__tests__/v6-company-purge.integration.test.ts",
@@ -20944,7 +21002,13 @@
         "server/src/services/native-runtime/runtime-asset-erasure-errors.ts",
         "server/src/services/run-secret-redaction.ts",
         "server/src/services/saas/company-purge.ts",
+        "server/src/services/saas/object-erasure.ts",
         "server/src/services/secrets.ts",
+        "server/src/storage/local-disk-provider.ts",
+        "server/src/storage/s3-erasure.ts",
+        "server/src/storage/s3-provider.ts",
+        "server/src/storage/service.ts",
+        "server/src/storage/types.ts",
         "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v2/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v3/references/memory-and-learning.md",
@@ -21151,6 +21215,14 @@
           "sha256": "16b6d57b4713356ef5bd1913a0f006505ce08856fcd670db390900a294a2e37e"
         },
         {
+          "path": "server/src/__tests__/storage-local-provider.test.ts",
+          "sha256": "aad6b64b5598c1fcf281e3fd9626e94c2c3feecfc5bf5aed92ca9084b2e6eb7a"
+        },
+        {
+          "path": "server/src/__tests__/storage-s3-erasure.test.ts",
+          "sha256": "2898609c664adc412136872dd32145d7c3f0e45242e4057e9266ecf2c2926fd2"
+        },
+        {
           "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
           "sha256": "d26a3e03b2b5dbab859fdeb6adab692e6b219e84ca119859bb01645f508ec6c8"
         },
@@ -21316,11 +21388,35 @@
         },
         {
           "path": "server/src/services/saas/company-purge.ts",
-          "sha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d"
+          "sha256": "6c524acb82cdde868b36f9a8ba9589273e485bd9d93545bbb4911477ab3582b8"
+        },
+        {
+          "path": "server/src/services/saas/object-erasure.ts",
+          "sha256": "31949c937931670728656fb223ae0c85064693d5efa36f75c86da40e95782474"
         },
         {
           "path": "server/src/services/secrets.ts",
           "sha256": "13fc503f7cad25b0e069c373b37730e7e890784d6e7d510b2ff7a35b067b1c3e"
+        },
+        {
+          "path": "server/src/storage/local-disk-provider.ts",
+          "sha256": "8f8d6bdf193e2acc907b4b0811638aeca9bb19f058eab086c4073aa917f97219"
+        },
+        {
+          "path": "server/src/storage/s3-erasure.ts",
+          "sha256": "ac35c4c471c84c6c65540780ce7405e26cead80424be94c68a8296dee8d4df45"
+        },
+        {
+          "path": "server/src/storage/s3-provider.ts",
+          "sha256": "12398bf40a0d933964c79b6c3faa70a2a733bf6d2c07bea50f802609b0f51afe"
+        },
+        {
+          "path": "server/src/storage/service.ts",
+          "sha256": "b10e93b59b5ba36c4d371a0c2749149b29bd8fd5a1bbe4220f696688d54206b9"
+        },
+        {
+          "path": "server/src/storage/types.ts",
+          "sha256": "a6df789b9f2a9cdf6db9170063a5da70591b4b6feb9f2de2ebb26449a199b105"
         },
         {
           "path": "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
@@ -26969,7 +27065,7 @@
         },
         {
           "path": "server/src/__tests__/company-transfer-runs.test.ts",
-          "sha256": "5dd870b91ef3e2146334fb9ae83f5f16097effd8c9f40e9141ac264e108da46f"
+          "sha256": "fcb572663189000812690de2d535e84e3d208fd74e7d172aac6a25d77d2ff52a"
         },
         {
           "path": "server/src/__tests__/container-init-reaping.test.ts",
@@ -27341,7 +27437,7 @@
         },
         {
           "path": "server/src/services/company-transfer-runs.ts",
-          "sha256": "914af1a806bed070422317a50078d8064a57ba70c6fe2a203951596b7e271fa4"
+          "sha256": "34fd72ece7a48059eb73802542735893080e87dab0511c84185ee75f12130cd2"
         },
         {
           "path": "server/src/services/cross-company-context-policy.ts",
@@ -29023,7 +29119,7 @@
         },
         {
           "path": "packages/shared/src/saas-contracts.ts",
-          "sha256": "cdb983c9d7285273f752f5f5da39b78eca88abcf31d66c0312979958ef7e1f6c"
+          "sha256": "e91c231707fa546b07c4e598a356702b42308869516f707b5c49e3bb761cba69"
         },
         {
           "path": "packages/shared/src/saas-operations.ts",
@@ -29177,10 +29273,22 @@
       "state": "source_delta_present_review_open",
       "sourceBeforePins": [
         {
+          "path": "packages/shared/src/company-export-transfer.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "packages/shared/src/company-import-transfer.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "7954318ecd3f9c2a4889438612bc1a63db9cae4f6f78e481fa779153e434f1f6"
+        },
+        {
+          "path": "server/src/__tests__/company-export-transfers.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
         },
         {
           "path": "server/src/__tests__/company-import-cloud-floor.test.ts",
@@ -29213,6 +29321,12 @@
           "sha256": null
         },
         {
+          "path": "server/src/services/company-export-transfers.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        {
           "path": "server/src/services/company-import-jobs.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -29220,22 +29334,28 @@
         }
       ],
       "sourcePaths": [
+        "packages/shared/src/company-export-transfer.ts",
         "packages/shared/src/company-import-transfer.ts",
+        "server/src/__tests__/company-export-transfers.integration.test.ts",
         "server/src/__tests__/company-import-cloud-floor.test.ts",
         "server/src/__tests__/company-import-job-history.integration.test.ts",
         "server/src/__tests__/company-import-jobs.integration.test.ts",
         "server/src/__tests__/company-import-transfer-routes.test.ts",
         "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+        "server/src/services/company-export-transfers.ts",
         "server/src/services/company-import-jobs.test.ts"
       ],
       "deletedSourcePaths": [],
       "changedSourcePaths": [
+        "packages/shared/src/company-export-transfer.ts",
         "packages/shared/src/company-import-transfer.ts",
+        "server/src/__tests__/company-export-transfers.integration.test.ts",
         "server/src/__tests__/company-import-cloud-floor.test.ts",
         "server/src/__tests__/company-import-job-history.integration.test.ts",
         "server/src/__tests__/company-import-jobs.integration.test.ts",
         "server/src/__tests__/company-import-transfer-routes.test.ts",
         "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+        "server/src/services/company-export-transfers.ts",
         "server/src/services/company-import-jobs.test.ts"
       ],
       "dependencyPaths": [],
@@ -29260,8 +29380,16 @@
       "sourceReviewBoundary": "Candidate source inventory derived from branch diff and V10 register paths. It is not a behavior audit, test receipt, phase approval, or release claim.",
       "sources": [
         {
+          "path": "packages/shared/src/company-export-transfer.ts",
+          "sha256": "231d88f08e7c515cd41c1a2edea1383c99d6b5becc63765ae6bcd7f91cafbb6c"
+        },
+        {
           "path": "packages/shared/src/company-import-transfer.ts",
           "sha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370"
+        },
+        {
+          "path": "server/src/__tests__/company-export-transfers.integration.test.ts",
+          "sha256": "e2304ca4c41f0cb8d9491930590fffdbc8f56f578b88a448e44cac1c6ec8a05b"
         },
         {
           "path": "server/src/__tests__/company-import-cloud-floor.test.ts",
@@ -29282,6 +29410,10 @@
         {
           "path": "server/src/__tests__/fixtures/company-import-crash-worker.ts",
           "sha256": "10565b10b9ff47e877787cfcc0e9bdd52afcf6ddd0a6674eb39223ea5104c486"
+        },
+        {
+          "path": "server/src/services/company-export-transfers.ts",
+          "sha256": "f6a8c61d54d7bf9debb841f7fbeb8cf6ad96449478d44d4d0099da83443e4e3c"
         },
         {
           "path": "server/src/services/company-import-jobs.test.ts",
@@ -31965,7 +32097,7 @@
         },
         {
           "path": "server/src/services/company-search-help.generated.ts",
-          "sha256": "9ac1d09ce7d26acc4bbca7e986ff8357faf51ccf78ae372eb248ee08664df8d4"
+          "sha256": "65714c2238fd031a09fd97ba3ca6e4c598edc264d2c7d1e01583281c8a2d3eb1"
         },
         {
           "path": "server/src/services/task-search.ts",
@@ -32029,11 +32161,11 @@
         },
         {
           "path": "ui/src/i18n/experience/da.json",
-          "sha256": "50492d84011a3ce984666700f2da8b274b7793a16dcc281303b3e178782fc52d"
+          "sha256": "5f03983c0914f0ae8898914ae7b4dac13aef9488b9668b6782ad4317eed3d939"
         },
         {
           "path": "ui/src/i18n/experience/en.json",
-          "sha256": "68d2b87166c9e6718336abdc59a90e445a94e42f207416eeadb40f31c683fc5b"
+          "sha256": "27a83349d14bb33a2970a47cf6f6cd6cb56dbf87f09a24acb725234bfa4ca0c4"
         },
         {
           "path": "ui/src/i18n/index.ts",
@@ -32524,7 +32656,7 @@
         },
         {
           "path": "doc/operations/agent-native-ui-operation-coverage.json",
-          "sha256": "619f4d86b30ec51c1bcf46af2dfa3a3ee4f16dd0c132b8c56f12313052390eb4"
+          "sha256": "909012e1554fdc3638db7d6cabd82620e9269600dcc631655d31e16d18dae595"
         },
         {
           "path": "doc/operations/production-hotspot-responsibilities.json",
@@ -32536,7 +32668,7 @@
         },
         {
           "path": "doc/operations/v10-capability-projection.json",
-          "sha256": "b313f957572f8133595c4a9e8e31655d6123260b3f3600e66c141f4200dc1351"
+          "sha256": "1fca9a924c7056b2f4cd05183c16301405c31a8227549b334a6183b3c48cc555"
         },
         {
           "path": "package.json",
@@ -35917,11 +36049,11 @@
         },
         {
           "path": "ui/src/pages/SaasDeletion.test.tsx",
-          "sha256": "87d4fddeeb290a50ee0c6fb32a093459f0a2869c343590e638f57d270da3bc8e"
+          "sha256": "5a17972995e6f741b4cca0f29e3bb9370a4ae94e77d50861627f6b63be50c196"
         },
         {
           "path": "ui/src/pages/SaasDeletion.tsx",
-          "sha256": "72505ddaa9b869e830a85ce206f4895caba3b3027a0a42d58138b0109b995fe4"
+          "sha256": "c9ac22dea86ec75ef0119c741d5c15f3ee1f6df7680a4329d82543522a26dda0"
         },
         {
           "path": "ui/src/pages/SaasOperations.test.tsx",
@@ -46664,7 +46796,7 @@
       "id": "source:server/src/app.ts",
       "kind": "current_source_owner",
       "path": "server/src/app.ts",
-      "sha256": "b08e6ee42b0e34c5ea7aa5af8d3efe4f2d70650710093fd038679cf77d01b76e",
+      "sha256": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -46752,7 +46884,7 @@
       "id": "source:server/src/services/authorization.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/authorization.ts",
-      "sha256": "af15a771e0b53366c5f40024d5815f8a4e42aa8b29c0f2616b492d5dc01a136c",
+      "sha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07",
@@ -48000,7 +48132,7 @@
       "id": "source:server/src/services/companies.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/companies.ts",
-      "sha256": "d3520403083566fcb8e6bb049109de890e0cd1876d5d1a57f87401e5e52d16fe",
+      "sha256": "4ddbd2bf2e89fdfb7c573c1e898bf9e15fa9a5c8f771afced9f8ab94d1a14785",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -48456,7 +48588,7 @@
       "id": "source:server/src/services/saas/platform.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/saas/platform.ts",
-      "sha256": "129877cf13d924cbd89c9658fb017968d8be1fb35ce31de93302b0fd3c2263c8",
+      "sha256": "a3fd740270f0c69c609ca87a0ee9e9b51e19d9f21cd898a370514b15fa454394",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -50442,7 +50574,7 @@
       "id": "source:server/src/services/company-portability.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-portability.ts",
-      "sha256": "89d5e6ef9a23d9dc814187bffee2c90bbb499daa12bf21e14f1d36661690995a",
+      "sha256": "8a954b5c29a1f3d765e3e0e7aa7d639ea11e58fd653b04734c95537f0b3dc437",
       "changeIds": [
         "SCR-V10-HOTSPOT-06",
         "SCR-V10-HOTSPOT-11",
@@ -51475,7 +51607,7 @@
       "id": "source:server/src/__tests__/openapi-routes.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/openapi-routes.test.ts",
-      "sha256": "6093928228bda46b0900833a5a3b641abcaac3f531a9ef4194e7ae4a0ffbd772",
+      "sha256": "7e0af49d07a042bf8be767fc1de31aac10fbf0cd1c426cf1771dcda5631a971e",
       "changeIds": [
         "SCR-V10-HOTSPOT-09"
       ],
@@ -51505,7 +51637,7 @@
       "id": "source:server/src/routes/openapi.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/openapi.ts",
-      "sha256": "cdb1131148f802dccfdf83974ada556d38eae8d1dd9c4126fa390e53ace34e17",
+      "sha256": "78422b7d184bf97a041b8ca91a232fc3b51c2ccb04ea79898f2c0b3611ebd52a",
       "changeIds": [
         "SCR-V10-HOTSPOT-09"
       ],
@@ -51963,7 +52095,7 @@
       "id": "source:server/src/routes/companies.ts",
       "kind": "current_source_owner",
       "path": "server/src/routes/companies.ts",
-      "sha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a",
+      "sha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6",
       "changeIds": [
         "SCR-V10-HOTSPOT-13"
       ],
@@ -51978,7 +52110,7 @@
       "id": "source:server/src/services/company-import-jobs.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-import-jobs.ts",
-      "sha256": "f2725ca5266e99b73acf799e68281e1e15c669c463622852f8c1523bc1124fca",
+      "sha256": "a0de7f32405f7153268aaccf04e83d3b5fb565bcfbbd50ccd7b53e6fd2f7fff1",
       "changeIds": [
         "SCR-V10-HOTSPOT-13",
         "SCR-V10-0554-company-import-lease-budget"
@@ -52690,7 +52822,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "522ea090f6536f6781e6247d465d2e04daecbfc36b77980fe9e9c56e5dadb4e2",
+      "sha256": "4ce0d73293a0ac6fb60e0a2242c5b1299a4b105739cee13a69276f3f95155f20",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -55600,7 +55732,7 @@
       "id": "source:server/src/services/saas/offboarding.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/saas/offboarding.ts",
-      "sha256": "f14b60703ce7801a7baed34d2c7b6496f14d0fc1c698eca691dfce1f6c7e8aa1",
+      "sha256": "c8e81010a5a43b1243c861205babbdebc587be5d7c01f37de5bf26e95ca12f98",
       "changeIds": [
         "SCR-V10-AUTH-IDENTITY"
       ],
@@ -59531,6 +59663,36 @@
       }
     },
     {
+      "id": "source:server/src/__tests__/storage-local-provider.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/storage-local-provider.test.ts",
+      "sha256": "aad6b64b5598c1fcf281e3fd9626e94c2c3feecfc5bf5aed92ca9084b2e6eb7a",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/storage-local-provider.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "4dabfa9304be918cbb940d64b323fde8317eef9f629d376044593b7f67353b2b"
+      }
+    },
+    {
+      "id": "source:server/src/__tests__/storage-s3-erasure.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/storage-s3-erasure.test.ts",
+      "sha256": "2898609c664adc412136872dd32145d7c3f0e45242e4057e9266ecf2c2926fd2",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/storage-s3-erasure.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
       "id": "source:server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
@@ -60149,7 +60311,7 @@
       "id": "source:server/src/services/saas/company-purge.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/saas/company-purge.ts",
-      "sha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
+      "sha256": "6c524acb82cdde868b36f9a8ba9589273e485bd9d93545bbb4911477ab3582b8",
       "changeIds": [
         "SCR-V10-PRIVATE-DATA-ERASURE"
       ],
@@ -60158,6 +60320,21 @@
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "present_at_base",
         "sha256": "84b86e3dbbfa0783341fa27911ae86df578f62cb263906f3a392a9bfa19a7074"
+      }
+    },
+    {
+      "id": "source:server/src/services/saas/object-erasure.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/services/saas/object-erasure.ts",
+      "sha256": "31949c937931670728656fb223ae0c85064693d5efa36f75c86da40e95782474",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/services/saas/object-erasure.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "a494fa1a00bbcfae4a2ad6250a0f81de889a5f5c858e0afb4394844e6ddd2cde"
       }
     },
     {
@@ -60173,6 +60350,81 @@
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "present_at_base",
         "sha256": "d8226e048e1f313f411ead88574acf8c26285dc3965ecf626c98604196241529"
+      }
+    },
+    {
+      "id": "source:server/src/storage/local-disk-provider.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/storage/local-disk-provider.ts",
+      "sha256": "8f8d6bdf193e2acc907b4b0811638aeca9bb19f058eab086c4073aa917f97219",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/storage/local-disk-provider.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "9a5ed62548ca4e58a539066bbc3e99e22352560f20407b02635a34e771fed596"
+      }
+    },
+    {
+      "id": "source:server/src/storage/s3-erasure.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/storage/s3-erasure.ts",
+      "sha256": "ac35c4c471c84c6c65540780ce7405e26cead80424be94c68a8296dee8d4df45",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/storage/s3-erasure.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/storage/s3-provider.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/storage/s3-provider.ts",
+      "sha256": "12398bf40a0d933964c79b6c3faa70a2a733bf6d2c07bea50f802609b0f51afe",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/storage/s3-provider.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "03da3d9b9a94c6b7919452d512c2a9f215d2cb946b596870f6402c3aca0e21a9"
+      }
+    },
+    {
+      "id": "source:server/src/storage/service.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/storage/service.ts",
+      "sha256": "b10e93b59b5ba36c4d371a0c2749149b29bd8fd5a1bbe4220f696688d54206b9",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/storage/service.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "ea24b62d002f1ac3cfd52497e273f425841e4a96e310644ff6d12ce164e753a5"
+      }
+    },
+    {
+      "id": "source:server/src/storage/types.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/storage/types.ts",
+      "sha256": "a6df789b9f2a9cdf6db9170063a5da70591b4b6feb9f2de2ebb26449a199b105",
+      "changeIds": [
+        "SCR-V10-PRIVATE-DATA-ERASURE"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/storage/types.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "present_at_base",
+        "sha256": "c00cca8ebd7a80f60002a7d1b714fb726d664fe99a0fc04db6a197e809597b82"
       }
     },
     {
@@ -65117,7 +65369,7 @@
       "id": "source:server/src/__tests__/company-transfer-runs.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/company-transfer-runs.test.ts",
-      "sha256": "5dd870b91ef3e2146334fb9ae83f5f16097effd8c9f40e9141ac264e108da46f",
+      "sha256": "fcb572663189000812690de2d535e84e3d208fd74e7d172aac6a25d77d2ff52a",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -66497,7 +66749,7 @@
       "id": "source:server/src/services/company-transfer-runs.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-transfer-runs.ts",
-      "sha256": "914af1a806bed070422317a50078d8064a57ba70c6fe2a203951596b7e271fa4",
+      "sha256": "34fd72ece7a48059eb73802542735893080e87dab0511c84185ee75f12130cd2",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
@@ -68822,7 +69074,7 @@
       "id": "source:packages/shared/src/saas-contracts.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/saas-contracts.ts",
-      "sha256": "cdb983c9d7285273f752f5f5da39b78eca88abcf31d66c0312979958ef7e1f6c",
+      "sha256": "e91c231707fa546b07c4e598a356702b42308869516f707b5c49e3bb761cba69",
       "changeIds": [
         "SCR-V10-SHARED-CONTRACTS"
       ],
@@ -69314,6 +69566,21 @@
       }
     },
     {
+      "id": "source:packages/shared/src/company-export-transfer.ts",
+      "kind": "current_source_owner",
+      "path": "packages/shared/src/company-export-transfer.ts",
+      "sha256": "231d88f08e7c515cd41c1a2edea1383c99d6b5becc63765ae6bcd7f91cafbb6c",
+      "changeIds": [
+        "SCR-V10-DURABLE-COMPANY-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "packages/shared/src/company-export-transfer.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
       "id": "source:packages/shared/src/company-import-transfer.ts",
       "kind": "current_source_owner",
       "path": "packages/shared/src/company-import-transfer.ts",
@@ -69326,6 +69593,21 @@
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "present_at_base",
         "sha256": "7954318ecd3f9c2a4889438612bc1a63db9cae4f6f78e481fa779153e434f1f6"
+      }
+    },
+    {
+      "id": "source:server/src/__tests__/company-export-transfers.integration.test.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/__tests__/company-export-transfers.integration.test.ts",
+      "sha256": "e2304ca4c41f0cb8d9491930590fffdbc8f56f578b88a448e44cac1c6ec8a05b",
+      "changeIds": [
+        "SCR-V10-DURABLE-COMPANY-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/__tests__/company-export-transfers.integration.test.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
       }
     },
     {
@@ -69398,6 +69680,21 @@
       ],
       "sourceBeforePin": {
         "path": "server/src/__tests__/fixtures/company-import-crash-worker.ts",
+        "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+        "status": "absent_at_base",
+        "sha256": null
+      }
+    },
+    {
+      "id": "source:server/src/services/company-export-transfers.ts",
+      "kind": "current_source_owner",
+      "path": "server/src/services/company-export-transfers.ts",
+      "sha256": "f6a8c61d54d7bf9debb841f7fbeb8cf6ad96449478d44d4d0099da83443e4e3c",
+      "changeIds": [
+        "SCR-V10-DURABLE-COMPANY-OPERATIONS"
+      ],
+      "sourceBeforePin": {
+        "path": "server/src/services/company-export-transfers.ts",
         "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
         "status": "absent_at_base",
         "sha256": null
@@ -72154,7 +72451,7 @@
       "id": "source:server/src/services/company-search-help.generated.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/company-search-help.generated.ts",
-      "sha256": "9ac1d09ce7d26acc4bbca7e986ff8357faf51ccf78ae372eb248ee08664df8d4",
+      "sha256": "65714c2238fd031a09fd97ba3ca6e4c598edc264d2c7d1e01583281c8a2d3eb1",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72394,7 +72691,7 @@
       "id": "source:ui/src/i18n/experience/da.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/da.json",
-      "sha256": "50492d84011a3ce984666700f2da8b274b7793a16dcc281303b3e178782fc52d",
+      "sha256": "5f03983c0914f0ae8898914ae7b4dac13aef9488b9668b6782ad4317eed3d939",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72409,7 +72706,7 @@
       "id": "source:ui/src/i18n/experience/en.json",
       "kind": "current_source_owner",
       "path": "ui/src/i18n/experience/en.json",
-      "sha256": "68d2b87166c9e6718336abdc59a90e445a94e42f207416eeadb40f31c683fc5b",
+      "sha256": "27a83349d14bb33a2970a47cf6f6cd6cb56dbf87f09a24acb725234bfa4ca0c4",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],
@@ -72664,7 +72961,7 @@
       "id": "source:doc/operations/agent-native-ui-operation-coverage.json",
       "kind": "current_source_owner",
       "path": "doc/operations/agent-native-ui-operation-coverage.json",
-      "sha256": "619f4d86b30ec51c1bcf46af2dfa3a3ee4f16dd0c132b8c56f12313052390eb4",
+      "sha256": "909012e1554fdc3638db7d6cabd82620e9269600dcc631655d31e16d18dae595",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -72709,7 +73006,7 @@
       "id": "source:doc/operations/v10-capability-projection.json",
       "kind": "current_source_owner",
       "path": "doc/operations/v10-capability-projection.json",
-      "sha256": "b313f957572f8133595c4a9e8e31655d6123260b3f3600e66c141f4200dc1351",
+      "sha256": "1fca9a924c7056b2f4cd05183c16301405c31a8227549b334a6183b3c48cc555",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -76474,7 +76771,7 @@
       "id": "source:ui/src/pages/SaasDeletion.test.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/SaasDeletion.test.tsx",
-      "sha256": "87d4fddeeb290a50ee0c6fb32a093459f0a2869c343590e638f57d270da3bc8e",
+      "sha256": "5a17972995e6f741b4cca0f29e3bb9370a4ae94e77d50861627f6b63be50c196",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -76489,7 +76786,7 @@
       "id": "source:ui/src/pages/SaasDeletion.tsx",
       "kind": "current_source_owner",
       "path": "ui/src/pages/SaasDeletion.tsx",
-      "sha256": "72505ddaa9b869e830a85ce206f4895caba3b3027a0a42d58138b0109b995fe4",
+      "sha256": "c9ac22dea86ec75ef0119c741d5c15f3ee1f6df7680a4329d82543522a26dda0",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -88085,6 +88382,16 @@
     },
     {
       "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/__tests__/storage-local-provider.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/__tests__/storage-s3-erasure.test.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
       "to": "source:server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
@@ -88295,7 +88602,37 @@
     },
     {
       "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/services/saas/object-erasure.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
       "to": "source:server/src/services/secrets.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/storage/local-disk-provider.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/storage/s3-erasure.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/storage/s3-provider.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/storage/service.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-PRIVATE-DATA-ERASURE",
+      "to": "source:server/src/storage/types.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {
@@ -91365,7 +91702,17 @@
     },
     {
       "from": "SCR-V10-DURABLE-COMPANY-OPERATIONS",
+      "to": "source:packages/shared/src/company-export-transfer.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-DURABLE-COMPANY-OPERATIONS",
       "to": "source:packages/shared/src/company-import-transfer.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-DURABLE-COMPANY-OPERATIONS",
+      "to": "source:server/src/__tests__/company-export-transfers.integration.test.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {
@@ -91391,6 +91738,11 @@
     {
       "from": "SCR-V10-DURABLE-COMPANY-OPERATIONS",
       "to": "source:server/src/__tests__/fixtures/company-import-crash-worker.ts",
+      "relation": "implemented_or_operated_by_current_source_owner"
+    },
+    {
+      "from": "SCR-V10-DURABLE-COMPANY-OPERATIONS",
+      "to": "source:server/src/services/company-export-transfers.ts",
       "relation": "implemented_or_operated_by_current_source_owner"
     },
     {

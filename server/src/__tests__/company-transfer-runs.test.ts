@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { companies, createDb, projects } from "@paperclipai/db";
+import { companies, companyTransferRuns, createDb, projects } from "@paperclipai/db";
 import { sha256HexOfBytes } from "@paperclipai/shared/portability-hash";
 import {
   getEmbeddedPostgresTestSupport,
@@ -12,6 +13,9 @@ import {
   companyTransferRunService,
   type CompanyTransferPartsIndex,
 } from "../services/company-transfer-runs.js";
+import { companyExportTransferService } from "../services/company-export-transfers.js";
+import { createStorageService } from "../storage/service.js";
+import type { StorageProvider } from "../storage/types.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -31,6 +35,12 @@ function demoManifest(): CompanyTransferPartsIndex & { idempotencyKey: string } 
     chunks: [{ name: "chunks/0000.json.gz" }, { name: "chunks/0001.json.gz" }],
     blobs: [{ name: `blobs/${sha256HexOfBytes(pngBytes)}` }],
   };
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
 }
 
 describeEmbeddedPostgres("companyTransferRunService", () => {
@@ -115,6 +125,239 @@ describeEmbeddedPostgres("companyTransferRunService", () => {
     });
     expect(retried.alreadyCompleted).toBe(true);
     expect(retried.run.id).toBe(created.run.id);
+  });
+
+  it("leases durable export work, prevents overlapping owners, and records one expiring artifact", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Export lease owner",
+      issuePrefix: `EL${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}` });
+    const manifest = { version: 1, source: "accepted-export-selection" };
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    const key = randomUUID();
+    const { run } = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "board:export-lease", idempotencyKey: key, companyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+      manifest, manifestSha256: sha256HexOfBytes(Buffer.from(JSON.stringify(manifest))),
+    });
+    const replay = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "board:export-lease", idempotencyKey: key, companyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+      manifest, manifestSha256: sha256HexOfBytes(Buffer.from(JSON.stringify(manifest))),
+    });
+    expect(replay.run.id).toBe(run.id);
+    expect(replay.resumed).toBe(true);
+    const start = new Date(Date.now() + 60_000);
+    expect((await companyTransferRunService.claimExport(db, run.id, "worker-a", { now: start, leaseMs: 1000 }))?.status).toBe("running");
+    expect(await companyTransferRunService.claimExport(db, run.id, "worker-b", { now: new Date(start.getTime() + 500), leaseMs: 1000 })).toBeNull();
+    expect(await companyTransferRunService.renewExportLease(db, run.id, "worker-a", { now: new Date(start.getTime() + 500), leaseMs: 1000 })).toBe(true);
+    expect(await companyTransferRunService.claimExport(db, run.id, "worker-b", { now: new Date(start.getTime() + 2000), leaseMs: 1000 })).not.toBeNull();
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, "worker-a", { objectKey: "old", state: "allocated", storageScopeId: "a".repeat(64) })).toBe(false);
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, "worker-b", { objectKey: "private-key", state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, "worker-b", { objectKey: "replacement-key", state: "allocated", storageScopeId: "a".repeat(64) })).toBe(false);
+    expect((await companyTransferRunService.getRun(db, run.id))!.containerRef).toMatchObject({ artifact: { objectKey: "private-key", state: "allocated", storageScopeId: "a".repeat(64) } });
+    const sha = sha256HexOfBytes(Buffer.from("private artifact"));
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, "worker-b", { objectKey: "private-key", state: "stored",
+      sha256: sha, byteSize: 16, expiresAt, manifestSha256: sha256HexOfBytes(Buffer.from("manifest")) })).toBe(true);
+    expect(await companyTransferRunService.completeExport(db, run.id, "worker-b", sha256HexOfBytes(Buffer.from("manifest")))).toBe(true);
+    const completed = (await companyTransferRunService.getRun(db, run.id))!;
+    expect(completed.status).toBe("completed");
+    expect((completed.containerRef as { artifact: { state: string; expiresAt: string } }).artifact).toMatchObject({ state: "ready", expiresAt });
+  });
+
+  it("retains late provider receipts and retries cleanup of failed settled artifacts", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Export receipt owner",
+      issuePrefix: `ER${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}` });
+    const run = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "board:export-receipt", idempotencyKey: randomUUID(), companyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+      manifest: { version: 1, source: "controlled-storage-receipt" },
+    });
+    const workerId = "receipt-worker";
+    const claimed = await companyTransferRunService.claimExport(db, run.run.id, workerId, { leaseMs: 5_000 });
+    expect(claimed).not.toBeNull();
+
+    const putStarted = deferred();
+    const finishPut = deferred();
+    const deleteStarted = deferred();
+    const finishDelete = deferred();
+    const deleted = new Set<string>();
+    let deleteFailures = 1;
+    let pauseNextDelete = false;
+    let providerPutCount = 0;
+    const provider: StorageProvider = {
+      id: "local_disk", scopeId: "a".repeat(64),
+      async putObject({ objectKey }) { providerPutCount += 1; putStarted.resolve(); await finishPut.promise; deleted.delete(objectKey); },
+      async getObject({ objectKey }) { return { stream: Readable.from(Buffer.from(objectKey)) }; },
+      async headObject({ objectKey }) { return { exists: !deleted.has(objectKey) }; },
+      async deleteObject({ objectKey }) {
+        if (deleteFailures-- > 0) throw new Error("controlled delete failure");
+        if (pauseNextDelete) {
+          pauseNextDelete = false;
+          deleteStarted.resolve();
+          await finishDelete.promise;
+        }
+        deleted.add(objectKey);
+      },
+      async eraseObject(input) {
+        await provider.deleteObject(input);
+        if ((await provider.headObject(input)).exists) throw new Error("controlled physical erasure unconfirmed");
+      },
+    };
+    const storage = createStorageService(provider);
+    const transfers = companyExportTransferService(db, storage, {
+      async exportBundle() { throw new Error("unexpected generation during cleanup recovery"); },
+      async assertExternalInstructionsAllowed() { return false; },
+      async assertExportDownloadAccess() {},
+    });
+    const bytes = Buffer.from("durable export bytes");
+    const manifestSha = sha256HexOfBytes(Buffer.from("export manifest"));
+    let allocatedKey = "";
+    const put = storage.putFile({ companyId, namespace: `company-exports/${run.run.id}/receipt-worker`,
+      originalFilename: "export.json", contentType: "application/json", body: bytes,
+      onAllocated: async objectKey => {
+        allocatedKey = objectKey;
+        expect(await companyTransferRunService.recordExportArtifact(db, run.run.id, workerId,
+          { objectKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+      },
+      onTransportSettled: async objectKey => {
+        expect(await companyTransferRunService.recordExportArtifact(db, run.run.id, workerId, {
+          objectKey, state: "stored", sha256: sha256HexOfBytes(bytes), byteSize: bytes.length,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(), manifestSha256: manifestSha,
+        })).toBe(true);
+      },
+      onWritePrevented: async objectKey => {
+        await companyTransferRunService.clearAllocatedExportArtifact(db, run.run.id, workerId, objectKey);
+      },
+    });
+    await putStarted.promise;
+
+    // A second worker sees the original allocation after its lease expires,
+    // cannot claim it, and marks the outcome unknown without replacing owner A.
+    const expiredRef = (await companyTransferRunService.getRun(db, run.run.id))!.containerRef as Record<string, unknown>;
+    await db.update(companyTransferRuns).set({ containerRef: { ...expiredRef,
+      lease: { ownerId: workerId, expiresAt: new Date(Date.now() - 1_000).toISOString() } } })
+      .where(eq(companyTransferRuns.id, run.run.id));
+    expect(await companyTransferRunService.claimExport(db, run.run.id, "worker-b")).toBeNull();
+    expect(await companyTransferRunService.prepareCompanyExportErasure(db, companyId).catch(() => "blocked")).toBe("blocked");
+    await db.update(companies).set({ status: "archived" }).where(eq(companies.id, companyId));
+    expect(await companyTransferRunService.prepareCompanyExportErasure(db, companyId).catch(() => "blocked")).toBe("blocked");
+
+    finishPut.resolve();
+    await put;
+    let late = (await companyTransferRunService.getRun(db, run.run.id))!;
+    expect(late.status).toBe("failed");
+    expect(late.error).toBeNull();
+    expect((late.containerRef as { artifact: { state: string; objectKey: string } }).artifact)
+      .toMatchObject({ state: "stored", objectKey: allocatedKey });
+    await expect(companyTransferRunService.prepareCompanyExportErasure(db, companyId, "b".repeat(64)))
+      .rejects.toMatchObject({ details: { code: "company_export_storage_scope_changed" } });
+    await expect(companyTransferRunService.confirmCompanyExportPrefixErased(db, companyId, "b".repeat(64)))
+      .rejects.toMatchObject({ details: { code: "company_export_storage_scope_changed" } });
+    expect((await companyTransferRunService.getRun(db, run.run.id))!.containerRef).toMatchObject({ artifact: { state: "stored" } });
+    await expect(companyTransferRunService.prepareCompanyExportErasure(db, companyId, "a".repeat(64))).resolves.toBeUndefined();
+    await expect(companyTransferRunService.assertCompanyExportErasureComplete(db, companyId)).rejects.toThrow();
+
+    // Failed deletion leaves the known stored receipt discoverable without TTL;
+    // only a later provider delete acknowledgement permits its tombstone.
+    await expect(storage.deleteObject(companyId, allocatedKey)).rejects.toThrow("controlled delete failure");
+    expect((await companyTransferRunService.listExpiredExportArtifacts(db, 20)).map(row => row.id)).toContain(run.run.id);
+    await transfers.recoverBatch(20);
+    late = (await companyTransferRunService.getRun(db, run.run.id))!;
+    expect((late.containerRef as { artifact: { state: string } }).artifact.state).toBe("deleted");
+    await expect(companyTransferRunService.assertCompanyExportErasureComplete(db, companyId)).resolves.toBeUndefined();
+
+    // Model an export rejected by its final current-authority check after the
+    // provider receipt, then make cleanup fail once and recover from the same
+    // bounded ledger query. failExport must preserve the known stored state.
+    const secondCompanyId = randomUUID();
+    await db.insert(companies).values({ id: secondCompanyId, name: "Stored export cleanup",
+      issuePrefix: `EC${secondCompanyId.replace(/-/g, "").slice(0, 6).toUpperCase()}` });
+    const secondInput = {
+      direction: "export", actorKey: "board:export-final-auth-failure", idempotencyKey: randomUUID(), companyId: secondCompanyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+      manifest: { version: 1, source: "post-store-authorization-failure" },
+    } as const;
+    const secondRun = await companyTransferRunService.resumeOrCreate(db, secondInput);
+    const secondWorker = "post-store-worker";
+    expect(await companyTransferRunService.claimExport(db, secondRun.run.id, secondWorker)).not.toBeNull();
+    let secondKey = "";
+    await storage.putFile({ companyId: secondCompanyId, namespace: `company-exports/${secondRun.run.id}/post-store-worker`,
+      originalFilename: "export.json", contentType: "application/json", body: bytes,
+      onAllocated: async objectKey => {
+        secondKey = objectKey;
+        expect(await companyTransferRunService.recordExportArtifact(db, secondRun.run.id, secondWorker,
+          { objectKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+      },
+      onTransportSettled: async objectKey => {
+        expect(await companyTransferRunService.recordExportArtifact(db, secondRun.run.id, secondWorker, {
+          objectKey, state: "stored", sha256: sha256HexOfBytes(bytes), byteSize: bytes.length,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(), manifestSha256: manifestSha,
+        })).toBe(true);
+      },
+    });
+    expect(await companyTransferRunService.failExport(db, secondRun.run.id, secondWorker, "current_authority_lost")).toBe(true);
+    expect((await companyTransferRunService.getRun(db, secondRun.run.id))!.containerRef)
+      .toMatchObject({ artifact: { state: "stored", objectKey: secondKey } });
+    expect(await companyTransferRunService.recordExportArtifact(db, secondRun.run.id, "worker-b", {
+      objectKey: secondKey, state: "stored", sha256: sha256HexOfBytes(bytes), byteSize: bytes.length,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(), manifestSha256: manifestSha,
+    })).toBe(false);
+    deleteFailures = 1;
+    await expect(storage.deleteObject(secondCompanyId, secondKey)).rejects.toThrow("controlled delete failure");
+    expect((await companyTransferRunService.listExpiredExportArtifacts(db, 20)).map(row => row.id)).toContain(secondRun.run.id);
+    pauseNextDelete = true;
+    const cleanup = transfers.recoverBatch(20);
+    await deleteStarted.promise;
+    const retry = await companyTransferRunService.resumeOrCreate(db, secondInput);
+    expect(retry.run.id).toBe(secondRun.run.id);
+    expect(retry.run.status).toBe("failed");
+    expect(await companyTransferRunService.claimExport(db, secondRun.run.id, "retry-worker")).toBeNull();
+    expect(providerPutCount).toBe(2);
+    finishDelete.resolve();
+    await cleanup;
+    expect((await companyTransferRunService.getRun(db, secondRun.run.id))!.containerRef)
+      .toMatchObject({ artifact: { state: "deleted", objectKey: secondKey } });
+    expect((await companyTransferRunService.resumeOrCreate(db, secondInput)).run.id).toBe(secondRun.run.id);
+    expect(await companyTransferRunService.claimExport(db, secondRun.run.id, "retry-worker")).toBeNull();
+
+    // No-write proof after an expired lease clears only the same allocation;
+    // the actual controlled provider is never called for that attempt.
+    const noWriteCompanyId = randomUUID();
+    await db.insert(companies).values({ id: noWriteCompanyId, name: "Export no-write proof",
+      issuePrefix: `NW${noWriteCompanyId.replace(/-/g, "").slice(0, 6).toUpperCase()}` });
+    const noWrite = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "board:export-no-write", idempotencyKey: randomUUID(), companyId: noWriteCompanyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+    });
+    const noWriteOwner = "no-write-owner";
+    await db.update(companyTransferRuns).set({ status: "running", containerRef: {
+      version: 1, kind: "company_export_transfer_v1",
+      lease: { ownerId: noWriteOwner, expiresAt: new Date(Date.now() + 5_000).toISOString() }, artifact: null,
+    } }).where(eq(companyTransferRuns.id, noWrite.run.id));
+    const noWriteStorage = createStorageService(provider, {
+      async reserve() {
+        const current = (await companyTransferRunService.getRun(db, noWrite.run.id))!.containerRef as Record<string, unknown>;
+        await db.update(companyTransferRuns).set({ containerRef: { ...current,
+          lease: { ownerId: noWriteOwner, expiresAt: new Date(Date.now() - 1_000).toISOString() } } })
+          .where(eq(companyTransferRuns.id, noWrite.run.id));
+        expect(await companyTransferRunService.failExport(db, noWrite.run.id, noWriteOwner, "lease_elapsed")).toBe(true);
+        throw new Error("controlled pre-write reservation rejection");
+      }, async stored() {}, async deleting() {}, async deleted() {},
+    });
+    await expect(noWriteStorage.putFile({ companyId: noWriteCompanyId, namespace: `company-exports/${noWrite.run.id}/no-write`,
+      originalFilename: "export.json", contentType: "application/json", body: bytes,
+      onAllocated: async objectKey => {
+        expect(await companyTransferRunService.recordExportArtifact(db, noWrite.run.id, noWriteOwner,
+          { objectKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+      },
+      onWritePrevented: async objectKey => {
+        expect(await companyTransferRunService.clearAllocatedExportArtifact(db, noWrite.run.id, noWriteOwner, objectKey)).toBe(true);
+      },
+    })).rejects.toThrow("controlled pre-write reservation rejection");
+    expect(providerPutCount).toBe(2);
+    expect((await companyTransferRunService.getRun(db, noWrite.run.id))!.containerRef)
+      .toMatchObject({ artifact: null });
   });
 
   it("scopes resume to the actor and direction", async () => {
@@ -402,5 +645,18 @@ describeEmbeddedPostgres("companyTransferRunService", () => {
     });
     expect(fresh.resumed).toBe(false);
     expect(fresh.run.id).not.toBe(run.id);
+
+    const cancelledExport = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "user:carol", idempotencyKey: manifest.idempotencyKey,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+    });
+    await companyTransferRunService.cancel(db, cancelledExport.run.id);
+    const replayedExport = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "user:carol", idempotencyKey: manifest.idempotencyKey,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+    });
+    expect(replayedExport.run.id).toBe(cancelledExport.run.id);
+    expect(replayedExport.run.status).toBe("cancelled");
+    expect(replayedExport.resumed).toBe(true);
   });
 });

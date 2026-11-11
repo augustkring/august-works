@@ -9867,5 +9867,130 @@
     "phaseStatusesPromoted": 0,
     "actualProviderPasskeyCeremonyHostQualification": false,
     "durableExportImplemented": false
+  },
+  "companyExportOriginalOwnerR93": {
+    "sourceHead": "b037a498593b3adde965c65615fc6ecb08141343",
+    "sourcePaths": {
+      "doc/operations/aw-v6-runtime.md": "75a4c671850a8e86b6ba0ea1ae5ffeb82785130c610233525b13b1951569e56c",
+      "doc/operations/company-export-transfers.md": "d878325d297c4bc3d6e2004b23d6da6e15a68bd0753721ddf06264bbb561dafe",
+      "docs/da/help/export-and-delete.md": "60b3971f283556d048300a30edcbfd03992e936803a2e33a2aedca9a708eec75",
+      "docs/help/export-and-delete.md": "119a5e614aa426df39e25d620889545e2fb18c563a98e299e1661679d223fb4b",
+      "package.json": "631b595ef1b57251c2d6f8218ad1a367705072b3d2ec14a6f2010fc9abb9b6f7",
+      "packages/shared/src/company-export-transfer.ts": "231d88f08e7c515cd41c1a2edea1383c99d6b5becc63765ae6bcd7f91cafbb6c",
+      "packages/shared/src/saas-contracts.ts": "e91c231707fa546b07c4e598a356702b42308869516f707b5c49e3bb761cba69",
+      "pnpm-lock.yaml": "b70210ed554c63d425e34e4c075f0984309f74f0836d82d85f714b1c4deeb5b2",
+      "server/package.json": "08b8faa2b2b9c69530928aa0b283cf9e53e70e27a692a8cb9fdbee6dec3fb0f4",
+      "server/src/__tests__/company-export-transfers.integration.test.ts": "e2304ca4c41f0cb8d9491930590fffdbc8f56f578b88a448e44cac1c6ec8a05b",
+      "server/src/__tests__/company-transfer-runs.test.ts": "fcb572663189000812690de2d535e84e3d208fd74e7d172aac6a25d77d2ff52a",
+      "server/src/__tests__/openapi-routes.test.ts": "7e0af49d07a042bf8be767fc1de31aac10fbf0cd1c426cf1771dcda5631a971e",
+      "server/src/__tests__/storage-local-provider.test.ts": "aad6b64b5598c1fcf281e3fd9626e94c2c3feecfc5bf5aed92ca9084b2e6eb7a",
+      "server/src/__tests__/storage-s3-erasure.test.ts": "2898609c664adc412136872dd32145d7c3f0e45242e4057e9266ecf2c2926fd2",
+      "server/src/app.ts": "055d5edd13a88bc5a5207ba5879f5604ea95045f2843dab163e8335febc4e9d7",
+      "server/src/routes/companies.ts": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6",
+      "server/src/routes/openapi.ts": "78422b7d184bf97a041b8ca91a232fc3b51c2ccb04ea79898f2c0b3611ebd52a",
+      "server/src/services/authorization.ts": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533",
+      "server/src/services/companies.ts": "4ddbd2bf2e89fdfb7c573c1e898bf9e15fa9a5c8f771afced9f8ab94d1a14785",
+      "server/src/services/company-export-transfers.ts": "f6a8c61d54d7bf9debb841f7fbeb8cf6ad96449478d44d4d0099da83443e4e3c",
+      "server/src/services/company-import-jobs.ts": "a0de7f32405f7153268aaccf04e83d3b5fb565bcfbbd50ccd7b53e6fd2f7fff1",
+      "server/src/services/company-portability.ts": "8a954b5c29a1f3d765e3e0e7aa7d639ea11e58fd653b04734c95537f0b3dc437",
+      "server/src/services/company-search-help.generated.ts": "65714c2238fd031a09fd97ba3ca6e4c598edc264d2c7d1e01583281c8a2d3eb1",
+      "server/src/services/company-transfer-runs.ts": "34fd72ece7a48059eb73802542735893080e87dab0511c84185ee75f12130cd2",
+      "server/src/services/saas/company-purge.ts": "6c524acb82cdde868b36f9a8ba9589273e485bd9d93545bbb4911477ab3582b8",
+      "server/src/services/saas/object-erasure.ts": "31949c937931670728656fb223ae0c85064693d5efa36f75c86da40e95782474",
+      "server/src/services/saas/offboarding.ts": "c8e81010a5a43b1243c861205babbdebc587be5d7c01f37de5bf26e95ca12f98",
+      "server/src/services/saas/platform.ts": "a3fd740270f0c69c609ca87a0ee9e9b51e19d9f21cd898a370514b15fa454394",
+      "server/src/storage/local-disk-provider.ts": "8f8d6bdf193e2acc907b4b0811638aeca9bb19f058eab086c4073aa917f97219",
+      "server/src/storage/s3-erasure.ts": "ac35c4c471c84c6c65540780ce7405e26cead80424be94c68a8296dee8d4df45",
+      "server/src/storage/s3-provider.ts": "12398bf40a0d933964c79b6c3faa70a2a733bf6d2c07bea50f802609b0f51afe",
+      "server/src/storage/service.ts": "b10e93b59b5ba36c4d371a0c2749149b29bd8fd5a1bbe4220f696688d54206b9",
+      "server/src/storage/types.ts": "a6df789b9f2a9cdf6db9170063a5da70591b4b6feb9f2de2ebb26449a199b105",
+      "server/tsconfig.json": "41b38f5d62b35e02f2b15c294baf39d196a8e6af125bd4a4d7b5e30d9334d150",
+      "ui/src/i18n/experience/da.json": "5f03983c0914f0ae8898914ae7b4dac13aef9488b9668b6782ad4317eed3d939",
+      "ui/src/i18n/experience/en.json": "27a83349d14bb33a2970a47cf6f6cd6cb56dbf87f09a24acb725234bfa4ca0c4",
+      "ui/src/pages/SaasDeletion.test.tsx": "5a17972995e6f741b4cca0f29e3bb9370a4ae94e77d50861627f6b63be50c196",
+      "ui/src/pages/SaasDeletion.tsx": "c9ac22dea86ec75ef0119c741d5c15f3ee1f6df7680a4329d82543522a26dda0"
+    },
+    "phasePinChanges": [
+      {
+        "path": "doc/operations/aw-v6-runtime.md",
+        "oldSha256": "a96c4276fcc2385eb8f6ffc35bf47fc47dec5fd76bc754ef2f4bd7c4c6c2b32e",
+        "newSha256": "75a4c671850a8e86b6ba0ea1ae5ffeb82785130c610233525b13b1951569e56c"
+      },
+      {
+        "path": "server/src/routes/companies.ts",
+        "oldSha256": "63b2f7541da901e94bf91d54ce98d03b01f729dc20191b5ce5400ff209d50c9a",
+        "newSha256": "76cfb993edac7ce27bcae130404f682e371f59324fd365812a8f8b29b1417ec6"
+      },
+      {
+        "path": "server/src/services/authorization.ts",
+        "oldSha256": "af15a771e0b53366c5f40024d5815f8a4e42aa8b29c0f2616b492d5dc01a136c",
+        "newSha256": "7ca9d478369570e04f0e15a3cd5bea96a588623851fd0f2b4aa94157af118533"
+      },
+      {
+        "path": "server/src/services/saas/platform.ts",
+        "oldSha256": "129877cf13d924cbd89c9658fb017968d8be1fb35ce31de93302b0fd3c2263c8",
+        "newSha256": "a3fd740270f0c69c609ca87a0ee9e9b51e19d9f21cd898a370514b15fa454394"
+      }
+    ],
+    "sourceInventory": {
+      "sourceDeltaPathCount": 2096,
+      "deletedSourcePathCount": 41,
+      "untrackedSourceCandidateCount": 0,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "fullDiffPathCount": 14949,
+      "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted. R88 forwards exact persisted wake comments through the existing Runtime Control, remote attachment and Host workspace-scope readers; component fixtures retain current linked-Human source proofs and all original workspace boundaries. No Host/SDK or release status is promoted. R89 registers five exact provider-confirmed managed-secret erasure and company-purge source paths under the existing private-data-erasure owner. Existing ownership, crosswalk, and requirement/phase qualification remain unchanged; no live provider or Human proof is implied. P2 adds only the official0579 SQL/snapshot under the database owner and the new personal account receipt component/test under the existing auth-identity owner. Historical assessments/statuses remain unchanged; receipt visibility does not assert provider erasure or fleet qualification. R91 refreshes exact Native input dispatch and managed pipeline source pins within their existing owners. Component outcomes and collection-only Host/browser evidence remain distinct from actual Host or provider execution. No historical requirement or phase status is promoted. R92 registers only the existing SaaS deletion status type under the shared-contract owner and refreshes current deletion recovery source hashes. Scoped PostgreSQL/UI/compiler evidence does not promote any requirement or phase status. R93 registers eleven export/storage implementation and test paths under their existing durable-operation and private-erasure owners; no requirement or migration status promotion."
+    },
+    "evidenceRoot": "doc/operations/aw-v10-evidence/company-export-original-owner-20261111",
+    "evidenceManifest": {
+      "r616-phase-0.log.gz": "034828695711373abedbd443600383d2ac341ad2bbba41d7999985673556cfb1",
+      "r617-source-after.json": "39e1a51acf9c37ff36ef4493fde0e79c6d9434e0eac40efa3dd6ded9a34a81cd",
+      "r616-build-receipt.json": "d8eb65f4c024ca9009013bf25e56aaf66c7a44ac1a22720042efa78a00207907",
+      "r617-receipt.json": "dc28855a2c12e06d80ce54abc8b21ca13e3f754f13905b76f1c4773f5bd6acb0",
+      "prior-attempts.json": "df8161b8459d580e2b29a971dd2d756fc5b7f3749c71266e4666eaedba7e59ad",
+      "r618-source-after.json": "3a5363bdcf802df844e63ef8d195164f3de1c5e4f85b516105fa3c9e9a60700d",
+      "r616-source-after.json": "7a3a708ca77f5b57e4c5d58948e9b11b8a8de5d55f5bbad51a30802fdf28ffe9",
+      "r618-source-before.json": "af60d5c730f50e61557f0696a6471d213bd551bb4244d7a26006b8fc3a85a975",
+      "r617-source-manifest.json": "26c69721a5ff67fab56cb4dac9d414ed3e666332dbe246760ea279aabc3465bf",
+      "README.md": "93b3fb7abb921528980fd07b10085960b563f96e27e17321eedfb563dfa9360c",
+      "r618-read-only-source-protection-restored.json": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071",
+      "r618-phase-0.log.gz": "a38f6f66f78be361cfc3fe4d59221e90ecf91a79f91d7d42ca39b8ade255dc89",
+      "r616-source-before.json": "b22112eea27ef7f55489ba2176b526b77d65a2c5386dff1d28cd21056831551f",
+      "r618-phase-1.log.gz": "5b2109fd238877d2d5f666cb39633ec42d87afb444198579724c4d1cf75a11b0",
+      "r617-cleanup.json": "e2cd5214c0c8f92fedc63ad8d95f2a1fbacc8c0b6f3aeb0594282a3307aee1a3",
+      "r616-phase-1.log.gz": "3a4096e5ce578e4f8551c399a111ea20a9ea5438f800a7a461e6933636047e09",
+      "final-source-pins.json": "1376830e03d23e750390acb337c7c8ebca32912c93a51609d00ea1d95690ba57",
+      "r618-build-receipt.json": "60998b957503b8b1dcbc46b9c6000c50ae6964c3175b1832ad6d64734a602c37",
+      "r617-log.gz": "19369f1f03c45604bf0a33b2fa75beb6b33e1a2322aac77101a03e61e0fe7bfc"
+    },
+    "localQualification": {
+      "R617": {
+        "status": "PASS",
+        "testsPassed": 216,
+        "actualPostgres": true,
+        "providerBoundary": "controlled SDK/Storage; not live provider proof"
+      },
+      "R616": {
+        "status": "PASS",
+        "testsPassed": 45,
+        "tokenGate": "PASS"
+      },
+      "R618": {
+        "status": "PASS",
+        "typecheck": "full recursive workspace",
+        "build": "PASS",
+        "sourceHashesAndMtimesUnchanged": true
+      }
+    },
+    "requirementStatusesPromoted": 0,
+    "phaseStatusesPromoted": 0,
+    "liveProviderHostRestoreQualification": false,
+    "remainingWork": [
+      "resource-policy integration and aggregate generation bounds",
+      "read-only billing export delivery and remaining caller/authority profiles",
+      "source-copy invalidation/physical erasure reconciliation",
+      "current-head whole-branch CI and actual operator/provider/restore journeys"
+    ]
   }
 }
