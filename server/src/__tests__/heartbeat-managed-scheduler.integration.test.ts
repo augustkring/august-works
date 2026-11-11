@@ -165,7 +165,7 @@ import { captureNativeBlockedHumanInteraction, assertNativeBlockedInteractionRes
 import { assertV7Authorization } from "../services/v7-authorization.js";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
-import { CAPABILITY_SEMANTIC_TOOL_CATALOG } from "../vendor/paperclip-runner/index.js";
+import { CAPABILITY_SEMANTIC_TOOL_CATALOG, parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 type ManagedSchedulerContext = Parameters<Parameters<typeof withManagedNativeHeartbeatFixture>[0]["driveScheduler"]>[0];
 type ManagedReplyInput = Parameters<Parameters<typeof withManagedNativeHeartbeatFixture>[0]["providerReply"]>[0];
 
@@ -416,6 +416,152 @@ function managedLivenessFinish(input: ManagedReplyInput,
       evidence: [], verification: [], attentionRequests: [], artifacts: [],
     } }] };
 }
+
+it("reconstructs the current source-qualified v2 frame on a same-Task new Run with a retained OpenCode checkpoint", async () => {
+  const deadlineAt = Date.now() + 600_000;
+  const commentBody = `Continue the existing Task with this current request ${randomUUID()}.`;
+  let firstRunId: string | null = null;
+  const secondFrames = new Map<string, Record<string, unknown>>();
+  await withManagedNativeHeartbeatFixture({ db, root: home, opencodeBinary: qualifiedOpenCodeBinary(), timeoutSec: 300,
+    schedulerMode: "serial",
+    providerReply: input => {
+      if (firstRunId === null) firstRunId = input.runId;
+      if (input.runId === firstRunId) {
+        if (input.callIndex === 1) return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
+          id: `retained-plan-${input.runId}`, name: managedLivenessTool(input.body, "write_document"),
+          input: { idempotencyKey: `retained-plan-${input.runId}`, key: "plan", title: "Existing plan",
+            body: "# Plan\n\n- Inspect the repository\n- Implement the fix", baseRevisionId: null } }] };
+        if (input.callIndex === 2) return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
+          id: `retained-notes-${input.runId}`, name: managedLivenessTool(input.body, "write_document"),
+          input: { idempotencyKey: `retained-notes-${input.runId}`, key: "notes", title: "Initial work note",
+            body: "Verified the current repository state before asking for the next instruction.", baseRevisionId: null } }] };
+        if (input.callIndex === 3) return managedLivenessFinish(input, "yielded",
+          "The plan and repository note are saved; continue after the Human's next comment.");
+        if (input.callIndex === 4) return { stop_reason: "end_turn" as const,
+          content: [{ type: "text" as const, text: "The plan and repository note are saved for the next request." }] };
+      } else {
+        if (input.callIndex === 1) {
+          const messages = Array.isArray(input.body.messages) ? input.body.messages as Array<Record<string, unknown>> : [];
+          const latestUser = [...messages].reverse().find(message => message.role === "user");
+          const parts = Array.isArray(latestUser?.content) ? latestUser.content as Array<Record<string, unknown>> : [];
+          const latestText = typeof latestUser?.content === "string" ? latestUser.content
+            : parts.map(part => typeof part.text === "string" ? part.text : "").join("\n");
+          const frame = JSON.parse(latestText) as Record<string, unknown>;
+          const taskFrame = frame.task as Record<string, unknown> | undefined;
+          if (frame.schema !== "paperclip.native-model-envelope.v2" || !taskFrame ||
+            !String(taskFrame.prompt ?? "").includes(commentBody) || !input.execution.continuationPrompt)
+            throw new Error("same_task_new_run_current_v2_frame_missing");
+          expect(taskFrame).toEqual(input.execution.task);
+          secondFrames.set(input.runId, frame);
+          return { stop_reason: "tool_use" as const, content: [{ type: "tool_use" as const,
+            id: `retained-result-${input.runId}`, name: managedLivenessTool(input.body, "write_document"),
+            input: { idempotencyKey: `retained-result-${input.runId}`, key: "result", title: "Current result",
+              body: "Completed from the current Human request without repeating the saved plan.", baseRevisionId: null } }] };
+        }
+        if (input.callIndex === 2) return managedLivenessFinish(input, "done", "Completed the current request.");
+        if (input.callIndex === 3) return { stop_reason: "end_turn" as const,
+          content: [{ type: "text" as const, text: "The current request is complete." }] };
+      }
+      throw new Error(`same_task_new_run_unexpected_provider_turn:${input.runId}:${input.callIndex}`);
+    },
+    driveScheduler: async ({ actor, companyId, agentId, heartbeat }) => {
+      await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
+        heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(eq(agents.id, agentId));
+      const task = await issueService(db).create(companyId, { title: "Continue one retained Native Task",
+        description: "Save an initial plan, then continue only after a current Human comment.", status: "todo",
+        responsibleUserId: actor.userId!, createdByUserId: actor.userId!, assigneeAgentId: agentId }, db, undefined,
+        { manualInputActor: actor, privacyActor: actor, sourceAccessActor: actor });
+      const plan = await orchestrationService(db).create(actor, companyId, { issueId: task.id,
+        expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
+        completionContract: { objective: "Complete the current Human request after recording the plan",
+          requiredOutputs: [{ kind: "task_document", key: "result" }],
+          businessInvariants: ["Reuse completed work and do not repeat prior effects"] },
+        budgets: { maxModelCostMinor: 20, maxToolActions: 6 }, workers: [{ key: "writer", issueId: task.id }] });
+      await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
+        action: "start", rationale: "Run the actual managed Native Worker and retain its provider checkpoint" });
+      const firstWake = await heartbeat.wakeup(agentId, { source: "assignment", triggerDetail: "system",
+        reason: "issue_assigned", requestedByActorType: "user", requestedByActorId: actor.userId!,
+        payload: { issueId: task.id }, contextSnapshot: { issueId: task.id } });
+      expect(firstWake).not.toBeNull();
+      const remaining = deadlineAt - Date.now();
+      if (remaining <= 0) throw new Error("same_task_new_run_first_deadline_exhausted");
+      await expect.poll(async () => {
+        const [run] = await db.select({ status: heartbeatRuns.status, livenessState: heartbeatRuns.livenessState })
+          .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, firstWake!.id)));
+        return run?.status === "succeeded" && run.livenessState === "advanced";
+      }, { timeout: remaining }).toBe(true);
+      const [prior] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.id, firstWake!.id)));
+      if (!prior) throw new Error("same_task_new_run_prior_run_missing");
+      const priorProfile = prior.runnerProfileJson as Record<string, unknown>;
+      const priorCheckpoint = priorProfile.sessionCheckpoint as Record<string, unknown>;
+      const priorIdentity = priorCheckpoint.identity as Record<string, unknown>;
+      expect(priorIdentity).toMatchObject({ runId: prior.id, companyId, issueId: task.id, agentId });
+      expect(typeof prior.nativeSessionId).toBe("string");
+      expect(typeof priorCheckpoint.providerSessionId).toBe("string");
+      expect(String(priorCheckpoint.providerSessionId).length).toBeGreaterThan(0);
+      const prematureLivenessWakes = await db.select().from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.agentId, agentId),
+        eq(agentWakeupRequests.reason, "run_liveness_continuation")));
+      expect(prematureLivenessWakes.filter(wake => wake.payload?.retryOfRunId === prior.id)).toEqual([]);
+
+      const comment = await issueService(db).addComment(task.id, commentBody,
+        { userId: actor.userId! }, { manualInputActor: actor });
+      const nextWake = await heartbeat.wakeup(agentId, { source: "automation", triggerDetail: "system",
+        reason: "issue_commented", requestedByActorType: "user", requestedByActorId: actor.userId!,
+        payload: { issueId: task.id, commentId: comment.id },
+        contextSnapshot: { issueId: task.id, commentId: comment.id, wakeCommentId: comment.id, wakeReason: "issue_commented" } });
+      expect(nextWake).not.toBeNull();
+      expect(nextWake!.id).not.toBe(prior.id);
+      const secondRemaining = deadlineAt - Date.now();
+      if (secondRemaining <= 0) throw new Error("same_task_new_run_second_deadline_exhausted");
+      await expect.poll(async () => {
+        const [run] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, nextWake!.id)));
+        return run?.status === "succeeded";
+      }, { timeout: secondRemaining }).toBe(true);
+      await heartbeat.drainActiveRunExecutions();
+
+      const [current] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
+        eq(heartbeatRuns.id, nextWake!.id)));
+      if (!current) throw new Error("same_task_new_run_current_run_missing");
+      expect(current).toMatchObject({ companyId, agentId, nativeIssueId: task.id, runtimeMode: "native", status: "succeeded" });
+      expect(current.id).not.toBe(prior.id);
+      expect(current.nativeSessionId).toBe(prior.nativeSessionId);
+      const currentProfile = current.runnerProfileJson as Record<string, unknown>;
+      const currentInput = parseNativeExecutionInput(currentProfile.nativeExecutionInput);
+      const currentContinuation = (current.contextSnapshot as Record<string, unknown>).executionContinuation as Record<string, unknown>;
+      const resumeDelta = currentContinuation.resumeDelta as Record<string, unknown>;
+      expect(resumeDelta.baseRunId).toBe(prior.id);
+      if (currentInput.schema !== "paperclip.native-execution-input.v4" ||
+        !("continuationPrompt" in currentInput) || !currentInput.continuationPrompt)
+        throw new Error("same_task_new_run_compact_input_missing");
+      const compactEvents = JSON.parse(currentInput.continuationPrompt) as Record<string, unknown>;
+      expect(JSON.stringify(compactEvents)).toContain(commentBody);
+      const currentCheckpoint = currentProfile.sessionCheckpoint as Record<string, unknown>;
+      const currentIdentity = currentCheckpoint.identity as Record<string, unknown>;
+      expect(currentIdentity).toMatchObject({ runId: current.id, companyId, issueId: task.id, agentId });
+      expect(currentCheckpoint.providerSessionId).toBe(priorCheckpoint.providerSessionId);
+      expect(secondFrames.get(current.id)).toMatchObject({ schema: "paperclip.native-model-envelope.v2" });
+      const currentReceipt = nativeRunInputSourceReceiptSchema.parse(currentProfile.nativeInputSourceReceipt);
+      expect(currentReceipt.binding).toMatchObject({ companyId, runId: current.id, agentId, issueId: task.id });
+      expect(currentReceipt.bootstrap.inputs).toContainEqual(expect.objectContaining({ kind: "retained_run", runId: prior.id }));
+      expect(currentReceipt.bootstrap.inputs).toContainEqual(expect.objectContaining({ kind: "comment", commentId: comment.id }));
+      const planDocuments = await db.select({ revisionNumber: documents.latestRevisionNumber }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "plan")));
+      expect(planDocuments).toEqual([{ revisionNumber: 1 }]);
+      const notesDocuments = await db.select({ revisionNumber: documents.latestRevisionNumber }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "notes")));
+      expect(notesDocuments).toEqual([{ revisionNumber: 1 }]);
+      const resultDocuments = await db.select({ body: documents.latestBody }).from(issueDocuments)
+        .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+        .where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, task.id), eq(issueDocuments.key, "result")));
+      expect(resultDocuments).toEqual([{ body: "Completed from the current Human request without repeating the saved plan." }]);
+    },
+  });
+}, 900_000);
 
 it.each([false, true])("actual managed OpenCode plan-only output queues one bounded continuation with legacy review present: %s", async withLegacyReview => {
   const deadlineAt = Date.now() + 600_000;

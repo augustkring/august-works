@@ -15,9 +15,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+import { eq } from "drizzle-orm";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  createDb,
   heartbeatRuns,
   heartbeatRunEvents,
   agents,
@@ -33,10 +35,11 @@ import {
   validatePrpStructuredRunResult,
   validatePrpEvent,
   parseNativeExecutionInput,
+  buildNativeModelEnvelope,
   type NativeExecutionInputV1,
   type PrpEvent,
 } from "@paperclipai/paperclip-runner";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { nativeSha256 } from "./canonical.js";
 import * as noLaunchProofModule from "./native-maintenance-no-launch.js";
@@ -56,6 +59,13 @@ import { buildNativeHeartbeatPreparationSpans } from "./native-run-trace.js";
 import { NativeRunnerOwnershipUnverifiedError } from "./native-runner-ownership.js";
 import type { AdapterRuntimeEvent } from "../../adapters/index.js";
 import { HttpError } from "../../errors.js";
+import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
+import { seedV5Presences, enableV5ForTest } from "../../__tests__/helpers/v5-fixtures.js";
+import { seedCurrentHumanSourceActor } from "../../__tests__/helpers/current-human-source-fixture.js";
+import type { NativeBootstrapSourceClosure } from "./native-execution-input.js";
+import { buildNativeExecutionInput, prepareNativeTurnWithContext } from "./native-execution-input.js";
+import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
+import { EMPTY_CONTEXT_PACKET_MARKDOWN } from "../context/context-packet-rendering.js";
 
 // These executor fixtures model ordinary runs without analytical roots. Real
 // source admission is exercised against PostgreSQL in analytical-context privacy.
@@ -257,7 +267,8 @@ vi.mock("./current-wake-comments.js", () => ({
   assertCurrentWakeCommentsRead: state.assertCurrentWakeCommentsRead,
 }));
 
-vi.mock("../activity-log.js", () => ({
+vi.mock("../activity-log.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../activity-log.js")>(),
   persistActivity: state.persistActivity,
   publishActivity: state.publishActivity,
 }));
@@ -335,7 +346,10 @@ import {
   failUnclaimedNativeOpenCodeConformanceRun,
   nativeManagedOpenCodeRequiredToolNames,
   nativeManagedCallApiOperationIds,
+  canonicalManagedOpenCodeContinuationTurn,
 } from "./native-session-executor.js";
+
+const assignedMcpCurrentHumanDbSupport = await getEmbeddedPostgresTestSupport();
 
 beforeEach(() => {
   analyticalAdmission.mockReset().mockResolvedValue(undefined);
@@ -9012,35 +9026,88 @@ describe("runnerd provider runtime wiring", () => {
     expect(state.createAssignedMcpTools).not.toHaveBeenCalled();
   });
 
-  it("keeps assigned MCP credentials on the control plane for remote Codex", async () => {
-    const assignedMcpTools = { definitions: () => [], has: () => false, execute: vi.fn() };
-    state.createAssignedMcpTools.mockResolvedValueOnce(assignedMcpTools);
-    state.createBackend.mockClear();
-    state.createTransport.mockClear();
-    state.toolAuthorityDefinitions.mockClear();
-    await createRunnerdBackend({
-      db: leaseDb(execution), execution, runnerInstanceId: "runner-assigned-mcp",
-      runnerEnvironment: {
-        PAPERCLIP_NATIVE_MCP_NAME: "paperclip-assigned",
-        PAPERCLIP_NATIVE_MCP_URL: "http://127.0.0.1:3217/mcp/gateways/assigned-test",
-        PAPERCLIP_NATIVE_MCP_TOKEN: "private-run-token",
-      },
-      runnerExecutionTarget: {
-        kind: "remote", transport: "sandbox", providerKey: "daytona",
-        leaseId: "lease-assigned-mcp", remoteCwd: "/home/daytona/paperclip-workspace",
-        runner: { execute: vi.fn() },
-      } as never,
-    });
-    expect(state.createAssignedMcpTools).toHaveBeenCalledWith(expect.objectContaining({
-      gatewayPublicId: "assigned-test", bearerToken: "private-run-token",
-    }));
-    expect(state.toolAuthorityDefinitions).toHaveBeenCalledWith(expect.objectContaining({ assignedMcpTools }));
-    state.createBackend.mock.calls[0]![1].codexTransportFactory!();
-    const options = state.createTransport.mock.calls[0]![0] as { environment: NodeJS.ProcessEnv };
-    expect(options.environment.PAPERCLIP_NATIVE_MCP_NAME).toBeUndefined();
-    expect(options.environment.PAPERCLIP_NATIVE_MCP_URL).toBeUndefined();
-    expect(options.environment.PAPERCLIP_NATIVE_MCP_TOKEN).toBeUndefined();
-  });
+  (assignedMcpCurrentHumanDbSupport.supported ? it : it.skip)(
+    "keeps assigned MCP credentials on the control plane for remote Codex with the current Human run owner",
+    async () => {
+      const database = await startEmbeddedPostgresTestDatabase("native-executor-assigned-mcp-human-");
+      const db = createDb(database.connectionString, { maxConnections: 3 });
+      try {
+        await enableV5ForTest(db);
+        const f = await seedV5Presences(db);
+        const human = await seedCurrentHumanSourceActor(db, [f.home], f.userId);
+        if (!human.userId) throw new Error("assigned MCP fixture requires a current authenticated Human");
+        const makeOwnedTaskAndRun = async (responsibleUserId: string | null) => {
+          const task = await issueServiceModule.issueService(db).create(f.home, {
+            title: "Keep assigned MCP credentials on the server",
+            description: "Authenticated current Human source for the remote Codex binding.",
+            status: "todo", createdByUserId: human.userId!, responsibleUserId: human.userId!,
+          }, db, undefined, { manualInputActor: human, privacyActor: human, sourceAccessActor: human });
+          const currentTask = await issueServiceModule.issueService(db).update(task.id, {
+            assigneeAgentId: f.presence.id, status: "in_progress", actorUserId: human.userId!, privacyActor: human,
+          });
+          if (!currentTask?.identifier) throw new Error("assigned MCP current Human Task identifier is missing");
+          const [run] = await db.insert(heartbeatRuns).values({
+            companyId: f.home, agentId: f.presence.id, responsibleUserId,
+            status: "running", runtimeMode: "native", nativeIssueId: task.id,
+            contextSnapshot: { issueId: task.id },
+          }).returning();
+          await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, task.id));
+          const boundExecution = {
+            ...execution,
+            binding: { ...execution.binding, companyId: f.home, runId: run!.id,
+              issueId: task.id, agentId: f.presence.id },
+            task: { ...execution.task, identifier: currentTask.identifier,
+              title: currentTask.title, prompt: currentTask.title },
+            session: { ...execution.session, normalizedSessionId: randomUUID() },
+          };
+          return { task: currentTask, run: run!, execution: boundExecution };
+        };
+        const positive = await makeOwnedTaskAndRun(human.userId);
+        const assignedMcpTools = { definitions: () => [], has: () => false, execute: vi.fn() };
+        const runnerEnvironment = {
+          PAPERCLIP_NATIVE_MCP_NAME: "paperclip-assigned",
+          PAPERCLIP_NATIVE_MCP_URL: "http://127.0.0.1:3217/mcp/gateways/assigned-test",
+          PAPERCLIP_NATIVE_MCP_TOKEN: "private-run-token",
+        };
+        const remoteTarget = () => ({
+          kind: "remote" as const, transport: "sandbox" as const, providerKey: "daytona",
+          leaseId: randomUUID(), remoteCwd: "/home/daytona/paperclip-workspace",
+          runner: { execute: vi.fn() },
+        } as never);
+        state.createAssignedMcpTools.mockClear();
+        state.createAssignedMcpTools.mockResolvedValueOnce(assignedMcpTools);
+        state.createBackend.mockClear();
+        state.createTransport.mockClear();
+        state.toolAuthorityDefinitions.mockClear();
+        await createRunnerdBackend({ db, execution: positive.execution,
+          runnerInstanceId: randomUUID(), runnerEnvironment, runnerExecutionTarget: remoteTarget() });
+        expect(state.createAssignedMcpTools).toHaveBeenCalledWith(expect.objectContaining({
+          companyId: f.home, issueId: positive.task.id, runId: positive.run.id,
+          agentId: f.presence.id, responsibleUserId: human.userId,
+          gatewayPublicId: "assigned-test", bearerToken: "private-run-token",
+        }));
+        expect(state.toolAuthorityDefinitions).toHaveBeenCalledWith(expect.objectContaining({ assignedMcpTools }));
+        state.createBackend.mock.calls[0]![1].codexTransportFactory!();
+        const options = state.createTransport.mock.calls[0]![0] as { environment: NodeJS.ProcessEnv };
+        expect(options.environment.PAPERCLIP_NATIVE_MCP_NAME).toBeUndefined();
+        expect(options.environment.PAPERCLIP_NATIVE_MCP_URL).toBeUndefined();
+        expect(options.environment.PAPERCLIP_NATIVE_MCP_TOKEN).toBeUndefined();
+
+        const negative = await makeOwnedTaskAndRun(null);
+        state.createAssignedMcpTools.mockClear();
+        state.createBackend.mockClear();
+        await expect(createRunnerdBackend({ db, execution: negative.execution,
+          runnerInstanceId: randomUUID(), runnerEnvironment, runnerExecutionTarget: remoteTarget() }))
+          .rejects.toThrow("assigned native MCP requires the current responsible Human");
+        expect(state.createAssignedMcpTools).not.toHaveBeenCalled();
+        expect(state.createBackend).not.toHaveBeenCalled();
+      } finally {
+        await db.$client.end({ timeout: 0 }).catch(() => undefined);
+        await database.cleanup();
+      }
+    },
+    60_000,
+  );
 
   it("makes remote authority archival idempotent and returns the archived state", async () => {
     const remoteExecute = vi.fn();
@@ -11784,4 +11851,109 @@ it.each([
       new NativeProviderTerminalFailure(code, false),
     ),
   ).toBe("native_event_replay_conflict");
+});
+
+
+// This unit fixture checks the turn-preparation seam only. The existing PG
+// admission suite covers real source-owner rechecks; this is not Host or SDK proof.
+describe("managed OpenCode continuation source preparation", () => {
+  it("reconstructs canonical v2 only under current authority from schema-valid server input", () => {
+    const companyId = randomUUID(), runId = randomUUID(), previousRunId = randomUUID();
+    const issueId = randomUUID(), agentId = randomUUID(), messageId = randomUUID();
+    const issue = { id: issueId, identifier: "NATIVE-1", title: "Current task",
+      description: "Current task description", workMode: "standard" };
+    const message = { id: messageId, body: "Compact current delta only", authorType: "user",
+      authorId: "current-human", sourceTrust: "user", createdByRunId: null };
+    const execution = parseNativeExecutionInput(buildNativeExecutionInput({
+      companyId, runId, agentId, issue, taskPrompt: "Full current task prompt",
+      wakePayload: { reason: "issue_commented", issue, commentIds: [messageId], latestCommentId: messageId,
+        comments: [{ ...message, author: { type: "user", id: "current-human" } }],
+        commentWindow: { requestedCount: 1, includedCount: 1, missingCount: 0 },
+        executionContinuation: { version: 1, objective: message.body, messages: [message],
+          resumeDelta: { baseRunId: previousRunId, messages: [message] } } },
+      resumedSession: true, previousTurn: { runId: previousRunId, task: { title: issue.title, description: issue.description } },
+      conversationMode: false, workspace: { id: runId, cwd: "/tmp/current-native-task", repoUrl: null, repoRef: null, branchName: null },
+      normalizedSessionId: "opencode-retained-session", provider: "opencode",
+      opencodePermissionMode: "allow", model: "openrouter/test/model",
+      completionContract: { id: randomUUID(), sha256: `sha256:${"a".repeat(64)}`,
+        schemaVersion: "paperclip.run-result.v1", contract: { revision: "1", objective: "Deliver the current task",
+          criteria: [{ id: "output", requirement: "Deliver the current task" }] } },
+      runtimeContext: nativeRuntimeContextFixture(),
+    }));
+    expect(execution.schema).toBe("paperclip.native-execution-input.v4");
+    expect("continuationPrompt" in execution && execution.continuationPrompt).toBeTruthy();
+    const currentWorkspace = { cwd: execution.workspace.cwd, repoUrl: execution.workspace.repoUrl,
+      repoRef: execution.workspace.repoRef, branchName: execution.workspace.branchName };
+    const sourceClosure = {
+      sourceSet: {
+        policy: { issueIds: [issueId], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] },
+        inputs: [
+          { kind: "task", issueId, sourceVersion: "1", contentHash: "a".repeat(64) },
+          { kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: "b".repeat(64) },
+          { kind: "context", manifestId: randomUUID(), queryHash: "e".repeat(64),
+            policySnapshotHash: "f".repeat(64), contentHash: "1".repeat(64) },
+          { kind: "workspace_metadata", runId, executionWorkspaceId: runId, origin: "task_session",
+            sourceVersion: `task-session:${runId}`, contentHash: nativeSha256(currentWorkspace) },
+        ],
+      },
+      taskEnvelopeDigest: nativeSha256(buildNativeModelEnvelope(execution).task),
+    } as NativeBootstrapSourceClosure;
+    // Initial bootstrap can already carry real Context source rows; turnContext
+    // is minted only by the later witness-bound per-turn preparation.
+    expect(sourceClosure.turnContext).toBeUndefined();
+    expect(sourceClosure.sourceSet.inputs.filter(source => source.kind === "context")).toHaveLength(1);
+    const compactInput = { message: { role: "user" as const,
+      text: JSON.stringify(buildNativeModelEnvelope(execution, { resumedSession: true })) },
+      continuation: true as const, requestedCollaborationMode: "default" as const };
+    const authorityScope = { companyId, runId, agentId, issueId, executionInputHash: nativeSha256(execution) };
+
+    const canonical = canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: compactInput,
+      sourceClosure, authorityScope });
+    expect(canonical).toEqual({ message: { role: "user", text: JSON.stringify(buildNativeModelEnvelope(execution)) },
+      requestedCollaborationMode: "default" });
+    expect(JSON.parse(canonical.message.text)).toMatchObject({ schema: "paperclip.native-model-envelope.v2" });
+    expect(canonical.message.text).toContain("Full current task prompt");
+    expect(canonical.message.text).toContain("Compact current delta only");
+
+    const contextManifestId = randomUUID(), contextMarkdown = EMPTY_CONTEXT_PACKET_MARKDOWN;
+    const contextManifest = { id: contextManifestId, companyId, runId, agentId, issueId, projectId: null,
+      queryHash: "c".repeat(64), policySnapshotHash: "d".repeat(64), createdAt: new Date("2026-11-11T00:00:00.000Z") };
+    const contextWitness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId,
+      actor: { type: "agent", source: "none", companyId, agentId, runId, onBehalfOfUserId: "current-human" },
+      renderedMarkdown: contextMarkdown, manifest: contextManifest, items: [], roots: [], });
+    expect(contextWitness).toBeDefined();
+    const preparedWithContext = prepareNativeTurnWithContext({ turnInput: canonical, baseClosure: sourceClosure,
+      companyId, runId, agentId, issueId, contextMarkdown, contextWitness: contextWitness ?? null,
+      manifestIds: [{ companyId, contextManifestId }] });
+    expect(preparedWithContext).not.toBeNull();
+    expect(JSON.parse(preparedWithContext!.turnInput.message.text)).toMatchObject({
+      schema: "paperclip.native-model-envelope.v2",
+      turnContext: { schema: "paperclip.native-turn-context.v1", manifestIds: [contextManifestId] },
+    });
+    expect(preparedWithContext!.sourceClosure.sourceSet.inputs.filter(input => input.kind === "context")).toHaveLength(2);
+    expect(preparedWithContext!.sourceClosure.turnContext).toEqual({
+      markdownDigest: createHash("sha256").update(contextMarkdown, "utf8").digest("hex"), manifestIds: [contextManifestId],
+    });
+    expect(prepareNativeTurnWithContext({ turnInput: canonical, baseClosure: sourceClosure,
+      companyId, runId, agentId, issueId, contextMarkdown, contextWitness: contextWitness ?? null,
+      manifestIds: [{ companyId, contextManifestId: randomUUID() }] })).toBeNull();
+
+    const forgedText = { ...compactInput, message: { ...compactInput.message, text: compactInput.message.text.replace("Compact current delta only", "forged delta") } };
+    expect(() => canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: forgedText, sourceClosure, authorityScope }))
+      .toThrow("managed_opencode_continuation_source_binding_invalid");
+    const forgedMode = { ...compactInput, requestedCollaborationMode: "plan" as const };
+    expect(() => canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: forgedMode, sourceClosure, authorityScope }))
+      .toThrow("managed_opencode_continuation_source_binding_invalid");
+    const forgedKey = { ...compactInput, unexpected: true } as unknown as typeof compactInput;
+    expect(() => canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: forgedKey, sourceClosure, authorityScope }))
+      .toThrow("managed_opencode_continuation_source_binding_invalid");
+    const staleWake = structuredClone(sourceClosure);
+    (staleWake.sourceSet.inputs[1] as Record<string, unknown>).runId = randomUUID();
+    expect(() => canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: compactInput, sourceClosure: staleWake, authorityScope }))
+      .toThrow("managed_opencode_continuation_source_binding_invalid");
+    expect(canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: compactInput, sourceClosure, authorityScope: null }))
+      .toEqual(compactInput);
+    expect(() => canonicalManagedOpenCodeContinuationTurn({ execution, turnInput: compactInput, sourceClosure,
+      authorityScope: { ...authorityScope, runId: randomUUID() } })).toThrow("managed_opencode_continuation_source_binding_invalid");
+  });
 });

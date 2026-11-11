@@ -902,7 +902,17 @@ async function configureManagedRunSandboxHost(
       return await (await exactAdmission(args.runId, leases[0]!.id)).beforeNativeExecution(args);
     }) satisfies Host["beforeNativeExecution"],
     modelRequest: async (_body: unknown, _signal?: AbortSignal): ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]> => {
-      throw new Error("scheduler_software_host_incoming_model_authority_required");
+      const error = new Error("scheduler_software_host_incoming_model_authority_required");
+      const allowedCallers = new Set([
+        "managed-native-conversation-frame.ts", "managed-native-heartbeat-fixture.ts",
+        "managed-native-opencode-e2e-fixture.ts", "managed-native-conversation-sandbox-host.ts",
+        "native-session-executor.ts", "worker-model-gateway.ts", "native-model-session-controller.ts",
+      ]);
+      const sourceFrames = safeErrorSourceFrames(error)
+        .filter(frame => allowedCallers.has(frame.sourceFile))
+        .map(({ sourceFile, line }) => ({ sourceFile, line }));
+      console.info("native_serial_model_request_authority_denied", JSON.stringify({ sourceFrames }));
+      throw error;
     },
     modelRequestAuthenticated: async (body: unknown, signal: AbortSignal, authorization: string | undefined) => {
       const { host } = serialModelAdmission(authorization, { ...input,

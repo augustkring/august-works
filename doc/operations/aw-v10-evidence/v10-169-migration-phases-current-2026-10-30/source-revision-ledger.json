@@ -9541,5 +9541,243 @@
       "providerLiveProof": false
     },
     "qualificationScope": "Exact local software evidence only; no status promotion, host/provider/production/restore or complete V10 qualification."
+  },
+  "nativeDispatchAndManagedPipelineCheckpointR91": {
+    "sourceHead": "b276fcc603755b715546d3b3bbdacad40c2721cb",
+    "sourcePaths": [
+      {
+        "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
+        "sha256": "0c3bd88c8492882c007af90172c84e1c319bdd56e89262fc8b24d5e421517cc7",
+        "bytes": 59980,
+        "mtimeNs": 1794432204571477102
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts",
+        "sha256": "c64df88daebfba1bb1bb78862f7f72f734ac06e2cacc301696c9ca13ee0c9e6e",
+        "bytes": 420556,
+        "mtimeNs": 1794432230770862958
+      },
+      {
+        "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625",
+        "bytes": 257755,
+        "mtimeNs": 1794432230791094978
+      },
+      {
+        "path": "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts",
+        "sha256": "93bca50a2f7e2fd7d963bbba8f820517db0b800fcaccbd9d7e8c539504b63b71",
+        "bytes": 137676,
+        "mtimeNs": 1794432204567997316
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.test.ts",
+        "sha256": "39f613983eac78330a10d2f17e64fa5dfb84f70e5ea2a59847aeb635296f7d7d",
+        "bytes": 462982,
+        "mtimeNs": 1794433082590137871
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db",
+        "bytes": 845831,
+        "mtimeNs": 1794432204565558053
+      },
+      {
+        "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
+        "sha256": "f15317515b99886f0299cbb9fd8eac402eb6d2f2c9416d8bc00c893c34e2e77c",
+        "bytes": 14276,
+        "mtimeNs": 1794432230772977731
+      }
+    ],
+    "ownerGroups": {
+      "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-04",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06",
+        "SCR-V10-HOTSPOT-07"
+      ],
+      "server/src/services/native-runtime/native-session-executor.test.ts": [
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06"
+      ],
+      "server/src/services/native-runtime/native-session-executor.ts": [
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06"
+      ],
+      "tests/e2e/fixtures/managed-pipeline-producer.ts": [
+        "SCR-V10-CUSTOMER-EXPERIENCE"
+      ],
+      "server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts": [
+        "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
+      ],
+      "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts": [
+        "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
+      ],
+      "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": [
+        "SCR-V10-HOTSPOT-02",
+        "SCR-V10-HOTSPOT-04",
+        "SCR-V10-HOTSPOT-05",
+        "SCR-V10-HOTSPOT-06"
+      ]
+    },
+    "phasePinChanges": {
+      "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": {
+        "oldSha256": "786638259e35762a0a50244069421299cc3e33c645f3df80448bfcd1e1397931",
+        "newSha256": "93bca50a2f7e2fd7d963bbba8f820517db0b800fcaccbd9d7e8c539504b63b71"
+      },
+      "server/src/services/native-runtime/native-session-executor.ts": {
+        "oldSha256": "45f31b38e32b6c50f30cdc2f00cc183cab7240f023c4ce7780644dc947b26a86",
+        "newSha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db"
+      }
+    },
+    "inventory": {
+      "sourceDeltaPathCount": 2084,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "deletedSourcePathCount": 41,
+      "untrackedSourceCandidateCount": 0,
+      "fullDiffPathCount": 14896
+    },
+    "evidenceRoot": "doc/operations/aw-v10-evidence/native-retained-continuation-authority-20261111",
+    "evidenceManifest": {
+      "README.md": "c2e690050f9f2aad660a910f4b0a2ee6a13812ef1ae5ea83e0ecf17137cfe40d",
+      "final-source-pins.json": "ce478167da65107902b51169bb3fe5d1dc1c227124684fae1ce0b2014a491a01",
+      "r598-cleanup.json": "3be9a57c1dee0924acb72c516ef958089542df4e4eef5f797274f34d20049f68",
+      "r598-receipt.json": "e278f4df9258ef984f7b9b89b5ae7e9b3b75387c60cfa795718a67153ecc3584",
+      "r598-source-after.json": "c17b7a08d4cd66121dad4c73ae9e4b75ad287fded60a638825a9220485cbd7ae",
+      "r598-source-manifest.json": "70951005a9699300503d680717f2d24c1c5d807fcb8dbef989bd9a04a807078b",
+      "r598.log.gz": "b89151346e65de60382919067b79a20be1b4d9e38900da1dd28cb6691e4c104a",
+      "r599-build-receipt.json": "15d0e3ba300d94f2742324b79a646c3d92395d529567ef914920821d53ec1074",
+      "r599-phase-0.log.gz": "9c6e1a7e8ac0224a38a3aadf5929aecc05264c9d79f79a50de68ff57a225be13",
+      "r599-phase-1.log.gz": "03ac03e453cf3e0b22bb8b33b495ff5e65cd649b57cc6b0b1f367526fd8fa6a2",
+      "r599-phase-2.log.gz": "062ce47d278999c3a5f233343ff79ef34244b8495e433b95bac53fcd678aaade",
+      "r599-read-only-source-protection-restored.json": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071",
+      "r599-source-after.json": "438febad6f0a995df51ab81e61929b832a894c637937145b4a2358688e62bc67",
+      "r599-source-before.json": "66319051042df9bd5bbfb659ba0fb1a7d632b8a1381d13ae4beef0247b6e8462"
+    },
+    "rootFinalFacts": {
+      "R591": {
+        "status": "FAILED",
+        "testsPassed": 538,
+        "testsFailed": 6,
+        "cause": "four unchanged missing-provider-pack Host cases; UUID import and audit mock fixture omissions"
+      },
+      "R592": {
+        "status": "FAILED",
+        "testsPassed": 539,
+        "testsFailed": 1,
+        "hostCasesExcluded": 4,
+        "cause": "new fixture expected canonical-JSON hash instead of the Context owner raw-byte digest"
+      },
+      "R593": {
+        "status": "FAILED",
+        "testsPassed": 539,
+        "testsFailed": 1,
+        "hostCasesExcluded": 4,
+        "cause": "foreign-scope fixture expected unchanged input instead of strict rejection"
+      },
+      "R598": {
+        "status": "PASS",
+        "testsPassed": 540,
+        "testsFailed": 0,
+        "hostCasesExcluded": 4,
+        "actualPostgres": true,
+        "pinsStable": true,
+        "normalCleanupZeroOwnedSurvivors": true
+      },
+      "R599": {
+        "status": "PASS",
+        "typecheck": "PASS",
+        "build": "PASS",
+        "playwrightList": "PASS",
+        "steps": [
+          {
+            "command": [
+              "pnpm",
+              "--filter",
+              "@paperclipai/server",
+              "typecheck"
+            ],
+            "exit": 0,
+            "seconds": 179.63257362900185,
+            "peakGroupRssBytes": 6478610432,
+            "stopped": null
+          },
+          {
+            "command": [
+              "pnpm",
+              "--filter",
+              "@paperclipai/server",
+              "build"
+            ],
+            "exit": 0,
+            "seconds": 176.5449425910192,
+            "peakGroupRssBytes": 6403883008,
+            "stopped": null
+          },
+          {
+            "command": [
+              "node",
+              "node_modules/@playwright/test/cli.js",
+              "test",
+              "--list",
+              "--config",
+              "tests/e2e/playwright.config.ts",
+              "tests/e2e/pipelines-tutorial-flow.spec.ts"
+            ],
+            "exit": 0,
+            "seconds": 8.472278842993546,
+            "peakGroupRssBytes": 942641152,
+            "stopped": null
+          }
+        ],
+        "sourceHashesAndMtimesUnchanged": true,
+        "originalModesRestored": true
+      },
+      "actualSdkHostExecutionQualified": false,
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "R594": {
+        "status": "PASS",
+        "testsPassed": 540,
+        "testsFailed": 0,
+        "hostCasesExcluded": 4,
+        "scope": "intermediate before the explicit Task identifier fixture guard"
+      },
+      "R595": {
+        "status": "FAILED",
+        "cause": "new MCP fixture Task identifier type nullable; explicit guard added afterward",
+        "build": "DID_NOT_RUN",
+        "playwrightList": "DID_NOT_RUN"
+      },
+      "R596": {
+        "status": "PASS_INTERMEDIATE",
+        "testsPassed": 540,
+        "scope": "superseded by isolated R598"
+      },
+      "R597": {
+        "status": "INVALIDATED",
+        "commandsExit": 0,
+        "cause": "transient storage source edit/restoration by sub-agent; immutable compiler input not established; all agents stopped and checks repeated"
+      }
+    },
+    "qualificationScope": "Root-pinned component test and typecheck/build/Playwright-list evidence only. Playwright list is collection, not browser execution. Four actual Host cases remain unqualified locally due provider_pack_missing. R591/R592/R593/R595/R597 failures are retained as failed, not promoted. No Host/provider/deployment/restore/Human or overall V10 qualification.",
+    "requirementStatusesPromoted": 0,
+    "phaseStatusesPromoted": 0,
+    "hostResolved": false,
+    "providerLiveProof": false,
+    "aliasSourcePinRefresh": [
+      {
+        "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
+        "oldSha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721",
+        "newSha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625"
+      },
+      {
+        "path": "server/src/services/native-runtime/native-session-executor.ts",
+        "oldSha256": "45f31b38e32b6c50f30cdc2f00cc183cab7240f023c4ce7780644dc947b26a86",
+        "newSha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db"
+      }
+    ]
   }
 }

@@ -4,8 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, request as pwRequest, type APIRequestContext } from "@playwright/test";
-import { and, eq, sql } from "../../../packages/db/node_modules/drizzle-orm/index.js";
-import { createDb, authSessions, authUsers, companies, environmentLeases, heartbeatRuns } from "../../../packages/db/src/index.ts";
+import { and, asc, eq, inArray, sql } from "../../../packages/db/node_modules/drizzle-orm/index.js";
+import { createDb, authSessions, authUsers, companies, environmentLeases, heartbeatRunEvents, heartbeatRuns } from "../../../packages/db/src/index.ts";
 import { createApp } from "../../../server/src/app.js";
 import { createStorageService } from "../../../server/src/storage/service.js";
 import { createLocalDiskStorageProvider } from "../../../server/src/storage/local-disk-provider.js";
@@ -18,7 +18,7 @@ import { verifyNativeCleanupRuntimeState } from "../../../server/src/services/ex
 import { startEmbeddedPostgresTestDatabase } from "../../../server/src/__tests__/helpers/embedded-postgres.js";
 import { withManagedNativeHeartbeatFixture } from "../../../server/src/__tests__/helpers/managed-native-heartbeat-fixture.js";
 import { createControlledNativeSignoffBackend } from "../../../server/src/__tests__/helpers/controlled-native-signoff-backend.js";
-import { makeConversationFixtureTreeWritable } from "../../../server/src/__tests__/helpers/managed-native-conversation-frame.js";
+import { boundedRunnerFailureDiagnostic, makeConversationFixtureTreeWritable } from "../../../server/src/__tests__/helpers/managed-native-conversation-frame.js";
 import { listenOnFetchAllowedPort } from "../fetch-allowed-port";
 
 /** An actual current Native producer for pipeline application/API contracts.
@@ -108,8 +108,34 @@ export async function withManagedPipelineProducer(deadlineAt: number, inspect: (
           await inspect({ db: scopedDb, board, agentApi, company: { id: companyId, issuePrefix: company.issuePrefix },
             key: { agentId, runId: run!.id, taskId: task.id } });
           control.release(); await heartbeat.drainActiveRunExecutions();
-          await expect.poll(async () => (await scopedDb.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id)))[0]?.status,
-            { timeout: remaining() }).toBe("succeeded");
+          try {
+            await expect.poll(async () => (await scopedDb.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, wake.id)))[0]?.status,
+              { timeout: remaining() }).toBe("succeeded");
+          } catch {
+            // Keep the original Native failure private while attaching its bounded
+            // code/stage and message hashes to the Playwright assertion report.
+            let diagnostic: unknown = { availability: "unavailable" };
+            try {
+              const [failedRun] = await scopedDb.select({ status: heartbeatRuns.status,
+                errorCode: heartbeatRuns.errorCode, error: heartbeatRuns.error,
+                executionStage: heartbeatRuns.executionStage, nativePhase: heartbeatRuns.nativePhase })
+                .from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, wake.id)));
+              if (failedRun) {
+                const events = await scopedDb.select({ seq: heartbeatRunEvents.seq, eventType: heartbeatRunEvents.eventType,
+                  message: heartbeatRunEvents.message, payload: heartbeatRunEvents.payload }).from(heartbeatRunEvents)
+                  .where(and(eq(heartbeatRunEvents.companyId, companyId), eq(heartbeatRunEvents.runId, wake.id),
+                    inArray(heartbeatRunEvents.eventType, ["error", "turn.failed"])))
+                  .orderBy(asc(heartbeatRunEvents.seq)).limit(4);
+                const statuses = ["queued", "running", "succeeded", "failed", "timed_out", "cancelled", "interrupted", "superseded"];
+                diagnostic = { status: statuses.includes(failedRun.status) ? failedRun.status : "other",
+                  ...boundedRunnerFailureDiagnostic(0, { executionStage: failedRun.executionStage,
+                    nativePhase: failedRun.nativePhase, error: { code: failedRun.errorCode, message: failedRun.error } }),
+                  runnerFailures: events.map(event => ({ eventType: event.eventType,
+                    ...boundedRunnerFailureDiagnostic(event.seq, event.payload, event.message) })) };
+              }
+            } catch { /* Diagnostic collection must not replace the assertion failure. */ }
+            throw new Error(`managed_pipeline_native_run_failure:${JSON.stringify(diagnostic)}`);
+          }
           expect(factsForRun(wake.id)).toMatchObject({ providerCallCount: 0, issuerFacts: [] });
           const leases = await scopedDb.select().from(environmentLeases).where(and(eq(environmentLeases.companyId, companyId), eq(environmentLeases.heartbeatRunId, wake.id)));
           expect(leases).toHaveLength(1); const lease = leases[0]; assert(lease);

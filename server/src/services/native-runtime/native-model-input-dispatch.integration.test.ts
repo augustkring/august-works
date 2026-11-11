@@ -40,7 +40,7 @@ import {
 import { nativeRunInputSourceReceiptSchema, type ContextAuthorityDecision, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
-import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
+import { readCurrentManagedOpenCodeSourceScope, recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
   recordNativeDocumentToolResultIntent, recordNativeProjectToolResultIntent, recordNativeInputToolResultIntent,
   assertNativeRunReadSourceHistoryQualified } from "./native-session-executor.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
@@ -49,7 +49,7 @@ import { captureNativeProjectToolResult } from "./paperclip-runner-tool-authorit
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { nativeCommentProjectionHash, nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
-import { buildNativeModelEnvelope } from "@paperclipai/paperclip-runner";
+import { buildNativeModelEnvelope, parseNativeExecutionInput } from "@paperclipai/paperclip-runner";
 import { buildNativeExecutionInput, buildNativeBootstrapSourceSet, prepareNativeTurnWithContext } from "./native-execution-input.js";
 import { buildRetainedNativeRuntimeContext, type NativeRuntimeAuthoredSourceCapture } from "./runtime-context.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
@@ -180,6 +180,47 @@ describe("native model input dispatch intent", () => {
     }
     return { issueId: boundIssueId, runId, leaseOwner, attempt, eventSeq };
   }
+
+  it("binds continuation canonicalization eligibility to persisted current OpenCode authority", async () => {
+    const seeded = await seed();
+    const execution = parseNativeExecutionInput(buildNativeExecutionInput({
+      companyId, runId: seeded.runId, agentId,
+      issue: { id: seeded.issueId, identifier: "NMI-1", title: "Current task", description: "Current request", workMode: "standard" },
+      taskPrompt: "Current server-rendered task prompt",
+      workspace: { id: seeded.runId, cwd: "/native/current", repoUrl: null, repoRef: null, branchName: null },
+      normalizedSessionId: randomUUID(), provider: "opencode", opencodePermissionMode: "allow",
+      model: "openrouter/test/model", completionContract: { id: randomUUID(),
+        sha256: `sha256:${"a".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
+        contract: { revision: "1", objective: "Deliver the current task", criteria: [{ id: "output", requirement: "Deliver the current task" }] } },
+      runtimeContext: nativeRuntimeContextFixture(),
+    }));
+    const executionInputHash = nativeSha256(execution);
+    const authority = { version: 1, executionInputHash, systemInstructionsHash: "b".repeat(64), toolSchemasHash: "c".repeat(64),
+      toolSchemas: [], authorizedPromptHashes: [], promptSourceBindings: [] };
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution, nativeOpenCodeSourceAuthority: authority } })
+      .where(and(eq(heartbeatRuns.id, seeded.runId), eq(heartbeatRuns.companyId, companyId)));
+    expect(await readCurrentManagedOpenCodeSourceScope(db, execution, authority)).toEqual({
+      companyId, runId: seeded.runId, agentId, issueId: seeded.issueId, executionInputHash,
+    });
+    expect(await readCurrentManagedOpenCodeSourceScope(db, execution, null)).toBeNull();
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } })
+      .where(eq(heartbeatRuns.id, seeded.runId));
+    expect(await readCurrentManagedOpenCodeSourceScope(db, execution, authority)).toBeNull();
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution,
+      nativeOpenCodeSourceAuthority: { ...authority, executionInputHash: "f".repeat(64) } } })
+      .where(eq(heartbeatRuns.id, seeded.runId));
+    expect(await readCurrentManagedOpenCodeSourceScope(db, execution, authority)).toBeNull();
+
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution,
+      nativeOpenCodeSourceAuthority: { ...authority, systemInstructionsHash: "d".repeat(64) } } })
+      .where(eq(heartbeatRuns.id, seeded.runId));
+    expect(await readCurrentManagedOpenCodeSourceScope(db, execution, authority)).toBeNull();
+
+    const wrongRunExecution = { ...execution, binding: { ...execution.binding, runId: randomUUID() } };
+    expect(await readCurrentManagedOpenCodeSourceScope(db, wrongRunExecution, authority)).toBeNull();
+  });
 
   function dispatchArgs(
     seeded: Awaited<ReturnType<typeof seed>>,

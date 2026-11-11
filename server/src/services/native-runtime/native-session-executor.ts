@@ -7735,6 +7735,111 @@ function nativeAttachmentStageAuthorityBinding(profile: Record<string, unknown>,
   return { valid: matchingDispatches.length > 0, stageHash: matchingDispatches.length > 0 ? stage.stageHash : null };
 }
 
+export type ManagedOpenCodeSourceScope = { companyId: string; runId: string; agentId: string; issueId: string; executionInputHash: string };
+
+/** Read the current persisted managed OpenCode authority for this exact Native
+ * Run. This is a narrow binding check; dispatch still repeats the full source,
+ * lease and receipt checks under its canonical transaction. */
+export async function readCurrentManagedOpenCodeSourceScope(db: Db, execution: NativeExecutionInput,
+  expectedAuthority: Readonly<Record<string, unknown>> | null): Promise<ManagedOpenCodeSourceScope | null> {
+  if (execution.provider.kind !== "opencode" || !expectedAuthority) return null;
+  const binding = execution.binding;
+  const [run] = await db.select({ companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId,
+    issueId: heartbeatRuns.nativeIssueId, runtimeMode: heartbeatRuns.runtimeMode, status: heartbeatRuns.status,
+    runnerProfileJson: heartbeatRuns.runnerProfileJson }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, binding.companyId), eq(heartbeatRuns.id, binding.runId),
+      eq(heartbeatRuns.agentId, binding.agentId), eq(heartbeatRuns.nativeIssueId, binding.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).limit(1);
+  if (!run || run.companyId !== binding.companyId || run.agentId !== binding.agentId || run.issueId !== binding.issueId) return null;
+  const profile = record(run.runnerProfileJson);
+  const persistedInput = profile.nativeExecutionInput;
+  let parsed: NativeExecutionInput;
+  try { parsed = parseNativeExecutionInput(persistedInput); } catch { return null; }
+  const executionInputHash = nativeSha256(persistedInput);
+  if (executionInputHash !== nativeSha256(execution) || parsed.provider.kind !== "opencode" ||
+    parsed.binding.companyId !== binding.companyId || parsed.binding.runId !== binding.runId ||
+    parsed.binding.agentId !== binding.agentId || parsed.binding.issueId !== binding.issueId ||
+    parsed.binding.executionWorkspaceId !== binding.executionWorkspaceId) return null;
+  const authority = record(profile.nativeOpenCodeSourceAuthority);
+  const expectedBinding = {
+    version: expectedAuthority.version,
+    ...(Object.hasOwn(expectedAuthority, "artifactAuthority") ? { artifactAuthority: expectedAuthority.artifactAuthority } : {}),
+    ...(Object.hasOwn(expectedAuthority, "workspaceMetadataSource") ? { workspaceMetadataSource: expectedAuthority.workspaceMetadataSource } : {}),
+    executionInputHash: expectedAuthority.executionInputHash,
+    systemInstructionsHash: expectedAuthority.systemInstructionsHash,
+    toolSchemasHash: expectedAuthority.toolSchemasHash,
+    toolSchemas: expectedAuthority.toolSchemas,
+  };
+  const actualBinding = {
+    version: authority.version,
+    ...(Object.hasOwn(expectedAuthority, "artifactAuthority") ? { artifactAuthority: authority.artifactAuthority } : {}),
+    ...(Object.hasOwn(expectedAuthority, "workspaceMetadataSource") ? { workspaceMetadataSource: authority.workspaceMetadataSource } : {}),
+    executionInputHash: authority.executionInputHash,
+    systemInstructionsHash: authority.systemInstructionsHash,
+    toolSchemasHash: authority.toolSchemasHash,
+    toolSchemas: authority.toolSchemas,
+  };
+  if (!isDeepStrictEqual(actualBinding, expectedBinding)) return null;
+  const promptHashes = authority.authorizedPromptHashes;
+  const promptBindings = authority.promptSourceBindings;
+  if (authority.version !== 1 || authority.executionInputHash !== executionInputHash ||
+    !Array.isArray(promptHashes) || promptHashes.length > 64 ||
+    promptHashes.some(hash => typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash)) ||
+    new Set(promptHashes).size !== promptHashes.length ||
+    !Array.isArray(promptBindings) || promptBindings.length !== promptHashes.length || promptBindings.length > 64 ||
+    promptBindings.some(value => {
+      const binding = record(value);
+      return typeof binding.promptHash !== "string" || !promptHashes.includes(binding.promptHash) ||
+        typeof binding.sourceSetHash !== "string" || !/^[0-9a-f]{64}$/.test(binding.sourceSetHash);
+    }) ||
+    new Set(promptBindings.map(value => record(value).promptHash)).size !== promptBindings.length) return null;
+  return { companyId: run.companyId, runId: binding.runId, agentId: run.agentId, issueId: run.issueId, executionInputHash };
+}
+
+/** Replace only the exact server-built compact OpenCode continuation with the
+ * full current v2 envelope before source/Context qualification. The provider
+ * session remains retained; no runner-supplied continuation bytes survive. */
+export function canonicalManagedOpenCodeContinuationTurn(input: {
+  execution: NativeExecutionInput;
+  turnInput: Parameters<NativeSession["startTurn"]>[0];
+  sourceClosure: NativeBootstrapSourceClosure | null | undefined;
+  authorityScope: ManagedOpenCodeSourceScope | null;
+}): Parameters<NativeSession["startTurn"]>[0] {
+  const { execution, turnInput, sourceClosure, authorityScope } = input;
+  if (execution.provider.kind !== "opencode" || !("continuationPrompt" in execution) || !execution.continuationPrompt ||
+    turnInput.continuation !== true || !sourceClosure) return turnInput;
+  if (!authorityScope) return turnInput;
+  if (execution.schema !== "paperclip.native-execution-input.v4" || sourceClosure.turnContext)
+    throw new Error("managed_opencode_continuation_source_binding_invalid");
+  const executionBinding = execution.binding;
+  const wakes = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+    source.kind === "native_task_wake");
+  const tasks = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+    source.kind === "task" && source.issueId === executionBinding.issueId);
+  const workspaces = sourceClosure.sourceSet.inputs.filter((source): source is Extract<NativePayloadSourceInput, { kind: "workspace_metadata" }> =>
+    source.kind === "workspace_metadata" && source.runId === executionBinding.runId);
+  const expectedFull = buildNativeModelEnvelope(execution);
+  const expectedCompact = {
+    message: { role: "user" as const, text: JSON.stringify(buildNativeModelEnvelope(execution, { resumedSession: true })) },
+    continuation: true as const,
+    requestedCollaborationMode: "executionMode" in execution ? execution.executionMode : "default" as const,
+  };
+  if (authorityScope.companyId !== executionBinding.companyId || authorityScope.runId !== executionBinding.runId ||
+    authorityScope.agentId !== executionBinding.agentId || authorityScope.issueId !== executionBinding.issueId ||
+    authorityScope.executionInputHash !== nativeSha256(execution) ||
+    !isDeepStrictEqual(turnInput, expectedCompact) || expectedFull.schema !== "paperclip.native-model-envelope.v2" ||
+    sourceClosure.taskEnvelopeDigest !== nativeSha256(expectedFull.task) ||
+    wakes.length !== 1 || wakes[0]!.runId !== executionBinding.runId || wakes[0]!.issueId !== executionBinding.issueId ||
+    tasks.length !== 1 || wakes[0]!.sourceVersion !== tasks[0]!.sourceVersion || workspaces.length !== 1 ||
+    workspaces[0]!.executionWorkspaceId !== executionBinding.executionWorkspaceId)
+    throw new Error("managed_opencode_continuation_source_binding_invalid");
+  return {
+    message: { role: "user", text: JSON.stringify(expectedFull) },
+    requestedCollaborationMode: expectedCompact.requestedCollaborationMode,
+  };
+}
+
 async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
   run: typeof heartbeatRuns.$inferSelect, turnInput: Parameters<NativeSession["startTurn"]>[0],
   closure: NativeBootstrapSourceClosure | null | undefined, rawNativeExecutionInput: unknown,
@@ -11957,6 +12062,7 @@ async function executePaperclipNativeSessionWithinScope(
     // initial source admission. Recheck before preparing a provider backend.
     await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
     let launchEventSeq: number | null = null;
+    const managedOpenCodeSourceAuthorityRef = { value: null as Readonly<Record<string, unknown>> | null };
     const managedOpenCodeOutputCaptureRef = input.execution.provider.kind === "opencode" &&
       (input.runnerEnvironment ?? process.env).PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN?.trim()
       ? { value: null as NativeModelOutputCapture | null } : undefined;
@@ -11990,6 +12096,7 @@ async function executePaperclipNativeSessionWithinScope(
             runnerInstanceId: effectiveRunnerInstanceId,
             durableEnvironmentLeaseId: durableRunnerBinding?.environmentLeaseId,
             nativeModelOutputCapture: managedOpenCodeOutputCaptureRef,
+            managedOpenCodeSourceAuthorityRef,
             managedNativeContextReadCapture: managedContextReadCaptureRef,
             trace,
             toolTrace,
@@ -12216,9 +12323,16 @@ async function executePaperclipNativeSessionWithinScope(
               }
             },
             prepareTurn: async turnInput => {
+              const sourceClosure = input.bootstrapSourceClosure;
+              const authorityScope = input.execution.provider.kind === "opencode" &&
+                turnInput.continuation === true && sourceClosure
+                ? await readCurrentManagedOpenCodeSourceScope(input.db, input.execution, managedOpenCodeSourceAuthorityRef.value) : null;
+              const sourceBoundTurnInput = canonicalManagedOpenCodeContinuationTurn({
+                execution: input.execution, turnInput, sourceClosure, authorityScope,
+              });
               const prepared = input.prepareTurnSourceClosure
-                ? await input.prepareTurnSourceClosure(turnInput, input.bootstrapSourceClosure)
-                : { turnInput, sourceClosure: input.bootstrapSourceClosure ?? undefined };
+                ? await input.prepareTurnSourceClosure(sourceBoundTurnInput, sourceClosure)
+                : { turnInput: sourceBoundTurnInput, sourceClosure: sourceClosure ?? undefined };
               return retainedSessionHistoryUnknown
                 ? { turnInput: prepared.turnInput, sourceClosure: undefined }
                 : prepared;
@@ -14554,6 +14668,7 @@ export async function createRunnerdBackend(input: {
   restartRecovery?: NativeRestartRecoveryClaim;
   durableEnvironmentLeaseId?: string;
   nativeModelOutputCapture?: { readonly value: NativeModelOutputCapture | null };
+  managedOpenCodeSourceAuthorityRef?: { value: Readonly<Record<string, unknown>> | null };
   testBeforeManagedProjectCreate?: (capture: NativeModelOutputCapture) => Promise<void>;
   testAfterManagedProjectCreate?: (input: { actor: AuthorizationActor; companyId: string; issueId: string; capture: NativeModelOutputCapture; callId: string;
     arguments: Record<string, unknown>; result: { project: Record<string, unknown>; receipt: NativeProjectCreateReceipt;
@@ -15117,6 +15232,8 @@ async function createRunnerdBackendWithinSessionClaim(
       authorizedPromptHashes: [],
       promptSourceBindings: [],
     };
+    if (input.managedOpenCodeSourceAuthorityRef)
+      input.managedOpenCodeSourceAuthorityRef.value = sourceAuthority;
     await input.db.transaction(async (tx) => {
       const [run] = await tx.select().from(heartbeatRuns).where(and(
         eq(heartbeatRuns.companyId, input.execution.binding.companyId),

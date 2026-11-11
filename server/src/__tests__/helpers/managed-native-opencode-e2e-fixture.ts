@@ -305,7 +305,7 @@ type ManagedNativePrivateRoot = {
 };
 
 export type ManagedWorkerSandboxHost = Awaited<ReturnType<typeof configureManagedConversationSandboxHost>> & {
-  /** Actual controlled Host provider/network bridge; resolves current attached credentials per request. */
+  /** Explicitly unauthenticated entry stays available only for negative controls. */
   modelRequest: (body: unknown, signal: AbortSignal) =>
     ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
 };
@@ -1695,12 +1695,14 @@ export async function runManagedNativeOpenCodeFixture(input: {
           authorizedPromptCount: authorizedPromptHashes.length, canonicalManagedPromptLength: canonicalManagedPrompt.length,
           authorityContainsCanonicalPrompt: authorizedPromptHashes.includes(canonicalManagedPromptHash) })}`);
         if (input.sandboxRelay) {
-          if (!sandboxHost?.modelRequest) throw new Error("managed_worker_host_provider_bridge_missing");
+          if (!sandboxHost?.modelRequestAuthenticated)
+            throw new Error("managed_worker_host_authenticated_provider_bridge_missing");
           const controller = new AbortController();
           const cancel = () => { if (!res.writableEnded) controller.abort(); };
           req.once("aborted", cancel); res.once("close", cancel);
+          const authorization = typeof req.headers.authorization === "string" ? req.headers.authorization : undefined;
           try {
-            const result = await sandboxHost.modelRequest(wire, controller.signal);
+            const result = await sandboxHost.modelRequestAuthenticated(wire, controller.signal, authorization);
             res.status(200).set("Cache-Control", "no-store").set("X-Accel-Buffering", "no").type("text/event-stream").send(result.sse);
           } finally { req.off("aborted", cancel); res.off("close", cancel); }
           return;

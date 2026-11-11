@@ -246,7 +246,7 @@
     },
     {
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "57a0ae5d8b09a88c95dfc305f5e0d7eeec0819d6c67cc17cbbd733ffeeea3721"
+      "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625"
     },
     {
       "path": "server/src/__tests__/helpers/native-managed-output-references.ts",
@@ -382,7 +382,7 @@
     },
     {
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "45f31b38e32b6c50f30cdc2f00cc183cab7240f023c4ce7780644dc947b26a86"
+      "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db"
     },
     {
       "path": "server/src/services/native-runtime/paperclip-runner-tool-authority.ts",
