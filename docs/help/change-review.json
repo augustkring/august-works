@@ -693,7 +693,7 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "7029e53654164155404e2af113253022b43f4a221eaf13b34e230370d2dd13b1",
+      "sourceSha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
       "rationale": "Company deletion remains staged while provider outcomes or managed erasure are unresolved. The article distinguishes an accepted request from verified completion."
@@ -701,7 +701,7 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "666c0ef19e4521e73e98fd36a64b4fe69d4106e3de54895be61ff9b3b72e66cc",
+      "sourceSha256": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
       "articleSha256": "b05752471add53c4826d857b903e92a8536d0947c63c3ae002221c5491555ee9",
       "decision": "no_change",
       "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
@@ -773,7 +773,7 @@
     {
       "source": "server/src/services/saas/company-purge.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "7029e53654164155404e2af113253022b43f4a221eaf13b34e230370d2dd13b1",
+      "sourceSha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
       "rationale": "Sletning af virksomheden afventer fortsat uafklarede udbyderresultater eller administreret sletning. Artiklen skelner mellem en accepteret anmodning og bekr\u00e6ftet gennemf\u00f8relse."
@@ -781,7 +781,7 @@
     {
       "source": "server/src/services/saas/offboarding.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "666c0ef19e4521e73e98fd36a64b4fe69d4106e3de54895be61ff9b3b72e66cc",
+      "sourceSha256": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
       "articleSha256": "7fde6e33e14d19c8c5db53cb6cd131b2aaa6c56309c5199efb5a35c95294db10",
       "decision": "no_change",
       "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
@@ -2461,7 +2461,7 @@
     {
       "source": "server/src/services/access.ts",
       "articleId": "workflows-preview",
-      "sourceSha256": "8b717130bdc9a6e17473ef01c2124f15ec01e2ad4a65233ad283d838bff4902f",
+      "sourceSha256": "f66f890bb7652e5ebf55133b80e39047129602f74db86afb6f3be294121fbe7f",
       "articleSha256": "e1c5c2d77645ce6fd9586ca6d9185c4396adec71f7e850e059748261c062fd89",
       "decision": "updated",
       "rationale": "Coverage remains bound to current Human/source access and the selected published version; withdrawing required permission invalidates it instead of reviving it on regrant. The article states these conditions."
@@ -2517,7 +2517,7 @@
     {
       "source": "server/src/services/access.ts",
       "articleId": "workflows-preview-da",
-      "sourceSha256": "8b717130bdc9a6e17473ef01c2124f15ec01e2ad4a65233ad283d838bff4902f",
+      "sourceSha256": "f66f890bb7652e5ebf55133b80e39047129602f74db86afb6f3be294121fbe7f",
       "articleSha256": "ef133efd581756186bf271221a91b494ea14cfac3c00fb8f3d816f9e741177d0",
       "decision": "updated",
       "rationale": "D\u00e6kning er fortsat knyttet til den aktuelle adgang for Human og kilde samt den valgte publicerede version. Tilbagetr\u00e6kning af en n\u00f8dvendig tilladelse ugyldigg\u00f8r d\u00e6kningen, og en senere gentildeling genopliver den ikke. Artiklen beskriver disse vilk\u00e5r."

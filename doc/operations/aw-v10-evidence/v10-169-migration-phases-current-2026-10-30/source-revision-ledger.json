@@ -8883,5 +8883,414 @@
       "hostResolved": false,
       "sdkQualified": false
     }
+  },
+  "providerConfirmedErasureAndNativeLedgerCheckpointR89": {
+    "sourceHead": "25a96cf6c007882d64c84f9a770b5fd83f3ed621",
+    "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+    "worktreeDisposition": "Thirteen exact tracked source paths on the R88 baseline. Five previously unowned provider/purge paths are added under the existing private-data-erasure group; all other source ownership is preserved. Phase and Help source fingerprints refresh only at exact reviewed intersections. No source/test path is interpreted as external provider or Human proof.",
+    "changes": [
+      {
+        "path": "packages/shared/src/validators/memory.ts",
+        "worktreeSha256": "161c32caace8a70545d93204614ff053031527c73192cd0a31acda048e17368d",
+        "bytes": 17463,
+        "mtimeNs": 1794428629861240033,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "cdde2c3511bee71c384013cb02ab04c452bfab1714685daaf514ce0ab8f53f69"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/aws-secrets-manager-provider.test.ts",
+        "worktreeSha256": "f13f8274b76e9b9ac6c997a74777ef8a07ba5ed50d1eb5b67d5a96b0ec7b0a3d",
+        "bytes": 44403,
+        "mtimeNs": 1794428798044008681,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "f94d5e98b5ccdf038b85da21a62287ace8534a15ab3f02cb40c22f82473276c4"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/native-payload-source-binding.integration.test.ts",
+        "worktreeSha256": "5ab019295eb3db72331d5f8445dcd0668b81158cdeeb6c16075fec58671f1c1c",
+        "bytes": 56012,
+        "mtimeNs": 1794427152991148428,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "absent_at_base",
+          "sha256": null
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/secrets-service.test.ts",
+        "worktreeSha256": "16b6d57b4713356ef5bd1913a0f006505ce08856fcd670db390900a294a2e37e",
+        "bytes": 182760,
+        "mtimeNs": 1794428798043862542,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "ab9c9536ee144d9211bb8a205dd2e57ff928360de6ea695af74afd749e9652be"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/v6-account-deletion.integration.test.ts",
+        "worktreeSha256": "f5196feb9f9a1877d9e195afc7fa199ef1ff9da47925bc8ccf1063e427f4fb13",
+        "bytes": 43462,
+        "mtimeNs": 1794428798043965226,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "8c60f99712216e98ced0daec5de051e926a1af591179f79f7075a215d9c6f0ab"
+        },
+        "ownerGroups": [
+          "SCR-V10-AUTH-IDENTITY"
+        ]
+      },
+      {
+        "path": "server/src/__tests__/v6-company-purge.integration.test.ts",
+        "worktreeSha256": "eb28e222a576540b8b876a9b7fe7fd435fb53fc47f10b3e8150b210930499a68",
+        "bytes": 11544,
+        "mtimeNs": 1794428798043989642,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "417d8bc1ed702703e6b3e7a67879f731d0f3112a7b2943666981bb47193fdced"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/secrets/aws-secrets-manager-provider.ts",
+        "worktreeSha256": "4688f3fc942a9d633adc26ff74f28455c0e258d6a89bab73d9119c655b1b3588",
+        "bytes": 50816,
+        "mtimeNs": 1794428954331960267,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "3f497fedaba9dff3f19d5a7ccca1202117813cadba7ed6530e74421df50f7852"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/services/access.ts",
+        "worktreeSha256": "f66f890bb7652e5ebf55133b80e39047129602f74db86afb6f3be294121fbe7f",
+        "bytes": 79243,
+        "mtimeNs": 1794428028746138232,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "293cd7af8030060b7deecf6098fdb66edbbb46576898e9bea44b267eaf754849"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-03"
+        ]
+      },
+      {
+        "path": "server/src/services/companies.ts",
+        "worktreeSha256": "d3520403083566fcb8e6bb049109de890e0cd1876d5d1a57f87401e5e52d16fe",
+        "bytes": 31448,
+        "mtimeNs": 1794428028746169819,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "bddb836c3a3e6da609687b9e9175463e5710f21aa5ab108b855112954b06e6f0"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-02"
+        ]
+      },
+      {
+        "path": "server/src/services/memory/memory-service.test.ts",
+        "worktreeSha256": "e231cb1f27ad2891527ad329e9d09ddfdd9dc22ff1b1daf9a402c752a2e0d017",
+        "bytes": 62645,
+        "mtimeNs": 1794428629861749859,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "e3ae5ca89512849e7ccf5d2b60a5c0f83523bf5f23026496a56c5b5f258fbaad"
+        },
+        "ownerGroups": [
+          "SCR-V10-HOTSPOT-06"
+        ]
+      },
+      {
+        "path": "server/src/services/saas/company-purge.ts",
+        "worktreeSha256": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
+        "bytes": 30703,
+        "mtimeNs": 1794428028746169819,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "84b86e3dbbfa0783341fa27911ae86df578f62cb263906f3a392a9bfa19a7074"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      },
+      {
+        "path": "server/src/services/saas/offboarding.ts",
+        "worktreeSha256": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
+        "bytes": 20283,
+        "mtimeNs": 1794428028746224541,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "a59b45f938293783a1e5318ac8b409e866d921dca36d936fa803bfe986526fe9"
+        },
+        "ownerGroups": [
+          "SCR-V10-AUTH-IDENTITY"
+        ]
+      },
+      {
+        "path": "server/src/services/secrets.ts",
+        "worktreeSha256": "13fc503f7cad25b0e069c373b37730e7e890784d6e7d510b2ff7a35b067b1c3e",
+        "bytes": 220203,
+        "mtimeNs": 1794428028745945983,
+        "worktreeStatus": "modified",
+        "base81": {
+          "status": "present_at_base",
+          "sha256": "d8226e048e1f313f411ead88574acf8c26285dc3965ecf626c98604196241529"
+        },
+        "ownerGroups": [
+          "SCR-V10-PRIVATE-DATA-ERASURE"
+        ]
+      }
+    ],
+    "inventory": {
+      "sourceDeltaPathCount": 2080,
+      "ownerGroupCount": 50,
+      "hotspotRegisterCount": 25,
+      "requirementCrosswalkCount": 169,
+      "deletedSourcePathCount": 41,
+      "untrackedSourceCandidateCount": 0,
+      "fullDiffPathCount": 14860
+    },
+    "evidenceRoot": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111",
+    "evidenceFiles": [
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/README.md",
+        "sha256": "2b1e77da6b7a00bc67f152dc32eb510837b63f17d559f022106865cf775dfef4"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/final-source-pins.json",
+        "sha256": "16294a074fbc0167d324b84eaf97cddb287696d28407b53ff72d1514b3ace7f0"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r583-cleanup.json",
+        "sha256": "6ae3b8e6e284898b5ec434e283963b341b3d5dd2c5799c29a95d18f684c60c76"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r583-receipt.json",
+        "sha256": "f0aca3cffc8c9218c3e75188dbe583e3d24baf6f4599526e566beecfb66ac13c"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r583-source-after.json",
+        "sha256": "5144151fdef709de088a8d7dd8ce419a1fc62e4d0ba69965bb89b464328ffbb2"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r583-source-manifest.json",
+        "sha256": "00506206d75efa13a22a4c3660bef72060b269b00a4d034354fa7fffce517081"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r583.log.gz",
+        "sha256": "a42870367b8275fee7182aecd59056a0bb9620e6e66830e8ae0bcbe2eac88f49"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r585-build-receipt.json",
+        "sha256": "40473f9a9c43557990839507b2fac0e9dce3ca5be52ffef0c00868da6f1c7ac7"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r585-phase-0.log.gz",
+        "sha256": "73e2b14d4b8aeb9e9b371e82c3de4e4037921a4a6d2073a5db2775b3b4ea0085"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r585-phase-1.log.gz",
+        "sha256": "beb9f15d64b2e373d49d4cef3d1c2c350e6a63b0e785b1d6a1d910449423a2e2"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r585-read-only-source-protection-restored.json",
+        "sha256": "021f849e69b752dd3b41b043fab26f0147a68a0ac5788a226d1bced2489ac071"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r585-source-after.json",
+        "sha256": "d0ff1a570c2fd8eab43bfe7f08c98fcaae73d36565409cbf2688d57d2dd2e0c6"
+      },
+      {
+        "path": "doc/operations/aw-v10-evidence/provider-confirmed-erasure-and-native-ledger-20261111/r585-source-before.json",
+        "sha256": "d2c4c53d88e6f083fea90ac337b06821c599dbaa93d2963af61ec514f0a15e6c"
+      }
+    ],
+    "metadataPinRefresh": {
+      "ownerAdditions": [
+        {
+          "path": "server/src/__tests__/aws-secrets-manager-provider.test.ts",
+          "ownerGroups": [
+            "SCR-V10-PRIVATE-DATA-ERASURE"
+          ],
+          "base81": {
+            "status": "present_at_base",
+            "sha256": "f94d5e98b5ccdf038b85da21a62287ace8534a15ab3f02cb40c22f82473276c4"
+          }
+        },
+        {
+          "path": "server/src/__tests__/secrets-service.test.ts",
+          "ownerGroups": [
+            "SCR-V10-PRIVATE-DATA-ERASURE"
+          ],
+          "base81": {
+            "status": "present_at_base",
+            "sha256": "ab9c9536ee144d9211bb8a205dd2e57ff928360de6ea695af74afd749e9652be"
+          }
+        },
+        {
+          "path": "server/src/__tests__/v6-company-purge.integration.test.ts",
+          "ownerGroups": [
+            "SCR-V10-PRIVATE-DATA-ERASURE"
+          ],
+          "base81": {
+            "status": "present_at_base",
+            "sha256": "417d8bc1ed702703e6b3e7a67879f731d0f3112a7b2943666981bb47193fdced"
+          }
+        },
+        {
+          "path": "server/src/secrets/aws-secrets-manager-provider.ts",
+          "ownerGroups": [
+            "SCR-V10-PRIVATE-DATA-ERASURE"
+          ],
+          "base81": {
+            "status": "present_at_base",
+            "sha256": "3f497fedaba9dff3f19d5a7ccca1202117813cadba7ed6530e74421df50f7852"
+          }
+        },
+        {
+          "path": "server/src/services/secrets.ts",
+          "ownerGroups": [
+            "SCR-V10-PRIVATE-DATA-ERASURE"
+          ],
+          "base81": {
+            "status": "present_at_base",
+            "sha256": "d8226e048e1f313f411ead88574acf8c26285dc3965ecf626c98604196241529"
+          }
+        }
+      ],
+      "capabilityPaths": [],
+      "phasePaths": [
+        "server/src/__tests__/native-payload-source-binding.integration.test.ts",
+        "server/src/__tests__/v6-account-deletion.integration.test.ts"
+      ],
+      "helpPairs": [
+        {
+          "source": "server/src/services/saas/company-purge.ts",
+          "articleId": "export-and-delete",
+          "decision": "no_change",
+          "rationale": "Company deletion remains staged while provider outcomes or managed erasure are unresolved. The article distinguishes an accepted request from verified completion."
+        },
+        {
+          "source": "server/src/services/saas/company-purge.ts",
+          "articleId": "export-and-delete-da",
+          "decision": "no_change",
+          "rationale": "Sletning af virksomheden afventer fortsat uafklarede udbyderresultater eller administreret sletning. Artiklen skelner mellem en accepteret anmodning og bekr\u00e6ftet gennemf\u00f8relse."
+        },
+        {
+          "source": "server/src/services/saas/offboarding.ts",
+          "articleId": "export-and-delete",
+          "decision": "no_change",
+          "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
+        },
+        {
+          "source": "server/src/services/saas/offboarding.ts",
+          "articleId": "export-and-delete-da",
+          "decision": "no_change",
+          "rationale": "Company deletion now completes canonical run cancellation under a fenced revoke-finalization lease before later cleanup. The page labels this pending step in EN/DA; the article already distinguishes accepted deletion from confirmed stop, storage removal and retained exceptions."
+        },
+        {
+          "source": "server/src/services/access.ts",
+          "articleId": "workflows-preview",
+          "decision": "updated",
+          "rationale": "Coverage remains bound to current Human/source access and the selected published version; withdrawing required permission invalidates it instead of reviving it on regrant. The article states these conditions."
+        },
+        {
+          "source": "server/src/services/access.ts",
+          "articleId": "workflows-preview-da",
+          "decision": "updated",
+          "rationale": "D\u00e6kning er fortsat knyttet til den aktuelle adgang for Human og kilde samt den valgte publicerede version. Tilbagetr\u00e6kning af en n\u00f8dvendig tilladelse ugyldigg\u00f8r d\u00e6kningen, og en senere gentildeling genopliver den ikke. Artiklen beskriver disse vilk\u00e5r."
+        }
+      ]
+    },
+    "rootFinalFacts": {
+      "R583": {
+        "status": "PASS",
+        "testsPassed": 195,
+        "testsFailed": 0,
+        "fileCount": 6,
+        "harnessSeconds": 94.354,
+        "pinsStable": true,
+        "cleanup": "normal",
+        "scope": "final privacy/provider managed-secret actual PostgreSQL cohort"
+      },
+      "R584": {
+        "status": "FAILED",
+        "cause": "swatchdog budget stop during CLI package; all prior packages completed and no TypeScript errors observed before stop; build did not run",
+        "sourceHashesAndMtimesUnchanged": true,
+        "originalModesRestored": true,
+        "excludedFromPublicEvidence": true
+      },
+      "providerLiveProof": false,
+      "hostResolved": false,
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "R585": {
+        "status": "PASS",
+        "typecheck": "PASS",
+        "build": "PASS",
+        "sourceHashesAndMtimesUnchanged": true,
+        "originalModesRestored": true,
+        "steps": [
+          {
+            "command": [
+              "pnpm",
+              "-r",
+              "typecheck"
+            ],
+            "exit": 0,
+            "seconds": 345.0647284100123,
+            "peakGroupRssBytes": 6353158144,
+            "stopped": null
+          },
+          {
+            "command": [
+              "pnpm",
+              "build"
+            ],
+            "exit": 0,
+            "seconds": 263.17732688901015,
+            "peakGroupRssBytes": 6265614336,
+            "stopped": null
+          }
+        ]
+      }
+    },
+    "statusPromotion": {
+      "requirementStatusesPromoted": 0,
+      "phaseStatusesPromoted": 0,
+      "hostResolved": false,
+      "providerLiveProof": false
+    }
   }
 }

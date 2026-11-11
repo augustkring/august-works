@@ -21,14 +21,14 @@
     }
   ],
   "sourceInventoryBoundary": {
-    "sourceDeltaPathCount": 2075,
+    "sourceDeltaPathCount": 2080,
     "deletedSourcePathCount": 41,
     "untrackedSourceCandidateCount": 0,
     "ownerGroupCount": 50,
     "hotspotRegisterCount": 25,
     "requirementCrosswalkCount": 169,
-    "fullDiffPathCount": 14842,
-    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted. R88 forwards exact persisted wake comments through the existing Runtime Control, remote attachment and Host workspace-scope readers; component fixtures retain current linked-Human source proofs and all original workspace boundaries. No Host/SDK or release status is promoted."
+    "fullDiffPathCount": 14860,
+    "note": "This graph inventories every changed source/test/config/SQL file in the current branch diff plus untracked current source candidates; it excludes non-source documentation/evidence/archive files. Requirement links are exact path matches against the 169-item register and may be empty. It does not claim every changed file is a V10 feature or that every branch diff line has been behavior-reviewed. Source includes Rust/TOML/Python, root build/configuration, dependency patches, runtime Skill/release/evaluation assets and UI assets. Previously reviewed owner/recovery/rollback/approval metadata and explicit dependencies are preserved. Intermediate branch-only snapshots and superseded source prototypes absent at both base and current source are recorded as retired, never base deletions. The complete publication inventory includes the staged software-evidence checkpoint; source-hash refreshes do not qualify unexecuted SDK or browser journeys. This checkpoint full-diff count includes current source paths; recompute after Root adds evidence and stages all source candidates. Root staged all source and 62 evidence files; the full-diff count is the exact staged path count against base81. Provisional R80 browser checkpoint: current source/test paths are hash-guarded; Help Markdown remains tracked through the Help review map and source ledger, not source graph owner paths. Recompute counts after Root evidence/staging and final source freeze. Root staged all 30 source/Help paths, metadata and 37 evidence files; the full-diff count is the exact staged base81 comparison. R81 source-policy/recovery publication stages all 16 source paths and 22 separate evidence files. The staged base81 inventory is recounted by Root; source hashes do not promote qualification. R82 assigned-MCP/channel-native-Skills checkpoint: 30 exact-hash dirty source/configuration/test/inventory paths (25 tracked modifications, five untracked source candidates) are included; four unchanged build inputs are guarded but are not source-delta paths. The separate 19-file evidence root is publication-only, never a source graph owner set. The expected base81 publication inventory is 14,669 tracked paths plus five untracked source files and 19 evidence files; Root must recalculate after staging. Root publication recount: all source and evidence paths are staged, zero untracked source candidates remain, and the exact base81 staged diff has 14,693 paths. R83 guarded source refresh: Root supplied the exact final source/evidence manifests and publication inventory. Two exact installer source paths are registered under the existing durable-workflows owner group; all other ownership and the historical crosswalk remain unchanged. Evidence remains outside source ownership. Recalculate official generated metadata only after Root applies this private candidate. R84 preserves all historical requirement and phase states. It adds exact GitHub review and thread-identity ownership, scoped provider-migration source rebinding, retained invocation-record accounting, actual first-admin fixture setup and bounded diagnostic privacy. Local checks do not qualify external SDK, Host, restore or Human journeys. R85 adds exact processed Telegram migration lineage, bounded persisted-event hashes and retry-safe controlled policy fixtures; strengthens actual SDK resumption assertions; repairs the ephemeral Ubuntu apt mirror path while preserving sandbox and browser dependencies. Local checks do not qualify actual SDK, Host, provider, restore or Human outcomes. R86 registers the officially generated additive GitHub stable-repository migration receipt table and exact historical delivery lineage. All current Human, source, runtime and published-finding checks remain. Current PostgreSQL regressions and workspace typecheck/build pass; fleet, rollback, restore, provider and Human qualification are not promoted. R87 adds exact run-owned dispatched-tool liveness evidence and a component activity backfill regression; Native scheduler and real contention test candidates do not establish SDK or Host qualification. No requirement or phase status is promoted. R88 forwards exact persisted wake comments through the existing Runtime Control, remote attachment and Host workspace-scope readers; component fixtures retain current linked-Human source proofs and all original workspace boundaries. No Host/SDK or release status is promoted. R89 registers five exact provider-confirmed managed-secret erasure and company-purge source paths under the existing private-data-erasure owner. Existing ownership, crosswalk, and requirement/phase qualification remain unchanged; no live provider or Human proof is implied."
   },
   "requirementsCrosswalk": [
     {
@@ -15393,6 +15393,12 @@
           "sha256": "cdde2c3511bee71c384013cb02ab04c452bfab1714685daaf514ce0ab8f53f69"
         },
         {
+          "path": "server/src/__tests__/aws-secrets-manager-provider.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "f94d5e98b5ccdf038b85da21a62287ace8534a15ab3f02cb40c22f82473276c4"
+        },
+        {
           "path": "server/src/__tests__/http-log-redaction.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
@@ -15489,6 +15495,12 @@
           "sha256": "d76175f8fd551f767c5b1edb065daf85b5bab7b3a4bb44f6042df98d336e6afc"
         },
         {
+          "path": "server/src/__tests__/secrets-service.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "ab9c9536ee144d9211bb8a205dd2e57ff928360de6ea695af74afd749e9652be"
+        },
+        {
           "path": "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -15499,6 +15511,12 @@
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
           "sha256": null
+        },
+        {
+          "path": "server/src/__tests__/v6-company-purge.integration.test.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "417d8bc1ed702703e6b3e7a67879f731d0f3112a7b2943666981bb47193fdced"
         },
         {
           "path": "server/src/__tests__/v6-database-quarantine.integration.test.ts",
@@ -15541,6 +15559,12 @@
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "present_at_base",
           "sha256": "8f74307d6e825fd5489f129fdf164f87f9c484c54ebc5142bf74799ff9e23d33"
+        },
+        {
+          "path": "server/src/secrets/aws-secrets-manager-provider.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "3f497fedaba9dff3f19d5a7ccca1202117813cadba7ed6530e74421df50f7852"
         },
         {
           "path": "server/src/services/activity-privacy.ts",
@@ -15729,6 +15753,12 @@
           "sha256": "84b86e3dbbfa0783341fa27911ae86df578f62cb263906f3a392a9bfa19a7074"
         },
         {
+          "path": "server/src/services/secrets.ts",
+          "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
+          "status": "present_at_base",
+          "sha256": "d8226e048e1f313f411ead88574acf8c26285dc3965ecf626c98604196241529"
+        },
+        {
           "path": "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
           "baseCommitSha": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
           "status": "absent_at_base",
@@ -15824,6 +15854,7 @@
         "packages/shared/src/memory-private-sharing.test.ts",
         "packages/shared/src/types/memory.ts",
         "packages/shared/src/validators/memory.ts",
+        "server/src/__tests__/aws-secrets-manager-provider.test.ts",
         "server/src/__tests__/http-log-redaction.test.ts",
         "server/src/__tests__/learning-deleted-memory-source.integration.test.ts",
         "server/src/__tests__/memory-candidate-steered-producer.integration.test.ts",
@@ -15840,8 +15871,10 @@
         "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
         "server/src/__tests__/redact-sensitive.test.ts",
         "server/src/__tests__/run-secret-redaction.test.ts",
+        "server/src/__tests__/secrets-service.test.ts",
         "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
         "server/src/__tests__/v10-private-payload.integration.test.ts",
+        "server/src/__tests__/v6-company-purge.integration.test.ts",
         "server/src/__tests__/v6-database-quarantine.integration.test.ts",
         "server/src/__tests__/v7-derived-memory.integration.test.ts",
         "server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts",
@@ -15849,6 +15882,7 @@
         "server/src/middleware/http-log-redaction.ts",
         "server/src/middleware/redact-sensitive.ts",
         "server/src/routes/memory.ts",
+        "server/src/secrets/aws-secrets-manager-provider.ts",
         "server/src/services/activity-privacy.ts",
         "server/src/services/analytical-context-privacy.ts",
         "server/src/services/analytical-privacy.ts",
@@ -15880,6 +15914,7 @@
         "server/src/services/native-runtime/runtime-asset-erasure-errors.ts",
         "server/src/services/run-secret-redaction.ts",
         "server/src/services/saas/company-purge.ts",
+        "server/src/services/secrets.ts",
         "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v2/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v3/references/memory-and-learning.md",
@@ -15912,6 +15947,7 @@
         "packages/shared/src/memory-private-sharing.test.ts",
         "packages/shared/src/types/memory.ts",
         "packages/shared/src/validators/memory.ts",
+        "server/src/__tests__/aws-secrets-manager-provider.test.ts",
         "server/src/__tests__/http-log-redaction.test.ts",
         "server/src/__tests__/learning-deleted-memory-source.integration.test.ts",
         "server/src/__tests__/memory-candidate-steered-producer.integration.test.ts",
@@ -15928,8 +15964,10 @@
         "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
         "server/src/__tests__/redact-sensitive.test.ts",
         "server/src/__tests__/run-secret-redaction.test.ts",
+        "server/src/__tests__/secrets-service.test.ts",
         "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
         "server/src/__tests__/v10-private-payload.integration.test.ts",
+        "server/src/__tests__/v6-company-purge.integration.test.ts",
         "server/src/__tests__/v6-database-quarantine.integration.test.ts",
         "server/src/__tests__/v7-derived-memory.integration.test.ts",
         "server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts",
@@ -15937,6 +15975,7 @@
         "server/src/middleware/http-log-redaction.ts",
         "server/src/middleware/redact-sensitive.ts",
         "server/src/routes/memory.ts",
+        "server/src/secrets/aws-secrets-manager-provider.ts",
         "server/src/services/activity-privacy.ts",
         "server/src/services/analytical-context-privacy.ts",
         "server/src/services/analytical-privacy.ts",
@@ -15968,6 +16007,7 @@
         "server/src/services/native-runtime/runtime-asset-erasure-errors.ts",
         "server/src/services/run-secret-redaction.ts",
         "server/src/services/saas/company-purge.ts",
+        "server/src/services/secrets.ts",
         "skills-releases/blentera-platform/v1/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v2/references/memory-and-learning.md",
         "skills-releases/blentera-platform/v3/references/memory-and-learning.md",
@@ -15986,6 +16026,7 @@
       "characterizationTests": [
         "packages/db/src/context-memory-root-snapshot.test.ts",
         "packages/shared/src/memory-private-sharing.test.ts",
+        "server/src/__tests__/aws-secrets-manager-provider.test.ts",
         "server/src/__tests__/http-log-redaction.test.ts",
         "server/src/__tests__/learning-deleted-memory-source.integration.test.ts",
         "server/src/__tests__/memory-candidate-steered-producer.integration.test.ts",
@@ -16001,8 +16042,10 @@
         "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
         "server/src/__tests__/native-memory-task-transaction-reuse.integration.test.ts",
         "server/src/__tests__/redact-sensitive.test.ts",
+        "server/src/__tests__/secrets-service.test.ts",
         "server/src/__tests__/task-privacy-prepared-plan.integration.test.ts",
         "server/src/__tests__/v10-private-payload.integration.test.ts",
+        "server/src/__tests__/v6-company-purge.integration.test.ts",
         "server/src/__tests__/v6-database-quarantine.integration.test.ts",
         "server/src/__tests__/v7-derived-memory.integration.test.ts",
         "server/src/__tests__/v9-feedback-retention-erasure.integration.test.ts",
@@ -26125,7 +26168,7 @@
       "sourceReviewBoundary": "Candidate source inventory derived from branch diff and V10 register paths. It is not a behavior audit, test receipt, phase approval, or release claim."
     }
   ],
-  "sourceAfterGeneration": "R88 retains all existing source owners, base comparisons and historical qualification; Root regenerates after exact scoped evidence and publication recount.",
+  "sourceAfterGeneration": "R89 records retained managed-secret provider erasure and fail-closed company cleanup paths with exact source and evidence pins. Existing phase history and all qualification statuses remain preserved; no live provider, restore, Host, or Human qualification is asserted.",
   "crosswalkLinkageBasis": "Only currentAssessment.sourceOwners, currentAssessment.scopedEvidence[*].paths, and explicit sourcePath fields are treated as requirement-to-source links. Nested generic path fields, review pins, and human reference strings are excluded. Links remain traceability only and do not close acceptance.",
   "currentSourceRecovery": {
     "sourceHead": "b1edccff649dceaaa92aa83e153ebe05c09ae273",

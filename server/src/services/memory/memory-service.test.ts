@@ -1102,6 +1102,26 @@ describePg("Memory Core service", () => {
     expect((await reapplyMemoryDeletionMarkers(db, seeded.companyId)).deletedRecordCount).toBe(0);
   });
 
+  it("round-trips the canonical Native run source-erasure marker through the deletion ledger", async () => {
+    const seeded = await seed();
+    const runId = randomUUID(), markerKey = `memory-run-source-erasure:v1:${runId}`;
+    await db.insert(memoryDeletionMarkers).values({ companyId: seeded.companyId, kind: "source", key: markerKey });
+    const svc = memoryService(db), actor = userActor(seeded.userId);
+    const ledger = await svc.exportDeletionLedger(seeded.companyId, actor);
+    expect(ledger.markers).toContainEqual(expect.objectContaining({ key: markerKey, kind: "source", recordId: null }));
+    await db.delete(memoryDeletionMarkers).where(and(eq(memoryDeletionMarkers.companyId, seeded.companyId), eq(memoryDeletionMarkers.key, markerKey)));
+    expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId, seeded.companyId))).toHaveLength(0);
+    await svc.restoreDeletionLedger(seeded.companyId, ledger, actor);
+    expect(await db.select().from(memoryDeletionMarkers).where(and(eq(memoryDeletionMarkers.companyId, seeded.companyId), eq(memoryDeletionMarkers.key, markerKey))))
+      .toHaveLength(1);
+    await expect(svc.restoreDeletionLedger(seeded.companyId, { ...ledger, markers: [{ ...ledger.markers[0]!,
+      key: "memory-run-source-erasure:v1:not-a-uuid" }] }, actor)).rejects.toThrow();
+    await expect(svc.restoreDeletionLedger(seeded.companyId, { ...ledger, markers: [{ ...ledger.markers[0]!,
+      kind: "operation", key: markerKey }] }, actor)).rejects.toMatchObject({ name: "ZodError" });
+    await expect(svc.restoreDeletionLedger(seeded.companyId, { ...ledger, markers: [{ ...ledger.markers[0]!,
+      recordId: randomUUID(), key: markerKey }] }, actor)).rejects.toMatchObject({ name: "ZodError" });
+  });
+
   it("applies a company maximum age to records without individual expiry dates", async () => {
     const seeded = await seed();
     const ownBinding = await privateBinding(seeded.companyId, seeded.userId, seeded.agent.id);

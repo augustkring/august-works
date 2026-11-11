@@ -1,0 +1,13 @@
+# Provider-confirmed erasure and Native deletion ledger — R89, 11 November 2026
+
+Managed remote secret erasure keeps the original key, provider vault and material until the original provider confirms removal. Missing or disabled authority, legacy renamed identity, missing material and interrupted reservations remain explicit pending liabilities. Access grants are revoked immediately; company cleanup cannot discard their retained provider pins. User keys keep the complete unique suffix.
+
+AWS DeleteSecret schedules a recovery window; that acknowledgement does not prove physical absence. The existing signed gateway now uses metadata-only DescribeSecret against the immutable original ARN. A structured original-provider ResourceNotFoundException closes erasure. Scheduled metadata, transport failures, contradictory refs and generic NotFound responses remain pending. Retrying an already scheduled deletion does not reset its recovery window. These tests use controlled AWS wire responses, not live AWS or backup-expiry proof.
+
+Native source erasure markers now roundtrip through the existing memory deletion-ledger export/restore contract with their exact established key. The strict schema permits only the source marker form with a null record ID. PostgreSQL rejects restoring the original erased Native input after the marker roundtrip. No writer identity or execution qualification is replaced.
+
+R583 passes all 195 tests in six complete affected suites using actual embedded PostgreSQL and filesystem operations, including the controlled AWS gateway. Normal cleanup leaves zero owned processes and source pins remain unchanged. R585 passes full recursive workspace typecheck and the full build with protected source hashes and modification times unchanged and original modes restored. The receipts retain exact timings and commands.
+
+Earlier R580, R581 and R582 exposed two incorrect new fixture expectations and a new DNS-error substring classification defect. They were corrected before R583; none is treated as passing evidence. R584 reached its aggregate watchdog during CLI typecheck after earlier packages completed, without an observed TypeScript error; its build did not run. R585 raises only the aggregate check budget to 600 seconds per command and records the completed checks. No production or test timeout is relaxed.
+
+The source graph adds five existing-source ownership entries. Two current phase hashes and six reviewed Help source hashes refresh; historical requirement and phase states remain unchanged. Full current-head CI, actual SDK/Host journeys, provider/restore/operator and representative Human qualification remain open. PR42 remains draft and unmerged.

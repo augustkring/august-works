@@ -40,6 +40,7 @@ import {
   customerFeedbackRetention,
   saasNotifications,
 } from "@paperclipai/db";
+import { assertCompanyManagedSecretErasureComplete } from "./secrets.js";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import { isCloudManagedInstance } from "./cloud-instance.js";
 import { notifyCloudOfPrimaryCompanyLifecycleChange } from "./cloud-lifecycle-sync.js";
@@ -641,6 +642,7 @@ export function companyService(db: Db) {
         // Preserve its original semantics only after protected images have
         // settled; it cannot report completion while leaving their objects.
         await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).for("update");
+        await assertCompanyManagedSecretErasureComplete(tx, id);
         const holds = await tx.select({ id: customerFeedbackRetention.id }).from(customerFeedbackRetention).where(and(
           eq(customerFeedbackRetention.companyId, id), eq(customerFeedbackRetention.legalHold, true),
           sql`(${customerFeedbackRetention.holdReleaseAt} is null or ${customerFeedbackRetention.holdReleaseAt}>clock_timestamp())`,

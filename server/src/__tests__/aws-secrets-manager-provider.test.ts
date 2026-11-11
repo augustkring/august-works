@@ -916,6 +916,7 @@ describe("awsSecretsManagerProvider", () => {
 
   it("deletes only Paperclip-managed AWS secrets", async () => {
     const calls: Array<{ op: string; input: Record<string, unknown> }> = [];
+    let metadataCalls = 0;
     const provider = createAwsSecretsManagerProvider({
       config: {
         region: "us-east-1",
@@ -936,6 +937,11 @@ describe("awsSecretsManagerProvider", () => {
         },
         async getSecretValue() {
           throw new Error("not used");
+        },
+        async describeSecret(input) {
+          metadataCalls++;
+          if (metadataCalls > 1) throw Object.assign(new Error("Original secret is absent"), { name: "ResourceNotFoundException" });
+          return { ARN: input.SecretId };
         },
         async deleteSecret(input) {
           calls.push({ op: "deleteSecret", input });
@@ -1074,4 +1080,93 @@ describe("awsSecretsManagerProvider", () => {
       },
     ]);
   });
+  const originalDeletionArn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:paperclip/prod-use1/company-1/retained-value-Ab1234";
+  const originalDeletion = { mode: "delete" as const, externalRef: originalDeletionArn,
+    material: { scheme: "aws_secrets_manager_v1", secretId: originalDeletionArn, versionId: "original-version", source: "managed" },
+    context: { companyId: "company-1", secretKey: "retained-value", secretName: "Retained value", version: 1 } };
+  function deletionProvider(describeSecret: ((input: { SecretId: string }) => Promise<{ ARN?: string; DeletedDate?: number }>) | undefined,
+    deleteSecret: (input: { SecretId: string; RecoveryWindowInDays: number }) => Promise<unknown>) {
+    const neverRead = vi.fn(async () => { throw new Error("Deletion must not read a secret value"); });
+    const unused = async () => { throw new Error("Unexpected write during metadata erasure check"); };
+    return { neverRead, provider: createAwsSecretsManagerProvider({ config: {
+      region: "us-east-1", endpoint: "https://secretsmanager.us-east-1.amazonaws.com",
+      deploymentId: "prod-use1", prefix: "paperclip", kmsKeyId: null,
+      environmentTag: "test", providerOwnerTag: "paperclip", deleteRecoveryWindowDays: 30,
+    }, gateway: { createSecret: unused, putSecretValue: unused, getSecretValue: neverRead,
+      ...(describeSecret ? { describeSecret } : {}), deleteSecret } }) };
+  }
+
+  it("retains scheduled deletion until metadata confirms the exact original ARN is absent without restarting its window", async () => {
+    let scheduled = false, absent = false;
+    const describe = vi.fn(async (input: { SecretId: string }) => {
+      if (absent) throw Object.assign(new Error("Original secret is absent"), { name: "ResourceNotFoundException" });
+      return { ARN: input.SecretId, ...(scheduled ? { DeletedDate: 1_800_000_000 } : {}) };
+    });
+    const remove = vi.fn(async () => { scheduled = true; return {}; });
+    const { provider, neverRead } = deletionProvider(describe, remove);
+    await expect(provider.deleteOrArchive(originalDeletion)).rejects.toMatchObject({ code: "conflict" });
+    expect(remove).toHaveBeenCalledExactlyOnceWith({ SecretId: originalDeletionArn, RecoveryWindowInDays: 30 });
+    await expect(provider.deleteOrArchive(originalDeletion)).rejects.toMatchObject({ code: "conflict" });
+    expect(remove).toHaveBeenCalledTimes(1);
+    absent = true;
+    await expect(provider.deleteOrArchive(originalDeletion)).resolves.toBeUndefined();
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(describe.mock.calls.map(([input]) => input.SecretId)).toEqual(Array(4).fill(originalDeletionArn));
+    expect(neverRead).not.toHaveBeenCalled();
+  });
+
+  it("keeps a lost DeleteSecret reply pending and discovers its scheduled state before any duplicate delete", async () => {
+    let scheduled = false, absent = false;
+    const describe = async (input: { SecretId: string }) => {
+      if (absent) throw Object.assign(new Error("Original secret is absent"), { name: "ResourceNotFoundException" });
+      return { ARN: input.SecretId, ...(scheduled ? { DeletedDate: 1_800_000_000 } : {}) };
+    };
+    const remove = vi.fn(async () => { scheduled = true; throw new Error("fetch failed"); });
+    const { provider, neverRead } = deletionProvider(describe, remove);
+    await expect(provider.deleteOrArchive(originalDeletion)).rejects.toMatchObject({ code: "provider_unavailable" });
+    await expect(provider.deleteOrArchive(originalDeletion)).rejects.toMatchObject({ code: "conflict" });
+    expect(remove).toHaveBeenCalledTimes(1);
+    absent = true;
+    await expect(provider.deleteOrArchive(originalDeletion)).resolves.toBeUndefined();
+    expect(remove).toHaveBeenCalledTimes(1); expect(neverRead).not.toHaveBeenCalled();
+  });
+
+  it.each(["unsupported metadata", "missing ARN", "replacement ARN", "DNS ENOTFOUND", "generic NotFound", "error message mentions absence", "access denied"] as const)(
+    "does not turn %s into physical absence or issue a destructive delete", async mode => {
+      const describe = async () => {
+        if (mode === "DNS ENOTFOUND") throw new Error("getaddrinfo ENOTFOUND");
+        if (mode === "generic NotFound") throw new Error("NotFound");
+        if (mode === "error message mentions absence") throw new Error("AccessDeniedException: ResourceNotFoundException");
+        if (mode === "access denied") throw new Error("AccessDeniedException");
+        return mode === "replacement ARN" ? { ARN: originalDeletionArn.replace("Ab1234", "Cd5678") } : {};
+      };
+      const remove = vi.fn(async () => ({}));
+      const { provider, neverRead } = deletionProvider(mode === "unsupported metadata" ? undefined : describe, remove);
+      const error = await provider.deleteOrArchive(originalDeletion).then(() => undefined, error => error);
+      expect(error).toBeInstanceOf(SecretProviderClientError);
+      expect(error.code).not.toBe("not_found");
+      expect(remove).not.toHaveBeenCalled(); expect(neverRead).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not treat DeleteSecret NotFound as confirmed metadata absence", async () => {
+    const remove = vi.fn(async () => { throw new Error("ResourceNotFoundException"); });
+    const { provider } = deletionProvider(async () => ({ ARN: originalDeletionArn }), remove);
+    await expect(provider.deleteOrArchive(originalDeletion)).rejects.toMatchObject({ code: "provider_error" });
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("never adopts a name-only or contradictory stored reference during managed removal", async () => {
+    const describe = vi.fn(async () => ({ ARN: originalDeletionArn }));
+    const remove = vi.fn(async () => ({}));
+    const { provider } = deletionProvider(describe, remove);
+    const name = "paperclip/prod-use1/company-1/retained-value";
+    await expect(provider.deleteOrArchive({ ...originalDeletion, externalRef: name,
+      material: { ...originalDeletion.material, secretId: name } })).rejects.toMatchObject({ code: "conflict" });
+    await expect(provider.deleteOrArchive({ ...originalDeletion,
+      material: { ...originalDeletion.material, secretId: originalDeletionArn.replace("Ab1234", "Cd5678") } }))
+      .rejects.toMatchObject({ code: "conflict" });
+    expect(describe).not.toHaveBeenCalled(); expect(remove).not.toHaveBeenCalled();
+  });
+
 });

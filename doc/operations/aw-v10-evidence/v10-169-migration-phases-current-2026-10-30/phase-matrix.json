@@ -1267,7 +1267,7 @@
     },
     {
       "path": "server/src/__tests__/native-payload-source-binding.integration.test.ts",
-      "sha256": "a68008d680de218c051ede7f24948e058836d9e1661ecd7ec406a1cbadf1710e"
+      "sha256": "5ab019295eb3db72331d5f8445dcd0668b81158cdeeb6c16075fec58671f1c1c"
     },
     {
       "path": "server/src/__tests__/native-payload-source-mutation-binding.integration.test.ts",
@@ -1315,7 +1315,7 @@
     },
     {
       "path": "server/src/__tests__/v6-account-deletion.integration.test.ts",
-      "sha256": "0c9b6a49bafc50e0d806a8aace363c236a9a718cf1052baed926c22965acc15a"
+      "sha256": "f5196feb9f9a1877d9e195afc7fa199ef1ff9da47925bc8ccf1063e427f4fb13"
     },
     {
       "path": "server/src/__tests__/v7-derived-memory.integration.test.ts",

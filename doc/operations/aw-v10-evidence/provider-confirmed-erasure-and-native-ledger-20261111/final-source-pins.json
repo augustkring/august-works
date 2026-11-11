@@ -1,0 +1,19 @@
+{
+  "headBaseline": "25a96cf6c007882d64c84f9a770b5fd83f3ed621",
+  "qualification": "Scoped software evidence with actual embedded PostgreSQL and controlled AWS wire; no live-provider/Host/Human qualification",
+  "sourcePaths": {
+    "packages/shared/src/validators/memory.ts": "161c32caace8a70545d93204614ff053031527c73192cd0a31acda048e17368d",
+    "server/src/__tests__/aws-secrets-manager-provider.test.ts": "f13f8274b76e9b9ac6c997a74777ef8a07ba5ed50d1eb5b67d5a96b0ec7b0a3d",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "5ab019295eb3db72331d5f8445dcd0668b81158cdeeb6c16075fec58671f1c1c",
+    "server/src/__tests__/secrets-service.test.ts": "16b6d57b4713356ef5bd1913a0f006505ce08856fcd670db390900a294a2e37e",
+    "server/src/__tests__/v6-account-deletion.integration.test.ts": "f5196feb9f9a1877d9e195afc7fa199ef1ff9da47925bc8ccf1063e427f4fb13",
+    "server/src/__tests__/v6-company-purge.integration.test.ts": "eb28e222a576540b8b876a9b7fe7fd435fb53fc47f10b3e8150b210930499a68",
+    "server/src/secrets/aws-secrets-manager-provider.ts": "4688f3fc942a9d633adc26ff74f28455c0e258d6a89bab73d9119c655b1b3588",
+    "server/src/services/access.ts": "f66f890bb7652e5ebf55133b80e39047129602f74db86afb6f3be294121fbe7f",
+    "server/src/services/companies.ts": "d3520403083566fcb8e6bb049109de890e0cd1876d5d1a57f87401e5e52d16fe",
+    "server/src/services/memory/memory-service.test.ts": "e231cb1f27ad2891527ad329e9d09ddfdd9dc22ff1b1daf9a402c752a2e0d017",
+    "server/src/services/saas/company-purge.ts": "8e1f0f7916b1054c0ab46bab1429fc94c4d119140c9e9be9be6134c64375030d",
+    "server/src/services/saas/offboarding.ts": "0a4c8676433e9a97435dee9c33526c01326dc685d95ff1e9f809340ca14608a9",
+    "server/src/services/secrets.ts": "13fc503f7cad25b0e069c373b37730e7e890784d6e7d510b2ff7a35b067b1c3e"
+  }
+}

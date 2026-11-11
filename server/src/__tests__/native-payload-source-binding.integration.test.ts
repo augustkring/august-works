@@ -15,6 +15,7 @@ import { projectControlService } from "../services/project-control.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enableV5ForTest, seedV5Companies } from "./helpers/v5-fixtures.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory, purgeMemoryRecords } from "../services/memory/memory-privacy.js";
+import { memoryService } from "../services/memory/memory-service.js";
 
 describe("Native payload source snapshot binds its original payload owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string;
@@ -277,7 +278,11 @@ describe("Native payload source snapshot binds its original payload owner", () =
   it.each(["issue", "comment", "document_revision"] as const)("erases a captured derived %s through the original transactional purge", async kind => {
     const [agent] = await db.insert(agents).values({ companyId, name: "Erasure fixture", role: "engineer", adapterType: "process" }).returning();
     const source = await insert(0);
-    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, runtimeMode: "native", nativeIssueId: source.id }).returning();
+    const historicalInputProfile = { nativeExecutionInput: { schema: "historical-input-fixture" } };
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, runtimeMode: "native", nativeIssueId: source.id,
+      runnerProfileJson: historicalInputProfile }).returning();
+    expect(run).toMatchObject({ nativeInputSourceProtocolVersion: 0, sourceContextProvenanceQualified: false,
+      runnerProfileJson: historicalInputProfile });
     // New structural fixtures, never an in-place protocol or source-proof upgrade.
     const [task] = await db.insert(issues).values({ companyId, title: "PRIVATE saved task", description: "PRIVATE saved body",
       createdByAgentId: agent!.id, originKind: "manual", originRunId: run!.id, originId: `paperclip-runner:create-task:${source.id}:erasure-fixture`,
@@ -306,6 +311,18 @@ describe("Native payload source snapshot binds its original payload owner", () =
       await tx.insert(memoryDeletionMarkers).values({ companyId, kind: "source", key: `memory-run-source-erasure:v1:${run!.id}` });
       await purgeDerivedWorkflowMemory(tx, companyId, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [run!.id] });
     });
+    const markerKey = `memory-run-source-erasure:v1:${run!.id}`, ledgerService = memoryService(db);
+    const systemActor = { principal: { type: "system" as const, service: "native-source-erasure-test" } };
+    const ledger = await ledgerService.exportDeletionLedger(companyId, systemActor);
+    expect(ledger.markers).toContainEqual(expect.objectContaining({ key: markerKey, kind: "source", recordId: null }));
+    await db.delete(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.key, markerKey));
+    expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.key, markerKey))).toHaveLength(0);
+    await ledgerService.restoreDeletionLedger(companyId, ledger, systemActor);
+    expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.key, markerKey))).toHaveLength(1);
+    await expect(db.update(heartbeatRuns).set({ nativeInputSourceProtocolVersion: 1, runnerProfileJson: historicalInputProfile })
+      .where(eq(heartbeatRuns.id, run!.id))).rejects.toMatchObject({
+        cause: { code: "23514", message: expect.stringContaining("Erased native run inputs cannot be restored") },
+      });
     const [erased] = await db.execute<{ body: string; captured: unknown; invalidated: boolean }>(sql`select
       case when ${kind}='issue' then to_jsonb(r)->>'title' else to_jsonb(r)->>'body' end as body,
       payload_source_snapshot as captured,payload_source_snapshot_invalidated as invalidated

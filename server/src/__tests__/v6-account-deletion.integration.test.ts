@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   accountDeletionOperations,
   activityLog,
@@ -19,6 +19,9 @@ import {
   boardApiKeys,
   companies,
   companyMemberships,
+  connectionGrants,
+  toolApplications,
+  toolConnections,
   companySecrets,
   companySecretVersions,
   emailDeliveries,
@@ -37,6 +40,8 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { accountDeletionService as nativeAccountDeletionService } from "../services/saas/account-deletion.js";
+import { secretService } from "../services/secrets.js";
+import { awsSecretsManagerProvider, createAwsSecretsManagerProvider } from "../secrets/aws-secrets-manager-provider.js";
 import { saasRoutes } from "../routes/saas.js";
 import { saasCommercialGuard } from "../middleware/saas-commercial-guard.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -592,6 +597,96 @@ const support = await getEmbeddedPostgresTestSupport();
         )[0]!.action,
       ).toBe("fixture.audit");
     });
+    it("keeps personal erasure pending until its original vault deletion survives disable and wire failure", async () => {
+      const memberId = "managed-vault-erasure-member", ownerId = "managed-vault-erasure-owner";
+      await user(memberId); await user(ownerId);
+      const companyId = await organization([ownerId]);
+      await db.insert(companyMemberships).values({ companyId, principalType: "user",
+        principalId: memberId, membershipRole: "member" });
+      const secrets = secretService(db);
+      const vault = await secrets.createProviderConfig(companyId, { provider: "aws_secrets_manager",
+        displayName: "Original personal vault", config: { region: "us-east-1", namespace: "account-erasure" } });
+      const definition = await secrets.createUserSecretDefinition(companyId, { key: "account-private-token",
+        name: "Account private token", provider: "aws_secrets_manager", providerConfigId: vault.id });
+      let failDelete = true, scheduled = false, absent = false;
+      const deleteWire = vi.fn(async (_input: { SecretId: string; RecoveryWindowInDays?: number }) => {
+        if (failDelete) throw new Error("controlled AWS deletion failure");
+        scheduled = true; return {};
+      });
+      const unreachable = async () => { throw new Error("unexpected AWS operation during account erasure"); };
+      const provider = createAwsSecretsManagerProvider({ gateway: {
+        createSecret: async input => ({ ARN: `arn:aws:secretsmanager:us-east-1:123456789012:secret:${input.Name}`,
+          VersionId: "account-version-1" }),
+        putSecretValue: unreachable, getSecretValue: unreachable, deleteSecret: deleteWire,
+        describeSecret: async input => {
+          if (absent) throw Object.assign(new Error("Original secret is absent"), { name: "ResourceNotFoundException" });
+          return { ARN: input.SecretId, ...(scheduled ? { DeletedDate: 1_800_000_000 } : {}) };
+        },
+      } });
+      const createSpy = vi.spyOn(awsSecretsManagerProvider, "createSecret").mockImplementation(provider.createSecret);
+      const deleteSpy = vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive").mockImplementation(provider.deleteOrArchive);
+      try {
+        const value = await secrets.createCurrentUserSecretValue(companyId, memberId,
+          { definitionId: definition.id, value: "fixture-only-controlled-value" });
+        expect(value.key).toContain(`user.${definition.key}.`);
+        const originalRef = value.externalRef;
+        // Component connection ownership is persisted; secret bytes/namespace
+        // were produced by the actual original user-secret service above.
+        const [application] = await db.insert(toolApplications).values({ companyId,
+          applicationKey: `erasure-${randomUUID()}`, name: "Exclusive member credential", type: "mcp_http" }).returning();
+        const [connection] = await db.insert(toolConnections).values({ companyId, applicationId: application!.id,
+          name: "Exclusive member connection", uid: `erasure-${randomUUID()}`, transport: "mcp_remote",
+          credentialPolicy: "per_user", status: "active", enabled: true }).returning();
+        const [grant] = await db.insert(connectionGrants).values({ companyId, connectionId: connection!.id,
+          kind: "user", subjectUserId: memberId, status: "active",
+          credentialSecretRefs: [{ configPath: "headers.Authorization", secretId: value.id, versionSelector: "latest" }] }).returning();
+        expect(originalRef).toContain(`/account-erasure/${companyId}/${value.key}`);
+        await secrets.disableProviderConfig(vault.id);
+        const now = new Date();
+        const service = accountDeletionService(db, { ...effects, removeSecret: id => secrets.remove(id) });
+        expect(await service.request(memberId, input("managed-vault-erasure-001"), now)).toMatchObject({ status: "requested" });
+        expect(await secrets.getById(value.id)).toMatchObject({ ownerUserId: memberId,
+          status: "deleted", key: value.key, providerConfigId: vault.id, externalRef: originalRef });
+        expect(await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant!.id)))
+          .toMatchObject([{ status: "revoked", credentialSecretRefs: [] }]);
+        expect(await db.select().from(authSessions).where(eq(authSessions.userId, memberId))).toEqual([]);
+        expect(await db.select().from(authAccounts).where(eq(authAccounts.userId, memberId))).toEqual([]);
+        expect(await db.select().from(companyMemberships).where(eq(companyMemberships.principalId, memberId))).toEqual([]);
+        await service.processOne(new Date(now.getTime() + 1_000));
+        const operation = async () => (await db.select().from(accountDeletionOperations)
+          .where(eq(accountDeletionOperations.userId, memberId)))[0];
+        expect(await operation()).toMatchObject({ status: "processing", completedAt: null,
+          errorCode: "account_erasure_pending" });
+        expect(await secrets.getById(value.id)).toMatchObject({ status: "deleted", key: value.key,
+          providerConfigId: vault.id, externalRef: originalRef, latestVersion: 1 });
+        expect(deleteSpy).not.toHaveBeenCalled(); expect(deleteWire).not.toHaveBeenCalled();
+        await secrets.updateProviderConfig(vault.id, { status: "ready" });
+        await service.processOne(new Date(now.getTime() + 32_000));
+        expect(await operation()).toMatchObject({ status: "processing", completedAt: null,
+          errorCode: "account_erasure_pending" });
+        expect(await secrets.getById(value.id)).toMatchObject({ status: "deleted", key: value.key,
+          providerConfigId: vault.id, externalRef: originalRef });
+        expect(deleteWire).toHaveBeenCalledTimes(1);
+        failDelete = false;
+        await service.processOne(new Date(now.getTime() + 64_000));
+        expect(await operation()).toMatchObject({ status: "processing", completedAt: null });
+        expect(await secrets.getById(value.id)).toMatchObject({ status: "deleted", key: value.key, externalRef: originalRef });
+        await service.processOne(new Date(now.getTime() + 96_000));
+        expect(await operation()).toMatchObject({ status: "processing", completedAt: null });
+        expect(deleteWire).toHaveBeenCalledTimes(2);
+        absent = true;
+        await service.processOne(new Date(now.getTime() + 128_000));
+        expect(await operation()).toMatchObject({ status: "completed", completedAt: expect.any(Date), errorCode: null });
+        expect(await db.select().from(authUsers).where(eq(authUsers.id, memberId))).toEqual([]);
+        expect(await secrets.getById(value.id)).toBeNull();
+        expect(await db.select().from(companySecretVersions).where(eq(companySecretVersions.secretId, value.id))).toEqual([]);
+        expect(deleteWire.mock.calls.map(([call]) => call.SecretId)).toEqual([originalRef, originalRef]);
+        expect(deleteSpy.mock.calls.every(([call]) => call.providerConfig?.id === vault.id &&
+          call.context?.secretKey === value.key)).toBe(true);
+        expect(await db.select().from(authUsers).where(eq(authUsers.id, ownerId))).toHaveLength(1);
+      } finally { createSpy.mockRestore(); deleteSpy.mockRestore(); }
+    });
+
     it("erases local support content with deletion markers before completing personal account erasure", async () => {
       await user("support-local-delete");
       await user("support-local-coworker");
@@ -866,5 +961,51 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(retained).toMatchObject({ name: "Deleted account", emailVerified: false,
         twoFactorEnabled: false, phishingResistantRequired: true });
     });
+    it("retains an account-fenced provider reservation when its in-flight create loses the reply", async () => {
+      const memberId = "inflight-vault-erasure-member", ownerId = "inflight-vault-erasure-owner";
+      await user(memberId); await user(ownerId);
+      const companyId = await organization([ownerId]);
+      await db.insert(companyMemberships).values({ companyId, principalType: "user",
+        principalId: memberId, membershipRole: "member" });
+      const secrets = secretService(db);
+      const vault = await secrets.createProviderConfig(companyId, { provider: "aws_secrets_manager",
+        displayName: "In-flight personal vault", config: { region: "us-east-1", namespace: "inflight-erasure" } });
+      const definition = await secrets.createUserSecretDefinition(companyId, { key: "inflight-private-token",
+        name: "In-flight private token", provider: "aws_secrets_manager", providerConfigId: vault.id });
+      let entered = false, release!: () => void;
+      const replyGate = new Promise<void>(resolve => { release = resolve; });
+      const unreachable = async () => { throw new Error("unexpected AWS operation for unknown create"); };
+      const provider = createAwsSecretsManagerProvider({ gateway: {
+        createSecret: async () => {
+          entered = true;
+          await replyGate;
+          throw new Error("controlled lost create reply after provider entry");
+        },
+        putSecretValue: unreachable, getSecretValue: unreachable, deleteSecret: unreachable,
+      } });
+      const createSpy = vi.spyOn(awsSecretsManagerProvider, "createSecret").mockImplementation(provider.createSecret);
+      const deleteSpy = vi.spyOn(awsSecretsManagerProvider, "deleteOrArchive");
+      const creating = secrets.createCurrentUserSecretValue(companyId, memberId,
+        { definitionId: definition.id, value: "controlled-inflight-value" }).then(
+          value => ({ value, error: undefined as unknown }), error => ({ value: undefined, error }));
+      try {
+        await vi.waitFor(() => expect(entered).toBe(true), { timeout: 5_000 });
+        const service = accountDeletionService(db, { ...effects, removeSecret: id => secrets.remove(id) });
+        await service.request(memberId, input("inflight-vault-erasure-001"));
+        const [reserved] = await db.select().from(companySecrets).where(and(
+          eq(companySecrets.companyId, companyId), eq(companySecrets.ownerUserId, memberId)));
+        expect(reserved).toMatchObject({ status: "deleted", latestVersion: 0,
+          providerConfigId: vault.id, deletedAt: expect.any(Date) });
+        expect(await db.select().from(authSessions).where(eq(authSessions.userId, memberId))).toEqual([]);
+        release();
+        expect((await creating).error).toMatchObject({ status: 502, details: { code: "provider_error" } });
+        expect(await secrets.getById(reserved!.id)).toMatchObject({ status: "deleted", key: reserved!.key,
+          providerConfigId: vault.id, latestVersion: 0 });
+        expect(deleteSpy).not.toHaveBeenCalled();
+        expect((await db.select().from(accountDeletionOperations)
+          .where(eq(accountDeletionOperations.userId, memberId)))[0]).toMatchObject({ completedAt: null });
+      } finally { release(); await creating; createSpy.mockRestore(); deleteSpy.mockRestore(); }
+    });
+
   },
 );

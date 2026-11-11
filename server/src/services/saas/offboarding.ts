@@ -1,3 +1,4 @@
+import { secretService, assertCompanyManagedSecretErasureComplete } from "../secrets.js";
 import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import {
   activityLog,
@@ -5,6 +6,7 @@ import {
   agentIdentities,
   agents,
   companies,
+  companySecrets,
   companyDeletionOperations,
   feedbackImageDeletions,
   companyMemberships,
@@ -423,6 +425,15 @@ export function saasOffboardingService(
             .where(eq(companyDeletionOperations.id, operation.id));
           return true;
         }
+        // Drain through the original secret owner outside the purge transaction.
+        // Its retained row is the existing retry liability, never a new queue.
+        const remoteSecrets = await db.select({ id: companySecrets.id }).from(companySecrets).where(and(
+          eq(companySecrets.companyId, operation.companyId), eq(companySecrets.managedMode, "paperclip_managed"),
+          sql`${companySecrets.provider}<>'local_encrypted'`,
+        )).orderBy(companySecrets.id).limit(20);
+        const secrets = secretService(db);
+        for (const secret of remoteSecrets) await secrets.remove(secret.id);
+        await assertCompanyManagedSecretErasureComplete(db, operation.companyId);
         const objectEvidence = await objects.erase(
           operation.companyId,
           now,

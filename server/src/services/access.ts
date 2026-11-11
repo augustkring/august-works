@@ -258,6 +258,8 @@ export function accessService(db: Db) {
     const ownedSecrets = referencedSecretIds.length === 0 ? [] : await tx.select({
       id: companySecrets.id,
       userSecretDefinitionId: companySecrets.userSecretDefinitionId,
+      provider: companySecrets.provider,
+      managedMode: companySecrets.managedMode,
     }).from(companySecrets).where(and(
       eq(companySecrets.companyId, companyId),
       eq(companySecrets.scope, "user"),
@@ -475,10 +477,19 @@ export function accessService(db: Db) {
           inArray(companySecretBindings.secretId, [...connectionSecretIdsToRemove]),
         ));
       }
-      if (secretIdsToDelete.length > 0) {
-        await tx.delete(companySecrets).where(and(
-          eq(companySecrets.companyId, companyId),
-          inArray(companySecrets.id, secretIdsToDelete),
+      {
+        const remoteIds = ownedSecrets.filter(secret =>
+          secret.managedMode === "paperclip_managed" && secret.provider !== "local_encrypted").map(secret => secret.id);
+        // Membership revocation is immediate and never waits on provider wire.
+        // Keep the exact owner/config/version/material for the native erasure worker.
+        if (remoteIds.length) await tx.update(companySecrets).set({ status: "deleted",
+          deletedAt: sql`coalesce(${companySecrets.deletedAt},${now.toISOString()}::timestamptz)`, updatedAt: now,
+        }).where(and(eq(companySecrets.companyId, companyId), eq(companySecrets.scope, "user"),
+          eq(companySecrets.ownerUserId, userId), inArray(companySecrets.id, remoteIds)));
+        const localIds = secretIdsToDelete.filter(id => !remoteIds.includes(id));
+        if (localIds.length) await tx.delete(companySecrets).where(and(
+          eq(companySecrets.companyId, companyId), eq(companySecrets.scope, "user"),
+          eq(companySecrets.ownerUserId, userId), inArray(companySecrets.id, localIds),
         ));
       }
     }
