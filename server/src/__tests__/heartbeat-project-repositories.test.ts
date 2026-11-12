@@ -8,7 +8,8 @@ import path from "node:path";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { pathToFileURL } from "node:url";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issues, principalPermissionGrants, projectWorkspaces } from "@paperclipai/db";
 import { runLocalGit, setExpensiveWorkspaceGitExecutor } from "@paperclipai/adapter-utils/git-workspace-sync";
 import { WorkspaceGitScanError } from "../services/workspace-git-operation-scheduler.js";
@@ -31,6 +32,12 @@ vi.mock("../adapters/index.js", () => ({
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe : describe.skip;
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
+
 suite("task project repository provisioning", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;

@@ -5,7 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import {
   agents,
   authUsers,
@@ -64,6 +65,12 @@ if (!embeddedPostgresSupport.supported) {
     `Skipping embedded Postgres heartbeat plugin environment tests on this host: ${embeddedPostgresSupport.reason ?? "unsupported environment"}`,
   );
 }
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
 
 describeEmbeddedPostgres("heartbeat plugin environments", () => {
   let stopDb: (() => Promise<void>) | null = null;

@@ -1,6 +1,7 @@
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { eq } from "drizzle-orm";
 import {
   agents,
@@ -45,6 +46,12 @@ vi.mock("../adapters/index.js", () => ({
 import { heartbeatService } from "../services/heartbeat.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { reconcileNativeFinalizations } from "../services/native-runtime/native-finalization-reconciler.js";
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
 
 describe("P6-32 legacy finalization regression", () => {
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;

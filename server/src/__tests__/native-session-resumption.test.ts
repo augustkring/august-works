@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { eq, inArray } from "drizzle-orm";
 import {
   activityLog,
@@ -106,6 +107,12 @@ async function createNativeRecoveryProject(db: ReturnType<typeof createDb>, comp
   if (created.status !== 201) throw new Error(`Canonical Human Project creation failed: ${created.status}`);
   return created.body.id as string;
 }
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
 
 describe("P6-25 pre-result native session recovery", () => {
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;

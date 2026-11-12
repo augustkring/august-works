@@ -8,7 +8,8 @@ import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { promisify } from "node:util";
 import { and, eq, inArray } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import {
   activityLog,
   agentRuntimeState,
@@ -893,6 +894,12 @@ async function expectForwardBranchReconciled(input: {
     expect(sourceWorkspace?.branchName).toBe(input.expectedBranch);
   }
 }
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
 
 describeEmbeddedPostgres("heartbeat workspace branch containment", () => {
   let db!: Db;
