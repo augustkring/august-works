@@ -30,6 +30,8 @@ import { conflict } from "../errors.js";
 //   completed: terminal — resumeOrCreate short-circuits with alreadyCompleted.
 //   cancelled: terminal and unclaimable — excluded from the resume lookup, so
 //              redeclaring the same content after a sweep starts a fresh run.
+//              An original export owner may still settle its exact allocated
+//              key after cancellation; this only records evidence/cleanup.
 //   completePart records parts only under pending|running — never onto an
 //   applying or terminal run.
 
@@ -532,8 +534,10 @@ export const companyTransferRunService = {
   async recordExportArtifact(db: Db, runId: string, workerId: string, artifact: { objectKey: string; state: "allocated" | "stored"; storageScopeId?: string; sha256?: string; byteSize?: number; expiresAt?: string; manifestSha256?: string }): Promise<boolean> {
     return db.transaction(async raw => {
       const tx = raw as unknown as Db;
+      // A cancelled owner can still receive its own in-flight storage receipt.
+      // The guarded update below preserves `cancelled`; it never reopens publish.
       const [row] = await tx.select().from(companyTransferRuns).where(and(eq(companyTransferRuns.id, runId), eq(companyTransferRuns.direction, "export"),
-        inArray(companyTransferRuns.status, artifact.state === "allocated" ? ["running"] : ["running", "failed"]))).for("update");
+        inArray(companyTransferRuns.status, artifact.state === "allocated" ? ["running"] : ["running", "failed", "cancelled"]))).for("update");
       const ref = row?.containerRef && typeof row.containerRef === "object" ? row.containerRef as Record<string, unknown> : null;
       const lease = ref?.lease && typeof ref.lease === "object" ? ref.lease as Record<string, unknown> : null;
       const previous = ref?.artifact && typeof ref.artifact === "object" ? ref.artifact as Record<string, unknown> : null;
@@ -562,7 +566,7 @@ export const companyTransferRunService = {
     const [updated] = await db.update(companyTransferRuns).set({
       containerRef: sql`jsonb_set(${companyTransferRuns.containerRef}, '{artifact}', 'null'::jsonb, false)`, updatedAt: new Date(),
       error: sql`case when ${companyTransferRuns.error} = 'company_export_storage_outcome_unknown' then null else ${companyTransferRuns.error} end`,
-    }).where(and(eq(companyTransferRuns.id, runId), eq(companyTransferRuns.direction, "export"), inArray(companyTransferRuns.status, ["running", "failed"]),
+    }).where(and(eq(companyTransferRuns.id, runId), eq(companyTransferRuns.direction, "export"), inArray(companyTransferRuns.status, ["running", "failed", "cancelled"]),
       sql`${companyTransferRuns.containerRef}->'artifact'->>'state' = 'allocated'`,
       sql`${companyTransferRuns.containerRef}->'artifact'->>'objectKey' = ${objectKey}`,
       sql`${companyTransferRuns.containerRef}->'lease'->>'ownerId' = ${workerId}`)).returning({ id: companyTransferRuns.id });
@@ -582,10 +586,11 @@ export const companyTransferRunService = {
   async markFailedExportArtifactDeleted(db: Db, runId: string, workerId: string, objectKey: string): Promise<boolean> {
     const [updated] = await db.update(companyTransferRuns).set({
       containerRef: sql`jsonb_set(${companyTransferRuns.containerRef}, '{artifact,state}', '"deleted"'::jsonb, false)`, updatedAt: new Date(),
-    }).where(and(eq(companyTransferRuns.id, runId), eq(companyTransferRuns.direction, "export"), eq(companyTransferRuns.status, "failed"),
+    }).where(and(eq(companyTransferRuns.id, runId), eq(companyTransferRuns.direction, "export"),
+      sql`((${companyTransferRuns.status} = 'failed' and ${companyTransferRuns.containerRef}->'artifact'->>'state' in ('allocated','stored'))
+        or (${companyTransferRuns.status} = 'cancelled' and ${companyTransferRuns.containerRef}->'artifact'->>'state' = 'stored'))`,
       sql`${companyTransferRuns.containerRef}->'artifact'->>'objectKey' = ${objectKey}`,
-      sql`${companyTransferRuns.containerRef}->'lease'->>'ownerId' = ${workerId}`,
-      sql`${companyTransferRuns.containerRef}->'artifact'->>'state' in ('allocated','stored')`)).returning({ id: companyTransferRuns.id });
+      sql`${companyTransferRuns.containerRef}->'lease'->>'ownerId' = ${workerId}`)).returning({ id: companyTransferRuns.id });
     return Boolean(updated);
   },
 
@@ -648,7 +653,7 @@ export const companyTransferRunService = {
       and(eq(companyTransferRuns.status, "completed"),
         inArray(sql<string>`${companyTransferRuns.containerRef}->'artifact'->>'state'`, ["ready", "expired"]),
         sql`coalesce(${companyTransferRuns.containerRef}->'artifact'->>'expiresAt', '') <= ${now.toISOString()}`),
-      and(eq(companyTransferRuns.status, "failed"),
+      and(inArray(companyTransferRuns.status, ["failed", "cancelled"]),
         sql`${companyTransferRuns.containerRef}->'artifact'->>'state' = 'stored'`),
     )))
       .orderBy(companyTransferRuns.updatedAt).limit(Math.max(1, Math.min(100, limit)));

@@ -1,10 +1,11 @@
+import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { agents, companies, createDb, environmentLeases, environments, heartbeatRunEvents, heartbeatRuns,
-  instanceSettings, issues, memoryJobs, nativeRunFinalizations, workflowRevisions, workflowRuns, workflows } from "@paperclipai/db";
+  instanceSettings, issues, memoryJobs, nativeRunFinalizations, workflowRevisions, workflowRuns, workflows, companyTransferRuns } from "@paperclipai/db";
 import type { ResourceGovernancePolicy, WorkflowGraphV1 } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
@@ -15,6 +16,7 @@ import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
 import { admitAnalyticalRequest, isResourceAdmissionDeferred } from "../services/resource-governance.js";
 import { hasPendingRunCleanup } from "../services/execution-blocker.js";
+import { companyTransferRunService } from "../services/company-transfer-runs.js";
 
 describe("configured original-owner resource admission", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -44,12 +46,143 @@ describe("configured original-owner resource admission", () => {
     return (await db.insert(memoryJobs).values({ companyId, operationType, jobKey: randomUUID(), sourceRefJson: {}, submittedAt }).returning())[0]!;
   }
   async function pending(id: string) { return (await db.select().from(memoryJobs).where(eq(memoryJobs.id, id)))[0]!; }
+  async function exportRun(companyId: string, direction: "export" | "import" = "export") {
+    return (await db.insert(companyTransferRuns).values({ companyId, direction, actorKey: "resource-test",
+      idempotencyKey: randomUUID(), containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null } }).returning())[0]!;
+  }
+
+  it("shares global admission with real export leases, excludes imports, and lets Stop cleanup settle while full", async () => {
+    const imported = await exportRun(a, "import");
+    await db.update(companyTransferRuns).set({ status: "running" }).where(eq(companyTransferRuns.id, imported.id));
+    const count = async () => (await db.execute<{ count: string }>(sql`select public.aw_v10_resource_durable_occupancy(null)::text as count`))[0]!.count;
+    expect(await count()).toBe("0");
+
+    await configure("durable_execution", 1);
+    const exp = await exportRun(a), heartbeatId = randomUUID(), job = await queue(b);
+    await db.insert(heartbeatRuns).values({ id: heartbeatId, companyId: b, agentId: agentA, status: "queued" });
+    const other = createDb(database.connectionString);
+    const attempted = await Promise.all([
+      companyTransferRunService.claimExport(db, exp.id, "export-worker").then(row => row ? "export" : "none",
+        error => isResourceAdmissionDeferred(error) ? "deferred" : Promise.reject(error)),
+      other.update(heartbeatRuns).set({ status: "running" }).where(eq(heartbeatRuns.id, heartbeatId)).returning()
+        .then(rows => rows.length ? "heartbeat" : "none", error => isResourceAdmissionDeferred(error) ? "deferred" : Promise.reject(error)),
+    ]);
+    expect(attempted.filter(value => value === "export" || value === "heartbeat")).toHaveLength(1);
+    expect(await count()).toBe("1");
+    // Changing an already-running import to export is a positive export admission.
+    await expect(db.update(companyTransferRuns).set({ direction: "export" })
+      .where(eq(companyTransferRuns.id, imported.id)))
+      .rejects.toMatchObject({ cause: { code: "P0001" } });
+    expect((await companyTransferRunService.getRun(db, imported.id))!.direction).toBe("import");
+    expect((await pending(job.id)).status).toBe("queued");
+    const [exportState] = await db.select({ status: companyTransferRuns.status }).from(companyTransferRuns).where(eq(companyTransferRuns.id, exp.id));
+    const [heartbeatState] = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns).where(eq(heartbeatRuns.id, heartbeatId));
+    expect([exportState!.status, heartbeatState!.status].sort()).toEqual(
+      attempted.includes("export") ? ["queued", "running"] : ["pending", "running"]);
+  });
+
+  it("enforces configured global and per-company limits for export owners", async () => {
+    await configure("durable_execution", 2, 1);
+    const thirdCompany = randomUUID();
+    await db.insert(companies).values({ id: thirdCompany, name: "Unlisted tenant", issuePrefix: "RC" });
+    const first = await exportRun(a), sameCompany = await exportRun(a), peer = await exportRun(b), globalOverflow = await exportRun(thirdCompany);
+    expect(await companyTransferRunService.claimExport(db, first.id, "export-a")).not.toBeNull();
+    await expect(companyTransferRunService.claimExport(db, sameCompany.id, "export-a2"))
+      .rejects.toMatchObject({ cause: { code: "P0001" } });
+    expect(await companyTransferRunService.claimExport(db, peer.id, "export-b")).not.toBeNull();
+    await expect(companyTransferRunService.claimExport(db, globalOverflow.id, "export-c"))
+      .rejects.toMatchObject({ cause: { code: "P0001" } });
+  });
+
+  it("allows Stop cleanup to cancel an export while the shared pool is full", async () => {
+    await configure("durable_execution", 1);
+    const run = await exportRun(a);
+    expect(await companyTransferRunService.claimExport(db, run.id, "stop-worker")).not.toBeNull();
+    expect((await db.execute<{ count: string }>(sql`select public.aw_v10_resource_durable_occupancy(null)::text as count`))[0]!.count).toBe("1");
+    await expect(companyTransferRunService.cancel(db, run.id)).resolves.toBeUndefined();
+    expect((await db.select({ status: companyTransferRuns.status }).from(companyTransferRuns).where(eq(companyTransferRuns.id, run.id)))[0]!.status).toBe("cancelled");
+    expect((await db.execute<{ count: string }>(sql`select public.aw_v10_resource_durable_occupancy(null)::text as count`))[0]!.count).toBe("0");
+  });
+
+  it("keeps a cancelled export's unknown allocation occupied until its original provider receipt", async () => {
+    await configure("durable_execution", 1);
+    const run = await exportRun(a), worker = "cancelled-export-owner", objectKey = `company-exports/${randomUUID()}`;
+    expect(await companyTransferRunService.claimExport(db, run.id, worker)).not.toBeNull();
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, worker,
+      { objectKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+    await companyTransferRunService.cancel(db, run.id);
+    const occupancy = async () => (await db.execute<{ count: string }>(sql`select public.aw_v10_resource_durable_occupancy(${a}::uuid)::text as count`))[0]!.count;
+    expect(await occupancy()).toBe("1");
+    const receipt = { objectKey, state: "stored" as const, storageScopeId: "a".repeat(64), sha256: "b".repeat(64), byteSize: 1 };
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, "different-worker", receipt)).toBe(false);
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, worker, { ...receipt, objectKey: `${objectKey}.other` })).toBe(false);
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, worker, receipt)).toBe(true);
+    expect(await occupancy()).toBe("0");
+    expect(await companyTransferRunService.claimExport(db, run.id, "retry-worker")).toBeNull();
+    expect((await companyTransferRunService.getRun(db, run.id))!.status).toBe("cancelled");
+  });
+
+  it("keeps an unknown allocated export occupied after lease failure until its original stored receipt", async () => {
+    await configure("durable_execution", 1);
+    const run = await exportRun(a), worker = "original-export-worker", objectKey = `company-exports/${randomUUID()}`;
+    const claimed = await companyTransferRunService.claimExport(db, run.id, worker);
+    expect(claimed?.status).toBe("running");
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, worker,
+      { objectKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+    expect(await companyTransferRunService.failExport(db, run.id, worker, "injected_failure")).toBe(true);
+    await db.execute(sql`update company_transfer_runs set container_ref=jsonb_set(container_ref,'{lease,expiresAt}',${JSON.stringify(new Date(Date.now() - 1000).toISOString())}::jsonb) where id=${run.id}::uuid`);
+    const occupancy = async () => (await db.execute<{ count: string }>(sql`select public.aw_v10_resource_durable_occupancy(${a}::uuid)::text as count`))[0]!.count;
+    expect(await occupancy()).toBe("1");
+    expect(await companyTransferRunService.claimExport(db, run.id, "retry-worker")).toBeNull();
+    const blocked = await queue(a);
+    expect(await memoryJobService(db).claimNext()).toBeNull();
+    expect((await pending(blocked.id)).status).toBe("queued");
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, worker,
+      { objectKey, state: "stored", storageScopeId: "a".repeat(64), sha256: "b".repeat(64), byteSize: 1 })).toBe(true);
+    expect(await occupancy()).toBe("0");
+    const [settled] = await db.select().from(companyTransferRuns).where(eq(companyTransferRuns.id, run.id));
+    expect(settled!.status).toBe("failed");
+    expect(settled!.containerRef).toMatchObject({ artifact: { state: "stored", objectKey, storageScopeId: "a".repeat(64) } });
+    expect((await memoryJobService(db).claimNext())?.id).toBe(blocked.id);
+  });
+
+  it("upgrades the previous shared functions without losing an existing unknown export liability", async () => {
+    const run = await exportRun(a), worker = "pre-upgrade-worker", objectKey = `${a}/company-exports/upgrade.json`;
+    expect(await companyTransferRunService.claimExport(db, run.id, worker)).not.toBeNull();
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, worker,
+      { objectKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+    expect(await companyTransferRunService.failExport(db, run.id, worker, "company_export_storage_outcome_unknown")).toBe(true);
+    const migration = (name: string) => readFileSync(new URL(`../../../packages/db/src/migrations/${name}`, import.meta.url), "utf8");
+    const originalFunction = (source: string, name: string) => {
+      const statement = source.split("--> statement-breakpoint").find(part =>
+        new RegExp(`CREATE (?:OR REPLACE )?FUNCTION public[.]${name}\\(`).test(part));
+      if (!statement) throw new Error(`Original function missing: ${name}`);
+      return statement.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+    };
+    const [before] = await db.select().from(companyTransferRuns).where(eq(companyTransferRuns.id, run.id));
+    await db.transaction(async tx => {
+      await tx.execute(sql.raw("DROP TRIGGER aw_v10_resource_company_transfer_admission ON public.company_transfer_runs"));
+      await tx.execute(sql.raw("DROP INDEX public.company_transfer_runs_resource_active_idx"));
+      await tx.execute(sql.raw(originalFunction(migration("0564_broken_guardian.sql"), "aw_v10_resource_durable_admission")));
+      await tx.execute(sql.raw(originalFunction(migration("0577_native_prelaunch_container_occupancy.sql"), "aw_v10_resource_durable_occupancy")));
+      const occupancy = async () => (await tx.execute<{ count: string }>(sql`select public.aw_v10_resource_durable_occupancy(${a}::uuid)::text as count`))[0]!.count;
+      expect(await occupancy()).toBe("0");
+      for (const statement of migration("0580_aberrant_karma.sql").split("--> statement-breakpoint")) {
+        if (statement.trim()) await tx.execute(sql.raw(statement));
+      }
+      expect(await occupancy()).toBe("1");
+      const [after] = await tx.select().from(companyTransferRuns).where(eq(companyTransferRuns.id, run.id));
+      expect(after).toEqual(before);
+    });
+  });
 
   it("has no invented capacity when the operator configured none", async () => {
     const one = await queue(a), two = await queue(a);
     const worker = memoryJobService(db);
     expect((await worker.claimNext())?.id).toBe(one.id);
     expect((await worker.claimNext())?.id).toBe(two.id);
+    const exported = await exportRun(a);
+    expect(await companyTransferRunService.claimExport(db, exported.id, "unconfigured-export-worker")).not.toBeNull();
   });
 
   it("serializes competing original heartbeat and Memory positive claims across real database sessions", async () => {

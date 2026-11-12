@@ -624,6 +624,75 @@ describeEmbeddedPostgres("companyTransferRunService", () => {
     expect(await companyTransferRunService.claimApply(db, exportRun.run.id)).toBe(true);
   });
 
+  it("settles and erases a late stored artifact after export cancellation without reopening the run", async () => {
+    const companyId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Cancelled export receipt",
+      issuePrefix: `CR${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}` });
+    const { run } = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "board:cancelled-export", idempotencyKey: randomUUID(), companyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+    });
+    const workerId = "original-cancelled-worker", objectKey = `${companyId}/company-exports/${run.id}/late.json`;
+    expect(await companyTransferRunService.claimExport(db, run.id, workerId)).not.toBeNull();
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, workerId,
+      { objectKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+    await companyTransferRunService.cancel(db, run.id);
+
+    const receipt = { objectKey, state: "stored" as const, sha256: "b".repeat(64), byteSize: 1,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(), manifestSha256: "c".repeat(64) };
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, "other-worker", receipt)).toBe(false);
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, workerId, { ...receipt, objectKey: `${objectKey}.other` })).toBe(false);
+    expect(await companyTransferRunService.recordExportArtifact(db, run.id, workerId, receipt)).toBe(true);
+    expect(await companyTransferRunService.claimExport(db, run.id, "retry-worker")).toBeNull();
+    expect(await companyTransferRunService.completeExport(db, run.id, workerId, "c".repeat(64))).toBe(false);
+    const settled = (await companyTransferRunService.getRun(db, run.id))!;
+    expect(settled.status).toBe("cancelled");
+    expect(settled.containerRef).toMatchObject({ artifact: { state: "stored", objectKey, storageScopeId: "a".repeat(64) } });
+    const replay = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "board:cancelled-export", idempotencyKey: run.idempotencyKey, companyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+    });
+    expect(replay.run.id).toBe(run.id);
+    expect(replay.run.status).toBe("cancelled");
+
+    const erased: string[] = [];
+    const storage = createStorageService({
+      id: "local_disk", scopeId: "a".repeat(64),
+      async putObject() {},
+      async getObject() { return { stream: Readable.from([]) }; },
+      async headObject() { return { exists: false }; },
+      async deleteObject({ objectKey: key }) { erased.push(key); },
+      async eraseObject({ objectKey: key }) { erased.push(key); },
+    });
+    const transfers = companyExportTransferService(db, storage, {
+      async exportBundle() { throw new Error("cancelled export must not regenerate"); },
+      async assertExternalInstructionsAllowed() { return false; },
+      async assertExportDownloadAccess() {},
+    });
+    expect((await companyTransferRunService.listExpiredExportArtifacts(db)).map(row => row.id)).toContain(run.id);
+    await transfers.recoverBatch();
+    expect(erased).toEqual([objectKey]);
+    const deleted = (await companyTransferRunService.getRun(db, run.id))!;
+    expect(deleted.status).toBe("cancelled");
+    expect(deleted.containerRef).toMatchObject({ artifact: { state: "deleted", objectKey } });
+
+    const noWrite = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "board:cancelled-no-write", idempotencyKey: randomUUID(), companyId,
+      containerRef: { version: 1, kind: "company_export_transfer_v1", lease: null, artifact: null },
+    });
+    const noWriteWorker = "original-no-write-worker", noWriteKey = `${companyId}/company-exports/${noWrite.run.id}/prevented.json`;
+    expect(await companyTransferRunService.claimExport(db, noWrite.run.id, noWriteWorker)).not.toBeNull();
+    expect(await companyTransferRunService.recordExportArtifact(db, noWrite.run.id, noWriteWorker,
+      { objectKey: noWriteKey, state: "allocated", storageScopeId: "a".repeat(64) })).toBe(true);
+    await companyTransferRunService.cancel(db, noWrite.run.id);
+    expect(await companyTransferRunService.clearAllocatedExportArtifact(db, noWrite.run.id, "other-worker", noWriteKey)).toBe(false);
+    expect(await companyTransferRunService.clearAllocatedExportArtifact(db, noWrite.run.id, noWriteWorker, `${noWriteKey}.other`)).toBe(false);
+    expect(await companyTransferRunService.clearAllocatedExportArtifact(db, noWrite.run.id, noWriteWorker, noWriteKey)).toBe(true);
+    const cleared = (await companyTransferRunService.getRun(db, noWrite.run.id))!;
+    expect(cleared.status).toBe("cancelled");
+    expect(cleared.containerRef).toMatchObject({ artifact: null });
+  });
+
   it("does not restart a cancelled run", async () => {
     const manifest = demoManifest();
     const { run } = await companyTransferRunService.resumeOrCreate(db, {

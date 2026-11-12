@@ -520,7 +520,7 @@ export function companyExportTransferService(
         if (artifact.state === "ready") await companyTransferRunService.expireExportArtifact(db, run.id, artifact.objectKey);
         try {
           await deleteArtifact(run.companyId!, artifact);
-          if (run.status === "failed" && artifact.state === "stored") {
+          if ((run.status === "failed" || run.status === "cancelled") && artifact.state === "stored") {
             const lease = parseContainer(run.containerRef)?.lease;
             if (lease?.ownerId) await companyTransferRunService.markFailedExportArtifactDeleted(db, run.id, lease.ownerId, artifact.objectKey);
           } else {

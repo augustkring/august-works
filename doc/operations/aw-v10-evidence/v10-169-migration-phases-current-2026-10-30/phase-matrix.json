@@ -17,8 +17,8 @@
   "sourceBaseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
   "officialMigrationInterval": {
     "first": 502,
-    "last": 579,
-    "latestOfficialMigration": "0579_puzzling_morlocks",
+    "last": 580,
+    "latestOfficialMigration": "0580_aberrant_karma",
     "latestOfficialMigrationCommit": null,
     "journalSource": "packages/db/src/migrations/meta/_journal.json"
   },
@@ -244,9 +244,10 @@
         539,
         547,
         553,
-        576
+        576,
+        580
       ],
-      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding.",
+      "purpose": "Memory sharing publication provenance; workflow duration width; company-purpose budgets/reservations, package pinning, sandbox claim, durable plugin lifecycle and provider wire receipt immutability; native conversation reservation binding. Migration 0580 extends existing configured durable-execution admission and occupancy to original company export work and unknown allocated writes.",
       "authority": "Budget/reservation owner and durable provider receipts are authoritative before dispatch; plugin lifecycle rows control admitted runtime state; Memory share publication is explicit and scoped.",
       "durableState": [
         "memory_private_share_publications target binding/source owner",
@@ -254,28 +255,34 @@
         "agent_package_versions pin",
         "durable_plugin lifecycle",
         "provider_wire_receipt",
-        "orchestration_model_reservations native conversation identity"
+        "orchestration_model_reservations native conversation identity",
+        "company_transfer_runs running export or unknown allocated original write, including terminal cancellation/failure; generation settlement does not prove physical erasure"
       ],
       "compatibility": "Legacy reservations without new purpose/source identity are not silently upgraded into a supported capability. Rollout requires admission gate and writer drain where old binaries cannot populate bindings. Provider acknowledgement uncertainty is reconciled from immutable receipts; never repeat a consequential call just because response was lost.",
       "owners": [
         "packages/db/src/migrations/0530_curious_lockjaw.sql",
+        "packages/db/src/migrations/0531_regular_bug.sql",
         "packages/db/src/migrations/0532_company_purpose_model_budgets.sql",
         "packages/db/src/migrations/0534_first_party_support_package_pin.sql",
-        "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
-        "packages/db/src/migrations/0547_native_conversation_model_reservations.sql",
-        "packages/db/src/migrations/0553_cute_thor_girl.sql",
-        "server/src/services/resource-governance.ts",
-        "packages/db/src/migrations/0531_regular_bug.sql",
         "packages/db/src/migrations/0535_giant_adam_warlock.sql",
         "packages/db/src/migrations/0536_yellow_nemesis.sql",
+        "packages/db/src/migrations/0538_durable_plugin_lifecycle.sql",
         "packages/db/src/migrations/0539_jev_decision_settings.sql",
-        "packages/db/src/migrations/0576_native_review_model_reservations.sql"
+        "packages/db/src/migrations/0547_native_conversation_model_reservations.sql",
+        "packages/db/src/migrations/0553_cute_thor_girl.sql",
+        "packages/db/src/migrations/0576_native_review_model_reservations.sql",
+        "packages/db/src/migrations/0580_aberrant_karma.sql",
+        "packages/db/src/schema/company_transfer_runs.ts",
+        "server/src/services/company-export-transfers.ts",
+        "server/src/services/company-transfer-runs.ts",
+        "server/src/services/resource-governance.ts"
       ],
       "tests": [
-        "server/src/__tests__/resource-governance.integration.test.ts",
-        "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
+        "server/src/__tests__/company-transfer-runs.test.ts",
+        "server/src/__tests__/first-party-support-model-gateway.test.ts",
         "server/src/__tests__/memory-private-share-publication.integration.test.ts",
-        "server/src/__tests__/first-party-support-model-gateway.test.ts"
+        "server/src/__tests__/native-budget-queue-source-binding.integration.test.ts",
+        "server/src/__tests__/resource-governance.integration.test.ts"
       ],
       "recovery": "Reservation/lease and queue recovery tests exercise selected local DB state transitions. Provider execution, external billing, plugin host and cross-region backup/restore remain unqualified."
     },
@@ -643,7 +650,8 @@
       "evidence": [
         "packages/db/src/migrations/meta/_journal.json",
         "packages/db/src/migrations/0505_flippant_wendell_vaughn.sql",
-        "packages/db/src/migrations/0564_broken_guardian.sql"
+        "packages/db/src/migrations/0564_broken_guardian.sql",
+        "server/src/__tests__/resource-governance.integration.test.ts"
       ],
       "qualificationLimit": "Migration SQL and selected DB fixtures establish schema behavior only; no universal mixed-version binary matrix or hosted rollout proof.",
       "cases": [
@@ -666,6 +674,14 @@
         {
           "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
           "case": "binds a concrete native source reader for every applicable \u00a717 kind"
+        },
+        {
+          "path": "server/src/__tests__/resource-governance.integration.test.ts",
+          "case": "upgrades the previous shared functions without losing an existing unknown export liability"
+        },
+        {
+          "path": "server/src/__tests__/resource-governance.integration.test.ts",
+          "case": "enforces configured global and per-company limits for export owners"
         }
       ]
     },
@@ -725,7 +741,8 @@
       "evidence": [
         "server/src/__tests__/company-import-process-recovery.integration.test.ts",
         "server/src/__tests__/heartbeat-native-cleanup-admission.test.ts",
-        "server/src/__tests__/native-finalization-recovery.test.ts"
+        "server/src/__tests__/native-finalization-recovery.test.ts",
+        "server/src/__tests__/resource-governance.integration.test.ts"
       ],
       "qualificationLimit": "Tests qualify only listed local owner recovery paths, not every external effect, worker cadence, or hosted restart.",
       "cases": [
@@ -748,6 +765,10 @@
         {
           "path": "server/src/__tests__/private-0565-responsibility-scan.integration.test.ts",
           "case": "fences an expired worker lease and lets only the new token commit"
+        },
+        {
+          "path": "server/src/__tests__/resource-governance.integration.test.ts",
+          "case": "keeps a cancelled export's unknown allocation occupied until its original provider receipt"
         }
       ]
     },
@@ -1154,7 +1175,7 @@
     },
     {
       "path": "packages/db/src/migrations/meta/_journal.json",
-      "sha256": "51588bf9b8ba53cddd7e77354574f4b45b4739f22bd58496de85d5dc016773c3"
+      "sha256": "7ce0800bc46b9af6728a94633dbb2810ed9fca8b00676ff69f522b03e21000af"
     },
     {
       "path": "packages/db/src/native-input-source-protocol.test.ts",
@@ -1314,7 +1335,7 @@
     },
     {
       "path": "server/src/__tests__/resource-governance.integration.test.ts",
-      "sha256": "483983848ee49c8b728bc47fb4a8cc4ecc77f7a04f528011a4af85d0f2731b31"
+      "sha256": "be680457b1c2d83cb5512bf377f85644a2f019cfaf5445ac2c796ff51112f24d"
     },
     {
       "path": "server/src/__tests__/support-case-storage.integration.test.ts",
@@ -1563,6 +1584,30 @@
     {
       "path": "packages/db/src/migrations/0579_puzzling_morlocks.sql",
       "sha256": "155f299a1a4db9ada9d55c7cb7b5c2323dccdfa5a380b5d61318ae9c6877c06c"
+    },
+    {
+      "path": "packages/db/src/migrations/0580_aberrant_karma.sql",
+      "sha256": "e22eac270e38642c622e487418857bbf010155778f463fca08d98737eae99b7c"
+    },
+    {
+      "path": "packages/db/src/migrations/meta/0580_snapshot.json",
+      "sha256": "8c96e3a9287b1909fd00d1e1f053ad6640376a4c499158af1420649a7ec6af35"
+    },
+    {
+      "path": "packages/db/src/schema/company_transfer_runs.ts",
+      "sha256": "6d8b07578bb745bd0b8bef1d59fb41d6875e647197b29af22520a55d46b5384c"
+    },
+    {
+      "path": "server/src/__tests__/company-transfer-runs.test.ts",
+      "sha256": "043a0c46d192fe176d4fcaab8969d6514004fc01b43256c4cc6fa235b45cdb6f"
+    },
+    {
+      "path": "server/src/services/company-export-transfers.ts",
+      "sha256": "6c77ea294e44b5366e18d37cfcbc55c8734adc42c52d41491284764cb9c6c282"
+    },
+    {
+      "path": "server/src/services/company-transfer-runs.ts",
+      "sha256": "deb5aa0edb43606ba15b36e5ed1f844f53645f3d33de6f015ca6ac0e4206646b"
     }
   ],
   "sourcePinBasis": "Exact private composed source inventory anchored at sourceHead b1, not equality with its unchanged tree. Only two individually approved code/test pins and two own-documentation pins change from the recovered b1 index; original changed/retired pin history remains preserved. Hash equality is not behavioral or release qualification.",
@@ -1570,16 +1615,16 @@
     "baseCommit": "81d3445b98b1cd80ff400ede6bd44ea71d88d735",
     "command": "git diff --name-status 81d3445b98b1cd80ff400ede6bd44ea71d88d735 -- packages/db/src/migrations",
     "selection": "Union of added/modified/renamed-destination migration SQL files in the source-base git diff and all current journal entries absent from the source-base journal; this catches published journal entries whose SQL payload is still untracked.",
-    "currentAffectedCount": 78,
+    "currentAffectedCount": 79,
     "currentAffectedFirst": "0502_swift_maria_hill",
-    "currentAffectedLast": "0579_puzzling_morlocks"
+    "currentAffectedLast": "0580_aberrant_karma"
   },
-  "sourcePinFinality": "Exact personal-account receipt source/SQL/owner/test pins frozen after official generation, actual PostgreSQL/HTTP and UI regressions and full workspace typecheck/build. Historical phase cases and qualification states remain unchanged.",
+  "sourcePinFinality": "Exact current source hashes after R622 actual PostgreSQL and R623 full typecheck/build; software scope only, no historical status promotion.",
   "latestMigrationPublication": {
-    "migration": "0579_puzzling_morlocks",
+    "migration": "0580_aberrant_karma",
     "sourceCommit": null,
-    "sourceState": "Exact current source-hash publication candidate; official generated SQL, snapshot and journal with local software receipts.",
-    "qualificationScope": "Software source only; no fleet, deployed key rotation, rollout, rollback, restore, Host/provider or Human qualification."
+    "sourceState": "Official generated source with exact current pins and local software receipts.",
+    "qualificationScope": "Does not establish fleet cutover, deployed rollback/restore, provider/Host or Human qualification."
   },
   "affectedMigrationReasons": {
     "0502": "Extends auth_security_events action contract with board_api_key_id, owner/user and company-null constraints, and expiry index; board-key audit rows use the existing user-auth event writer.",
@@ -1598,10 +1643,11 @@
     "0576": "Adds durable Native review-model reservation identity and bounded reservation state for the plan review dispatch lane; does not change existing Support Assistant funding or provider qualification.",
     "0577": "Adds typed prelaunch setup-container occupancy settlement and receipt reconciliation. This is resource cleanup evidence only; it is distinct from Native process-stop projection and makes no claim of process termination, provider erasure, or storage removal.",
     "0578": "Adds a company/endpoint/stable GitHub repository-scoped old-to-new coordinate receipt in the same transaction as repository rename and conversation/origin rebinding; no backfill or guessed aliases.",
-    "0579": "Adds an optional unique lowercase SHA256 receipt-key hash to the original personal account deletion operation. It supports only the exact accepted personal request status after session revocation; historical NULL rows gain no receipt, and the schema does not grant account or company authority."
+    "0579": "Adds an optional unique lowercase SHA256 receipt-key hash to the original personal account deletion operation. It supports only the exact accepted personal request status after session revocation; historical NULL rows gain no receipt, and the schema does not grant account or company authority.",
+    "0580": "Extends existing shared durable-execution policy/admission to export claims and uncertain allocated writes, preserving original Native cleanup predicates, configured limits and Stop/settlement bypass. Adds only a partial active-liability index; no new queue or invented quota."
   },
-  "revisionDate": "2026-11-11",
-  "sourceHead": "4f110b840ad25ffccfd9c26d675fd438cc1f9d45",
+  "revisionDate": "2026-11-12",
+  "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",
   "previousCurrentRegister": {
     "path": "doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/historical-phase-matrix-2026-10-30.json",
     "sha256": "cd326df9b733887f54e4bc969e86955337981e06ea58728c47702372bbe71673",
@@ -1653,6 +1699,13 @@
       "sourceHead": "4f110b840ad25ffccfd9c26d675fd438cc1f9d45",
       "sourceState": "Official generated personal account receipt snapshot with exact source pins and local software receipts.",
       "phaseBoundary": "Software source inventory only; no prior phase qualification or status is promoted."
+    },
+    {
+      "migration": "0580_aberrant_karma",
+      "sourceCommit": null,
+      "sourceHead": "884dbba4a78603a791b65471e41fe950a23e2e4f",
+      "sourceState": "Official Drizzle generation with exact SQL/snapshot/journal and current local software checks.",
+      "phaseBoundary": "Source inventory and selected software qualification only; prior phase statuses remain unchanged."
     }
   ],
   "recoverySourceBasis": {

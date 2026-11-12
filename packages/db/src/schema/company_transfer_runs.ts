@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { pgTable, uuid, text, integer, jsonb, timestamp, index } from "drizzle-orm/pg-core";
 import { companies } from "./companies.js";
 
@@ -39,6 +40,9 @@ export const companyTransferRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    resourceActiveIdx: index("company_transfer_runs_resource_active_idx")
+      .on(table.companyId, table.id)
+      .where(sql`${table.direction}='export' and (${table.status}='running' or ${table.containerRef} #>> '{artifact,state}'='allocated')`),
     companyIdx: index("company_transfer_runs_company_idx").on(table.companyId),
     idempotencyDirectionIdx: index("company_transfer_runs_idempotency_direction_idx").on(
       table.idempotencyKey,
