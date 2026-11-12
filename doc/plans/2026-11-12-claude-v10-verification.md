@@ -45,9 +45,9 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 
 | Phase | Scope | Status |
 |---|---|---|
-| 0 Setup | `CLAUDE.md`, reference indexes, `pb-*` router skills, test environment | Done (this PR) |
-| 1 Triage | Cluster every failing CI job by root cause; rank by jobs fixed | Next |
-| 2 Green CI | Fix one cluster per PR until `verify`, serialized, security and e2e pass | Open |
+| 0 Setup | `CLAUDE.md`, reference indexes, `pb-*` router skills, test environment | Done (#43) |
+| 1 Triage | Cluster every failing CI job by root cause; rank by jobs fixed | Done (see failure ledger) |
+| 2 Green CI | Fix one cluster per PR until `verify`, serialized, security and e2e pass | In progress (#44, #45 merged) |
 | 3 Risk audits | Authority, privacy, data loss and migrations, spend, recovery, supply chain | Open |
 | 4 Requirements | Walk the 169 rows, P0 to P2; update register status | Open |
 | 5 UI/UX | §33 screens and §41 journeys in EN/DA; accessibility, critique, copy | Open |
@@ -78,6 +78,25 @@ This is the status ledger for the Claude Code verification pass. Earlier history
   Run as root, the same server test file reported 30 skipped. Embedded Postgres does not start
   as root, so a skipped-only run does not count as verification. `CLAUDE.md` records the
   working setup.
+
+## Failure ledger (CI on PR #42 head `ad190a71`, updated 2026-11-12)
+
+45 jobs failed and 15 were cancelled. Clusters, ranked by how many jobs a fix could turn green:
+
+| Cluster | What fails | Jobs | Status |
+|---|---|---|---|
+| A. Managed Native/OpenCode | Runs end `failed` / `adapter_failed` while preparing. Seen: `scheduler_software_host_incoming_model_authority_invalid` (`server/src/__tests__/helpers/managed-native-conversation-sandbox-host.ts:719`), `managed_opencode_checkpoint_deadline_exhausted`, `managed_close_source_real_native_run_not_successful` | 9 verified, up to 24 | Open, next |
+| B. Mocked legacy and Native fixtures | The paid-transport guards (brief §57.6 RT-03) deny the mocked `codex_local` and Native `codex` test doubles with `paid_transport_unqualified` | Serialized 1/9, several server shards | Fixed for 9 files in #44 and #45. Local result: 71 failures fell to 9. The 9 that remain have other causes (see A-local) |
+| A-local. Native fixture remainder | `native-session-resumption`: completion contract is `undefined` (3 cases). `heartbeat-process-recovery`: task root/cwd, accepted-interaction retry counts, paused-recipient successor (5 cases). `heartbeat-stale-queue-invalidation`: accepted queue after the Native owner finished (1 case) | Serialized 1/9, server shards | Open |
+| G2. Durable chat retry fixture | `durable-chat-wakeup.test.ts`: `durable_retry_fixture_sdk_initialization_hook_not_exhausted`, 11 cases | Server 8/12 | Open |
+| C. Chat channel source authority | Discord `metadata_only` update assertion | Chat 1/3 (also 2/3) | Open |
+| D. Generic server shards | Not yet classified | Server 2, 9, 10, 11 | Open |
+| E. UI unit test | One button-query assertion | Workspaces-a 2/2 | Open |
+| F. Playwright e2e | `tests/e2e/fixtures/managed-connection-review-cases.ts:12`, `signoff-policy.spec.ts:523` and `:579` | 6 shards | Open |
+| H. Product browser, agent chat | Unknown. A 110 MB failure artifact | 1 | Open |
+| T. Repository tests server-1 to server-4 | Hit the 60-minute timeout | 4 | Open |
+
+The Codex notes said many Native jobs died during sandbox or bwrap install. The logs do not show this.
 
 ## Decisions taken (2026-11-12)
 
