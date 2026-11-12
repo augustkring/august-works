@@ -30,7 +30,7 @@
     {
       "path": "AGENTS.md",
       "kind": "repository_developer_instructions",
-      "sourceSha256": "15d78015148aef4dd9efd2e195d00ca8a5110bcfbbd215e31cc6c33d6c255df9"
+      "sourceSha256": "f662b54e2fd1f5010534ac9bc4a871723ee8f6eb39c3894dcb4844e867f03109"
     },
     {
       "path": "packages/adapters/hermes/skills/paperclip-task-bridge/SKILL.md",
@@ -164,7 +164,7 @@
       "locator": "AGENTS.md#L1",
       "heading": "AGENTS.md",
       "depth": 1,
-      "sectionSha256": "25022830322b0eb31d8b3cba9f06d9e542ebb59bcb80342f8a8b1de1de66c756",
+      "sectionSha256": "2ab2d506a494bc5454838fc72480aa15781a8f15c0daf639f43796bf878ca727",
       "semanticOwner": "Repository maintainers",
       "target": "AGENTS.md",
       "runtimeDestination": "AGENTS.md",
@@ -194,7 +194,7 @@
       "locator": "AGENTS.md#L10",
       "heading": "2. Read This First",
       "depth": 2,
-      "sectionSha256": "da38bf33f577c056f3d3443cbba5ec8e94d929828b54b0b841be3f8280dd5b2b",
+      "sectionSha256": "e5a5e99dff5ba8cae554bdf0af1db3152ad2dd4270c56befc4129f69c7489bb7",
       "semanticOwner": "Repository maintainers",
       "target": "AGENTS.md",
       "runtimeDestination": "AGENTS.md",
@@ -205,8 +205,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#41",
-      "locator": "AGENTS.md#L41",
+      "id": "AGENTS.md#48",
+      "locator": "AGENTS.md#L48",
       "heading": "3. Repo Map",
       "depth": 2,
       "sectionSha256": "695c1447c16999fbeeac2de6fe2b811b6e947d328fe996cc0728cf4599675356",
@@ -220,8 +220,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#56",
-      "locator": "AGENTS.md#L56",
+      "id": "AGENTS.md#63",
+      "locator": "AGENTS.md#L63",
       "heading": "4. Dev Setup (Auto DB)",
       "depth": 2,
       "sectionSha256": "6c6d92e454f51afb13e0e12ab693bf03388cb7c16beb80216aea813d1527c06e",
@@ -235,8 +235,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#84",
-      "locator": "AGENTS.md#L84",
+      "id": "AGENTS.md#91",
+      "locator": "AGENTS.md#L91",
       "heading": "5. Core Engineering Rules",
       "depth": 2,
       "sectionSha256": "768ab948270ae1917705d26e6ee679a75a74b93fc98b30a921199cd17cd7639a",
@@ -250,8 +250,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#148",
-      "locator": "AGENTS.md#L148",
+      "id": "AGENTS.md#155",
+      "locator": "AGENTS.md#L155",
       "heading": "6. Database Change Workflow",
       "depth": 2,
       "sectionSha256": "65dd6661db596c932602fcdc5345f104665586134b8b8a47258b346e7f01529d",
@@ -265,8 +265,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#170",
-      "locator": "AGENTS.md#L170",
+      "id": "AGENTS.md#177",
+      "locator": "AGENTS.md#L177",
       "heading": "7. Verification Before Hand-off",
       "depth": 2,
       "sectionSha256": "2c8d7437d61db051a993e325c69a8aaa22d5cdc91c56c7280f1e96defdee8f2a",
@@ -280,8 +280,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#199",
-      "locator": "AGENTS.md#L199",
+      "id": "AGENTS.md#206",
+      "locator": "AGENTS.md#L206",
       "heading": "8. API and Auth Expectations",
       "depth": 2,
       "sectionSha256": "275927e3d82f18db922dc7e81af363e410ba8e229da3c264e93e287bab0386ba",
@@ -295,8 +295,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#213",
-      "locator": "AGENTS.md#L213",
+      "id": "AGENTS.md#220",
+      "locator": "AGENTS.md#L220",
       "heading": "9. UI Expectations",
       "depth": 2,
       "sectionSha256": "f51327d3be70ea683f1fc8f1704a344964012882ee17c6afda5e390309d2fb0c",
@@ -310,8 +310,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#220",
-      "locator": "AGENTS.md#L220",
+      "id": "AGENTS.md#227",
+      "locator": "AGENTS.md#L227",
       "heading": "10. Pull Request Requirements",
       "depth": 2,
       "sectionSha256": "34d8bbbb5a9132f5f608731d127f4117fb5f959d569b699a118aabd7e1293285",
@@ -325,8 +325,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#231",
-      "locator": "AGENTS.md#L231",
+      "id": "AGENTS.md#238",
+      "locator": "AGENTS.md#L238",
       "heading": "11. Definition of Done",
       "depth": 2,
       "sectionSha256": "1d9c85e1109abc589850e34df3056723db4c7b55f7c0dda9d49615648ce691d0",
@@ -340,8 +340,8 @@
       "precedence": "current canonical runtime admission, authorization, and operation owners govern effects; the pinned Platform Skill governs procedure; legacy instructions cannot add authority"
     },
     {
-      "id": "AGENTS.md#241",
-      "locator": "AGENTS.md#L241",
+      "id": "AGENTS.md#248",
+      "locator": "AGENTS.md#L248",
       "heading": "Design system",
       "depth": 2,
       "sectionSha256": "714e265ca45b2b16fcb74232ff2480d92510e6b2a70fc2b10756e2b4c218de5f",

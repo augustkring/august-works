@@ -14783,7 +14783,7 @@
       "sources": [
         {
           "path": ".github/workflows/pr-trusted.yml",
-          "sha256": "4964e29c806749c079688afaccf04e118cb63b50277101c6490f80d343380d9a"
+          "sha256": "65103cbcab9f13c83ef11da46828ac96d8c57d2feb3060bf8290ab9ab092ee6e"
         },
         {
           "path": "cli/src/__tests__/service-health-check.test.ts",
@@ -28373,7 +28373,7 @@
       "sources": [
         {
           "path": "doc/operations/platform-skill-migration-register.json",
-          "sha256": "d3259f841408bbd0196a664ad266069dbe7535a30efce2e96338404fcd361b7f"
+          "sha256": "6b2e3bf06b42b26c5e2727165b3f7e17374d95ed39d9523ebbdecf1b9c5d1097"
         },
         {
           "path": "evals/platform-skill/README.md",
@@ -53591,7 +53591,7 @@
       "id": "source:.github/workflows/pr-trusted.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/pr-trusted.yml",
-      "sha256": "4964e29c806749c079688afaccf04e118cb63b50277101c6490f80d343380d9a",
+      "sha256": "65103cbcab9f13c83ef11da46828ac96d8c57d2feb3060bf8290ab9ab092ee6e",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -67833,7 +67833,7 @@
       "id": "source:doc/operations/platform-skill-migration-register.json",
       "kind": "current_source_owner",
       "path": "doc/operations/platform-skill-migration-register.json",
-      "sha256": "d3259f841408bbd0196a664ad266069dbe7535a30efce2e96338404fcd361b7f",
+      "sha256": "6b2e3bf06b42b26c5e2727165b3f7e17374d95ed39d9523ebbdecf1b9c5d1097",
       "changeIds": [
         "SCR-V10-SKILLS-AND-PUBLICATION"
       ],
