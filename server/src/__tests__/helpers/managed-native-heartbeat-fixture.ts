@@ -156,9 +156,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
   /** Private fixture observer before the real Native runtime selection; no Run state is mutated. */
   beforeNativeRuntimeSelection?: NonNullable<NonNullable<Parameters<typeof heartbeatService>[1]>["beforeNativeRuntimeSelection"]>;
   providerReply: (facts: { body: Record<string, unknown>; callIndex: number; execution: NativeExecutionInput;
-    runId: string; issueId: string | null; signal: AbortSignal }) => {
+    runId: string; issueId: string | null }) => {
     stop_reason: "tool_use" | "end_turn"; content: Array<Record<string, unknown>>;
-  } | Promise<{ stop_reason: "tool_use" | "end_turn"; content: Array<Record<string, unknown>> }>;
+  };
   /** Observe only after the fixture Host has authenticated the current provider and signed model request. */
   beforeManagedModelRequest?: (facts: { body: unknown; runId: string; issueId: string | null }) => Promise<void>;
   /** Observe a completed result from the real assigned-MCP owner; replay calls the same bound owner with captured inputs. */
@@ -482,10 +482,9 @@ export async function withManagedNativeHeartbeatFixture<T>(input: Omit<FrameInpu
       const usage = { input_tokens: 100, output_tokens: 32 };
       const callIndex = input.schedulerMode
         ? providerCalls.filter(call => call.runId === runId).length : providerCalls.length;
-      let reply: Awaited<ReturnType<typeof input.providerReply>>;
+      let reply: ReturnType<typeof input.providerReply>;
       try {
-        if (!(init.signal instanceof AbortSignal)) throw new Error("conversation_fixture_provider_abort_signal_missing");
-        reply = await input.providerReply({ body, callIndex, execution, runId, issueId: issueId ?? null, signal: init.signal });
+        reply = input.providerReply({ body, callIndex, execution, runId, issueId: issueId ?? null });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const messagePrefix = Buffer.from(message, "utf8").subarray(0, 4096);

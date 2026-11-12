@@ -13908,7 +13908,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-          "sha256": "4ce0d73293a0ac6fb60e0a2242c5b1299a4b105739cee13a69276f3f95155f20"
+          "sha256": "522ea090f6536f6781e6247d465d2e04daecbfc36b77980fe9e9c56e5dadb4e2"
         },
         {
           "path": "server/src/__tests__/helpers/prepare-genuine-native-draft-conformance-fixture.ts",
@@ -52822,7 +52822,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-heartbeat-fixture.ts",
-      "sha256": "4ce0d73293a0ac6fb60e0a2242c5b1299a4b105739cee13a69276f3f95155f20",
+      "sha256": "522ea090f6536f6781e6247d465d2e04daecbfc36b77980fe9e9c56e5dadb4e2",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
