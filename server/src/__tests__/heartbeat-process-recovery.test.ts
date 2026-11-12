@@ -4,6 +4,7 @@ import * as controllerLeases from "../services/legacy-controller-lease.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { DEFAULT_OPENCODE_RUNNER_MODEL } from "../services/native-runtime/provider-profile.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
@@ -228,31 +229,13 @@ vi.mock("@paperclipai/shared/telemetry", async () => {
   };
 });
 
-// Orchestration-only legacy fixtures replace adapter.execute with a mock. The
-// production paid-transport guard denies every legacy provider dispatch
-// (brief §57.6 RT-03), so a fixture that needs a successful mocked execution
-// opts in per test with admitMockedLegacyDispatch(). The opt-in admits only the
-// mocked codex_local model dispatch; the real guard stays the default and is
+// Orchestration-only legacy fixtures replace adapter.execute with a mock and opt
+// in per test with admitMockedLegacyDispatch(); see
+// helpers/mocked-legacy-paid-dispatch.ts. The real guard stays the default and is
 // asserted by "routes opaque legacy paid dispatch to the managed runtime owner
-// without retry" and server/src/services/native-runtime/legacy-paid-transport-admission.test.ts.
-const legacyDispatchAdmission = vi.hoisted(() => ({ enabled: false }));
-function admitMockedLegacyDispatch() {
-  legacyDispatchAdmission.enabled = true;
-}
-vi.mock("../services/native-runtime/paid-transport-admission.js", async () => {
-  const actual = await vi.importActual<typeof import("../services/native-runtime/paid-transport-admission.js")>(
-    "../services/native-runtime/paid-transport-admission.js");
-  return {
-    ...actual,
-    withLegacyPaidTransportAdmission: <T,>(
-      input: Parameters<typeof actual.withLegacyPaidTransportAdmission>[0],
-      dispatch: () => T,
-    ): T =>
-      legacyDispatchAdmission.enabled && input.adapterType === "codex_local" && input.operation === "model_dispatch"
-        ? dispatch()
-        : actual.withLegacyPaidTransportAdmission(input, dispatch),
-  };
-});
+// without retry".
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
 
 vi.mock("../adapters/index.ts", async () => {
   const actual = await vi.importActual<typeof import("../adapters/index.ts")>(
@@ -553,7 +536,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   }, 20_000);
 
   afterEach(async () => {
-    legacyDispatchAdmission.enabled = false;
+    resetMockedLegacyDispatch();
     vi.clearAllMocks();
     // A recovery policy can stop before adapter dispatch; do not leak an
     // unused one-shot failure into the next test's otherwise healthy run.

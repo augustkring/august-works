@@ -5575,7 +5575,7 @@
         },
         {
           "path": "server/src/__tests__/agent-hire-ai-connections.test.ts",
-          "sha256": "60644557a1d629facafb66c325c3e65834f96516d154430cb82c947de9a0625f"
+          "sha256": "7ee4e9576d102b9ccec91f85dc7bfdadb88849e693cd71fc62083f4b05a29d86"
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
@@ -5599,7 +5599,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
-          "sha256": "26e26443e41555c6559a2b9560e186b96059d1000bf0e779415411f08ba65da6"
+          "sha256": "67eca93105ae859f9e9bcb014e7bb936348068c0dc103bc7982523b1e48199ef"
         },
         {
           "path": "server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
@@ -5655,15 +5655,15 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-plugin-environment.test.ts",
-          "sha256": "27ad069b39e767d92196ed810afeb619bab31addbd7f6f3220df0525f3f6ddfc"
+          "sha256": "e027f16c5609bbbaf3127a05d3311e8988702532383f1cb8b34d573eab99a3e0"
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
+          "sha256": "8b07a43a1f338e7fcaaac91fb4f0407b6456874fa9ad8f67ec62a9509e42c2a8"
         },
         {
           "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
-          "sha256": "ec848d368a6c2052b0b5436ceb2b0746aa6e1330bc810d14af98e11f12a504df"
+          "sha256": "39751ba4ecf681195b894feab2839365d82fdb4deebd6c487c1c1b48e1ef7901"
         },
         {
           "path": "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts",
@@ -5683,7 +5683,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
-          "sha256": "386264915167d8755d806db355a7dea93c0047ecc0c0f5fb63526464cd0d2237"
+          "sha256": "83e0b23ba4172e6ef684c55d8dbdca54c6923b17a9260b072e19e4fdfc65f61a"
         },
         {
           "path": "server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
@@ -5695,7 +5695,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-workspace-branch-containment.test.ts",
-          "sha256": "e16afb25f19711904affd64e45993697d17890b6ba3b6851fa7a481a53d71688"
+          "sha256": "a9869cbf949246510cb53017b3f0706475b8f9bec80ce7755ca9312c63ffbd92"
         },
         {
           "path": "server/src/__tests__/heartbeat-workspace-busy.test.ts",
@@ -5751,7 +5751,7 @@
         },
         {
           "path": "server/src/__tests__/legacy-finalization-regression.test.ts",
-          "sha256": "8989817ae7c62bed6474332e5290ac4ba9bcf294936a541351b99562398910c5"
+          "sha256": "393c0ee8e8ade6ee79b86b0be88f9b1adfdf2aaed8052c01a22e61dbbe6278ff"
         },
         {
           "path": "server/src/__tests__/low-trust-red-team-routes.test.ts",
@@ -5763,7 +5763,7 @@
         },
         {
           "path": "server/src/__tests__/native-session-resumption.test.ts",
-          "sha256": "362c826274bf07207f38f0027df05f8d4bc4b145eaa7315176b70bcf124ddfd6"
+          "sha256": "40fb2c63f851d8594c5977ea29294b45429617143841e2e9e802d020c43fac3b"
         },
         {
           "path": "server/src/__tests__/plugin-agent-runtime-state.integration.test.ts",
@@ -7614,7 +7614,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
+          "sha256": "8b07a43a1f338e7fcaaac91fb4f0407b6456874fa9ad8f67ec62a9509e42c2a8"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -8992,7 +8992,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
-          "sha256": "26e26443e41555c6559a2b9560e186b96059d1000bf0e779415411f08ba65da6"
+          "sha256": "67eca93105ae859f9e9bcb014e7bb936348068c0dc103bc7982523b1e48199ef"
         },
         {
           "path": "server/src/__tests__/heartbeat-issue-liveness-escalation.test.ts",
@@ -9000,7 +9000,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
+          "sha256": "8b07a43a1f338e7fcaaac91fb4f0407b6456874fa9ad8f67ec62a9509e42c2a8"
         },
         {
           "path": "server/src/__tests__/helpers/authoring-memory.ts",
@@ -10149,7 +10149,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
+          "sha256": "8b07a43a1f338e7fcaaac91fb4f0407b6456874fa9ad8f67ec62a9509e42c2a8"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
@@ -10792,7 +10792,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/agent-hire-ai-connections.test.ts",
-          "sha256": "60644557a1d629facafb66c325c3e65834f96516d154430cb82c947de9a0625f"
+          "sha256": "7ee4e9576d102b9ccec91f85dc7bfdadb88849e693cd71fc62083f4b05a29d86"
         },
         {
           "path": "server/src/__tests__/agent-live-run-routes.test.ts",
@@ -47233,7 +47233,7 @@
       "id": "source:server/src/__tests__/agent-hire-ai-connections.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/agent-hire-ai-connections.test.ts",
-      "sha256": "60644557a1d629facafb66c325c3e65834f96516d154430cb82c947de9a0625f",
+      "sha256": "7ee4e9576d102b9ccec91f85dc7bfdadb88849e693cd71fc62083f4b05a29d86",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-09"
@@ -47314,7 +47314,7 @@
       "id": "source:server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-accepted-plan-workspace-refresh.test.ts",
-      "sha256": "26e26443e41555c6559a2b9560e186b96059d1000bf0e779415411f08ba65da6",
+      "sha256": "67eca93105ae859f9e9bcb014e7bb936348068c0dc103bc7982523b1e48199ef",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06"
@@ -47515,7 +47515,7 @@
       "id": "source:server/src/__tests__/heartbeat-plugin-environment.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-plugin-environment.test.ts",
-      "sha256": "27ad069b39e767d92196ed810afeb619bab31addbd7f6f3220df0525f3f6ddfc",
+      "sha256": "e027f16c5609bbbaf3127a05d3311e8988702532383f1cb8b34d573eab99a3e0",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47530,7 +47530,7 @@
       "id": "source:server/src/__tests__/heartbeat-process-recovery.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-      "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d",
+      "sha256": "8b07a43a1f338e7fcaaac91fb4f0407b6456874fa9ad8f67ec62a9509e42c2a8",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",
@@ -47548,7 +47548,7 @@
       "id": "source:server/src/__tests__/heartbeat-project-repositories.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
-      "sha256": "ec848d368a6c2052b0b5436ceb2b0746aa6e1330bc810d14af98e11f12a504df",
+      "sha256": "39751ba4ecf681195b894feab2839365d82fdb4deebd6c487c1c1b48e1ef7901",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47625,7 +47625,7 @@
       "id": "source:server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
-      "sha256": "386264915167d8755d806db355a7dea93c0047ecc0c0f5fb63526464cd0d2237",
+      "sha256": "83e0b23ba4172e6ef684c55d8dbdca54c6923b17a9260b072e19e4fdfc65f61a",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47670,7 +47670,7 @@
       "id": "source:server/src/__tests__/heartbeat-workspace-branch-containment.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-workspace-branch-containment.test.ts",
-      "sha256": "e16afb25f19711904affd64e45993697d17890b6ba3b6851fa7a481a53d71688",
+      "sha256": "a9869cbf949246510cb53017b3f0706475b8f9bec80ce7755ca9312c63ffbd92",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47882,7 +47882,7 @@
       "id": "source:server/src/__tests__/legacy-finalization-regression.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/legacy-finalization-regression.test.ts",
-      "sha256": "8989817ae7c62bed6474332e5290ac4ba9bcf294936a541351b99562398910c5",
+      "sha256": "393c0ee8e8ade6ee79b86b0be88f9b1adfdf2aaed8052c01a22e61dbbe6278ff",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47930,7 +47930,7 @@
       "id": "source:server/src/__tests__/native-session-resumption.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/native-session-resumption.test.ts",
-      "sha256": "362c826274bf07207f38f0027df05f8d4bc4b145eaa7315176b70bcf124ddfd6",
+      "sha256": "40fb2c63f851d8594c5977ea29294b45429617143841e2e9e802d020c43fac3b",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],

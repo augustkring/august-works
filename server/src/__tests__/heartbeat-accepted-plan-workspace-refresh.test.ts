@@ -8,7 +8,8 @@ import { promisify } from "node:util";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { eq, ne } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import {
   activityLog,
   authUsers,
@@ -111,6 +112,12 @@ async function createGitRepoWithOrigin() {
   await runGit(repoRoot, ["fetch", "origin", "master"]);
   return { repoRoot, originRoot };
 }
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch());
+afterEach(() => resetMockedLegacyDispatch());
 
 describeEmbeddedPostgres("accepted plan workspace refresh", () => {
   let db!: ReturnType<typeof createDb>;
