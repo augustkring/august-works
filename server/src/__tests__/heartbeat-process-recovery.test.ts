@@ -4,7 +4,7 @@ import * as controllerLeases from "../services/legacy-controller-lease.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
-import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
+import { admitMockedLegacyDispatch, admitMockedNativeDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { DEFAULT_OPENCODE_RUNNER_MODEL } from "../services/native-runtime/provider-profile.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
@@ -2868,6 +2868,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("keeps an accepted Native result open while workspace copy-back is pending", async () => {
+    admitMockedNativeDispatch(["codex"]);
     await withTempPaperclipHome(async () => {
       const { companyId, agentId, issueId, runId } = await seedQueuedIssueRunFixture();
       await db.update(agents).set({ adapterType: "paperclip_runner",
@@ -12800,6 +12801,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   it.each(["issue", "wake", "run", "native", "close", "cancel"] as const)(
     "rechecks admission after transient database contention: %s",
     async (mode) => {
+      admitMockedNativeDispatch(["codex"]);
       admitMockedLegacyDispatch();
       const source = await seedCommittedChatControlStop();
       mockAdapterExecute.mockImplementation(async () => {
@@ -12952,6 +12954,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   it.each(["required", "admitted", "historical"] as const)(
     "rechecks only unadmitted native bootstrap recovery after a committed close: %s",
     async (admission) => {
+      admitMockedNativeDispatch(["codex"]);
       await withTempPaperclipHome(async () => {
         await fs.mkdir(resolvePaperclipInstanceRoot(), { recursive: true });
         const { source, child } = await seedPreparedChatRecovery(admission);
@@ -12994,6 +12997,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   it.each(["admitted", "historical"] as const)(
     "does not acquire a new chat gate lock for protected native recovery: %s",
     async (admission) => {
+      admitMockedNativeDispatch(["codex"]);
       await withTempPaperclipHome(async () => {
         await fs.mkdir(resolvePaperclipInstanceRoot(), { recursive: true });
         const { source, child } = await seedPreparedChatRecovery(admission);
