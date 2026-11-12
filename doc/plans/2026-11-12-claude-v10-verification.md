@@ -94,7 +94,7 @@ These are the defaults. A later decision that changes one updates this table.
 | Service owner | The repository owner is the named service owner. Claude prepares the runbooks. | The beta gate requires a named owner. |
 | Product claims | Claim only what has verified evidence. Claude drafts the claims, privacy policy and subprocessor list from the code. A lawyer reviews them before launch. | LOCK-1028 and LOCK-1030. Claude is not a lawyer. |
 | Usability evidence | Claude writes the test scripts. The owner runs about 5 short sessions with real people before beta. | The beta gate requires human first-value evidence. |
-| Skills | Copy the extra skills into `.claude/skills/` in the repository. | Skills installed on a local machine do not reach cloud sessions. |
+| Skills | Copied `web-design-guidelines` (rules pinned in `guidelines.md`, not fetched at run time) and `playwright-best-practices` into `.claude/skills/`, with MIT licences and source commits. Phase 3 uses the built-in `security-review` instead of the third-party Trail of Bits plugin. | Skills installed on a local machine do not reach cloud sessions. Instructions fetched at run time could change without review. |
 
 ## Things the owner will be asked to provide (only when the phase needs them)
 
