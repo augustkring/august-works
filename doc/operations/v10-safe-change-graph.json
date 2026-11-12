@@ -5659,7 +5659,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
+          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
         },
         {
           "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
@@ -7614,7 +7614,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
+          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -9000,7 +9000,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
+          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
         },
         {
           "path": "server/src/__tests__/helpers/authoring-memory.ts",
@@ -10149,7 +10149,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66"
+          "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
@@ -47530,7 +47530,7 @@
       "id": "source:server/src/__tests__/heartbeat-process-recovery.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-      "sha256": "61e3b5e6ef5c861b63d64c52e8b904c390158ce720acdcf7748b8af7a8e1ba66",
+      "sha256": "8da597dd4c1432c27df72c149d252ac29f7ec7cc48083382856706e38e553a0d",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",

@@ -228,6 +228,32 @@ vi.mock("@paperclipai/shared/telemetry", async () => {
   };
 });
 
+// Orchestration-only legacy fixtures replace adapter.execute with a mock. The
+// production paid-transport guard denies every legacy provider dispatch
+// (brief §57.6 RT-03), so a fixture that needs a successful mocked execution
+// opts in per test with admitMockedLegacyDispatch(). The opt-in admits only the
+// mocked codex_local model dispatch; the real guard stays the default and is
+// asserted by "routes opaque legacy paid dispatch to the managed runtime owner
+// without retry" and server/src/services/native-runtime/legacy-paid-transport-admission.test.ts.
+const legacyDispatchAdmission = vi.hoisted(() => ({ enabled: false }));
+function admitMockedLegacyDispatch() {
+  legacyDispatchAdmission.enabled = true;
+}
+vi.mock("../services/native-runtime/paid-transport-admission.js", async () => {
+  const actual = await vi.importActual<typeof import("../services/native-runtime/paid-transport-admission.js")>(
+    "../services/native-runtime/paid-transport-admission.js");
+  return {
+    ...actual,
+    withLegacyPaidTransportAdmission: <T,>(
+      input: Parameters<typeof actual.withLegacyPaidTransportAdmission>[0],
+      dispatch: () => T,
+    ): T =>
+      legacyDispatchAdmission.enabled && input.adapterType === "codex_local" && input.operation === "model_dispatch"
+        ? dispatch()
+        : actual.withLegacyPaidTransportAdmission(input, dispatch),
+  };
+});
+
 vi.mock("../adapters/index.ts", async () => {
   const actual = await vi.importActual<typeof import("../adapters/index.ts")>(
     "../adapters/index.ts",
@@ -527,6 +553,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   }, 20_000);
 
   afterEach(async () => {
+    legacyDispatchAdmission.enabled = false;
     vi.clearAllMocks();
     // A recovery policy can stop before adapter dispatch; do not leak an
     // unused one-shot failure into the next test's otherwise healthy run.
@@ -4314,6 +4341,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("allows conversation continuation after a transient remote-compaction failure", async () => {
+    admitMockedLegacyDispatch();
     mockAdapterExecute.mockResolvedValueOnce({
       exitCode: 1,
       signal: null,
@@ -4354,6 +4382,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("schedules bounded retries for failed accepted interaction continuation wakes", async () => {
+    admitMockedLegacyDispatch();
     const { companyId, agentId, runId, wakeupRequestId, issueId } =
       await seedQueuedIssueRunFixture();
     const interactionId = randomUUID();
@@ -4907,6 +4936,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("escalates (does not retry) an accepted-interaction-continuation setup failure whose message matches neither retryable pattern", async () => {
+    admitMockedLegacyDispatch();
     // Negative-case counterpart to "schedules an infra retry for a setup
     // failure caused by a transient sandbox provider worker restart" above.
     // The injected failure message is the real *permanent* "provider not
@@ -5353,6 +5383,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("blocks a git-sensitive local adapter before launch when a project-workspace-linked issue is missing its project id", async () => {
+    admitMockedLegacyDispatch();
     mockAdapterExecute.mockClear();
     const { companyId, agentId, runId, issueId } =
       await seedQueuedIssueRunFixture();
@@ -5614,6 +5645,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("queues one finish-handoff wake when a successful run leaves in-progress work without a next action", async () => {
+    admitMockedLegacyDispatch();
     const { companyId, agentId, runId, issueId } =
       await seedQueuedIssueRunFixture();
     mockAdapterExecute.mockImplementationOnce(
@@ -5661,6 +5693,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("requeues a missing-disposition handoff when the previous corrective wake was cancelled", async () => {
+    admitMockedLegacyDispatch();
     const { companyId, agentId, runId, issueId } =
       await seedQueuedIssueRunFixture();
     const idempotencyKey = `finish_successful_run_handoff:${issueId}:${runId}:1`;
@@ -5730,6 +5763,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("queues one missing-disposition handoff for artifact-producing successful runs left in progress", async () => {
+    admitMockedLegacyDispatch();
     const { companyId, agentId, runId, issueId } =
       await seedQueuedIssueRunFixture();
     mockAdapterExecute.mockImplementationOnce(
@@ -5820,6 +5854,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("redacts secret-bearing successful-run detected progress before handoff disclosure", async () => {
+    admitMockedLegacyDispatch();
     const { agentId, runId, issueId } = await seedQueuedIssueRunFixture();
     const bearerSecret = "live-bearer-token-value";
     const apiKeySecret = "sk-testsuccessfulhandoffsecret";
@@ -7347,6 +7382,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("dispatches interrupted CLI input after the executor releases its lease", async () => {
+    admitMockedLegacyDispatch();
     const actualProcess = await vi.importActual<typeof import("../adapters/process/execute.js")>("../adapters/process/execute.js");
     const { companyId, agentId, issueId, runId } = await seedRunFixture({
       runtimeMode: "legacy", adapterType: "codex_local", agentStatus: "idle", runStatus: "queued",
@@ -9474,6 +9510,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("does not immediately recover a generic on-demand run used for an in-review agent API update", async () => {
+    admitMockedLegacyDispatch();
     const { agentId, issueId, runId } = await seedInReviewParticipantRunFixture(
       {
         wakeReason: "manual",
@@ -9507,6 +9544,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("retries a pending execution-review participant once before blocking with a recovery action", async () => {
+    admitMockedLegacyDispatch();
     const { companyId, agentId, issueId, runId, stageId } =
       await seedInReviewParticipantRunFixture();
     const heartbeat = heartbeatService(db);
@@ -10332,6 +10370,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("lets a Task Stop win while an accepted interaction continuation is recovering", async () => {
+    admitMockedLegacyDispatch();
     const { companyId, agentId, issueId, runId, wakeupRequestId } =
       await seedQueuedIssueRunFixture();
     const interactionId = randomUUID();
@@ -11559,6 +11598,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it.each([false, true])("enqueues one bounded plan-only continuation with legacy productivity review present: %s", async (withLegacyReview) => {
+    admitMockedLegacyDispatch();
     const { companyId, agentId, issueId, runId } = await seedStrandedIssueFixture({
       status: "in_progress",
       runStatus: "failed",
@@ -11644,6 +11684,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("treats a plan document update as progress and does not enqueue liveness continuation", async () => {
+    admitMockedLegacyDispatch();
     const { agentId, companyId, issueId, runId } =
       await seedStrandedIssueFixture({
         status: "in_progress",
@@ -12776,6 +12817,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   it.each(["issue", "wake", "run", "native", "close", "cancel"] as const)(
     "rechecks admission after transient database contention: %s",
     async (mode) => {
+      admitMockedLegacyDispatch();
       const source = await seedCommittedChatControlStop();
       mockAdapterExecute.mockImplementation(async () => {
         await db.update(issues).set({ status: "done" }).where(eq(issues.id, source.issueId));
@@ -13330,6 +13372,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   );
 
   it("allows fresh Board work and coalesced user causes after a committed chat close", async () => {
+    admitMockedLegacyDispatch();
     const source = await seedCommittedChatControlStop();
     const child = await seedChatAutomaticChild(source);
     await db.insert(agentWakeupRequests).values({
@@ -13367,6 +13410,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("defers a contended chat close proof without starving another queued Board task", async () => {
+    admitMockedLegacyDispatch();
     const source = await seedCommittedChatControlStop();
     const child = await seedChatAutomaticChild(source);
     const boardIssueId = randomUUID();
@@ -15142,6 +15186,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   it.each(["same_agent", "reassigned_agent"] as const)(
     "admits a genuine new Board wake for %s after a native passive Board wait",
     async (target) => {
+      admitMockedLegacyDispatch();
       const fixture = await seedNativePassiveBoardResponse();
       await finalizeNativeRun({
         db,

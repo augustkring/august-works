@@ -60,6 +60,15 @@ Checked on 2026-11-12. Three things differ from CI:
 3. Build the workspace packages that a test imports from `dist`, for example
    `pnpm --filter "@paperclipai/plugin-sdk..." build`.
 
+## Before you push
+
+The `coverage` workflow pins hashes of many source and test files. After you change files,
+run these and commit any regenerated output:
+
+- `node scripts/generate-v10-safe-change-graph.mjs` (then `node scripts/check-v10-safe-change-graph.mjs`)
+- `node scripts/platform-skill-migration-register.mjs` (add `--write` if it reports stale, for example after an `AGENTS.md` change)
+- `node scripts/build-reference-index.mjs --check`
+
 ## Evidence
 
 Do not create new folders under `doc/operations/aw-v10-evidence/`. Record verification
