@@ -319,6 +319,9 @@ jobs:
       - name: Test standalone package build concurrency
         run: node --test ./scripts/__tests__/build-standalone-concurrency.test.mjs
 
+      - name: Test reference indexes are current
+        run: node --test ./scripts/__tests__/build-reference-index.test.mjs
+
       - name: Validate release package manifest
         run: node ./scripts/release-package-map.mjs check
 

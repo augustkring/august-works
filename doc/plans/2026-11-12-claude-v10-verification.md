@@ -59,6 +59,7 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 - `scripts/build-reference-index.mjs` writes heading indexes for the 39 playbooks
   (`doc/reference/aw-v9/playbooks/index/`) and the V10 brief (`doc/reference/blentera-v10/index.md`).
   `--check` fails when an index is stale. Re-running it produced no diff.
+  `scripts/__tests__/build-reference-index.test.mjs` (5 tests) runs in `pr-trusted.yml` and fails CI when an index is stale.
 - Router skills in `.claude/skills/`: `pb-security-privacy`, `pb-data-api-backend`, `pb-agentic-ai`,
   `pb-verification-reliability`, `pb-ui-ux-writing`. `doc-maintenance` is linked from `.agents/skills`.
   `check-pr` and `deal-with-security-advisory` are not linked, because they assume the `gh` CLI and
