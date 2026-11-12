@@ -79,12 +79,28 @@ This is the status ledger for the Claude Code verification pass. Earlier history
   as root, so a skipped-only run does not count as verification. `CLAUDE.md` records the
   working setup.
 
-## Open owner decisions
+## Decisions taken (2026-11-12)
 
-- Email provider for signup and notifications.
-- Keep Paddle or move to Stripe.
-- Production domain, and when to run the rename plan (`2026-10-28-blentera-origin-and-repository-rename.md`).
-- Named service owner, approved product and Trust Center claims, privacy policy, DPA and subprocessors.
-- Whether the repository stays public. The brief and the playbooks are currently readable by anyone.
-- Provider keys for live qualification in CI secrets: Anthropic, Slack, Teams, OpenClaw.
-- Who runs the representative usability sessions that the beta gate requires.
+The owner delegated all technical and product decisions to the verification lead (Claude).
+These are the defaults. A later decision that changes one updates this table.
+
+| Topic | Decision | Reason |
+|---|---|---|
+| Hosting | Keep UpCloud plus HCP Terraform (`deploy/v6`, `infra/`). Staging first, then production. | Already built, EU (Copenhagen/Finland), matches the brief. |
+| Billing | Keep Paddle. | Paddle is merchant of record: it collects and pays EU VAT for us. Already integrated. |
+| Email | Add a provider-neutral transport for the existing email outbox. Pick an EU-based provider in Phase 6. | The outbox exists (`server/src/services/saas/auth-delivery.ts`) but no mail is sent. An EU provider keeps the "EU hosted" claim honest (LOCK-1029). |
+| Public signup | Open only after email verification, abuse limits and Phase 3 audits pass. | Signup without verified email is the main abuse path. |
+| Repository visibility | Stay public during development, and make sure that it contains no secrets or customer data. Review before launch. | Public repositories get free GitHub Actions minutes. One full CI run is about 100 jobs. |
+| Service owner | The repository owner is the named service owner. Claude prepares the runbooks. | The beta gate requires a named owner. |
+| Product claims | Claim only what has verified evidence. Claude drafts the claims, privacy policy and subprocessor list from the code. A lawyer reviews them before launch. | LOCK-1028 and LOCK-1030. Claude is not a lawyer. |
+| Usability evidence | Claude writes the test scripts. The owner runs about 5 short sessions with real people before beta. | The beta gate requires human first-value evidence. |
+| Skills | Copy the extra skills into `.claude/skills/` in the repository. | Skills installed on a local machine do not reach cloud sessions. |
+
+## Things the owner will be asked to provide (only when the phase needs them)
+
+| When | What |
+|---|---|
+| Phase 2-3 | An Anthropic API key, added as a GitHub Actions secret, for the live provider tests. |
+| Phase 6 | Accounts: UpCloud, HCP Terraform, Paddle (sandbox first), an email provider, Sentry. The domain name. Company name and address for legal pages. |
+| Phase 6 | Slack and Microsoft Teams app registrations, with steps written by Claude. |
+| Before beta | A lawyer's review of the privacy policy and terms. About 5 people for short usability sessions. |
