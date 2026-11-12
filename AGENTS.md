@@ -32,6 +32,13 @@ contact others, spend, install or grant access. Keep the dated implementation
 ledger and screen contracts aligned, and distinguish software evidence from
 host/provider, manual accessibility and representative Human qualification.
 
+The playbooks are 20k-75k tokens each, so do not load them whole. Start from the
+generated heading indexes in `doc/reference/aw-v9/playbooks/index/` (rebuild with
+`node scripts/build-reference-index.mjs`) and read only the executive section,
+the checklist and the chapter that fits the change. Claude Code routes this
+through the `pb-*` skills in `.claude/skills/`. The V10 brief has the same kind
+of index at `doc/reference/blentera-v10/index.md`.
+
 When adding or changing an Apps catalog connection, also follow
 `doc/connections/CONNECTOR-PLAYBOOK.md`. It is the canonical connection
 authoring runbook for provider research, supported transport/auth patterns,
