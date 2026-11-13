@@ -262,6 +262,14 @@ export async function runManagedNativeConversationFrame(input: {
     providerWireBodyBytes: number[];
   }) => Promise<void>;
 }) {
+  // The default multi-Agent Host router admits each Run only on the lease of
+  // that Agent's registered managed environment. Registration (managed
+  // environment, cell and provider profile) must therefore exist before any
+  // Run is queued and leases an environment; only the Host itself is lazy.
+  // This mirrors the two-Agent heartbeat fixture's preparedRegistration flow.
+  const preRegisterManagedAgents = !input.configureHeartbeat && (input.managedAgentNames?.length ?? 0) > 0;
+  const managedRegistrationsByAgent = new Map<string,
+    Awaited<ReturnType<typeof import("./managed-native-conversation-sandbox-host.js").registerManagedSandboxProvider>>>();
   input = { ...input, sandboxRelay: input.sandboxRelay ?? true,
     configureHeartbeat: input.configureHeartbeat ?? (async context => {
       const { configureManagedConversationSandboxHost, configureManagedSerialSchedulerSandboxHost } =
@@ -281,10 +289,12 @@ export async function runManagedNativeConversationFrame(input: {
         if (existing) return existing;
         const profile = profileFor(id);
         if (!profile) throw new Error("conversation_multi_agent_profile_missing");
+        const preparedRegistration = managedRegistrationsByAgent.get(id);
+        if (!preparedRegistration) throw new Error("conversation_multi_agent_registration_missing");
         const hostRoot = join(context.runHome, `managed-agent-${id}`);
         await mkdir(hostRoot, { mode: 0o700 }); await chmod(hostRoot, 0o700);
         const host = await configureManagedSerialSchedulerSandboxHost({ ...context, agentId: id,
-          providerBindingId: profile.providerBindingId, profile: profile.profile, root: hostRoot });
+          providerBindingId: profile.providerBindingId, profile: profile.profile, root: hostRoot, preparedRegistration });
         hosts.set(id, host);
         return host;
       };
@@ -464,6 +474,11 @@ export async function runManagedNativeConversationFrame(input: {
       adapterType: "paperclip_runner", config: adapterConfig }));
     await providerService.recordDiscovery(companyId, configuredAgentId, snapshot,
       Object.fromEntries(providerConformanceRequirements(snapshot, providerBinding.isolationMode).map(check => [check, true])));
+    if (preRegisterManagedAgents) {
+      const { registerManagedSandboxProvider } = await import("./managed-native-conversation-sandbox-host.js");
+      managedRegistrationsByAgent.set(configuredAgentId, await registerManagedSandboxProvider({ db, actor: human,
+        companyId, agentId: configuredAgentId, providerBindingId: providerBinding.id }));
+    }
     const provider = await providerService.assertRuntime(companyId, configuredAgentId);
     const apiKey = `conversation-fixture-${randomUUID()}`;
     apiKeysByAgent.set(configuredAgentId, apiKey);
