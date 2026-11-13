@@ -4,7 +4,12 @@ import * as controllerLeases from "../services/legacy-controller-lease.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
-import { admitMockedLegacyDispatch, admitMockedNativeDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
+import {
+  admitMockedLegacyDispatch,
+  admitMockedNativeDispatch,
+  installMockedLegacyDispatchInChild,
+  resetMockedLegacyDispatch,
+} from "./helpers/mocked-legacy-paid-dispatch.js";
 import { DEFAULT_OPENCODE_RUNNER_MODEL } from "../services/native-runtime/provider-profile.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
@@ -45,6 +50,7 @@ import {
   chatDeliveries,
   chatEndpoints,
   chatExternalPrincipals,
+  chatIdentityLinks,
   chatMessageLinks,
   chatPublications,
   companySecretBindings,
@@ -93,6 +99,8 @@ import {
 } from "@paperclipai/db";
 import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
+import { credentialFingerprint, runtimeGeneration } from "../services/chat-runtime-fence.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -627,6 +635,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await db.delete(chatActions);
     await db.delete(chatDeliveries);
     await db.delete(chatConversations);
+    await db.delete(chatIdentityLinks);
     await db.delete(chatEndpoints);
     await db.delete(toolConnections);
     await db.delete(toolApplications);
@@ -1534,6 +1543,57 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     await db.update(heartbeatRuns).set({ status: "queued" }).where(eq(heartbeatRuns.id, input.runId));
   }
 
+  /** Current linked-Human channel source for a queued chat Task, as the canonical
+   * inbound wake producer records it. Native chat workspace selection reads this
+   * exact source (native-chat-workspace.ts); an origin label alone selects nothing. */
+  async function seedCanonicalChannelSource(input: { companyId: string; agentId: string; issueId: string; runId: string }) {
+    const userId = "responsible-user";
+    const actor = await seedCurrentHumanSourceActor(db, [input.companyId], userId);
+    const applicationId = randomUUID(), connectionId = randomUUID(), endpointId = randomUUID();
+    const conversationId = randomUUID(), deliveryId = randomUUID(), principalId = randomUUID();
+    const providerAccountId = `channel-account-${input.companyId}`;
+    const threadId = `channel-thread-${input.issueId}`;
+    const providerMessageId = `channel-message-${input.issueId}`;
+    const endpointSetup = { step: "complete" } as const;
+    const sessionGeneration = 1;
+    await db.insert(toolApplications).values({ id: applicationId, companyId: input.companyId,
+      applicationKey: `chat:discord:${endpointId}`, name: "Channel source", type: "chat", status: "active" });
+    await db.insert(toolConnections).values({ id: connectionId, companyId: input.companyId, applicationId,
+      name: "Channel source", uid: `channel-${connectionId}`, connectionPurpose: "channel",
+      transport: "chat_sdk", status: "active", enabled: true, healthStatus: "healthy", credentialSecretRefs: [] });
+    await db.insert(chatEndpoints).values({ id: endpointId, companyId: input.companyId, connectionId,
+      provider: "discord", publicId: randomUUID(), assignedAgentId: input.agentId,
+      providerAccountId, externalExecutionPolicy: "agent", status: "active",
+      allowDirectMessages: true, allowUnlinkedPeople: false, setup: endpointSetup });
+    await db.update(issues).set({ originKind: "chat_channel", responsibleUserId: userId,
+      originId: `${endpointId}:${threadId}:${sessionGeneration}` }).where(eq(issues.id, input.issueId));
+    const comment = await issueService(db).addComment(input.issueId, "Current linked Human channel input",
+      { userId }, { manualInputActor: actor });
+    await db.insert(chatConversations).values({ id: conversationId, companyId: input.companyId, endpointId,
+      issueId: input.issueId, externalConversationId: threadId, externalThreadId: threadId,
+      externalLabel: "Current channel Human", isDirectMessage: true, state: "active", sessionGeneration });
+    await db.insert(chatExternalPrincipals).values({ id: principalId, companyId: input.companyId, provider: "discord",
+      providerAccountId, externalId: userId, kind: "user", isBot: false });
+    await db.insert(chatIdentityLinks).values({ companyId: input.companyId, endpointId, principalId,
+      paperclipUserId: userId, status: "linked" });
+    await db.insert(chatDeliveries).values({ id: deliveryId, companyId: input.companyId, endpointId, conversationId,
+      principalId, providerEventId: providerMessageId, deduplicationKey: providerMessageId, eventKind: "message",
+      state: "processed", processedAt: new Date(), attempts: 1,
+      normalizedEvent: { runtimeContext: { generation: runtimeGeneration(endpointSetup), credentialFingerprint: credentialFingerprint([]) },
+        conversation: { externalThreadId: threadId }, message: { providerMessageId } } });
+    await db.insert(chatMessageLinks).values({ companyId: input.companyId, endpointId, conversationId, deliveryId,
+      commentId: comment.id, providerMessageId, direction: "inbound" });
+    await db.insert(chatActions).values({ companyId: input.companyId, endpointId, conversationId, deliveryId, principalId,
+      kind: "inbound_wakeup", providerActionId: `channel-wake-${input.issueId}`, status: "processed",
+      payload: { version: 1, issueId: input.issueId, agentId: input.agentId, commentId: comment.id,
+        sessionGeneration, requestedByActorType: "user", requestedByActorId: userId } });
+    const [run] = await db.select({ contextSnapshot: heartbeatRuns.contextSnapshot }).from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, input.runId));
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId, contextSnapshot: { ...run?.contextSnapshot,
+      conversationSessionGeneration: sessionGeneration, wakeCommentId: comment.id } })
+      .where(eq(heartbeatRuns.id, input.runId));
+  }
+
   async function runRecoveryWorkerProcess(databaseUrl: string, issueId: string) {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-up05-worker-"));
     const scriptPath = path.join(directory, "recovery-worker.mts");
@@ -1541,11 +1601,15 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     const heartbeatModuleUrl = new URL("../services/heartbeat.ts", import.meta.url).href;
     const adapterRegistryUrl = new URL("../adapters/registry.ts", import.meta.url).href;
     const issueServiceUrl = new URL("../services/issues.ts", import.meta.url).href;
+    // The worker gets the test's current mocked-dispatch opt-in before it
+    // imports any server module, so its imports are dynamic.
+    const admission = await installMockedLegacyDispatchInChild(directory);
     const script = `
-      import { createDb, closeRegisteredClients } from ${JSON.stringify(dbModuleUrl)};
-      import { heartbeatService } from ${JSON.stringify(heartbeatModuleUrl)};
-      import { registerServerAdapter } from ${JSON.stringify(adapterRegistryUrl)};
-      import { issueService } from ${JSON.stringify(issueServiceUrl)};
+      ${admission}
+      const { createDb, closeRegisteredClients } = await import(${JSON.stringify(dbModuleUrl)});
+      const { heartbeatService } = await import(${JSON.stringify(heartbeatModuleUrl)});
+      const { registerServerAdapter } = await import(${JSON.stringify(adapterRegistryUrl)});
+      const { issueService } = await import(${JSON.stringify(issueServiceUrl)});
       const url = process.env.PAPERCLIP_UP05_DATABASE_URL;
       const issueId = process.env.PAPERCLIP_UP05_ISSUE_ID;
       if (!url) throw new Error("Missing shared PostgreSQL URL");
@@ -2811,6 +2875,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("dispatches local native external chat inside the server-selected task root", async () => {
+    // The subject is the Native task root after admission. The session
+    // backend is a test factory, so admit codex Native checks only.
+    admitMockedNativeDispatch(["codex"]);
     await withTempPaperclipHome(async () => {
       const { companyId, agentId, issueId, runId } =
         await seedQueuedIssueRunFixture();
@@ -2822,10 +2889,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
         })
         .where(eq(agents.id, agentId));
-      await db
-        .update(issues)
-        .set({ originKind: "chat_channel" })
-        .where(eq(issues.id, issueId));
+      await seedCanonicalChannelSource({ companyId, agentId, issueId, runId });
       await db
         .update(heartbeatRuns)
         .set({
@@ -2969,6 +3033,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   }, 60_000);
 
   it("holds admitted native chat with a legacy shared cwd without replacing input or releasing ownership", async () => {
+    // The subject is ownership handling after admission. The session backend
+    // is a test factory, so admit codex Native checks only.
+    admitMockedNativeDispatch(["codex"]);
     await withTempPaperclipHome(async () => {
       const { companyId, agentId, issueId, runId } =
         await seedQueuedIssueRunFixture();
@@ -3019,10 +3086,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
         })
         .where(eq(agents.id, agentId));
-      await db
-        .update(issues)
-        .set({ originKind: "chat_channel" })
-        .where(eq(issues.id, issueId));
+      await seedCanonicalChannelSource({ companyId, agentId, issueId, runId });
       await db
         .update(heartbeatRuns)
         .set({
@@ -9921,6 +9985,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   });
 
   it("retains an accepted recipient message while paused and delivers one successor after resume", async () => {
+    // The subject is cross-process recovery after dispatch; the recovery
+    // workers replace codex_local execute with a mock.
+    admitMockedLegacyDispatch();
     const { companyId, agentId, issueId, runId, wakeupRequestId } = await seedQueuedIssueRunFixture();
     const interactionId = randomUUID();
     const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
@@ -10021,6 +10088,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
   it.each(["failed", "cancelled"] as const)(
     "retries accepted interaction recovery after an earlier %s receipt",
     async (priorStatus) => {
+      // The subject is receipt retry after dispatch; the recovery worker
+      // replaces codex_local execute with a mock.
+      admitMockedLegacyDispatch();
       const { companyId, agentId, issueId, runId, wakeupRequestId } =
         await seedQueuedIssueRunFixture();
       const interactionId = randomUUID();
