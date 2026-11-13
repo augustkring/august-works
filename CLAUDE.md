@@ -68,6 +68,7 @@ run these and commit any regenerated output:
 - `node scripts/generate-v10-safe-change-graph.mjs` (then `node scripts/check-v10-safe-change-graph.mjs`)
 - `node scripts/platform-skill-migration-register.mjs` (add `--write` if it reports stale, for example after an `AGENTS.md` change)
 - `node scripts/build-reference-index.mjs --check`
+- `pnpm -s run check:v10-169-migration-phases`. It has no write mode: if it reports `source pin changed: <path>`, set that path's `sha256` in `doc/operations/aw-v10-evidence/v10-169-migration-phases-current-2026-10-30/phase-matrix.json` to the file's current `sha256sum`.
 
 ## Evidence
 
