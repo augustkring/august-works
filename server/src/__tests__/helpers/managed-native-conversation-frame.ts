@@ -673,10 +673,16 @@ export async function runManagedNativeConversationFrame(input: {
     void input.beforeManagedConversationModelRequest({ db, requestNumber: managedConversationModelRequestCount })
       .then(() => next(), next);
   });
+  // The pinned OpenCode profile sends only the non-credential placeholder. The
+  // frame's minted Run token below selects that Run's fixture provider
+  // context; it is not the Host's attached `awms-` credential.
+  const placeholderOnlyModelRequests = new WeakSet<express.Request>();
   brokerApp.use((req, _res, next) => {
     if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages" &&
-        req.headers["x-api-key"] === "paperclip-managed-model-broker" && !req.headers.authorization && activeToken)
+        req.headers["x-api-key"] === "paperclip-managed-model-broker" && !req.headers.authorization && activeToken) {
+      placeholderOnlyModelRequests.add(req);
       req.headers.authorization = `Bearer ${activeToken}`;
+    }
     next();
   });
   brokerApp.use((req, _res, next) => {
@@ -714,9 +720,18 @@ export async function runManagedNativeConversationFrame(input: {
     const cancel = () => { if (!res.writableEnded) controller.abort(); };
     req.once("aborted", cancel); res.once("close", cancel);
     const authorization = typeof req.headers.authorization === "string" ? req.headers.authorization : undefined;
-    const modelRequest = authenticatedRequest
-      ? authenticatedRequest(req.body, controller.signal, authorization)
-      : request!(req.body, controller.signal);
+    // In production the OpenShell egress proxy injects the attached provider
+    // credential for a placeholder-only request. The Host's attached-provider
+    // bridge emulates that: it re-verifies the running Run, Ready Sandbox,
+    // single attached provider and its unexpired capability per request. The
+    // frame-minted token is a different JWT than the Host-attached one, so the
+    // authenticated route (exact attached-credential equality) is reserved for
+    // a caller that sent its own Authorization. The default multi-Agent router
+    // has no attached-provider bridge and keeps its authenticated route.
+    const placeholderBridge = placeholderOnlyModelRequests.has(req) && !preRegisterManagedAgents;
+    const modelRequest = request && (placeholderBridge || !authenticatedRequest)
+      ? request(req.body, controller.signal)
+      : authenticatedRequest!(req.body, controller.signal, authorization);
     void modelRequest.then(result => {
       if (!res.writableEnded) res.status(200).set("Cache-Control", "no-store").set("X-Accel-Buffering", "no")
         .type("text/event-stream").send(result.sse);
