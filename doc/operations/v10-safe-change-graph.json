@@ -5715,7 +5715,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625"
+          "sha256": "4a92ed8d170c082ecb34770d2b8037cd37fd406d4a7c364707f82074956c0c04"
         },
         {
           "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
@@ -7079,7 +7079,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625"
+          "sha256": "4a92ed8d170c082ecb34770d2b8037cd37fd406d4a7c364707f82074956c0c04"
         },
         {
           "path": "server/src/__tests__/helpers/paperclip-semantic-conformance.ts",
@@ -7618,7 +7618,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625"
+          "sha256": "4a92ed8d170c082ecb34770d2b8037cd37fd406d4a7c364707f82074956c0c04"
         },
         {
           "path": "server/src/__tests__/issue-queued-comments-routes.test.ts",
@@ -9008,7 +9008,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625"
+          "sha256": "4a92ed8d170c082ecb34770d2b8037cd37fd406d4a7c364707f82074956c0c04"
         },
         {
           "path": "server/src/__tests__/issue-closed-workspace-routes.test.ts",
@@ -10157,7 +10157,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-          "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625"
+          "sha256": "4a92ed8d170c082ecb34770d2b8037cd37fd406d4a7c364707f82074956c0c04"
         },
         {
           "path": "server/src/__tests__/helpers/native-private-memory-producer.ts",
@@ -47732,7 +47732,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
-      "sha256": "889640059e65f36b4baf763e3d68822a304efe334f9587fc6eada00f83de6625",
+      "sha256": "4a92ed8d170c082ecb34770d2b8037cd37fd406d4a7c364707f82074956c0c04",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
