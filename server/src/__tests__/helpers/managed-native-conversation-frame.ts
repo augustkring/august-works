@@ -262,6 +262,14 @@ export async function runManagedNativeConversationFrame(input: {
     providerWireBodyBytes: number[];
   }) => Promise<void>;
 }) {
+  // The default multi-Agent Host router admits each Run only on the lease of
+  // that Agent's registered managed environment. Registration (managed
+  // environment, cell and provider profile) must therefore exist before any
+  // Run is queued and leases an environment; only the Host itself is lazy.
+  // This mirrors the two-Agent heartbeat fixture's preparedRegistration flow.
+  const preRegisterManagedAgents = !input.configureHeartbeat && (input.managedAgentNames?.length ?? 0) > 0;
+  const managedRegistrationsByAgent = new Map<string,
+    Awaited<ReturnType<typeof import("./managed-native-conversation-sandbox-host.js").registerManagedSandboxProvider>>>();
   input = { ...input, sandboxRelay: input.sandboxRelay ?? true,
     configureHeartbeat: input.configureHeartbeat ?? (async context => {
       const { configureManagedConversationSandboxHost, configureManagedSerialSchedulerSandboxHost } =
@@ -281,10 +289,12 @@ export async function runManagedNativeConversationFrame(input: {
         if (existing) return existing;
         const profile = profileFor(id);
         if (!profile) throw new Error("conversation_multi_agent_profile_missing");
+        const preparedRegistration = managedRegistrationsByAgent.get(id);
+        if (!preparedRegistration) throw new Error("conversation_multi_agent_registration_missing");
         const hostRoot = join(context.runHome, `managed-agent-${id}`);
         await mkdir(hostRoot, { mode: 0o700 }); await chmod(hostRoot, 0o700);
         const host = await configureManagedSerialSchedulerSandboxHost({ ...context, agentId: id,
-          providerBindingId: profile.providerBindingId, profile: profile.profile, root: hostRoot });
+          providerBindingId: profile.providerBindingId, profile: profile.profile, root: hostRoot, preparedRegistration });
         hosts.set(id, host);
         return host;
       };
@@ -464,6 +474,11 @@ export async function runManagedNativeConversationFrame(input: {
       adapterType: "paperclip_runner", config: adapterConfig }));
     await providerService.recordDiscovery(companyId, configuredAgentId, snapshot,
       Object.fromEntries(providerConformanceRequirements(snapshot, providerBinding.isolationMode).map(check => [check, true])));
+    if (preRegisterManagedAgents) {
+      const { registerManagedSandboxProvider } = await import("./managed-native-conversation-sandbox-host.js");
+      managedRegistrationsByAgent.set(configuredAgentId, await registerManagedSandboxProvider({ db, actor: human,
+        companyId, agentId: configuredAgentId, providerBindingId: providerBinding.id }));
+    }
     const provider = await providerService.assertRuntime(companyId, configuredAgentId);
     const apiKey = `conversation-fixture-${randomUUID()}`;
     apiKeysByAgent.set(configuredAgentId, apiKey);
@@ -658,10 +673,16 @@ export async function runManagedNativeConversationFrame(input: {
     void input.beforeManagedConversationModelRequest({ db, requestNumber: managedConversationModelRequestCount })
       .then(() => next(), next);
   });
+  // The pinned OpenCode profile sends only the non-credential placeholder. The
+  // frame's minted Run token below selects that Run's fixture provider
+  // context; it is not the Host's attached `awms-` credential.
+  const placeholderOnlyModelRequests = new WeakSet<express.Request>();
   brokerApp.use((req, _res, next) => {
     if (req.method === "POST" && req.path === "/runtime-tools/model/v1/messages" &&
-        req.headers["x-api-key"] === "paperclip-managed-model-broker" && !req.headers.authorization && activeToken)
+        req.headers["x-api-key"] === "paperclip-managed-model-broker" && !req.headers.authorization && activeToken) {
+      placeholderOnlyModelRequests.add(req);
       req.headers.authorization = `Bearer ${activeToken}`;
+    }
     next();
   });
   brokerApp.use((req, _res, next) => {
@@ -699,9 +720,18 @@ export async function runManagedNativeConversationFrame(input: {
     const cancel = () => { if (!res.writableEnded) controller.abort(); };
     req.once("aborted", cancel); res.once("close", cancel);
     const authorization = typeof req.headers.authorization === "string" ? req.headers.authorization : undefined;
-    const modelRequest = authenticatedRequest
-      ? authenticatedRequest(req.body, controller.signal, authorization)
-      : request!(req.body, controller.signal);
+    // In production the OpenShell egress proxy injects the attached provider
+    // credential for a placeholder-only request. The Host's attached-provider
+    // bridge emulates that: it re-verifies the running Run, Ready Sandbox,
+    // single attached provider and its unexpired capability per request. The
+    // frame-minted token is a different JWT than the Host-attached one, so the
+    // authenticated route (exact attached-credential equality) is reserved for
+    // a caller that sent its own Authorization. The default multi-Agent router
+    // has no attached-provider bridge and keeps its authenticated route.
+    const placeholderBridge = placeholderOnlyModelRequests.has(req) && !preRegisterManagedAgents;
+    const modelRequest = request && (placeholderBridge || !authenticatedRequest)
+      ? request(req.body, controller.signal)
+      : authenticatedRequest!(req.body, controller.signal, authorization);
     void modelRequest.then(result => {
       if (!res.writableEnded) res.status(200).set("Cache-Control", "no-store").set("X-Accel-Buffering", "no")
         .type("text/event-stream").send(result.sse);

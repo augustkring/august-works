@@ -163,34 +163,43 @@ it("materializes agent-pinned Skill versions and installed MCP assignments in re
         if (primaryComment.status !== 201 || typeof primaryComment.body?.id !== "string")
           throw new Error(`native_runtime_skill_primary_comment_failed_${primaryComment.status}`);
         primaryWakeId = primaryComment.body.id;
-        const secondAgent = managedAgents?.[1];
-        if (!secondAgent) throw new Error("native_runtime_skill_second_agent_missing");
-        const secondChat = await request(app).post(`/api/companies/${companyId}/chats/${secondAgent.id}`)
-          .set("cookie", humanCookie).set(origin);
-        if (secondChat.status !== 200 || typeof secondChat.body?.id !== "string")
-          throw new Error(`native_runtime_skill_second_chat_failed_${secondChat.status}`);
-        secondaryIssueId = secondChat.body.id;
-        const secondComment = await request(app).post(`/api/issues/${secondaryIssueId}/comments`).set("cookie", humanCookie).set(origin)
-          .send({ body: "Please use the second agent's assigned Native skill.", clientRequestId: randomUUID() });
-        if (secondComment.status !== 201 || typeof secondComment.body?.id !== "string")
-          throw new Error(`native_runtime_skill_second_comment_failed_${secondComment.status}`);
-        secondaryWakeId = secondComment.body.id;
         const primaryAgentId = [...selectedByAgent.keys()][0]!;
         const secondaryAgentId = [...selectedByAgent.keys()][1]!;
-        const settleDeadline = Date.now() + 90_000;
         let primaryRun: typeof heartbeatRuns.$inferSelect | undefined;
         let secondaryRun: typeof heartbeatRuns.$inferSelect | undefined;
-        while (Date.now() < settleDeadline) {
-          await heartbeat.resumeQueuedRuns();
-          await heartbeat.drainActiveRunExecutions();
-          [primaryRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
-            eq(heartbeatRuns.agentId, primaryAgentId), eq(heartbeatRuns.nativeIssueId, primaryIssueId)))
-            .orderBy(desc(heartbeatRuns.createdAt)).limit(1);
-          [secondaryRun] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId),
-            eq(heartbeatRuns.agentId, secondaryAgentId), eq(heartbeatRuns.nativeIssueId, secondaryIssueId)))
-            .orderBy(desc(heartbeatRuns.createdAt)).limit(1);
-          if (primaryRun?.status === "succeeded" && secondaryRun?.status === "succeeded" && actualRuns.size === 2) break;
-          await new Promise(resolve => setTimeout(resolve, 100));
+        const readRun = async (runAgentId: string, issueId: string) => (await db.select().from(heartbeatRuns)
+          .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, runAgentId),
+            eq(heartbeatRuns.nativeIssueId, issueId))).orderBy(desc(heartbeatRuns.createdAt)).limit(1))[0];
+        const terminal = new Set(["succeeded", "failed", "timed_out", "cancelled", "superseded"]);
+        // The default multi-Agent frame owns one serial signed Host at a time and
+        // retires the predecessor Agent's Host before admitting the successor, so
+        // the second Agent's conversation starts only after the first settles.
+        const settle = async (done: () => boolean) => {
+          const settleDeadline = Date.now() + 90_000;
+          while (Date.now() < settleDeadline) {
+            await heartbeat.resumeQueuedRuns();
+            await heartbeat.drainActiveRunExecutions();
+            primaryRun = await readRun(primaryAgentId, primaryIssueId);
+            secondaryRun = secondaryIssueId ? await readRun(secondaryAgentId, secondaryIssueId) : undefined;
+            if (done()) return;
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        };
+        await settle(() => terminal.has(primaryRun?.status ?? "") && (primaryRun?.status !== "succeeded" || actualRuns.size === 1));
+        const secondAgent = managedAgents?.[1];
+        if (!secondAgent) throw new Error("native_runtime_skill_second_agent_missing");
+        if (primaryRun?.status === "succeeded" && actualRuns.size === 1) {
+          const secondChat = await request(app).post(`/api/companies/${companyId}/chats/${secondAgent.id}`)
+            .set("cookie", humanCookie).set(origin);
+          if (secondChat.status !== 200 || typeof secondChat.body?.id !== "string")
+            throw new Error(`native_runtime_skill_second_chat_failed_${secondChat.status}`);
+          secondaryIssueId = secondChat.body.id;
+          const secondComment = await request(app).post(`/api/issues/${secondaryIssueId}/comments`).set("cookie", humanCookie).set(origin)
+            .send({ body: "Please use the second agent's assigned Native skill.", clientRequestId: randomUUID() });
+          if (secondComment.status !== 201 || typeof secondComment.body?.id !== "string")
+            throw new Error(`native_runtime_skill_second_comment_failed_${secondComment.status}`);
+          secondaryWakeId = secondComment.body.id;
+          await settle(() => primaryRun?.status === "succeeded" && secondaryRun?.status === "succeeded" && actualRuns.size === 2);
         }
         if (primaryRun?.status !== "succeeded" || secondaryRun?.status !== "succeeded" || actualRuns.size !== 2) {
           const projectFailure = async (label: "primary" | "secondary", run: typeof primaryRun) => {
