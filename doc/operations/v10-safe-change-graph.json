@@ -24674,11 +24674,11 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.test.ts",
-          "sha256": "64684c7344dd744ceb89695337f75cb7d2d31c1b3312c16b664f4c456d27fd85"
+          "sha256": "39681eaa6571a4cbd91fa52e037127fe051b97bca18d785dbf9c4e4d40a0f11f"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.ts",
-          "sha256": "86781d6845defbd5f6b259ff7b8b68008d0a482668f5f0f994c377831eb4dae5"
+          "sha256": "7af808196eb23c1703186de55a2f37a7ce725fa3626010075125266755505ab7"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
@@ -62445,7 +62445,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/mcp-bridge.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.test.ts",
-      "sha256": "64684c7344dd744ceb89695337f75cb7d2d31c1b3312c16b664f4c456d27fd85",
+      "sha256": "39681eaa6571a4cbd91fa52e037127fe051b97bca18d785dbf9c4e4d40a0f11f",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62460,7 +62460,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/mcp-bridge.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.ts",
-      "sha256": "86781d6845defbd5f6b259ff7b8b68008d0a482668f5f0f994c377831eb4dae5",
+      "sha256": "7af808196eb23c1703186de55a2f37a7ce725fa3626010075125266755505ab7",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
