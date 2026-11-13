@@ -305,7 +305,10 @@ type ManagedNativePrivateRoot = {
 };
 
 export type ManagedWorkerSandboxHost = Awaited<ReturnType<typeof configureManagedConversationSandboxHost>> & {
-  /** Explicitly unauthenticated entry stays available only for negative controls. */
+  /** Attached-provider bridge: emulates the OpenShell endpoint credential
+   * injection for a placeholder-only managed request. It re-resolves and
+   * verifies the current attached credential per request; it is not a
+   * caller-supplied authority. */
   modelRequest: (body: unknown, signal: AbortSignal) =>
     ReturnType<ReturnType<typeof workerModelGateway>["callManagedMessages"]>;
 };
@@ -1695,14 +1698,27 @@ export async function runManagedNativeOpenCodeFixture(input: {
           authorizedPromptCount: authorizedPromptHashes.length, canonicalManagedPromptLength: canonicalManagedPrompt.length,
           authorityContainsCanonicalPrompt: authorizedPromptHashes.includes(canonicalManagedPromptHash) })}`);
         if (input.sandboxRelay) {
-          if (!sandboxHost?.modelRequestAuthenticated)
+          if (!sandboxHost?.modelRequestAuthenticated || !sandboxHost.modelRequest)
             throw new Error("managed_worker_host_authenticated_provider_bridge_missing");
           const controller = new AbortController();
           const cancel = () => { if (!res.writableEnded) controller.abort(); };
           req.once("aborted", cancel); res.once("close", cancel);
           const authorization = typeof req.headers.authorization === "string" ? req.headers.authorization : undefined;
+          // The pinned OpenCode config sends only the non-credential placeholder
+          // (opencode-server-driver.ts). In production the OpenShell egress
+          // proxy injects the attached `awms-` provider credential for this
+          // exact endpoint. This single-Run Host has no attested tunnel, so its
+          // attached-provider bridge emulates that injection: it re-verifies
+          // the running Run, Ready Sandbox, the single attached provider and
+          // its unexpired worker capability on every request. Any caller-sent
+          // Authorization still takes the strict authenticated route, and a
+          // request without the profile placeholder is never injected.
+          const placeholderOnly = authorization === undefined &&
+            req.headers["x-api-key"] === "paperclip-managed-model-broker";
           try {
-            const result = await sandboxHost.modelRequestAuthenticated(wire, controller.signal, authorization);
+            const result = placeholderOnly
+              ? await sandboxHost.modelRequest(wire, controller.signal)
+              : await sandboxHost.modelRequestAuthenticated(wire, controller.signal, authorization);
             res.status(200).set("Cache-Control", "no-store").set("X-Accel-Buffering", "no").type("text/event-stream").send(result.sse);
           } finally { req.off("aborted", cancel); res.off("close", cancel); }
           return;
