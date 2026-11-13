@@ -5,7 +5,8 @@ import path from "node:path";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import {
   agents,
   agentRuntimeState,
@@ -75,6 +76,12 @@ if (!embeddedPostgresSupport.supported) {
     `Skipping embedded Postgres workspace-busy tests on this host: ${embeddedPostgresSupport.reason ?? "unsupported environment"}`,
   );
 }
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch(["workspace_busy_test"]));
+afterEach(() => resetMockedLegacyDispatch());
 
 describe("computeWorkspaceBusyRetryDelayMs", () => {
   it("stays within the base-delay-to-base-plus-jitter window", () => {

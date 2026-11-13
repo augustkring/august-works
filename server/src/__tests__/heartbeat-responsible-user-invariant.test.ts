@@ -2,6 +2,7 @@ import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import {
   activityLog,
   agents,
@@ -81,6 +82,12 @@ async function deleteHeartbeatRunsAfterEvents(db: ReturnType<typeof createDb>) {
   }
 }
 
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts. Tests that
+// check the real refusal of unsupported legacy transports do not opt in.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+afterEach(() => resetMockedLegacyDispatch());
+
 describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   let db!: ReturnType<typeof createDb>;
   let heartbeat!: ReturnType<typeof heartbeatService>;
@@ -159,6 +166,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   }
 
   it("dispatches an interrupted queue under the clicking operator through the real startup path", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
     await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
@@ -187,6 +195,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   });
 
   it("keeps a board manual wake under its caller even when it adopts someone else's queue", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
     await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
@@ -209,6 +218,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   });
 
   it("keeps the clicking user when a manual wake merges into an older deferred receipt", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`, issueId = randomUUID(), commentId = randomUUID(), queueId = randomUUID();
     await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
@@ -245,6 +255,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   });
 
   it("starts an unscoped manual wake with its own user instead of joining another user's run", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId, ownerUserId } = await seedCompany();
     const operatorId = `operator-${randomUUID()}`;
     await seedHeartbeatResponsibleHuman(db, companyId, operatorId, "operator");
@@ -300,6 +311,7 @@ describeEmbeddedPostgres("heartbeat responsible-user invariant", () => {
   });
 
   it("uses the issue responsible user for automated dependency wakes without a message context", async () => {
+    admitMockedLegacyDispatch(["codex_local"]);
     const { companyId, agentId } = await seedCompany();
     const issueResponsibleUserId = `issue-owner-${randomUUID()}`;
     const commenterUserId = `commenter-${randomUUID()}`;
