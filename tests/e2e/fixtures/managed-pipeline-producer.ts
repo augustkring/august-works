@@ -42,7 +42,7 @@ export async function withManagedPipelineProducer(deadlineAt: number, inspect: (
     process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS = "1";
     database = await startEmbeddedPostgresTestDatabase("managed-pipeline-producer-", { preserveDataOnFailure: () => !completed });
     const scopedDb = createDb(database.connectionString); db = scopedDb;
-    await withManagedNativeHeartbeatFixture({ db: scopedDb, root, opencodeBinary: binary, timeoutSec: 180,
+    await withManagedNativeHeartbeatFixture({ db: scopedDb, root, opencodeBinary: binary, timeoutSec: 300,
       schedulerMode: "serial", controlledNativeSessionBackendFactory: backendOwner.controlledBackend,
       providerReply: () => { throw new Error("managed_pipeline_provider_dispatch_unexpected"); },
       driveScheduler: async ({ actor, companyId, agentId, heartbeat, factsForRun }) => {

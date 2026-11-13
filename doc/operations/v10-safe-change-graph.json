@@ -4445,7 +4445,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c"
+          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
         },
         {
           "path": "server/src/__tests__/email-channels.integration.test.ts",
@@ -5583,11 +5583,11 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c"
+          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
         },
         {
           "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
-          "sha256": "62accad0ec7f2fb6d96e5033cd6eb3d1b61844db8d25335c333d617ecfaa76ce"
+          "sha256": "9f205246497659d4fce7deb48ad43cf25223dbcc4366be6566990db4087f91d2"
         },
         {
           "path": "server/src/__tests__/environment-runtime.test.ts",
@@ -5679,7 +5679,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-runtime-skills.test.ts",
-          "sha256": "5dd048446f7afcd23483341179c9b38a97b7ce0f641a063504660a127819444b"
+          "sha256": "6d854e8e179e4643f6107512bda58da2281d4e75f615410070411350f59d14ee"
         },
         {
           "path": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
@@ -7035,7 +7035,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c"
+          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
         },
         {
           "path": "server/src/__tests__/company-search-extract-routes.test.ts",
@@ -8964,7 +8964,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c"
+          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
         },
         {
           "path": "server/src/__tests__/chat-project-tools.test.ts",
@@ -10141,7 +10141,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c"
+          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
@@ -11401,7 +11401,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-runtime-skills.test.ts",
-          "sha256": "5dd048446f7afcd23483341179c9b38a97b7ce0f641a063504660a127819444b"
+          "sha256": "6d854e8e179e4643f6107512bda58da2281d4e75f615410070411350f59d14ee"
         },
         {
           "path": "server/src/__tests__/platform-skill-admission.integration.test.ts",
@@ -24674,11 +24674,11 @@
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.test.ts",
-          "sha256": "64684c7344dd744ceb89695337f75cb7d2d31c1b3312c16b664f4c456d27fd85"
+          "sha256": "39681eaa6571a4cbd91fa52e037127fe051b97bca18d785dbf9c4e4d40a0f11f"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.ts",
-          "sha256": "86781d6845defbd5f6b259ff7b8b68008d0a482668f5f0f994c377831eb4dae5"
+          "sha256": "7af808196eb23c1703186de55a2f37a7ce725fa3626010075125266755505ab7"
         },
         {
           "path": "packages/paperclip-runner/src/drivers/opencode/opencode-server-driver.test.ts",
@@ -29672,7 +29672,7 @@
         },
         {
           "path": "server/src/__tests__/v9-feedback-images.integration.test.ts",
-          "sha256": "2f14df59c2847044227c2dccab7048c1f49f8a21687bce7649bc14fdb879602c"
+          "sha256": "6f23c58fe2ddbb416250181961e3d287aca43732f18e4d290849a95606404b54"
         },
         {
           "path": "server/src/__tests__/v9-feedback-restore-migration.integration.test.ts",
@@ -35509,7 +35509,7 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-intent.ts",
-          "sha256": "f5d37794e2852d452ee26410d9b1ebf077ced1e31d86e6f4c9c1c86d7bd4e9d7"
+          "sha256": "ce07ea2f2914e696d7cf7e1da863706f53da03fcc39de9fe9887f8762da34add"
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review-cases.ts",
@@ -35517,15 +35517,15 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review.ts",
-          "sha256": "232e169911231202cb08c03e8087bd0c3ba792655f21d7d9ef911cfd2f301872"
+          "sha256": "ff538c79778c23a522ca2c949933f4f896a3b57a432815f9383ce5d80abcb23b"
         },
         {
           "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
-          "sha256": "f15317515b99886f0299cbb9fd8eac402eb6d2f2c9416d8bc00c893c34e2e77c"
+          "sha256": "6ea59a9548716fdf412c74ac3aebce37fdc9d623dff3ffb9442d4df0ef76fc10"
         },
         {
           "path": "tests/e2e/fixtures/managed-signoff-comment.ts",
-          "sha256": "e6bdff9640f3bf0e047e90981f683f5fa3eaa532f8f30dd1f1a1118aa29c7fe0"
+          "sha256": "c2275b3105aa8e9d34694ed312d15fc041bdc28225717969a4ed4ad4937fa872"
         },
         {
           "path": "tests/e2e/fixtures/native-chat-codex.mjs",
@@ -35569,7 +35569,7 @@
         },
         {
           "path": "tests/e2e/signoff-policy.spec.ts",
-          "sha256": "a6858ab7e025749de471ff92e74c721ff10c091f8b5d60c7a200dc65d2d652d7"
+          "sha256": "e5d309c7b916fdd04906629d19ca321ffe57c183b60e34ec549384afa0dbc81c"
         },
         {
           "path": "tests/e2e/smoke-lab.catalog.ts",
@@ -46758,7 +46758,7 @@
       "id": "source:server/src/__tests__/chat-channels.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/chat-channels.integration.test.ts",
-      "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c",
+      "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -47268,7 +47268,7 @@
       "id": "source:server/src/__tests__/durable-chat-wakeup.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
-      "sha256": "62accad0ec7f2fb6d96e5033cd6eb3d1b61844db8d25335c333d617ecfaa76ce",
+      "sha256": "9f205246497659d4fce7deb48ad43cf25223dbcc4366be6566990db4087f91d2",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47609,7 +47609,7 @@
       "id": "source:server/src/__tests__/heartbeat-runtime-skills.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-runtime-skills.test.ts",
-      "sha256": "5dd048446f7afcd23483341179c9b38a97b7ce0f641a063504660a127819444b",
+      "sha256": "6d854e8e179e4643f6107512bda58da2281d4e75f615410070411350f59d14ee",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-11"
@@ -62445,7 +62445,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/mcp-bridge.test.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.test.ts",
-      "sha256": "64684c7344dd744ceb89695337f75cb7d2d31c1b3312c16b664f4c456d27fd85",
+      "sha256": "39681eaa6571a4cbd91fa52e037127fe051b97bca18d785dbf9c4e4d40a0f11f",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62460,7 +62460,7 @@
       "id": "source:packages/paperclip-runner/src/drivers/opencode/mcp-bridge.ts",
       "kind": "current_source_owner",
       "path": "packages/paperclip-runner/src/drivers/opencode/mcp-bridge.ts",
-      "sha256": "86781d6845defbd5f6b259ff7b8b68008d0a482668f5f0f994c377831eb4dae5",
+      "sha256": "7af808196eb23c1703186de55a2f37a7ce725fa3626010075125266755505ab7",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -69843,7 +69843,7 @@
       "id": "source:server/src/__tests__/v9-feedback-images.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v9-feedback-images.integration.test.ts",
-      "sha256": "2f14df59c2847044227c2dccab7048c1f49f8a21687bce7649bc14fdb879602c",
+      "sha256": "6f23c58fe2ddbb416250181961e3d287aca43732f18e4d290849a95606404b54",
       "changeIds": [
         "SCR-V10-CUSTOMER-FEEDBACK-AND-SHARING"
       ],
@@ -74735,7 +74735,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-intent.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-intent.ts",
-      "sha256": "f5d37794e2852d452ee26410d9b1ebf077ced1e31d86e6f4c9c1c86d7bd4e9d7",
+      "sha256": "ce07ea2f2914e696d7cf7e1da863706f53da03fcc39de9fe9887f8762da34add",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74765,7 +74765,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-review.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-review.ts",
-      "sha256": "232e169911231202cb08c03e8087bd0c3ba792655f21d7d9ef911cfd2f301872",
+      "sha256": "ff538c79778c23a522ca2c949933f4f896a3b57a432815f9383ce5d80abcb23b",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74780,7 +74780,7 @@
       "id": "source:tests/e2e/fixtures/managed-pipeline-producer.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
-      "sha256": "f15317515b99886f0299cbb9fd8eac402eb6d2f2c9416d8bc00c893c34e2e77c",
+      "sha256": "6ea59a9548716fdf412c74ac3aebce37fdc9d623dff3ffb9442d4df0ef76fc10",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74795,7 +74795,7 @@
       "id": "source:tests/e2e/fixtures/managed-signoff-comment.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-signoff-comment.ts",
-      "sha256": "e6bdff9640f3bf0e047e90981f683f5fa3eaa532f8f30dd1f1a1118aa29c7fe0",
+      "sha256": "c2275b3105aa8e9d34694ed312d15fc041bdc28225717969a4ed4ad4937fa872",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74960,7 +74960,7 @@
       "id": "source:tests/e2e/signoff-policy.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/signoff-policy.spec.ts",
-      "sha256": "a6858ab7e025749de471ff92e74c721ff10c091f8b5d60c7a200dc65d2d652d7",
+      "sha256": "e5d309c7b916fdd04906629d19ca321ffe57c183b60e34ec549384afa0dbc81c",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],

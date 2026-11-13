@@ -188,6 +188,47 @@ describe("OpenCode MCP bridge", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it("starts with an assigned app tool that declares JSON Schema draft-07 and validates by that dialect", async () => {
+    // Assigned app tools such as Railway publish zod `target: "draft-7"` schemas.
+    const handler = vi.fn(async () => ({ ok: true }));
+    const bridge = await startOpenCodeMcpBridge({
+      tools: [{
+        name: "app_railway_list_projects",
+        inputSchema: {
+          $schema: "http://json-schema.org/draft-07/schema#",
+          type: "object", required: ["limit"], additionalProperties: false,
+          properties: { limit: { type: "integer", minimum: 1 }, cursor: { type: "string" } },
+        },
+      }, {
+        name: "create_project",
+        inputSchema: { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", properties: {} },
+      }],
+      handler,
+    });
+    bridges.push(bridge);
+    const invalid = await rpc(bridge, {
+      id: "draft7-invalid",
+      method: "tools/call",
+      params: { name: "app_railway_list_projects", arguments: { limit: "ten" } },
+    });
+    expect(await invalid.json()).toMatchObject({ result: { isError: true } });
+    expect(handler).not.toHaveBeenCalled();
+    const valid = await rpc(bridge, {
+      id: "draft7-valid",
+      method: "tools/call",
+      params: { name: "app_railway_list_projects", arguments: { limit: 5 } },
+    });
+    expect(await valid.json()).not.toMatchObject({ result: { isError: true } });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("still fails closed on an unknown JSON Schema dialect", async () => {
+    await expect(startOpenCodeMcpBridge({
+      tools: [{ name: "unknown_dialect", inputSchema: { $schema: "https://example.invalid/schema", type: "object" } }],
+      handler: async () => ({ ok: true }),
+    })).rejects.toThrow(/no schema with key or ref/);
+  });
+
   it("times out and cancels in-flight calls", async () => {
     const observed = vi.fn();
     const bridge = await startOpenCodeMcpBridge({

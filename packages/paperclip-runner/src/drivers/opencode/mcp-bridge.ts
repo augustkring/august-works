@@ -1,6 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
+import type { ValidateFunction } from "ajv/dist/2020.js";
 
 import {
   PRP_BLOCK_RESULT_PROVIDER_INPUT_SCHEMA,
@@ -8,6 +8,7 @@ import {
   PRP_COMPLETION_RESULT_PROVIDER_INPUT_SCHEMA,
   PRP_COMPLETION_TOOL_NAME,
 } from "../../contracts/completion-result.js";
+import { createToolInputSchemaCompiler } from "../tool-input-schema-validator.js";
 
 export interface OpenCodeMcpToolDefinition {
   name: string;
@@ -135,8 +136,8 @@ function normalizeTools(
 }
 
 function compileValidators(tools: readonly OpenCodeMcpToolDefinition[]): Map<string, ValidateFunction> {
-  const ajv = new Ajv2020({ allErrors: true, strict: false });
-  return new Map(tools.map((tool) => [tool.name, ajv.compile(tool.inputSchema)]));
+  const compile = createToolInputSchemaCompiler();
+  return new Map(tools.map((tool) => [tool.name, compile(tool.inputSchema)]));
 }
 
 async function handleRequest(

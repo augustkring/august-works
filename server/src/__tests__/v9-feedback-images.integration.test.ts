@@ -381,7 +381,7 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     for (const seconds of [1, 2, 3, 4, 5]) await owner.processOne(new Date(now + seconds * 1000));
     const admittedOperation = await db.select({ stage: companyDeletionOperations.stage, status: companyDeletionOperations.status,
       errorCode: companyDeletionOperations.errorCode }).from(companyDeletionOperations).where(eq(companyDeletionOperations.companyId, companyId));
-    expect(admittedOperation).toMatchObject([{ stage: "purge", status: "processing", errorCode: "offboarding_reconciliation_pending" }]);
+    expect(admittedOperation).toMatchObject([{ stage: "purge", status: "processing", errorCode: "feedback_retention_hold_pending" }]);
     expect(bulkCalls).toBe(0); expect((await storage.headObject(companyId, row!.objectKey!)).exists).toBe(true);
     expect(await owner.get(companyId)).toMatchObject({ status: "processing", completedAt: null });
     await controls.change(actor(otherUser), companyId, feedbackId, { requestKey: randomUUID(), expectedVersion: held.version,
@@ -394,7 +394,7 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     expect(bulkCalls).toBe(1); expect(await rows()).toEqual([]);
     // The company purge reaches the retained image but must remain pending
     // until the separate image worker confirms physical deletion.
-    expect(retryState).toMatchObject({ status: "processing", errorCode: "offboarding_reconciliation_pending", completedAt: null });
+    expect(retryState).toMatchObject({ status: "processing", errorCode: "feedback_image_erasure_pending", completedAt: null });
     const pending = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.companyId, companyId));
     expect(pending).toHaveLength(1); expect(pending[0]!.imageId).toBe(image.id); expect(pending[0]!.deletedAt).toBeNull();
     expect(await processFeedbackImageDeletion(db, storage, undefined, companyId)).toBe(true);

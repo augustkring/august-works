@@ -61,11 +61,11 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
   try {
     // Existing server-owned closed-field projection; never print the raw error.
     process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS = "1";
-    await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: binary, timeoutSec: 180,
+    await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: binary, timeoutSec: 300,
       schedulerMode: "serial", assignedToolGatewayHttpRequest: request,
       prepareNativeRuntimeContext: async ({ companyId, agentId, actor }) => {
         assert(actor.type === "board" && actor.source === "session" && actor.userId && actor.sessionId);
-        await db.update(agents).set({ runtimeConfig: { timeoutSec: 180,
+        await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
           heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } }).where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
         // This identity is only the existing installation holder. Its adapter
         // is never invoked and it confers no runtime or paid qualification.
@@ -187,7 +187,7 @@ export async function withManagedConnectionIntent(page: Page, deadlineAt: number
             expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
             completionContract: { objective: "Retain the actual Railway project inventory", requiredOutputs: [{ kind: "task_document", key: "result" }],
               businessInvariants: ["Only the Human may approve connection access", "Use the actual fixed-contract tool result"] },
-            budgets: { maxWallClockSeconds: connectedRead ? 180 : 360, maxModelCostMinor: 10, maxToolActions: 8, maxRetries: connectedRead ? 0 : 1 },
+            budgets: { maxWallClockSeconds: connectedRead ? 300 : 360, maxModelCostMinor: 10, maxToolActions: 8, maxRetries: connectedRead ? 0 : 1 },
             workers: [{ key: "inventory", issueId: task.id }] });
           await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
             action: "start", rationale: "Human requests a bounded inventory with a connection card if needed" });

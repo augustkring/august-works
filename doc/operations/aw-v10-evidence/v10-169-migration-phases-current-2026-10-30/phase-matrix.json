@@ -1571,7 +1571,7 @@
     },
     {
       "path": "server/src/__tests__/chat-channels.integration.test.ts",
-      "sha256": "e8974d84c2a74010bb811eee00fa390903c27657cdc511d99186d730c9a9a04c"
+      "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
     },
     {
       "path": "server/src/services/chat-channels.ts",

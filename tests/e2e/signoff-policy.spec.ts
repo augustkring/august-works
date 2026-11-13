@@ -120,6 +120,62 @@ async function invokeHeartbeat(
   throw new Error(`No issue-bound heartbeat run became available for agent ${agentId}`);
 }
 
+const ACTIVE_RUN_STATUSES = new Set(["queued", "running"]);
+
+/**
+ * Wait until no queued or running heartbeat run is bound to the issue.
+ *
+ * An issue PATCH that hands the issue to another participant first cancels
+ * the current assignee's running issue run (`issue_reassigned`). For a legacy
+ * adapter run, that cancellation records an operator reconciliation hold on
+ * the issue, and the hold then skips every later wake on the issue
+ * (`execution_reconciliation_required`). These agents use a legacy `process`
+ * adapter that the paid-transport admission guard rejects during setup, so
+ * each run ends with `configuration_incomplete` within seconds. Without this
+ * wait, a PATCH can land while a run (the issue-assignment wake, a stage
+ * transition wake or the test's own invoke) is still in setup, and the next
+ * participant never gets a run. Waiting does not change what the server
+ * accepts or rejects; it only removes that race from the test.
+ */
+async function waitForIssueRunsToSettle(
+  board: APIRequestContext,
+  issueId: string,
+  timeoutMs = 15_000,
+): Promise<void> {
+  const isActiveIssueRun = async (runId: string) => {
+    const runRes = await board.get(`${BASE_URL}/api/heartbeat-runs/${runId}`);
+    if (!runRes.ok()) return false;
+    const run = await runRes.json();
+    const context = run.contextSnapshot ?? {};
+    return ACTIVE_RUN_STATUSES.has(run.status) &&
+      (context.issueId === issueId || context.taskId === issueId);
+  };
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const lock = await getIssueRunLockState(board, issueId);
+    let active = false;
+    for (const runId of [lock.executionRunId, lock.checkoutRunId]) {
+      if (runId && await isActiveIssueRun(runId)) active = true;
+    }
+    if (!active && lock.assigneeAgentId) {
+      const runsRes = await board.get(
+        `${BASE_URL}/api/companies/${lock.companyId}/heartbeat-runs?agentId=${lock.assigneeAgentId}&limit=20`,
+      );
+      expect(runsRes.ok()).toBe(true);
+      const runs = await runsRes.json();
+      for (const run of Array.isArray(runs) ? runs : []) {
+        if (typeof run.id === "string" && ACTIVE_RUN_STATUSES.has(run.status) && await isActiveIssueRun(run.id)) {
+          active = true;
+          break;
+        }
+      }
+    }
+    if (!active) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Heartbeat runs for issue ${issueId} did not settle within ${timeoutMs}ms`);
+}
+
 async function getIssueRunLockState(board: APIRequestContext, issueId: string): Promise<IssueRunLockState> {
   const res = await board.get(`${BASE_URL}/api/issues/${issueId}`);
   expect(res.ok()).toBe(true);
@@ -187,6 +243,7 @@ async function agentPatch(
   }: { maxAttempts?: number; backoffMs?: number; maxBackoffMs?: number } = {},
 ) {
   const runId = await invokeHeartbeat(board, agent.agentId, issueId);
+  await waitForIssueRunsToSettle(board, issueId);
   const patchWith = (patchRunId: string) =>
     agent.request.patch(`${BASE_URL}/api/issues/${issueId}`, {
       headers: { "X-Paperclip-Run-Id": patchRunId },
@@ -215,6 +272,7 @@ async function agentCheckoutAndPatch(
   patchData: Record<string, unknown>,
 ) {
   const runId = await invokeHeartbeat(board, agent.agentId, issueId);
+  await waitForIssueRunsToSettle(board, issueId);
   const directPatchRes = await agent.request.patch(`${BASE_URL}/api/issues/${issueId}`, {
     headers: { "X-Paperclip-Run-Id": runId },
     data: patchData,

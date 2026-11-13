@@ -18,6 +18,9 @@ vi.mock("../services/durable-chat-wakeup.js", async importOriginal => {
     },
   };
 });
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js"))
+    .withMockedLegacyDispatchAdmission(await importOriginal()));
 
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { mkdtemp, rmdir } from "node:fs/promises";
@@ -40,6 +43,7 @@ import {
   createDb,
   heartbeatRunEvents,
   heartbeatRuns,
+  instanceSettings,
   environmentLeases,
   nativeRunFinalizations,
   agentWakeupRequests,
@@ -59,6 +63,7 @@ import {
   runtimeOperations,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { chatChannelService } from "../services/chat-channels.js";
@@ -132,6 +137,7 @@ describe("durable inbound chat scheduler receipts", () => {
     });
   }, 30_000);
   afterEach(() => {
+    resetMockedLegacyDispatch();
     execute.mockClear();
     for (const unregister of unregisterAuthorities.splice(0)) unregister();
     for (const runId of liveRunIds) runningProcesses.delete(runId);
@@ -511,6 +517,16 @@ describe("durable inbound chat scheduler receipts", () => {
       throw new Error("durable_retry_fixture_unexpected_slack_request");
     };
     const occupancyBeforeStopCommit = new Map<string, number>();
+    // The managed fixture enables instance-wide V5 and Native flags. Restore
+    // them so later cases in this file keep their own instance settings.
+    const [experimentalBefore] = await db.select({ experimental: instanceSettings.experimental })
+      .from(instanceSettings).where(eq(instanceSettings.singletonKey, "default"));
+    const restoreInstanceExperimental = async () => {
+      if (experimentalBefore) await db.update(instanceSettings)
+        .set({ experimental: experimentalBefore.experimental })
+        .where(eq(instanceSettings.singletonKey, "default"));
+      else await db.delete(instanceSettings).where(eq(instanceSettings.singletonKey, "default"));
+    };
     await withManagedNativeHeartbeatFixture({
       db,
       root: nativeFixtureRoot,
@@ -654,6 +670,13 @@ describe("durable inbound chat scheduler receipts", () => {
         if (!principal) throw new Error("durable_retry_fixture_linked_principal_missing");
         await db.insert(chatIdentityLinks).values({ companyId, endpointId: endpoint.id, principalId: principal.id,
           paperclipUserId: actor.userId, status: "linked", confirmedAt: new Date() });
+        // A canonical Native channel conversation requires an active endpoint
+        // whose owner admitted agent execution of external messages. Finish
+        // Slack setup through the real activation path; the execution policy
+        // has no Slack settings route, so set it as other channel fixtures do.
+        await chatService.finishSlackSetup(endpoint.id, actor.userId);
+        await db.update(chatEndpoints).set({ externalExecutionPolicy: "agent" })
+          .where(and(eq(chatEndpoints.companyId, companyId), eq(chatEndpoints.id, endpoint.id)));
         if (!endpointCallbacks || typeof endpointCallbacks.onMessage !== "function")
           throw new Error("durable_retry_fixture_callbacks_missing");
         const channelId = slackChannelId;
@@ -951,7 +974,7 @@ describe("durable inbound chat scheduler receipts", () => {
           await chatService.shutdown();
         }
       },
-    });
+    }).finally(restoreInstanceExperimental);
   }
 
   it("contains exhausted Native bootstrap setup without inventing a process lifecycle", async () => {
@@ -1306,6 +1329,9 @@ describe("durable inbound chat scheduler receipts", () => {
     "fences generic recovery by actual original chat ownership ($sourceKind, deferred=$withDeferredInput, pre-provider=$preProvider)",
     async ({ withDeferredInput, sourceKind, preProvider }) => {
       const f = await retryFixture();
+      // The mocked legacy adapter stands in for a completed provider outcome;
+      // this case tests chat recovery ownership, not paid-transport admission.
+      admitMockedLegacyDispatch(["durable_chat_retry_test"]);
       await db
         .update(agents)
         .set({ adapterType: "durable_chat_retry_test" })
