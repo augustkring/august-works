@@ -7,7 +7,7 @@ import { join } from "node:path";
 import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
+import { admitMockedLegacyDispatch, admitMockedNativeDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { eq, inArray } from "drizzle-orm";
 import {
   activityLog,
@@ -79,7 +79,7 @@ vi.mock("../sentry.js", async () => {
   return { ...actual, captureRunFailure: mockCaptureRunFailure };
 });
 
-import { heartbeatService } from "../services/heartbeat.js";
+import { heartbeatService, persistHeartbeatRunProcessMetadata } from "../services/heartbeat.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { initializeRunIdentity } from "../services/run-identity.js";
 import { projectRoutes } from "../routes/projects.js";
@@ -775,6 +775,22 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         staleProviderProcess!.exitCode !== null ||
           staleProviderProcess!.signalCode !== null,
       ).toBe(true);
+      // A recovered provider is a real local process. Record its identity as
+      // the runner does at spawn, and let it exit before the turn result. The
+      // run's local Stop receipt is then the physical cleanup proof that lets
+      // the finished owner release a deferred successor (native-owner-release.ts).
+      const recoveredProviderProcess = spawn(
+        process.execPath,
+        ["-e", "setTimeout(() => process.exit(0), 50)"],
+        { detached: true, stdio: "ignore" },
+      );
+      const recoveredProviderExited = once(recoveredProviderProcess, "exit");
+      await once(recoveredProviderProcess, "spawn");
+      await persistHeartbeatRunProcessMetadata(db, runId, {
+        pid: recoveredProviderProcess.pid!,
+        processGroupId: recoveredProviderProcess.pid!,
+        startedAt: new Date().toISOString(),
+      });
       // Model the real launch/checkpoint gap: the durable DB snapshot may still
       // look idle, while the recovered provider has already started the old turn.
       const recoveredSnapshot: PersistedNativeSession = {
@@ -794,6 +810,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
           };
         },
         async *events() {
+          await recoveredProviderExited;
           yield providerTerminalEvent;
         },
         startTurn,
@@ -1028,6 +1045,9 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     });
 
     it("preserves the old provider contract and admits newer direction only in a separate turn", async () => {
+      // The subject is same-run recovery after launch. The session backend is a
+      // test factory, so admit its Native launch check for codex only.
+      admitMockedNativeDispatch(["codex"]);
       legacyAdapterExecute.mockClear();
       staleProviderProcess = spawn(
         process.execPath,

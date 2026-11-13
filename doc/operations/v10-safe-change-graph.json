@@ -5659,7 +5659,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "bd4a919c33e07a1c82ff8acb843a90e734791430e5acb20bd85eaead6629f00f"
+          "sha256": "14efb48fe39d52a0f58f51ca9e3a6d0b4cc9800626c795620aedd1734c27d28e"
         },
         {
           "path": "server/src/__tests__/heartbeat-project-repositories.test.ts",
@@ -5683,7 +5683,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
-          "sha256": "83e0b23ba4172e6ef684c55d8dbdca54c6923b17a9260b072e19e4fdfc65f61a"
+          "sha256": "9c2f81cebab6ff12a9f8fdc12d0de8bcb719e778b85022925420820faee07406"
         },
         {
           "path": "server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
@@ -5763,7 +5763,7 @@
         },
         {
           "path": "server/src/__tests__/native-session-resumption.test.ts",
-          "sha256": "40fb2c63f851d8594c5977ea29294b45429617143841e2e9e802d020c43fac3b"
+          "sha256": "79d940289c3725c6a087a9ab793e9b82a0ad0233940c65bce638ae55c4848df9"
         },
         {
           "path": "server/src/__tests__/plugin-agent-runtime-state.integration.test.ts",
@@ -7614,7 +7614,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "bd4a919c33e07a1c82ff8acb843a90e734791430e5acb20bd85eaead6629f00f"
+          "sha256": "14efb48fe39d52a0f58f51ca9e3a6d0b4cc9800626c795620aedd1734c27d28e"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-opencode-e2e-fixture.ts",
@@ -9000,7 +9000,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "bd4a919c33e07a1c82ff8acb843a90e734791430e5acb20bd85eaead6629f00f"
+          "sha256": "14efb48fe39d52a0f58f51ca9e3a6d0b4cc9800626c795620aedd1734c27d28e"
         },
         {
           "path": "server/src/__tests__/helpers/authoring-memory.ts",
@@ -10149,7 +10149,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-          "sha256": "bd4a919c33e07a1c82ff8acb843a90e734791430e5acb20bd85eaead6629f00f"
+          "sha256": "14efb48fe39d52a0f58f51ca9e3a6d0b4cc9800626c795620aedd1734c27d28e"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-conversation-frame.ts",
@@ -47530,7 +47530,7 @@
       "id": "source:server/src/__tests__/heartbeat-process-recovery.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-process-recovery.test.ts",
-      "sha256": "bd4a919c33e07a1c82ff8acb843a90e734791430e5acb20bd85eaead6629f00f",
+      "sha256": "14efb48fe39d52a0f58f51ca9e3a6d0b4cc9800626c795620aedd1734c27d28e",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-05",
@@ -47625,7 +47625,7 @@
       "id": "source:server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-stale-queue-invalidation.test.ts",
-      "sha256": "83e0b23ba4172e6ef684c55d8dbdca54c6923b17a9260b072e19e4fdfc65f61a",
+      "sha256": "9c2f81cebab6ff12a9f8fdc12d0de8bcb719e778b85022925420820faee07406",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47930,7 +47930,7 @@
       "id": "source:server/src/__tests__/native-session-resumption.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/native-session-resumption.test.ts",
-      "sha256": "40fb2c63f851d8594c5977ea29294b45429617143841e2e9e802d020c43fac3b",
+      "sha256": "79d940289c3725c6a087a9ab793e9b82a0ad0233940c65bce638ae55c4848df9",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
