@@ -7682,11 +7682,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "39f613983eac78330a10d2f17e64fa5dfb84f70e5ea2a59847aeb635296f7d7d"
+          "sha256": "883fe461b17d1e900f70fa39babb881fcb22dd11bd67dc70f1a96aa3c967d7e9"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db"
+          "sha256": "2277cdde8e863b98127db93eb7c34db233b66dba4437f9922a6d91e979ba8793"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9360,11 +9360,11 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-          "sha256": "39f613983eac78330a10d2f17e64fa5dfb84f70e5ea2a59847aeb635296f7d7d"
+          "sha256": "883fe461b17d1e900f70fa39babb881fcb22dd11bd67dc70f1a96aa3c967d7e9"
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db"
+          "sha256": "2277cdde8e863b98127db93eb7c34db233b66dba4437f9922a6d91e979ba8793"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -49781,7 +49781,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.test.ts",
-      "sha256": "39f613983eac78330a10d2f17e64fa5dfb84f70e5ea2a59847aeb635296f7d7d",
+      "sha256": "883fe461b17d1e900f70fa39babb881fcb22dd11bd67dc70f1a96aa3c967d7e9",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
@@ -49797,7 +49797,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db",
+      "sha256": "2277cdde8e863b98127db93eb7c34db233b66dba4437f9922a6d91e979ba8793",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"

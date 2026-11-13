@@ -17402,6 +17402,14 @@ async function createRunnerdBackendWithinSessionClaim(
                     connectUrl: transport.connectUrl,
                     ...(caBundlePath ? { caBundlePath } : {}),
                   },
+                  // The remote launcher returns its handle before runtime
+                  // staging finishes; runnerd cannot dial until the launch is
+                  // dispatched. Start the PRP startup wait from that point, as
+                  // provider_ingress does, so staging latency cannot consume
+                  // the bounded run.prepare deadline before runnerd exists.
+                  ...(remoteProcessLauncher
+                    ? { ready: () => remoteRunnerProcessSpawned }
+                    : {}),
                   startupFailureCode: "runner_direct_wss_failed" as const,
                   checkpoint: checkpointRemoteRunner,
                   release: () => inbound.release(),

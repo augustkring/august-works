@@ -85,8 +85,8 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 
 | Cluster | What fails | Jobs | Status |
 |---|---|---|---|
-| A1. Managed OpenCode relay credential | The sandbox-relay route in `managed-native-opencode-e2e-fixture.ts` required a Bearer token that nothing sends (OpenCode sends only the placeholder that OpenShell normally replaces). Result: `scheduler_software_host_incoming_model_authority_invalid`, `providerResponses=0` | Shards that use `runManagedNativeOpenCodeFixture` (6 files, for example shards 4 and 19) | Fixed in the fixture (this PR). Local: project-create 2/2 passed |
-| A2. Runner stalls at `run.prepare` | The run stops after `native.process_start_requested`, then `run.prepare` times out (`native_session_interrupted`) | Probably most serial heartbeat-fixture files and the close-source fixture (shards 6, 7, 8, 18), plus the second journey of payload-temporal | Open, next |
+| A1. Managed OpenCode relay credential | The sandbox-relay route in `managed-native-opencode-e2e-fixture.ts` required a Bearer token that nothing sends (OpenCode sends only the placeholder that OpenShell normally replaces). Result: `scheduler_software_host_incoming_model_authority_invalid`, `providerResponses=0` | Shards that use `runManagedNativeOpenCodeFixture` (6 files, for example shards 4 and 19) | Fixed in the fixture (#47). Local: project-create 2/2 passed. CI shard 19 now passes this step |
+| A2. Runner stalls at `run.prepare` | The run stops after `native.process_start_requested`, then `run.prepare` times out (`native_session_interrupted`) | Probably most serial heartbeat-fixture files and the close-source fixture (shards 6, 7, 8, 18), plus the second journey of payload-temporal | Root cause found: in `direct_outbound` mode the 30 s `run.prepare` deadline started before remote staging finished. Fixed in production (this PR) |
 | A3. Conversation-frame lease | `scheduler_software_host_unique_active_lease_required`: each agent's Host is created after the run takes its lease | Shard 10 (runtime-skills) | Open |
 | A4. Progress conversation | Run fails with `providerCallCount 0` | Shard 2 | Open, not diagnosed |
 | B. Mocked legacy and Native fixtures | The paid-transport guards (brief §57.6 RT-03) deny the mocked `codex_local` and Native `codex` test doubles with `paid_transport_unqualified` | Serialized 1/9, several server shards | Fixed for 9 files in #44 and #45. Local result: 71 failures fell to 9. The 9 that remain have other causes (see A-local) |
@@ -97,6 +97,7 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 | E. UI unit test | One button-query assertion | Workspaces-a 2/2 | Open |
 | F. Playwright e2e | `tests/e2e/fixtures/managed-connection-review-cases.ts:12`, `signoff-policy.spec.ts:523` and `:579` | 6 shards | Open |
 | H. Product browser, agent chat | Unknown. A 110 MB failure artifact | 1 | Open |
+| F2. e2e onboarding cleanup | `aw-v9-onboarding-permission-consent.spec.ts:286`: cleanup `DELETE /api/companies/:id` returns non-OK (first seen on #47; passed on base) | e2e 8/8 | Open |
 | T. Repository tests server-1 to server-4 | Hit the 60-minute timeout | 4 | Open |
 
 The Codex notes said many Native jobs died during sandbox or bwrap install. The logs do not show this.

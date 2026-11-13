@@ -15,6 +15,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+import { createServer as createHttpServer } from "node:http";
+import { runnerPrpWebSocketInternals, setupRunnerPrpWebSocketServer } from "../../realtime/runner-prp-ws.js";
 import { eq } from "drizzle-orm";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11638,6 +11640,134 @@ describe("runnerd provider runtime wiring", () => {
       remoteExecute.mock.calls.some(([call]) => call.command === "npm"),
     ).toBe(false);
   });
+
+  it.each(["dispatched", "staging_failed"] as const)(
+    "starts the direct WSS PRP startup wait only after the remote launch is dispatched (%s)",
+    async (scenario) => {
+      // Regression (cluster A2): the remote launcher returns its handle before
+      // runtime staging finishes. Without a registration ready() gate, the
+      // transport's bounded run.prepare wait started during staging and a slow
+      // stage exhausted it before runnerd existed.
+      setupRunnerPrpWebSocketServer(createHttpServer(), { apiUrl: "http://127.0.0.1:3100" });
+      try {
+        const directExecution = {
+          ...execution,
+          binding: { ...execution.binding, runId: randomUUID() },
+        } as NativeExecutionInputV1;
+        let stagingGate: { release: () => void; fail: (error: Error) => void } | null = null;
+        let gateStaging = false;
+        const remoteExecute = vi.fn(async (command: { command: string; args?: string[] }) => {
+          const script = command.args?.[1] ?? "";
+          // Hold launch staging at the harness-state inspection, which runs
+          // inside the launcher's ensureArtifact step before dispatch.
+          if (gateStaging && script.includes("base64 <")) {
+            gateStaging = false;
+            await new Promise<void>((resolveGate, rejectGate) => {
+              stagingGate = { release: resolveGate, fail: rejectGate };
+            });
+          }
+          let stdout = "";
+          if (script.includes("base64 <")) {
+            // A freshly created sandbox has no retained harness state.
+            return { exitCode: 1, signal: null, timedOut: false, stderr: "", stdout: "" };
+          } else if (command.args?.[2] === "paperclip-runner-launch") {
+            throw new Error("fixture_stop_after_launch_dispatch");
+          } else if (command.args?.[0] === "--build-metadata") {
+            stdout = JSON.stringify({
+              schema: "paperclip-runner/runnerd-build-metadata/v1",
+              binaryName: "paperclip-runnerd",
+              packageName: "@paperclipai/paperclip-runner",
+              binaryContractVersion: 2,
+              durableSessionCapabilities: ["unlimited_runtime", "connection_lease_renewal"],
+              prpTransportModes: ["dial_wss"],
+            });
+          } else if (command.args?.[0] === "--version") {
+            stdout = "codex-cli 0.156.0";
+          } else if (script === "uname -s; uname -m") {
+            stdout = `${process.platform === "darwin" ? "Darwin" : "Linux"}\n${process.arch === "arm64" ? "arm64" : "x86_64"}\n`;
+          } else if (script.includes("command -v paperclip-runnerd")) {
+            stdout = "/usr/local/bin/paperclip-runnerd\n";
+          } else if (script.includes("command -v codex")) {
+            stdout = "/usr/local/bin/codex\n";
+          }
+          return { exitCode: 0, signal: null, timedOut: false, stderr: "", stdout };
+        });
+        await createRunnerdBackend({
+          db: leaseDb(directExecution),
+          execution: directExecution,
+          runnerInstanceId: "runner-direct-wss",
+          runnerPublicUrl: "wss://paperclip.example.test",
+          runnerExecutionTarget: {
+            kind: "remote",
+            transport: "sandbox",
+            remoteCwd: "/workspace",
+            environmentId: "environment",
+            leaseId: "lease",
+            providerKey: "fake",
+            effectiveCapabilities: { runnerWebSocketIngress: false },
+            runner: { execute: remoteExecute, syncIn: vi.fn(async () => undefined) },
+          } as never,
+        });
+        state.createTransport.mockClear();
+        state.createBackend.mock.calls.at(-1)![1].codexTransportFactory!();
+        const transport = state.createTransport.mock.calls[0]![0] as RunnerTransportOptions & {
+          controlPlaneRegistration: (authority: unknown) => Promise<{
+            connection?: { mode: string };
+            ready?: () => Promise<void>;
+            startupFailureCode?: string;
+            release: () => Promise<void> | void;
+          }>;
+          runnerProcessLauncher: ReturnType<typeof createRemoteRunnerProcessLauncher>;
+        };
+        const registration = await transport.controlPlaneRegistration({});
+        try {
+          expect(registration).toMatchObject({
+            connection: { mode: "connect" },
+            startupFailureCode: "runner_direct_wss_failed",
+          });
+          expect(registration.ready).toBeTypeOf("function");
+          let ready = false;
+          const readyWait = registration.ready!().then(() => { ready = true; });
+          gateStaging = true;
+          const launched = transport.runnerProcessLauncher({
+            command: "/controller/paperclip-runnerd", args: [], cwd: "/controller", environment: {},
+          });
+          const launchOutcome = launched.completion.then(
+            () => "resolved",
+            (error: unknown) => (error instanceof Error ? error.message : String(error)),
+          );
+          await vi.waitFor(() => expect(stagingGate).not.toBeNull());
+          for (let tick = 0; tick < 20; tick += 1) await new Promise((resolveTick) => setImmediate(resolveTick));
+          // Staging is still in flight: the startup wait has not begun.
+          expect(ready).toBe(false);
+          expect(remoteExecute.mock.calls.some(([command]) => command.args?.[2] === "paperclip-runner-launch")).toBe(false);
+          if (scenario === "dispatched") {
+            stagingGate!.release();
+            await Promise.race([
+              readyWait,
+              launchOutcome.then((outcome) => {
+                if (!ready) throw new Error(`remote launch settled before ready: ${outcome}`);
+              }),
+            ]);
+            expect(ready).toBe(true);
+            expect(await launchOutcome).toBe("fixture_stop_after_launch_dispatch");
+          } else {
+            stagingGate!.fail(new Error("fixture_staging_failed"));
+            // The process completion rejects, which the transport turns into a
+            // startup failure; ready() never reports a runner that did not launch.
+            expect(await launchOutcome).toContain("fixture_staging_failed");
+            for (let tick = 0; tick < 20; tick += 1) await new Promise((resolveTick) => setImmediate(resolveTick));
+            expect(ready).toBe(false);
+            expect(remoteExecute.mock.calls.some(([command]) => command.args?.[2] === "paperclip-runner-launch")).toBe(false);
+          }
+        } finally {
+          await registration.release();
+        }
+      } finally {
+        runnerPrpWebSocketInternals.resetForTests();
+      }
+    },
+  );
 
   it("binds a remote launch to the configured controller-owned runner artifact", async () => {
     const remoteCwd = "/home/daytona/paperclip-workspace";
