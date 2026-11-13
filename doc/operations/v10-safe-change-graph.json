@@ -7203,7 +7203,7 @@
         },
         {
           "path": "server/src/__tests__/issues-goal-context-routes.test.ts",
-          "sha256": "2f77a3fffc520cdffd28076b71cc119449e9304058ed86009e3bc0d260f94e3b"
+          "sha256": "02ec4d5ff1b6692e416577736ba8363cb14fd13c64b4c2ef915db612e6b12140"
         },
         {
           "path": "server/src/__tests__/low-trust-red-team-routes.test.ts",
@@ -49467,7 +49467,7 @@
       "id": "source:server/src/__tests__/issues-goal-context-routes.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/issues-goal-context-routes.test.ts",
-      "sha256": "2f77a3fffc520cdffd28076b71cc119449e9304058ed86009e3bc0d260f94e3b",
+      "sha256": "02ec4d5ff1b6692e416577736ba8363cb14fd13c64b4c2ef915db612e6b12140",
       "changeIds": [
         "SCR-V10-HOTSPOT-04"
       ],
