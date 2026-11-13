@@ -35509,7 +35509,7 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-intent.ts",
-          "sha256": "f5d37794e2852d452ee26410d9b1ebf077ced1e31d86e6f4c9c1c86d7bd4e9d7"
+          "sha256": "ce07ea2f2914e696d7cf7e1da863706f53da03fcc39de9fe9887f8762da34add"
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review-cases.ts",
@@ -35517,15 +35517,15 @@
         },
         {
           "path": "tests/e2e/fixtures/managed-connection-review.ts",
-          "sha256": "232e169911231202cb08c03e8087bd0c3ba792655f21d7d9ef911cfd2f301872"
+          "sha256": "ff538c79778c23a522ca2c949933f4f896a3b57a432815f9383ce5d80abcb23b"
         },
         {
           "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
-          "sha256": "f15317515b99886f0299cbb9fd8eac402eb6d2f2c9416d8bc00c893c34e2e77c"
+          "sha256": "6ea59a9548716fdf412c74ac3aebce37fdc9d623dff3ffb9442d4df0ef76fc10"
         },
         {
           "path": "tests/e2e/fixtures/managed-signoff-comment.ts",
-          "sha256": "e6bdff9640f3bf0e047e90981f683f5fa3eaa532f8f30dd1f1a1118aa29c7fe0"
+          "sha256": "c2275b3105aa8e9d34694ed312d15fc041bdc28225717969a4ed4ad4937fa872"
         },
         {
           "path": "tests/e2e/fixtures/native-chat-codex.mjs",
@@ -74735,7 +74735,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-intent.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-intent.ts",
-      "sha256": "f5d37794e2852d452ee26410d9b1ebf077ced1e31d86e6f4c9c1c86d7bd4e9d7",
+      "sha256": "ce07ea2f2914e696d7cf7e1da863706f53da03fcc39de9fe9887f8762da34add",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74765,7 +74765,7 @@
       "id": "source:tests/e2e/fixtures/managed-connection-review.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-connection-review.ts",
-      "sha256": "232e169911231202cb08c03e8087bd0c3ba792655f21d7d9ef911cfd2f301872",
+      "sha256": "ff538c79778c23a522ca2c949933f4f896a3b57a432815f9383ce5d80abcb23b",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74780,7 +74780,7 @@
       "id": "source:tests/e2e/fixtures/managed-pipeline-producer.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-pipeline-producer.ts",
-      "sha256": "f15317515b99886f0299cbb9fd8eac402eb6d2f2c9416d8bc00c893c34e2e77c",
+      "sha256": "6ea59a9548716fdf412c74ac3aebce37fdc9d623dff3ffb9442d4df0ef76fc10",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
@@ -74795,7 +74795,7 @@
       "id": "source:tests/e2e/fixtures/managed-signoff-comment.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/fixtures/managed-signoff-comment.ts",
-      "sha256": "e6bdff9640f3bf0e047e90981f683f5fa3eaa532f8f30dd1f1a1118aa29c7fe0",
+      "sha256": "c2275b3105aa8e9d34694ed312d15fc041bdc28225717969a4ed4ad4937fa872",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
