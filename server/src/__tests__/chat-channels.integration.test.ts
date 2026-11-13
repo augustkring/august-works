@@ -127,7 +127,14 @@ import { createChatSdkEndpointRuntime } from "../services/chat-sdk-runtime.js";
 import type { TelegramDraftControl } from "../services/chat-telegram-draft-stop.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import type { AuthorizationActor } from "../services/authorization.js";
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts. Only
+// tests that call admitMockedLegacyDispatch() with their own adapter type are
+// admitted; every other dispatch reaches the real guard.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
 
 // Opt-in private physical candidate; normal CI uses the staged pinned package.
 vi.mock("@chat-adapter/telegram", async (importOriginal) => {
@@ -1067,6 +1074,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
   const fixtureCompanies = new Set<string>();
   const fixtureServices = new Set<ChatChannelService>();
   afterEach(async () => {
+    resetMockedLegacyDispatch();
     try {
       await Promise.all([...fixtureServices].map((service) => service.shutdown()));
     } finally {
@@ -26337,6 +26345,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
   it("materializes direct external-chat finals once and accepts the next turn without agent bookkeeping writes", async () => {
     const fixture = await seedCompany();
     const adapterType = `chat-shortcut-test-${randomUUID()}`;
+    admitMockedLegacyDispatch([adapterType]);
     const directFinals = ["SHORTCUT-FIRST", "SHORTCUT-SECOND"];
     const execute = vi.fn(async (_input: unknown) => ({
       exitCode: 0,
