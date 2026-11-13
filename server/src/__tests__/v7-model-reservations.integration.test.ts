@@ -548,6 +548,19 @@ const support = await getEmbeddedPostgresTestSupport();
           !(localStopConfirmed || remoteStopConfirmed))
         throw new Error(`conversation_native_stop_not_confirmed:${JSON.stringify(stop)}`);
     }
+    // The managed sandbox host owns the remote Native runtime asset eraser; the
+    // frame helper does not pass it through its facts, so capture it from the
+    // exact host the Run used and hand it to the real erasure job worker.
+    function managedHostRuntimeAssetEraser() {
+      let erase: NonNullable<Parameters<typeof memoryJobService>[1]>["eraseRemoteNativeRuntimeAsset"];
+      const configureHeartbeat = async (context: Parameters<NonNullable<Parameters<typeof runManagedNativeConversationFrame>[0]["configureHeartbeat"]>>[0]) => {
+        const { configureManagedConversationSandboxHost } = await import("./helpers/managed-native-conversation-sandbox-host.js");
+        const host = await configureManagedConversationSandboxHost({ ...context, root: context.runHome });
+        erase = host.eraseRemoteNativeRuntimeAsset;
+        return host;
+      };
+      return { configureHeartbeat, get erase() { return erase; } };
+    }
     function conversationReservationService(facts: ConversationFrameFacts) {
       const service = modelReservationService(db, {
         sourceSha,
@@ -836,6 +849,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const usagePricedTariff: ModelTariffCeiling = { ...tariff(), provider: "anthropic", model: "fixture-managed-conversation-v1",
         inputMinorPerMillion: 1000, outputMinorPerMillion: 2000, fixedMinor: 0,
         qualificationHash: "b".repeat(64), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() };
+      const hostEraser = managedHostRuntimeAssetEraser();
       const result = await conversationReservationFixture(async facts => { factsHolder.value = facts; }, 2000, usagePricedTariff,
         async facts => {
           const providerFrame = factsHolder.value;
@@ -955,9 +969,12 @@ const support = await getEmbeddedPostgresTestSupport();
               !!bundle && typeof bundle === "object" && typeof bundle.digest === "string" && typeof bundle.rootPath === "string");
           const runAssetsRoot = nativeRuntimeAssetsRoot({ companyId: providerFrame.companyId, runId: run.id });
           const runBundleRoot = path.join(runAssetsRoot, "bundles") + path.sep;
-          if (bundles.length !== 2 || !bundles.every(bundle =>
+          // The prepared runtime context is the Run-owned instruction bundle plus
+          // each selected Skill bundle (two Skills here); all three must be
+          // digest-pinned and live beneath this Run's own asset root.
+          if (!instructionBundle || skills.length !== 2 || bundles.length !== 3 || !bundles.every(bundle =>
             /^[a-f0-9]{64}$/.test(bundle.digest as string) && path.resolve(bundle.rootPath as string).startsWith(runBundleRoot)))
-            throw new Error(`conversation_fixture_expected_two_run_owned_context_bundles:${JSON.stringify({ count: bundles.length,
+            throw new Error(`conversation_fixture_expected_instruction_and_two_skill_run_owned_context_bundles:${JSON.stringify({ count: bundles.length,
               skillCount: skills.length, instructionBundlePresent: !!instructionBundle,
               bundlesRunOwned: bundles.every(bundle => path.resolve(bundle.rootPath as string).startsWith(runBundleRoot)) })}`);
           runtimeContextBundlePaths = bundles.map(bundle => bundle.rootPath as string);
@@ -976,11 +993,14 @@ const support = await getEmbeddedPostgresTestSupport();
             kind: prePurgeRef?.kind ?? null, runId: prePurgeRef?.runId ?? null,
             companyPurgeOperationId: prePurgeRef?.companyPurgeOperationId ?? null };
           purgeHolder.value = await purgeConversationCompany(exactFrame, "conversation-known-cost-purge", async operationId => {
-            await memoryJobService(db).tick({ limit: 100 });
+            if (!hostEraser.erase) throw new Error("conversation_runtime_asset_host_erasure_owner_missing");
+            await memoryJobService(db, { eraseRemoteNativeRuntimeAsset: hostEraser.erase }).tick({ limit: 100 });
             const [ownedAssetReceipt] = await db.select().from(memoryJobs).where(and(
               eq(memoryJobs.companyId, providerFrame.companyId), eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${run.id}`),
             )).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
-            expect(ownedAssetReceipt?.status).toBe("succeeded");
+            expect(ownedAssetReceipt?.status, JSON.stringify({ status: ownedAssetReceipt?.status ?? null,
+              errorCode: typeof ownedAssetReceipt?.errorCode === "string" && /^[a-z0-9_:-]{1,80}$/i.test(ownedAssetReceipt.errorCode)
+                ? ownedAssetReceipt.errorCode : null })).toBe("succeeded");
             expect((ownedAssetReceipt?.sourceRefJson as Record<string, unknown> | undefined)?.legacyDigests).toEqual([]);
             for (const bundlePath of runtimeContextBundlePaths)
               await expect(fs.stat(bundlePath)).rejects.toMatchObject({ code: "ENOENT" });
@@ -1014,7 +1034,7 @@ const support = await getEmbeddedPostgresTestSupport();
           await packs.assign(actor, companyId, { scopeType: "agent", scopeId: agentId, rolePackId: pack.id,
             versionPolicy: "pinned", pinnedVersionId: version.id });
           publishedRolePackVersionId = version.id;
-        });
+        }, hostEraser.configureHeartbeat);
       const facts = factsHolder.value;
       if (!facts) throw new Error("conversation_frame_facts_missing");
       expect(result.success).toBe(true);
@@ -1138,13 +1158,7 @@ const support = await getEmbeddedPostgresTestSupport();
     }, conversationFrameTestTimeoutMs);
     itNativeConversation("retains an actual unknown conversation hold and blocks canonical company purge", async () => {
       let purgeWasBlockedAfterRuntimeErasure = false;
-      let eraseRemoteNativeRuntimeAsset: NonNullable<Parameters<typeof memoryJobService>[1]>["eraseRemoteNativeRuntimeAsset"];
-      const configureHeartbeat = async (context: Parameters<NonNullable<Parameters<typeof runManagedNativeConversationFrame>[0]["configureHeartbeat"]>>[0]) => {
-        const { configureManagedConversationSandboxHost } = await import("./helpers/managed-native-conversation-sandbox-host.js");
-        const host = await configureManagedConversationSandboxHost({ ...context, root: context.runHome });
-        eraseRemoteNativeRuntimeAsset = host.eraseRemoteNativeRuntimeAsset;
-        return host;
-      };
+      const hostEraser = managedHostRuntimeAssetEraser();
       const result = await conversationReservationFixture(async () => {
         throw new Error("fixture_transport_lost_after_actual_dispatch");
       }, 2000, undefined, async facts => {
@@ -1156,8 +1170,8 @@ const support = await getEmbeddedPostgresTestSupport();
         const { operation } = await startConversationOffboarding(facts, "conversation-unknown-purge");
         const runIds = await enqueueCompanyManagedOpenCodeRuntimeErasure(db, facts.companyId, operation.id);
         expect(runIds).toContain(facts.run.id);
-        if (!eraseRemoteNativeRuntimeAsset) throw new Error("conversation_runtime_asset_host_erasure_owner_missing");
-        await memoryJobService(db, { eraseRemoteNativeRuntimeAsset }).tick({ limit: 32, companyId: facts.companyId });
+        if (!hostEraser.erase) throw new Error("conversation_runtime_asset_host_erasure_owner_missing");
+        await memoryJobService(db, { eraseRemoteNativeRuntimeAsset: hostEraser.erase }).tick({ limit: 32, companyId: facts.companyId });
         const [runtimeJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, facts.companyId),
           eq(memoryJobs.jobKey, `runtime-asset-erasure:v1:${facts.run.id}`))).orderBy(sql`${memoryJobs.attemptNumber} desc`).limit(1);
         expect(runtimeJob?.status, JSON.stringify({
@@ -1176,7 +1190,7 @@ const support = await getEmbeddedPostgresTestSupport();
         expect((await db.select().from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id)))[0]?.evidence)
           .not.toHaveProperty("nativeConversationModelFunding");
         purgeWasBlockedAfterRuntimeErasure = true;
-      }, undefined, undefined, configureHeartbeat);
+      }, undefined, hostEraser.configureHeartbeat);
       expect(purgeWasBlockedAfterRuntimeErasure).toBe(true);
       expect(result.success).toBe(false);
       expect(result.providerCallCount).toBeGreaterThan(0);

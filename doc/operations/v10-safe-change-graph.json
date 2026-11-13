@@ -11433,7 +11433,7 @@
         },
         {
           "path": "server/src/__tests__/v7-model-reservations.integration.test.ts",
-          "sha256": "0bbfc35bed3d4da672646f90aa9e9d5cf7bd79a7f504920488fb6d352a78d0bc"
+          "sha256": "93ae1c6c06d0ff95b8e19a68450fd73acf40165067d656c6bb931a29576a3d70"
         },
         {
           "path": "server/src/__tests__/v9-agent-authored-definition.integration.test.ts",
@@ -51829,7 +51829,7 @@
       "id": "source:server/src/__tests__/v7-model-reservations.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-model-reservations.integration.test.ts",
-      "sha256": "0bbfc35bed3d4da672646f90aa9e9d5cf7bd79a7f504920488fb6d352a78d0bc",
+      "sha256": "93ae1c6c06d0ff95b8e19a68450fd73acf40165067d656c6bb931a29576a3d70",
       "changeIds": [
         "SCR-V10-HOTSPOT-11"
       ],
