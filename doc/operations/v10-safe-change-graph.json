@@ -14783,7 +14783,7 @@
       "sources": [
         {
           "path": ".github/workflows/pr-trusted.yml",
-          "sha256": "65103cbcab9f13c83ef11da46828ac96d8c57d2feb3060bf8290ab9ab092ee6e"
+          "sha256": "83971667d880eb7740f7bf07eea0f4e232b8fde91be50e0177c427cb96cdf288"
         },
         {
           "path": "cli/src/__tests__/service-health-check.test.ts",
@@ -21960,7 +21960,7 @@
         },
         {
           "path": "scripts/fixtures/native-model-socket-observer-check.mjs",
-          "sha256": "1f7081f83a2dfe63b4c76e80e9e83e8852d6b3ec94856542554cf4f8f2541a6a"
+          "sha256": "1e3311e0ded6d194c9be8dcab39e4783cf58bb3f86f78f72e0b4e9206e3bc696"
         },
         {
           "path": "scripts/fixtures/native-model-socket-observer.mjs",
@@ -21980,11 +21980,11 @@
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-model-transport.test.ts",
-          "sha256": "511e1e68801466370f17d5635c3a8577cef198dba7ff70176fb839b2c161325e"
+          "sha256": "0c726944b93202632f03be2dcc5d8bd0bb6573f53954b8cd16cc5c0adb2c4532"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-model-transport.ts",
-          "sha256": "ce45abdf539100fe9fb6ac0cc491f5f092d37f49a8637a68e7c14443b4960372"
+          "sha256": "1da64e861c46fd707b8a7999249b4dda751fabb513e1e810b1dfb2a47278d0f5"
         },
         {
           "path": "server/src/__tests__/helpers/managed-native-model-tunnel.test.ts",
@@ -32760,7 +32760,7 @@
         },
         {
           "path": "scripts/ci-install-managed-native-test-observers.sh",
-          "sha256": "867d24d9e66f2261ee1beaac4012f486c0392645f90014b91998dc3deff9bd7c"
+          "sha256": "d54faeaa9c882aed229c817e6b9f4c63675373c780236cfc2ef5dc7f2ac51e0e"
         },
         {
           "path": "scripts/cli-command-migration.test.mjs",
@@ -53591,7 +53591,7 @@
       "id": "source:.github/workflows/pr-trusted.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/pr-trusted.yml",
-      "sha256": "65103cbcab9f13c83ef11da46828ac96d8c57d2feb3060bf8290ab9ab092ee6e",
+      "sha256": "83971667d880eb7740f7bf07eea0f4e232b8fde91be50e0177c427cb96cdf288",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -60750,7 +60750,7 @@
       "id": "source:scripts/fixtures/native-model-socket-observer-check.mjs",
       "kind": "current_source_owner",
       "path": "scripts/fixtures/native-model-socket-observer-check.mjs",
-      "sha256": "1f7081f83a2dfe63b4c76e80e9e83e8852d6b3ec94856542554cf4f8f2541a6a",
+      "sha256": "1e3311e0ded6d194c9be8dcab39e4783cf58bb3f86f78f72e0b4e9206e3bc696",
       "changeIds": [
         "SCR-V10-MODEL-PROVIDER-AND-MIGRATION-MONITOR"
       ],
@@ -60825,7 +60825,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-model-transport.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-model-transport.test.ts",
-      "sha256": "511e1e68801466370f17d5635c3a8577cef198dba7ff70176fb839b2c161325e",
+      "sha256": "0c726944b93202632f03be2dcc5d8bd0bb6573f53954b8cd16cc5c0adb2c4532",
       "changeIds": [
         "SCR-V10-MODEL-PROVIDER-AND-MIGRATION-MONITOR"
       ],
@@ -60840,7 +60840,7 @@
       "id": "source:server/src/__tests__/helpers/managed-native-model-transport.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/managed-native-model-transport.ts",
-      "sha256": "ce45abdf539100fe9fb6ac0cc491f5f092d37f49a8637a68e7c14443b4960372",
+      "sha256": "1da64e861c46fd707b8a7999249b4dda751fabb513e1e810b1dfb2a47278d0f5",
       "changeIds": [
         "SCR-V10-MODEL-PROVIDER-AND-MIGRATION-MONITOR"
       ],
@@ -73310,7 +73310,7 @@
       "id": "source:scripts/ci-install-managed-native-test-observers.sh",
       "kind": "current_source_owner",
       "path": "scripts/ci-install-managed-native-test-observers.sh",
-      "sha256": "867d24d9e66f2261ee1beaac4012f486c0392645f90014b91998dc3deff9bd7c",
+      "sha256": "d54faeaa9c882aed229c817e6b9f4c63675373c780236cfc2ef5dc7f2ac51e0e",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],

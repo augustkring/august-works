@@ -53,13 +53,13 @@ for observer_name in native-session-handles-v1 native-session-handles-v1.mjs; do
   fi
 done
 # Separate fixed read-only live socket observer; no Stop/erasure authority.
-echo "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079  scripts/fixtures/native-model-socket-observer" | /usr/bin/sha256sum --check --strict
+echo "62edb828425d9092fb5a00852525f510c24d45b18bcd0158e3286a846c410fd2  scripts/fixtures/native-model-socket-observer" | /usr/bin/sha256sum --check --strict
 echo "a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4  scripts/fixtures/native-model-socket-observer.mjs" | /usr/bin/sha256sum --check --strict
 # Unprivileged injected-I/O regression before any privileged observer install.
 observer_test_node="$node_real"
 /usr/bin/timeout --kill-after=1s 5s /usr/bin/env -i PATH=/usr/bin:/bin "$observer_test_node" --no-addons --disable-proto=throw --test scripts/fixtures/native-model-socket-observer.test.mjs
 for observer_name in native-model-socket-v1 native-model-socket-v1.mjs; do
-  observer_expected=ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079
+  observer_expected=62edb828425d9092fb5a00852525f510c24d45b18bcd0158e3286a846c410fd2
   [[ "$observer_name" != *.mjs ]] || observer_expected=a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4
   if [[ -e "$observer_dir/$observer_name" ]]; then
     echo "$observer_expected  $observer_dir/$observer_name" | /usr/bin/sha256sum --check --strict
@@ -90,7 +90,7 @@ test "$("$trusted_node_dir/node" --version)" = "$source_version"
 test "$(/usr/bin/sha256sum -- "$trusted_node_dir/node" | /usr/bin/cut -d ' ' -f 1)" = "$source_sha"
 echo "9045f8998cfe2fd12b706b58b459d1271815c37175a8017d1d958a3afbc009e8  $observer_dir/native-session-handles-v1" | /usr/bin/sha256sum --check --strict
 echo "7a092f75132698d5e43c0424fc103b100f0dd62353e80ca5c5d3d71969462f55  $observer_dir/native-session-handles-v1.mjs" | /usr/bin/sha256sum --check --strict
-echo "ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079  $observer_dir/native-model-socket-v1" | /usr/bin/sha256sum --check --strict
+echo "62edb828425d9092fb5a00852525f510c24d45b18bcd0158e3286a846c410fd2  $observer_dir/native-model-socket-v1" | /usr/bin/sha256sum --check --strict
 echo "a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4  $observer_dir/native-model-socket-v1.mjs" | /usr/bin/sha256sum --check --strict
 for observer_target in "$trusted_node_dir/node" "$observer_dir/native-session-handles-v1" "$observer_dir/native-session-handles-v1.mjs" "$observer_dir/native-model-socket-v1" "$observer_dir/native-model-socket-v1.mjs"; do
   observer_check_chain "$observer_target"
@@ -101,7 +101,7 @@ echo "a6fba302c87c6eaefe0c0a10b625cb3f14ae2959956900eeeb314c7912dfdfab  scripts/
 echo "PAPERCLIP_TEST_ERASER_NODE_PATH=$trusted_node_dir/node" >> "$GITHUB_ENV"
 echo "PAPERCLIP_TEST_PRIVILEGED_SESSION_OBSERVER=1" >> "$GITHUB_ENV"
 # Qualify actual same-UID nondumpable completeness and socket ownership before enabling this distinct lane.
-echo "1f7081f83a2dfe63b4c76e80e9e83e8852d6b3ec94856542554cf4f8f2541a6a  scripts/fixtures/native-model-socket-observer-check.mjs" | /usr/bin/sha256sum --check --strict
+echo "1e3311e0ded6d194c9be8dcab39e4783cf58bb3f86f78f72e0b4e9206e3bc696  scripts/fixtures/native-model-socket-observer-check.mjs" | /usr/bin/sha256sum --check --strict
 /usr/bin/timeout --kill-after=2s 12s /usr/bin/env -i PATH=/usr/bin:/bin "$trusted_node_dir/node" --no-addons --disable-proto=throw scripts/fixtures/native-model-socket-observer-check.mjs
 echo "PAPERCLIP_TEST_PRIVILEGED_MODEL_SOCKET_OBSERVER=1" >> "$GITHUB_ENV"
 echo "eraser-profile original-path=/usr/local/bin uid=0 mode=$(/usr/bin/stat -Lc %a -- /usr/local/bin)"

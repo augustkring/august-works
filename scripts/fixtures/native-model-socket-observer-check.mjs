@@ -6,7 +6,7 @@ import { lstatSync, readFileSync, readlinkSync, readdirSync, realpathSync } from
 import { createServer } from 'node:net';
 import { dirname } from 'node:path';
 const launcher='/usr/local/libexec/paperclip-fixture-observers/native-model-socket-v1';
-const hashes={ [launcher]:'ef02d5bc28b9886840627269d2bd5aa29bdc7b0582b939556c469db785461079', [launcher+'.mjs']:'a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4' };
+const hashes={ [launcher]:'62edb828425d9092fb5a00852525f510c24d45b18bcd0158e3286a846c410fd2', [launcher+'.mjs']:'a2f1183beaa1594c452bb17956e29f53030dc3de36ef59f830e82b3e186c08f4' };
 const started=Date.now(),deadline=started+10_000,limit=192*1024*1024;
 const children=[];let server,peer,stage='prerequisite',failureLabel=null;
 const sockets=new Set();
