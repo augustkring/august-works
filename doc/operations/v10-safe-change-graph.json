@@ -35569,7 +35569,7 @@
         },
         {
           "path": "tests/e2e/signoff-policy.spec.ts",
-          "sha256": "a6858ab7e025749de471ff92e74c721ff10c091f8b5d60c7a200dc65d2d652d7"
+          "sha256": "e5d309c7b916fdd04906629d19ca321ffe57c183b60e34ec549384afa0dbc81c"
         },
         {
           "path": "tests/e2e/smoke-lab.catalog.ts",
@@ -74960,7 +74960,7 @@
       "id": "source:tests/e2e/signoff-policy.spec.ts",
       "kind": "current_source_owner",
       "path": "tests/e2e/signoff-policy.spec.ts",
-      "sha256": "a6858ab7e025749de471ff92e74c721ff10c091f8b5d60c7a200dc65d2d652d7",
+      "sha256": "e5d309c7b916fdd04906629d19ca321ffe57c183b60e34ec549384afa0dbc81c",
       "changeIds": [
         "SCR-V10-CUSTOMER-EXPERIENCE"
       ],
