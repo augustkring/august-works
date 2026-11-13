@@ -4521,7 +4521,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
+          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
         }
       ],
       "kind": "safe_change_record",
@@ -5959,7 +5959,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
+          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
         },
         {
           "path": "server/src/services/workflows/workflow-executor.ts",
@@ -6379,7 +6379,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
+          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -10393,7 +10393,7 @@
         },
         {
           "path": "server/src/services/tool-gateway.ts",
-          "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e"
+          "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4"
         },
         {
           "path": "server/src/services/workflows/workflow-capability-resolver.ts",
@@ -27709,7 +27709,7 @@
         },
         {
           "path": "server/src/services/tool-access-policy.ts",
-          "sha256": "33ee5b1bbecc5ccc07254fedaf55896c9a78c61ebb4a380da087dbfaf8d5a5b8"
+          "sha256": "eec6d677bc7b1ff2bf6ef029843bbeeed9f9f5af34bd6592106dcd01f4d4655f"
         },
         {
           "path": "server/src/services/tool-action-delivery.ts",
@@ -47086,7 +47086,7 @@
       "id": "source:server/src/services/tool-gateway.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-gateway.ts",
-      "sha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
+      "sha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -67728,7 +67728,7 @@
       "id": "source:server/src/services/tool-access-policy.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/tool-access-policy.ts",
-      "sha256": "33ee5b1bbecc5ccc07254fedaf55896c9a78c61ebb4a380da087dbfaf8d5a5b8",
+      "sha256": "eec6d677bc7b1ff2bf6ef029843bbeeed9f9f5af34bd6592106dcd01f4d4655f",
       "changeIds": [
         "SCR-V10-UNCLASSIFIED-REGISTERED-OWNER"
       ],
