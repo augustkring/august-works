@@ -5667,7 +5667,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts",
-          "sha256": "c2e5597fdab7071b7b30cc7764502f765e9dcef70b622dc14b528a5b39ee619f"
+          "sha256": "d89649385c0e8ebae4599c445cdb9982f25f252f90df71551d3cfc9de2865ebf"
         },
         {
           "path": "server/src/__tests__/heartbeat-retry-scheduling.test.ts",
@@ -5699,11 +5699,11 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-workspace-busy.test.ts",
-          "sha256": "70e389c5451835a78144e9a48be42fa759a00a45b20758c47e83731f2740bd51"
+          "sha256": "5bb51322014602b8b8ae47f0d77fe8aac5c80ac472ab3792f060bac68a45c9de"
         },
         {
           "path": "server/src/__tests__/heartbeat-worktree-suppression.test.ts",
-          "sha256": "4204e0ad09fe4749a4293ca38cfd56afb44d6a270d83e35ef484f59b2379a1be"
+          "sha256": "ce0fac9429eab8b2cee6bcbc50dea392dc240d1a29c8c6d7f190ee9ddd4cf284"
         },
         {
           "path": "server/src/__tests__/helpers/managed-channel-close-source-fixture.ts",
@@ -47563,7 +47563,7 @@
       "id": "source:server/src/__tests__/heartbeat-responsible-user-invariant.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-responsible-user-invariant.test.ts",
-      "sha256": "c2e5597fdab7071b7b30cc7764502f765e9dcef70b622dc14b528a5b39ee619f",
+      "sha256": "d89649385c0e8ebae4599c445cdb9982f25f252f90df71551d3cfc9de2865ebf",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47685,7 +47685,7 @@
       "id": "source:server/src/__tests__/heartbeat-workspace-busy.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-workspace-busy.test.ts",
-      "sha256": "70e389c5451835a78144e9a48be42fa759a00a45b20758c47e83731f2740bd51",
+      "sha256": "5bb51322014602b8b8ae47f0d77fe8aac5c80ac472ab3792f060bac68a45c9de",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47700,7 +47700,7 @@
       "id": "source:server/src/__tests__/heartbeat-worktree-suppression.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-worktree-suppression.test.ts",
-      "sha256": "4204e0ad09fe4749a4293ca38cfd56afb44d6a270d83e35ef484f59b2379a1be",
+      "sha256": "ce0fac9429eab8b2cee6bcbc50dea392dc240d1a29c8c6d7f190ee9ddd4cf284",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],

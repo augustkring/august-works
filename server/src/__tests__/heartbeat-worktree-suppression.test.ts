@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import { eq, sql } from "drizzle-orm";
 import {
   activityLog,
@@ -37,6 +38,12 @@ if (!embeddedPostgresSupport.supported) {
     `Skipping embedded Postgres heartbeat worktree suppression tests on this host: ${embeddedPostgresSupport.reason ?? "unsupported environment"}`,
   );
 }
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
+beforeEach(() => admitMockedLegacyDispatch(["process"]));
+afterEach(() => resetMockedLegacyDispatch());
 
 describeEmbeddedPostgres("heartbeat worktree suppression", () => {
   let db!: ReturnType<typeof createDb>;

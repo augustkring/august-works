@@ -93,7 +93,7 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 | A-local. Native fixture remainder | `native-session-resumption`: completion contract is `undefined` (3 cases). `heartbeat-process-recovery`: task root/cwd, accepted-interaction retry counts, paused-recipient successor (5 cases). `heartbeat-stale-queue-invalidation`: accepted queue after the Native owner finished (1 case) | Serialized 1/9, server shards | Open |
 | G2. Durable chat retry fixture | `durable-chat-wakeup.test.ts`: `durable_retry_fixture_sdk_initialization_hook_not_exhausted`, 11 cases | Server 8/12 | Open |
 | C. Chat channel source authority | Discord `metadata_only` update assertion | Chat 1/3 (also 2/3) | Open |
-| D. Generic server shards | Not yet classified | Server 2, 9, 10, 11 | Open |
+| D. Generic server shards | Server 9/12: `heartbeat-responsible-user-invariant`, `heartbeat-workspace-busy` and `heartbeat-worktree-suppression` were the same paid-transport denial as B (15 tests) | Server 2, 9, 10, 11 | Server 9/12 files fixed (this PR, 15 failed before and 0 after locally); 2, 10, 11 still to classify |
 | E. UI unit test | One button-query assertion | Workspaces-a 2/2 | Open |
 | F. Playwright e2e | `tests/e2e/fixtures/managed-connection-review-cases.ts:12`, `signoff-policy.spec.ts:523` and `:579` | 6 shards | Open |
 | H. Product browser, agent chat | Unknown. A 110 MB failure artifact | 1 | Open |
