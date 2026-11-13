@@ -7686,7 +7686,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db"
+          "sha256": "2277cdde8e863b98127db93eb7c34db233b66dba4437f9922a6d91e979ba8793"
         },
         {
           "path": "server/src/services/native-runtime/native-session-resume.test.ts",
@@ -9364,7 +9364,7 @@
         },
         {
           "path": "server/src/services/native-runtime/native-session-executor.ts",
-          "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db"
+          "sha256": "2277cdde8e863b98127db93eb7c34db233b66dba4437f9922a6d91e979ba8793"
         },
         {
           "path": "server/src/services/native-runtime/native-tool-task-privacy.integration.test.ts",
@@ -49797,7 +49797,7 @@
       "id": "source:server/src/services/native-runtime/native-session-executor.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/native-session-executor.ts",
-      "sha256": "4be1a963f80a317ecd2728bb869d506e09a0970d4b11607659366d115ee629db",
+      "sha256": "2277cdde8e863b98127db93eb7c34db233b66dba4437f9922a6d91e979ba8793",
       "changeIds": [
         "SCR-V10-HOTSPOT-05",
         "SCR-V10-HOTSPOT-06"
