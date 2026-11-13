@@ -47,7 +47,7 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 |---|---|---|
 | 0 Setup | `CLAUDE.md`, reference indexes, `pb-*` router skills, test environment | Done (#43) |
 | 1 Triage | Cluster every failing CI job by root cause; rank by jobs fixed | Done (see failure ledger) |
-| 2 Green CI | Fix one cluster per PR until `verify`, serialized, security and e2e pass | In progress (#44, #45 merged) |
+| 2 Green CI | Fix one cluster per PR until `verify`, serialized, security and e2e pass | In progress (#44, #45, #47, #48, #49 merged) |
 | 3 Risk audits | Authority, privacy, data loss and migrations, spend, recovery, supply chain | Open |
 | 4 Requirements | Walk the 169 rows, P0 to P2; update register status | Open |
 | 5 UI/UX | §33 screens and §41 journeys in EN/DA; accessibility, critique, copy | Open |
@@ -87,15 +87,17 @@ This is the status ledger for the Claude Code verification pass. Earlier history
 |---|---|---|---|
 | A1. Managed OpenCode relay credential | The sandbox-relay route in `managed-native-opencode-e2e-fixture.ts` required a Bearer token that nothing sends (OpenCode sends only the placeholder that OpenShell normally replaces). Result: `scheduler_software_host_incoming_model_authority_invalid`, `providerResponses=0` | Shards that use `runManagedNativeOpenCodeFixture` (6 files, for example shards 4 and 19) | Fixed in the fixture (#47). Local: project-create 2/2 passed. CI shard 19 now passes this step |
 | A2. Runner stalls at `run.prepare` | The run stops after `native.process_start_requested`, then `run.prepare` times out (`native_session_interrupted`) | Probably most serial heartbeat-fixture files and the close-source fixture (shards 6, 7, 8, 18), plus the second journey of payload-temporal | Root cause found: in `direct_outbound` mode the 30 s `run.prepare` deadline started before remote staging finished. Fixed in production (this PR) |
-| A3. Conversation-frame lease | `scheduler_software_host_unique_active_lease_required`: each agent's Host is created after the run takes its lease | Shard 10 (runtime-skills) | Open |
-| A4. Progress conversation | Run fails with `providerCallCount 0` | Shard 2 | Open, not diagnosed |
+| A3. Conversation-frame lease | `scheduler_software_host_unique_active_lease_required`: each agent's Host is created after the run takes its lease | Shard 10 (runtime-skills) | Lease part fixed in the fixture (this PR): each Agent's managed sandbox is registered before its Runs lease. The test is still red, see A3b |
+| A4. Progress conversation | Run fails with `providerCallCount 0`: the frame preferred the strict authenticated model route, whose token matches only when minted in the same second | Shard 2 | Model route fixed in the fixture (this PR): placeholder requests use the Host bridge, as in #47. Locally `providerCallCount` went from 0 to 1. The test is still red, see A4b |
+| A3b. Serial Host artifact pin | `serial_model_original_artifact_pin_invalid`: the lazily created serial Host rejects the signed launch, because the Run pinned the provider-pack install root before this Agent's Host image home existed | Shard 10 | Open |
+| A4b. Progress comment source seal | `report_progress` returns "Managed progress comment source seal could not be retained": the seal UPDATE in `paperclip-runner-tool-authority.ts` matches no row, so the gateway rejects the next call | Shard 2 | Open |
 | B. Mocked legacy and Native fixtures | The paid-transport guards (brief §57.6 RT-03) deny the mocked `codex_local` and Native `codex` test doubles with `paid_transport_unqualified` | Serialized 1/9, several server shards | Fixed for 9 files in #44 and #45. Local result: 71 failures fell to 9. The 9 that remain have other causes (see A-local) |
 | A-local. Native fixture remainder | `native-session-resumption`: completion contract is `undefined` (3 cases). `heartbeat-process-recovery`: task root/cwd, accepted-interaction retry counts, paused-recipient successor (5 cases). `heartbeat-stale-queue-invalidation`: accepted queue after the Native owner finished (1 case) | Serialized 1/9, server shards | Open |
 | G2. Durable chat retry fixture | `durable-chat-wakeup.test.ts`: `durable_retry_fixture_sdk_initialization_hook_not_exhausted`, 11 cases | Server 8/12 | Open |
 | C. Chat channel source authority | Discord `metadata_only` update assertion | Chat 1/3 (also 2/3) | Open |
-| D. Generic server shards | Server 9/12: `heartbeat-responsible-user-invariant`, `heartbeat-workspace-busy` and `heartbeat-worktree-suppression` were the same paid-transport denial as B (15 tests) | Server 2, 9, 10, 11 | Server 9/12 files fixed (this PR, 15 failed before and 0 after locally); 2, 10, 11 still to classify |
+| D. Generic server shards | Server 9/12: `heartbeat-responsible-user-invariant`, `heartbeat-workspace-busy` and `heartbeat-worktree-suppression` were the same paid-transport denial as B (15 tests) | Server 2, 9, 10, 11 | Server 9/12 fixed (#49; green in CI). Server 2/12 fails in `v9-feedback-images.integration.test.ts` (erasure hold). 10 and 11 still to classify |
 | E. UI unit test | One button-query assertion | Workspaces-a 2/2 | Open |
-| F. Playwright e2e | `tests/e2e/fixtures/managed-connection-review-cases.ts:12`, `signoff-policy.spec.ts:523` and `:579` | 6 shards | Open |
+| F. Playwright e2e | `tests/e2e/fixtures/managed-connection-review-cases.ts:12`, `signoff-policy.spec.ts:523` and `:579`. Also failing on #49: `connection-intents.spec.ts:204`, `mcp-user-stories.spec.ts:288`, `aw-v9-account-security.spec.ts:96`, `pipelines-tutorial-flow.spec.ts:326` and `task-reload.spec.ts:46` | 6 shards | Open |
 | H. Product browser, agent chat | Unknown. A 110 MB failure artifact | 1 | Open |
 | F2. e2e onboarding cleanup | `aw-v9-onboarding-permission-consent.spec.ts:286`: cleanup `DELETE /api/companies/:id` returns non-OK (first seen on #47; passed on base) | e2e 8/8 | Open |
 | T. Repository tests server-1 to server-4 | Hit the 60-minute timeout | 4 | Open |
