@@ -2677,18 +2677,18 @@
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections",
-      "sourceSha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
+      "sourceSha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4",
       "articleSha256": "731cc171b5c7b6b7d1563e8d2476c1c51f32f3f6c3fa3f4adb7aa0fc365836f9",
       "decision": "no_change",
-      "rationale": "Approval execution now carries the accepted producer identity, and retained source access is checked against the current Human. The article's customer-facing connection setup, provider authorization, and reconnect steps remain accurate and unchanged."
+      "rationale": "Admitted remote MCP calls no longer count their own already-consumed rate-limit token when the dispatch re-check runs, so a policy with limit N admits exactly N calls per window. The article does not describe rate limits, and its customer-facing connection setup, provider authorization and reconnect steps remain accurate and unchanged."
     },
     {
       "source": "server/src/services/tool-gateway.ts",
       "articleId": "apps-and-connections-da",
-      "sourceSha256": "16025bb1d0bce4ac8150502d9a7149b18fedb86ea9b6383618b361e2ee3f8a4e",
+      "sourceSha256": "184065edc0f7ba1e93918933d94c5a243d193d27c32edfba9c663eeeb204b5e4",
       "articleSha256": "cff4bf06d20200c2b5785c92f7f41b197d730d85b0c3f6f1deca43b744906738",
       "decision": "no_change",
-      "rationale": "Godkendt udf\u00f8relse videref\u00f8rer nu producentens accepterede identitet, og adgang til bevaret kildemateriale kontrolleres mod den aktuelle person. Artiklernes vejledning til kunder om ops\u00e6tning af forbindelser, udbydergodkendelse og genoprettelse er fortsat korrekt og u\u00e6ndret."
+      "rationale": "Godkendte fjern-MCP-kald t\u00e6ller ikke l\u00e6ngere deres eget allerede forbrugte rate-limit-token, n\u00e5r kontrollen under afsendelse k\u00f8res, s\u00e5 en politik med gr\u00e6nse N tillader pr\u00e6cis N kald pr. vindue. Artiklen beskriver ikke rate limits, og vejledningen til kunder om ops\u00e6tning af forbindelser, udbydergodkendelse og genoprettelse er fortsat korrekt og u\u00e6ndret."
     },
     {
       "source": "server/src/services/workflows/workflow-http-request.ts",
