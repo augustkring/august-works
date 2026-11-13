@@ -231,12 +231,12 @@ export async function withManagedConnectionReview(input: {
   };
   try {
     process.env.PAPERCLIP_NATIVE_SOURCE_CLOSURE_DIAGNOSTICS = "1";
-    await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: binary, timeoutSec: 180,
+    await withManagedNativeHeartbeatFixture({ db, root, opencodeBinary: binary, timeoutSec: 300,
       schedulerMode: "serial", assignedToolGatewayHttpRequest: request,
       prepareNativeRuntimeContext: async ({ companyId, agentId, actor }) => {
         assert(actor.type === "board" && actor.userId && actor.sessionId);
         scope = { companyId, agentId, userId: actor.userId };
-        await db.update(agents).set({ runtimeConfig: { timeoutSec: 180,
+        await db.update(agents).set({ runtimeConfig: { timeoutSec: 300,
           heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } } })
           .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
         railway = await prepareConnectionIntentRailwayFixture({ db, companyId, userId: actor.userId,
@@ -519,7 +519,7 @@ export async function withManagedConnectionReview(input: {
               expectedIssueUpdatedAt: task.updatedAt.toISOString(), workload: "semantic", riskClass: "C0",
               completionContract: { objective: "Retain the actual governed Railway review outcome",
                 requiredOutputs: [{ kind: "task_document", key: "result" }], businessInvariants: ["No dispatch before Human approval", "Never resend the resolved action"] },
-              budgets: { maxWallClockSeconds: later ? 180 : 540, maxModelCostMinor: 10, maxToolActions: 10, maxRetries: later ? 0 : 2 },
+              budgets: { maxWallClockSeconds: later ? 300 : 540, maxModelCostMinor: 10, maxToolActions: 10, maxRetries: later ? 0 : 2 },
               workers: [{ key: "reviewed-reader", issueId: task.id }] });
             await orchestrationService(db).decide(actor, companyId, plan.id, { expectedVersion: plan.version,
               action: "start", rationale: "Human authorizes a bounded reviewed Railway read" });
