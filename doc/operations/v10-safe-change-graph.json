@@ -4445,7 +4445,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/email-channels.integration.test.ts",
@@ -5583,7 +5583,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
@@ -7035,7 +7035,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/company-search-extract-routes.test.ts",
@@ -8964,7 +8964,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/chat-project-tools.test.ts",
@@ -10141,7 +10141,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
@@ -46758,7 +46758,7 @@
       "id": "source:server/src/__tests__/chat-channels.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/chat-channels.integration.test.ts",
-      "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664",
+      "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
