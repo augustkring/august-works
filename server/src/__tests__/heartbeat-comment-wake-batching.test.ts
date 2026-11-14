@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { WebSocketServer } from "ws";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   agents,
   agentWakeupRequests,
@@ -41,6 +41,14 @@ import {
 } from "./helpers/embedded-postgres.ts";
 import { parseWakePayloadFromMessage } from "./helpers/wake-message.ts";
 import { installHeartbeatApiUrlFixture, seedHeartbeatResponsibleHuman } from "./helpers/heartbeat-runtime-fixtures.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
+
+// Mocked legacy dispatch: see helpers/mocked-legacy-paid-dispatch.ts. This file
+// drives the real process adapter and a controlled openclaw_gateway server; no
+// test here asserts the real paid-transport denial, so both are admitted. Every
+// other adapter type still reaches the real guard.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
@@ -288,8 +296,13 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
     restoreApiUrl?.();
   });
 
+  beforeEach(() => {
+    admitMockedLegacyDispatch(["process", "openclaw_gateway"]);
+  });
+
   afterEach(() => {
     runningProcesses.clear();
+    resetMockedLegacyDispatch();
   });
 
   it("defers approval-approved wakes for a running issue so the assignee resumes after the run", async () => {
@@ -2126,6 +2139,7 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
           runtimeMode: "native",
           nativeIssueId: issueId,
           driverKind: "codex",
+          nextEventSeq: 3,
           startedAt: new Date(),
           contextSnapshot: {
             issueId,
@@ -2144,11 +2158,19 @@ describeEmbeddedPostgres("heartbeat comment wake batching", () => {
             },
           },
         });
+        // The parked source's local process has stopped. Native cleanup state is
+        // unknown (null) unless an original process event proves settlement, and
+        // an unknown cancelled source correctly raises a Board reconciliation
+        // item, so the fixture records the original start and stop events.
+        await db.insert(heartbeatRunEvents).values([
+          { companyId, agentId, runId: sourceRunId, seq: 1, eventType: "native.process_start_requested", payload: {} },
+          { companyId, agentId, runId: sourceRunId, seq: 2, eventType: "native.local_process_stopped", payload: {} },
+        ]);
         await db.insert(nativeRunFinalizations).values({
           runId: sourceRunId,
           companyId,
           issueId,
-          phase: "observed",
+          phase: "committed",
         });
         await db
           .update(issues)

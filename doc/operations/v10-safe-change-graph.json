@@ -5603,7 +5603,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
-          "sha256": "11c0d079a3b3039a93b76a22a3e558a55187b7371e9894fd7398b6ae6d718193"
+          "sha256": "86c1716191d944ca5a66ab1ef0d15d1a03040a4b137b4354af4cfd4669843fe1"
         },
         {
           "path": "server/src/__tests__/heartbeat-context-summary.test.ts",
@@ -47330,7 +47330,7 @@
       "id": "source:server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
-      "sha256": "11c0d079a3b3039a93b76a22a3e558a55187b7371e9894fd7398b6ae6d718193",
+      "sha256": "86c1716191d944ca5a66ab1ef0d15d1a03040a4b137b4354af4cfd4669843fe1",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
