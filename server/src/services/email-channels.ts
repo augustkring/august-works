@@ -1322,7 +1322,12 @@ export function emailChannelService(db: Db, options: EmailChannelOptions) {
               status: "todo",
               priority: "medium",
               assigneeAgentId: endpoint.assignedAgentId,
+              // The sender is an external correspondent, never a Human here.
+              // Record the inbox sponsor (the Human who configured this inbox
+              // and its agent) as the accountable Human; untrusted, this value
+              // was dropped and the Run fell back to the company default.
               responsibleUserId: endpoint.sponsorUserId,
+              trustExplicitResponsibleUserId: true,
               originKind: "chat_channel",
               originId: `email:${endpoint.id}:${message.thread_id}`,
               idempotencyKey: `email:${endpoint.id}:${message.thread_id}`,

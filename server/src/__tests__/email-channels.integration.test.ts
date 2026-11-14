@@ -906,6 +906,9 @@ describe("AgentMail durable email pipeline", () => {
       status: "running",
       runtimeMode: "native",
       nativeIssueId: conversation.issueId,
+      // Heartbeat resolves the email Run's Human from the Task: email comments
+      // are system-authored, so this is the inbox sponsor.
+      responsibleUserId: "email-board",
       contextSnapshot: { issueId: conversation.issueId },
     });
     await db
@@ -955,6 +958,77 @@ describe("AgentMail durable email pipeline", () => {
     expect((await f.service.publication(queued.id, f.companyId)).outcome).toBe(
       "failed",
     );
+  });
+
+  // C2b: email Tasks are chat_channel Tasks with no linked Human. Their Native
+  // tools require the bound inbox policy and the Task's current responsible Human.
+  it("keeps email Native tools bound to the current inbox policy and responsible Human", async () => {
+    const f = await fixture();
+    const other = await fixture();
+    await f.receive(f.message());
+    const [conversation] = await db.select().from(chatConversations)
+      .where(eq(chatConversations.companyId, f.companyId));
+    const [task] = await db.select().from(issues).where(eq(issues.id, conversation.issueId));
+    expect(task).toMatchObject({ originKind: "chat_channel", responsibleUserId: "email-board",
+      conversationAgentId: null, conversationUserId: null });
+    const runId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: runId, companyId: f.companyId, agentId: f.agentId, status: "running", runtimeMode: "native",
+      nativeIssueId: conversation.issueId, responsibleUserId: "email-board",
+      contextSnapshot: { issueId: conversation.issueId },
+    });
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, conversation.issueId));
+    const binding = { companyId: f.companyId, agentId: f.agentId, runId, issueId: conversation.issueId };
+    const { assertNativeConversationToolNoPlanScope } = await import("../services/orchestration/native-tool-boundary.js");
+    const check = () => assertNativeConversationToolNoPlanScope(db, binding);
+    const denied = /outside its current inbox policy and responsible Human/;
+    await expect(check()).resolves.toBeUndefined();
+
+    // Negative: the Run's Human is not the Task's responsible Human.
+    await db.update(heartbeatRuns).set({ responsibleUserId: "other-user" }).where(eq(heartbeatRuns.id, runId));
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(heartbeatRuns).set({ responsibleUserId: "email-board" }).where(eq(heartbeatRuns.id, runId));
+    // Negative: the responsible Human is removed or downgraded to viewer.
+    const membership = and(eq(companyMemberships.companyId, f.companyId), eq(companyMemberships.principalId, "email-board"));
+    await db.update(companyMemberships).set({ status: "suspended" }).where(membership);
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(companyMemberships).set({ status: "active", membershipRole: "viewer" }).where(membership);
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(companyMemberships).set({ membershipRole: "operator" }).where(membership);
+    // Negative: the inbox is paused, or this Run no longer owns the Task.
+    await db.update(chatEndpoints).set({ status: "paused" }).where(eq(chatEndpoints.id, f.endpointId));
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(chatEndpoints).set({ status: "active" }).where(eq(chatEndpoints.id, f.endpointId));
+    await db.update(issues).set({ executionRunId: null }).where(eq(issues.id, conversation.issueId));
+    await expect(check()).rejects.toThrow(denied);
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, conversation.issueId));
+    await expect(check()).resolves.toBeUndefined();
+
+    // Negative: another company's Run cannot use this inbox through its own scope.
+    const otherRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({
+      id: otherRunId, companyId: other.companyId, agentId: other.agentId, status: "running", runtimeMode: "native",
+      nativeIssueId: conversation.issueId, responsibleUserId: "email-board", contextSnapshot: { issueId: conversation.issueId },
+    });
+    const otherBinding = { companyId: other.companyId, agentId: other.agentId, runId: otherRunId,
+      issueId: conversation.issueId, workMode: "standard" };
+    const request = emailSendSchema.parse({ endpointId: f.endpointId, conversationId: conversation.id,
+      replyToMessageId: [...f.messages.keys()][0], text: "Cross-company reply", idempotencyKey: randomUUID() });
+    const crossCompany = await (async () => {
+      const otherAuthority = new PaperclipRunnerToolAuthority(db, { ...otherBinding,
+        connectorAssignments: await resolveConnectorAssignments(db, otherBinding) });
+      return otherAuthority.execute({ tool: "agentmail_send", callId: randomUUID(), arguments: { request } });
+    })().then(() => null, (error: unknown) => error);
+    expect(crossCompany).toBeInstanceOf(Error);
+    expect((crossCompany as Error).message).toBe("paperclip_runner_tool_binding_not_authorized");
+    expect(await db.select().from(emailSends).where(eq(emailSends.companyId, f.companyId))).toHaveLength(0);
+    expect(f.sends).toHaveLength(0);
+
+    // Negative: the inbox lane is keyed on the bound AgentMail endpoint. A
+    // non-email chat Task still needs a current linked-Human channel turn.
+    await db.update(chatEndpoints).set({ provider: "slack" }).where(eq(chatEndpoints.id, f.endpointId));
+    await expect(check()).rejects.toThrow(/outside its current linked-Human turn/);
+    await db.update(chatEndpoints).set({ provider: "agentmail" }).where(eq(chatEndpoints.id, f.endpointId));
   });
 
   it("enforces one inbox owner across companies and reconnects the same identity", async () => {
