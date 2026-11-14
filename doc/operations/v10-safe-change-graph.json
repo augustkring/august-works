@@ -5571,7 +5571,7 @@
         },
         {
           "path": "server/src/__tests__/agent-conversations.test.ts",
-          "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9"
+          "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279"
         },
         {
           "path": "server/src/__tests__/agent-hire-ai-connections.test.ts",
@@ -5623,7 +5623,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-local-environment.test.ts",
-          "sha256": "b45618a9f532cbfd0b3b1c76b70fe5a6509b0136c7e0f113d42a00bbd7127112"
+          "sha256": "f7e6ea92b0eadd8bf3ba60e40973540ad5213a82cc9ad593b48bbfc2cfd23484"
         },
         {
           "path": "server/src/__tests__/heartbeat-lock-release-on-reassignment.test.ts",
@@ -5687,7 +5687,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
-          "sha256": "9539e04954850c410e595828e8cf95db05c4313d03311864fba490cb5b137e0b"
+          "sha256": "1aabef3e7c8d81d3bce821c6570ff2d932b7e545679f4594b7108af0f6d8c425"
         },
         {
           "path": "server/src/__tests__/heartbeat-task-drain.test.ts",
@@ -7023,7 +7023,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/agent-conversations.test.ts",
-          "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9"
+          "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279"
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
@@ -8940,7 +8940,7 @@
         },
         {
           "path": "server/src/__tests__/agent-conversations.test.ts",
-          "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9"
+          "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279"
         },
         {
           "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
@@ -47216,7 +47216,7 @@
       "id": "source:server/src/__tests__/agent-conversations.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/agent-conversations.test.ts",
-      "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9",
+      "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -47406,7 +47406,7 @@
       "id": "source:server/src/__tests__/heartbeat-local-environment.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-local-environment.test.ts",
-      "sha256": "b45618a9f532cbfd0b3b1c76b70fe5a6509b0136c7e0f113d42a00bbd7127112",
+      "sha256": "f7e6ea92b0eadd8bf3ba60e40973540ad5213a82cc9ad593b48bbfc2cfd23484",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47640,7 +47640,7 @@
       "id": "source:server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
-      "sha256": "9539e04954850c410e595828e8cf95db05c4313d03311864fba490cb5b137e0b",
+      "sha256": "1aabef3e7c8d81d3bce821c6570ff2d932b7e545679f4594b7108af0f6d8c425",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
