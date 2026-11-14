@@ -4037,6 +4037,19 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     };
   }
 
+  it("turns agent execution on by default only for linked-people-only Slack channels", async () => {
+    const fixture = await seedCompany();
+    const { service } = createService();
+    const app = routesApp(db, fixture.companyId, service);
+    const slack = await request(app).post(`/api/companies/${fixture.companyId}/chat-endpoints`)
+      .send({ provider: "slack", assignedAgentId: fixture.assignedAgentId }).expect(201);
+    const discord = await request(app).post(`/api/companies/${fixture.companyId}/chat-endpoints`)
+      .send({ provider: "discord", assignedAgentId: fixture.assignedAgentId }).expect(201);
+    expect(slack.body).toMatchObject({ allowUnlinkedPeople: false, externalExecutionPolicy: "agent" });
+    // Providers that admit unlinked people keep the restricted default.
+    expect(discord.body).toMatchObject({ allowUnlinkedPeople: true, externalExecutionPolicy: "restricted" });
+  });
+
   it("creates a channel-purpose connection and rejects attempts to change its assigned agent", async () => {
     const fixture = await seedCompany();
     const { service } = createService();
@@ -4053,6 +4066,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       assignedAgentName: "Maya",
       status: "draft",
       allowUnlinkedPeople: false,
+      externalExecutionPolicy: "agent",
       setup: { command: expect.stringMatching(/^\/maya-[a-z0-9]{6}$/) },
     });
     const createdCommand = createResponse.body.setup.command as string;
@@ -57041,6 +57055,10 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       githubUnavailableFile,
       linkedOriginalActor ? "ORIGINAL task, not the failed request" : undefined,
     );
+    // Failed chat retries are the restricted-channel recovery owner. Slack now
+    // defaults to agent execution, so pin the restricted policy these cases cover.
+    await db.update(chatEndpoints).set({ externalExecutionPolicy: "restricted" })
+      .where(eq(chatEndpoints.id, context.endpoint.id));
     let retrySourceMessageId = context.messageId;
     if (linkedOriginalActor) {
       const timestamp = Math.floor(Date.now() / 1000);

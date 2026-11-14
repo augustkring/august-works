@@ -6081,6 +6081,12 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         // database created before the column default was hardened.
         allowGroupChats: input.provider !== "microsoft-teams",
         allowUnlinkedPeople: !["slack", "imessage-photon"].includes(input.provider),
+        // Slack admits only linked people, and every inbound message still
+        // resolves to its own linked Human with current membership before any
+        // agent action (no pooled channel authority). Agent execution is
+        // therefore on by default for Slack; other providers that admit
+        // unlinked people keep the restricted default.
+        ...(input.provider === "slack" ? { externalExecutionPolicy: "agent" as const } : {}),
         capabilities: CAPABILITIES[input.provider],
         setup: {
           step: "provider_setup",
