@@ -12,7 +12,7 @@ import { errorHandler } from "../middleware/index.js";
 import { actorMiddleware } from "../middleware/auth.js";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   authUsers,
@@ -64,11 +64,21 @@ import {
 } from "../services/heartbeat.js";
 import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { installHeartbeatApiUrlFixture } from "./helpers/heartbeat-runtime-fixtures.js";
+import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
+
+// The conversation fixtures run the legacy `process` adapter as a stand-in
+// executor; no test here asserts the V10 paid-transport refusal. Only `process`
+// model dispatch is admitted (see helpers/mocked-legacy-paid-dispatch.ts); every
+// other call reaches the real guard.
+vi.mock("../services/native-runtime/paid-transport-admission.js", async (importOriginal) =>
+  (await import("./helpers/mocked-legacy-paid-dispatch.js")).withMockedLegacyDispatchAdmission(await importOriginal()));
 
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
   "persistent agent conversations",
   () => {
+    beforeEach(() => admitMockedLegacyDispatch(["process"]));
+    afterEach(() => resetMockedLegacyDispatch());
     let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
     let db: ReturnType<typeof createDb>;
     let companyId: string;
