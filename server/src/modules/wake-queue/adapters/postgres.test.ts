@@ -3,6 +3,10 @@ import { spawn } from "node:child_process";
 import { issueService } from "../../../services/issues.js";
 import { persistHeartbeatRunProcessMetadata } from "../../../services/heartbeat.js";
 import { recordNativeLocalProcessStopAfterExit } from "../../../services/native-local-process-stop.js";
+import { environmentService } from "../../../services/environments.js";
+import { settleCancelledNativeStartupCoordinator } from "../../../services/cancelled-native-startup.js";
+import { appendHeartbeatRunEvent } from "../../../services/heartbeat-run-events.js";
+import { IN_PROCESS_BACKEND_ADMITTED } from "../../../services/native-local-process-stop.js";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -162,7 +166,8 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
     return runId;
   }
 
-  async function recordSettledNativeLocalRun(runId: string, companyId: string) {
+  async function recordSettledNativeLocalRun(runId: string, companyId: string,
+    leaseRelease: "cleanup_success" | "local_driver" = "cleanup_success", providerLeaseId: string | null = null) {
     const child = spawn(process.execPath, ["-e", "setTimeout(() => process.exit(0), 60)"], {
       detached: true,
       stdio: "ignore",
@@ -174,15 +179,19 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
       processGroupId: child.pid,
       startedAt: new Date().toISOString(),
     });
-    await db.insert(environmentLeases).values({
+    const [lease] = await db.insert(environmentLeases).values({
       companyId,
       heartbeatRunId: runId,
       provider: "local",
+      providerLeaseId,
       status: "active",
       leasePolicy: "ephemeral",
-    });
+    }).returning();
     await closed;
-    await db.update(environmentLeases).set({
+    // The local driver's releaseRunLease calls releaseLease without a cleanup
+    // status: there is no provider resource, so cleanup_status stays null.
+    if (leaseRelease === "local_driver") await environmentService(db).releaseLease(lease!.id, "released");
+    else await db.update(environmentLeases).set({
       status: "released",
       releasedAt: new Date(),
       cleanupStatus: "success",
@@ -474,6 +483,74 @@ describeEmbeddedPostgres("wake-queue postgres adapter", () => {
       .toMatchObject({ status: "deferred_issue_execution", runId: null });
     expect(await db.select().from(heartbeatRuns)).toHaveLength(1);
   });
+
+  it.each([
+    [null, "promoted"],
+    ["unexpected-provider-resource", "released"],
+  ] as const)("R1: a succeeded Native run whose local lease was released by the local driver (provider lease %s) is %s after its local Stop", async (
+    providerLeaseId, expected,
+  ) => {
+    const companyId = await seedCompany(), agentId = await seedAgent({ companyId });
+    const issueId = await seedIssue({ companyId, status: "blocked", assigneeAgentId: agentId });
+    const runId = await seedRun({ companyId, agentId, status: "succeeded", contextSnapshot: { issueId } });
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId, finishedAt: new Date() })
+      .where(eq(heartbeatRuns.id, runId));
+    await db.insert(nativeRunFinalizations).values({ companyId, issueId, runId, phase: "committed" });
+    await db.update(issues).set({ executionRunId: runId, checkoutRunId: runId }).where(eq(issues.id, issueId));
+    await recordSettledNativeLocalRun(runId, companyId, "local_driver", providerLeaseId);
+    expect((await db.select().from(environmentLeases).where(eq(environmentLeases.heartbeatRunId, runId)))[0])
+      .toMatchObject({ provider: "local", status: "released", cleanupStatus: null, providerLeaseId });
+    const [comment] = await db.insert(issueComments).values({ companyId, issueId, authorType: "user",
+      authorUserId: "responsible-user", body: "Saved input after a local release" }).returning();
+    const wakeId = await seedDeferredWake({ companyId, agentId, issueId, requestedByActorId: "responsible-user",
+      payload: { _paperclipWakeContext: { issueId, wakeReason: "issue_commented", wakeCommentIds: [comment.id] } },
+    });
+    const release = createReleaseIssueExecution({ issueLock: createPostgresWakeQueueAdapter(db, stubDeps),
+      recovery: { escalateStrandedAssignedIssue: async () => undefined, escalateStrandedRecoveryIssueInPlace: async () => undefined },
+    });
+    expect((await release({ companyId, runId, now: new Date(), suppressImmediateRecovery: true,
+      resumeStrandedQueue: true })).outcome.kind).toBe(expected);
+    if (expected === "released") {
+      // A local lease that names a provider resource is not the local no-op
+      // release contract; null cleanup stays unknown and the input stays saved.
+      expect((await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, wakeId)))[0])
+        .toMatchObject({ status: "deferred_issue_execution", runId: null });
+      expect(await db.select().from(heartbeatRuns)).toHaveLength(1);
+    }
+  });
+
+  it.each(["never_admitted", "admitted"] as const)(
+    "DC1b-b: settles a Native run stopped before its first claim only when nothing started (%s)", async kind => {
+      const companyId = await seedCompany(), agentId = await seedAgent({ companyId });
+      const issueId = await seedIssue({ companyId, status: "blocked", assigneeAgentId: agentId });
+      const runId = await seedRun({ companyId, agentId, status: "cancelled", contextSnapshot: { issueId } });
+      const finishedAt = new Date();
+      await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: issueId, finishedAt,
+        runtimeModeResolvedAt: new Date(finishedAt.getTime() - 1000), nativeSessionId: randomUUID(),
+        resultJson: { startupCancellation: { requestedAt: finishedAt.toISOString(), beforeNativeSelection: false },
+          startupPreparationSettledAt: finishedAt.toISOString() } }).where(eq(heartbeatRuns.id, runId));
+      // Attempt zero is the never-claimed coordinator receipt; Stop landed first.
+      await db.insert(nativeRunFinalizations).values({ companyId, issueId, runId, phase: "observed" });
+      // The local driver's Stop-time release: expired, released, no cleanup status.
+      await db.insert(environmentLeases).values({ companyId, heartbeatRunId: runId, provider: "local",
+        status: "expired", leasePolicy: "ephemeral", releasedAt: finishedAt });
+      await db.update(issues).set({ executionRunId: runId, checkoutRunId: runId }).where(eq(issues.id, issueId));
+      if (kind === "admitted") await appendHeartbeatRunEvent(db, { companyId, runId, agentId,
+        eventType: IN_PROCESS_BACKEND_ADMITTED, stream: "system", level: "info", message: "admitted" });
+      const owner = issueService(db);
+      // Before settlement the observed coordinator is pending cleanup.
+      expect(await owner.clearExecutionRunIfTerminal(issueId)).toBe(false);
+      expect(await settleCancelledNativeStartupCoordinator(db, companyId, runId)).toBe(kind === "never_admitted");
+      const [coordinator] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, runId));
+      expect(coordinator).toMatchObject(kind === "never_admitted"
+        ? { phase: "terminal_failure", failureCode: "native_startup_cancelled", attempt: 0, leaseOwner: null }
+        : { phase: "observed", attempt: 0 });
+      expect(await owner.clearExecutionRunIfTerminal(issueId)).toBe(kind === "never_admitted");
+      expect(await owner.clearCheckoutRunIfTerminal(issueId)).toBe(kind === "never_admitted");
+      // Idempotent: a second settlement changes nothing.
+      expect(await settleCancelledNativeStartupCoordinator(db, companyId, runId)).toBe(false);
+    },
+  );
 
   it.each(["assignee", "mentioned"])("preserves a paused recipient's accepted message until resume (%s)", async kind => {
     const companyId = await seedCompany();
