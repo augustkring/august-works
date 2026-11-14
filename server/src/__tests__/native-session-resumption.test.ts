@@ -96,14 +96,17 @@ async function seedNativeRecoveryHuman(db: ReturnType<typeof createDb>, companyI
 }
 
 async function createNativeRecoveryProject(db: ReturnType<typeof createDb>, companyId: string,
-  userId: string, sessionId: string, name: string) {
+  userId: string, sessionId: string, name: string, workspace?: { name: string; cwd: string }) {
   const app = express();
   app.use(express.json());
   app.use(((req, _res, next) => { req.actor = { type: "board", source: "session", userId, sessionId,
     companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }] }; next(); }) as RequestHandler);
   app.use("/api", projectRoutes(db));
   app.use(errorHandler);
-  const created = await request(app).post(`/api/companies/${companyId}/projects`).send({ name });
+  // A workspace inserted after creation is not in the sealed Project source
+  // snapshot, so Native admission correctly rejects it as a changed source.
+  const created = await request(app).post(`/api/companies/${companyId}/projects`)
+    .send({ name, ...(workspace ? { workspace: { ...workspace, isPrimary: true } } : {}) });
   if (created.status !== 201) throw new Error(`Canonical Human Project creation failed: ${created.status}`);
   return created.body.id as string;
 }
@@ -662,7 +665,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     const companyId = randomUUID();
     const agentId = randomUUID();
     let projectId: string;
-    const projectWorkspaceId = randomUUID();
+    let projectWorkspaceId: string;
     const executionWorkspaceId = randomUUID();
     const newerExecutionWorkspaceId = randomUUID();
     const issueId = randomUUID();
@@ -865,15 +868,11 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         defaultResponsibleUserId: responsibleUserId,
       });
       const humanSessionId = await seedNativeRecoveryHuman(db, companyId, responsibleUserId);
-      projectId = await createNativeRecoveryProject(db, companyId, responsibleUserId, humanSessionId, "Recovery project");
-      await db.insert(projectWorkspaces).values({
-        id: projectWorkspaceId,
-        companyId,
-        projectId,
-        name: "Recovery workspace",
-        cwd: repoRoot,
-        isPrimary: true,
-      });
+      projectId = await createNativeRecoveryProject(db, companyId, responsibleUserId, humanSessionId, "Recovery project",
+        { name: "Recovery workspace", cwd: repoRoot });
+      const [primaryWorkspace] = await db.select({ id: projectWorkspaces.id }).from(projectWorkspaces)
+        .where(eq(projectWorkspaces.projectId, projectId));
+      projectWorkspaceId = primaryWorkspace!.id;
       await db.insert(agents).values({
         id: agentId,
         companyId,

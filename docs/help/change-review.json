@@ -1565,10 +1565,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+      "sourceSha256": "42aad0a051f6f9f807abc631fc535d9690d13a27d26c85e9ad6ac61141bfd638",
       "articleSha256": "0296c2c8ae18c613eef9c17ea9679b146e8afbcd3504451a5511a218d6d8b955",
       "decision": "no_change",
-      "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
+      "rationale": "2026-11-14 recovery audit: Native Stop and cleanup proof now let a cancelled run release its Task once cleanup is proven or nothing started; the article's guidance to wait for run and task status after a pending stop stays accurate, and no visible step, label or choice changed."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -1669,10 +1669,10 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+      "sourceSha256": "42aad0a051f6f9f807abc631fc535d9690d13a27d26c85e9ad6ac61141bfd638",
       "articleSha256": "ce0a7beaa56a5db23963d81eed8c19687d2efc5405773ec33dfd635a377090bc",
       "decision": "no_change",
-      "rationale": "The recovery article remains scoped to original Task status, stop, retry, and workspace guidance. This source also carries new approved chat-plan handoff steps; those are documented in Create and track work rather than changing the recovery procedure."
+      "rationale": "2026-11-14 recovery audit: Native Stop and cleanup proof now let a cancelled run release its Task once cleanup is proven or nothing started; the article's guidance to wait for run and task status after a pending stop stays accurate, and no visible step, label or choice changed."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
@@ -2053,18 +2053,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+      "sourceSha256": "42aad0a051f6f9f807abc631fc535d9690d13a27d26c85e9ad6ac61141bfd638",
       "articleSha256": "119a5e614aa426df39e25d620889545e2fb18c563a98e299e1661679d223fb4b",
-      "decision": "updated",
-      "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
+      "decision": "no_change",
+      "rationale": "2026-11-14 recovery audit: only internal Native Stop/cleanup bookkeeping changed; export and deletion behaviour, scope and steps described in the article are unchanged."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+      "sourceSha256": "42aad0a051f6f9f807abc631fc535d9690d13a27d26c85e9ad6ac61141bfd638",
       "articleSha256": "60b3971f283556d048300a30edcbfd03992e936803a2e33a2aedca9a708eec75",
-      "decision": "updated",
-      "rationale": "Reviewed EN/DA organization-deletion repair guidance for an original export storage namespace mismatch: retain the original request and involve Human/operator repair. Internal durable export routes do not change existing customer export controls. Personal account receipts, live provider confirmation and legal retention remain separately scoped."
+      "decision": "no_change",
+      "rationale": "2026-11-14 recovery audit: only internal Native Stop/cleanup bookkeeping changed; export and deletion behaviour, scope and steps described in the article are unchanged."
     },
     {
       "source": "ui/src/pages/CompanySettings.tsx",
@@ -2757,18 +2757,18 @@
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work",
-      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+      "sourceSha256": "42aad0a051f6f9f807abc631fc535d9690d13a27d26c85e9ad6ac61141bfd638",
       "articleSha256": "d689db2dabb61c675518460fb12bfeec898665ce74e9a4b5a920c8301a1d46d9",
-      "decision": "updated",
-      "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+      "decision": "no_change",
+      "rationale": "2026-11-14 recovery audit: only internal Stop/cleanup bookkeeping changed (controller lease stage, cancelled-startup settlement, post-cleanup release); task creation, handoff and tracking steps described in the article are unchanged."
     },
     {
       "source": "server/src/services/heartbeat.ts",
       "articleId": "create-and-track-work-da",
-      "sourceSha256": "abdcd18071434f41fe1692df9f798119df242798c91abde230de6c39b7b6e7f0",
+      "sourceSha256": "42aad0a051f6f9f807abc631fc535d9690d13a27d26c85e9ad6ac61141bfd638",
       "articleSha256": "9b7915956fb5c4a86f119627dea10499795af2e387d3c7e7f3a110723894831f",
-      "decision": "updated",
-      "rationale": "The task handoff instruction now requires review of scope/output/action-risk/model-tool-time limits, then bounded-plan start and To do queueing; the article documents that sequence and separates successful Run from verified completion/signoff."
+      "decision": "no_change",
+      "rationale": "2026-11-14 recovery audit: only internal Stop/cleanup bookkeeping changed (controller lease stage, cancelled-startup settlement, post-cleanup release); task creation, handoff and tracking steps described in the article are unchanged."
     },
     {
       "source": "ui/src/pages/Orchestration.tsx",

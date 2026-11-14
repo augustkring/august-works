@@ -29,6 +29,7 @@ import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopI
 import { legacyControllerBootId, legacyControllerClaim, renewLegacyControllerLease, hasLiveLegacyController, revokeExpiredLegacyController, watchLegacyControllerLease } from "./legacy-controller-lease.js";
 import { completeTerminatedRemoteNativeSessionCleanup } from "../vendor/paperclip-runner/index.js";
 import { hasNativeLocalProcessStop } from "./native-local-process-stop.js";
+import { settleCancelledNativeStartupCoordinator } from "./cancelled-native-startup.js";
 import { hasRemoteTerminationReceipt, remoteExecutionHasStopped, currentRemoteTerminationReceipt, recordNativeRemoteWorkloadStopped, stoppedRemoteCleanupScopes } from "./remote-execution-termination.js";
 import { prepareRetainedConnectorSkills, prepareConnectorSkillDelivery } from "./connector-runtime.js";
 import { admitExplicitNativeContinuation, undeliveredLegacyUserCommentIds } from "./explicit-native-continuation.js";
@@ -23920,7 +23921,11 @@ export function heartbeatService(
             // the original Task's Stop with an unrelated bootstrap failure.
             // The final dispatch gate and all source checks still run below
             // when this read permits preparation to continue.
-            await controllerLease.assertOwned("dispatching");
+            // Renew ownership only: nothing has been selected or dispatched
+            // yet, so the run stays in `preparing`. Advancing it to
+            // `dispatching` here would make a Stop at this point miss its
+            // before-Native-selection receipt and strand the cancelled run.
+            await controllerLease.assertOwned();
             if (!await withChatControlRecoveryGate(run, "dispatch", async () => run)) return;
           }
           const originalCoordinationCapture = nativeWorkspaceCoordinationCapture ??
@@ -27538,6 +27543,14 @@ export function heartbeatService(
             resultJson: sql`coalesce(${heartbeatRuns.resultJson}, '{}'::jsonb) ||
               ${JSON.stringify({ startupPreparationSettledAt: new Date().toISOString() })}::jsonb`,
           }).where(and(eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "cancelled")));
+          if (latestRun.runtimeMode === "native") {
+            // Stopped after Native selection, before the first claim. Settle the
+            // never-claimed coordinator so its cleanup is not pending forever;
+            // the shared startup proof is rechecked under the claim locks.
+            await settleCancelledNativeStartupCoordinator(db, run.companyId, run.id).catch(err => {
+              logger.warn({ err, runId: run.id }, "could not settle the cancelled Native startup coordinator");
+            });
+          }
         }
       } finally {
         controllerLease.stop();
@@ -27573,11 +27586,14 @@ export function heartbeatService(
         if (latestRun) await resumeRemoteStopComments(latestRun).catch(err => {
           logger.warn({ err, runId: run.id }, "failed to resume user messages after remote Stop");
         });
-        if (latestRun?.runtimeMode === "native" && latestRun.status === "succeeded" &&
-            nativeDispatchStarted && !nativeSessionResumeScheduled && !nativeWorkspaceFinalizeScheduled &&
+        if (latestRun?.runtimeMode === "native" &&
+            ((latestRun.status === "succeeded" && nativeDispatchStarted) || latestRun.status === "cancelled") &&
+            !nativeSessionResumeScheduled && !nativeWorkspaceFinalizeScheduled &&
             !nativeOwnershipHeld && !shutdownInProgress) {
           // The shared release transaction retains issue ownership while cleanup
           // is pending and verifies exact Native receipts before deferred handoff.
+          // A Stop's own release runs before this executor has released its
+          // lease and recorded its settlement, so a cancelled run retries here.
           await releaseIssueExecutionAndPromote(latestRun, { suppressImmediateRecovery: true }).catch(err => {
             logger.error({ err, runId: run.id }, "failed to promote deferred Human input after Native completion");
           });

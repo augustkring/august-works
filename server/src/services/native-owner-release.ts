@@ -6,6 +6,7 @@ import {
   heartbeatRuns,
   nativeRunFinalizations,
 } from "@paperclipai/db";
+import { isCancelledNativeStartup } from "./cancelled-native-startup.js";
 import { hasPendingRunCleanup } from "./execution-blocker.js";
 import {
   hasNativeLocalProcessStop,
@@ -16,6 +17,21 @@ import { stoppedRemoteCleanupScopes } from "./remote-execution-termination.js";
 import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
 
 type HeartbeatRunRow = typeof heartbeatRuns.$inferSelect;
+type EnvironmentLeaseRow = typeof environmentLeases.$inferSelect;
+
+/** The local driver's release contract: it owns no provider resource, so its
+ * `releaseRunLease` sets a terminal status and `releasedAt` and leaves
+ * `cleanup_status` null. Match `aw_v10_has_pending_run_cleanup` and the
+ * resource-cleanup index: a released local lease is clean when cleanup
+ * succeeded, or when it is null and no provider lease was ever bound. A local
+ * lease that names a provider resource still needs an explicit `success`.
+ * This is lease bookkeeping only; callers still require the separate process
+ * or controller settlement receipt. */
+export function localLeaseReleased(lease: EnvironmentLeaseRow): boolean {
+  return lease.provider === "local" && ["released", "expired", "failed"].includes(lease.status) &&
+    lease.releasedAt !== null &&
+    (lease.cleanupStatus === "success" || (lease.cleanupStatus === null && lease.providerLeaseId === null));
+}
 
 async function nativeInProcessControllerSettled(
   db: Db,
@@ -64,11 +80,22 @@ async function nativeOwnerReleaseHasNullableCleanupProof(
     eq(environmentLeases.companyId, run.companyId),
     eq(environmentLeases.heartbeatRunId, run.id),
   ));
-  const allReleasedLocal = leases.length > 0 && leases.every(lease => lease.provider === "local" &&
-    ["released", "expired", "failed"].includes(lease.status) && lease.releasedAt !== null && lease.cleanupStatus === "success");
+  const allReleasedLocal = leases.length > 0 && leases.every(localLeaseReleased);
   if (allReleasedLocal && await hasNativeLocalProcessStop(db, run.companyId, run.id)) return true;
-  if (issueId && await nativeInProcessControllerSettled(db, run, issueId) && leases.every(lease => lease.provider === "local" &&
-      ["released", "expired", "failed"].includes(lease.status) && lease.releasedAt !== null && lease.cleanupStatus === "success")) return true;
+  if (issueId && await nativeInProcessControllerSettled(db, run, issueId) && leases.every(localLeaseReleased)) return true;
+  if (run.status === "cancelled") {
+    // A Stop after Native selection but before the first coordinator claim:
+    // attempt zero is a durable never-claimed receipt, and the shared startup
+    // proof rejects any launch, process or provider evidence and any lease
+    // that is not released (or remotely terminated). Nothing ever started, so
+    // there is no process whose stop could be recorded. The share lock fences
+    // a concurrent claim of this coordinator.
+    const [coordinator] = await db.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.companyId, run.companyId),
+      eq(nativeRunFinalizations.runId, run.id),
+    )).for("share");
+    if (await isCancelledNativeStartup(db, run, coordinator)) return true;
+  }
   if (!run.runnerProfileJson || typeof run.runnerProfileJson !== "object" || Array.isArray(run.runnerProfileJson) ||
       run.runnerProfileJson.nativeRemoteRuntimeAssetLocator === undefined) return false;
   // This verifies the family-specific signed Stop/Inspect or typed bootstrap
@@ -103,11 +130,9 @@ export async function nativeOwnerReleaseHasCleanupProof(
     eq(environmentLeases.companyId, run.companyId),
     eq(environmentLeases.heartbeatRunId, run.id),
   ));
-  const allReleasedLocal = leases.length > 0 && leases.every(lease => lease.provider === "local" &&
-    ["released", "expired", "failed"].includes(lease.status) && lease.releasedAt !== null && lease.cleanupStatus === "success");
+  const allReleasedLocal = leases.length > 0 && leases.every(localLeaseReleased);
   if (allReleasedLocal && await hasNativeLocalProcessStop(db, run.companyId, run.id)) return true;
-  if (await nativeInProcessControllerSettled(db, run, issueId) && leases.every(lease => lease.provider === "local" &&
-      ["released", "expired", "failed"].includes(lease.status) && lease.releasedAt !== null && lease.cleanupStatus === "success")) return true;
+  if (await nativeInProcessControllerSettled(db, run, issueId) && leases.every(localLeaseReleased)) return true;
   if (!run.runnerProfileJson || typeof run.runnerProfileJson !== "object" || Array.isArray(run.runnerProfileJson) ||
       run.runnerProfileJson.nativeRemoteRuntimeAssetLocator === undefined || !leases.length) return false;
   return await stoppedRemoteCleanupScopes(db, run.companyId, run.id) !== null;
