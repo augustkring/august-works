@@ -53303,7 +53303,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         const commentsBefore = await db
           .select({ id: issueComments.id })
           .from(issueComments)
-          .where(eq(issueComments.issueId, conversation.issueId));
+          .where(eq(issueComments.issueId, conversation.issueId))
+          .orderBy(issueComments.id);
         const wakesBefore = wakeup.mock.calls.length;
         const reactionsBefore = providerRuntime.reactions.length;
         const postsBefore = providerRuntime.posts.length;
@@ -53333,7 +53334,8 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
             await db
               .select({ id: issueComments.id })
               .from(issueComments)
-              .where(eq(issueComments.issueId, conversation.issueId)),
+              .where(eq(issueComments.issueId, conversation.issueId))
+              .orderBy(issueComments.id),
           ).toEqual(commentsBefore);
           expect(wakeup).toHaveBeenCalledTimes(wakesBefore);
           expect(cancelRun).not.toHaveBeenCalled();

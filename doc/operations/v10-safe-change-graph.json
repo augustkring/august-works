@@ -4445,7 +4445,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/email-channels.integration.test.ts",
@@ -5583,7 +5583,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/durable-chat-wakeup.test.ts",
@@ -5603,7 +5603,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
-          "sha256": "11c0d079a3b3039a93b76a22a3e558a55187b7371e9894fd7398b6ae6d718193"
+          "sha256": "86c1716191d944ca5a66ab1ef0d15d1a03040a4b137b4354af4cfd4669843fe1"
         },
         {
           "path": "server/src/__tests__/heartbeat-context-summary.test.ts",
@@ -7035,7 +7035,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/company-search-extract-routes.test.ts",
@@ -8964,7 +8964,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/chat-project-tools.test.ts",
@@ -10141,7 +10141,7 @@
         },
         {
           "path": "server/src/__tests__/chat-channels.integration.test.ts",
-          "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664"
+          "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-chat-dispatch-boundaries.integration.test.ts",
@@ -14783,7 +14783,7 @@
       "sources": [
         {
           "path": ".github/workflows/pr-trusted.yml",
-          "sha256": "83971667d880eb7740f7bf07eea0f4e232b8fde91be50e0177c427cb96cdf288"
+          "sha256": "e92d71fbed766830cf1808e718a2198de073210ba74206117dbc5b8ffa531963"
         },
         {
           "path": "cli/src/__tests__/service-health-check.test.ts",
@@ -32716,7 +32716,7 @@
         },
         {
           "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-          "sha256": "9e244a5399d73c46f95e4d1f4f4635c2b4cdce23f4982547dcdc317be1ca4c01"
+          "sha256": "0c6db5b3c1956074b2cd42adac4a6c3d6ac5927a0fe9e3102a0eefecb6a0618c"
         },
         {
           "path": "scripts/assert-cloud-image-sentry.mjs",
@@ -32788,7 +32788,7 @@
         },
         {
           "path": "scripts/general-server-shard-durations.json",
-          "sha256": "816a74512ab3416344217d932838f9a46b7057d1a53b804de4811f037c9ff77f"
+          "sha256": "e61cfa29704191af269db30ebe7268b7e0ac6a67a6fe1d32f58780c8b4dfce09"
         },
         {
           "path": "scripts/generate-feature-catalog.ts",
@@ -46758,7 +46758,7 @@
       "id": "source:server/src/__tests__/chat-channels.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/chat-channels.integration.test.ts",
-      "sha256": "52329b645cc70ce68c2c61926d648f3b28e1d0b6bd6e3a3bbcae06052dab3664",
+      "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-02",
@@ -47330,7 +47330,7 @@
       "id": "source:server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-comment-wake-batching.test.ts",
-      "sha256": "11c0d079a3b3039a93b76a22a3e558a55187b7371e9894fd7398b6ae6d718193",
+      "sha256": "86c1716191d944ca5a66ab1ef0d15d1a03040a4b137b4354af4cfd4669843fe1",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -53591,7 +53591,7 @@
       "id": "source:.github/workflows/pr-trusted.yml",
       "kind": "current_source_owner",
       "path": ".github/workflows/pr-trusted.yml",
-      "sha256": "83971667d880eb7740f7bf07eea0f4e232b8fde91be50e0177c427cb96cdf288",
+      "sha256": "e92d71fbed766830cf1808e718a2198de073210ba74206117dbc5b8ffa531963",
       "changeIds": [
         "SCR-V10-SUPPORT-STATUS-TRUST-NOTICES"
       ],
@@ -73145,7 +73145,7 @@
       "id": "source:scripts/__tests__/run-vitest-stable-shard.test.mjs",
       "kind": "current_source_owner",
       "path": "scripts/__tests__/run-vitest-stable-shard.test.mjs",
-      "sha256": "9e244a5399d73c46f95e4d1f4f4635c2b4cdce23f4982547dcdc317be1ca4c01",
+      "sha256": "0c6db5b3c1956074b2cd42adac4a6c3d6ac5927a0fe9e3102a0eefecb6a0618c",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
@@ -73415,7 +73415,7 @@
       "id": "source:scripts/general-server-shard-durations.json",
       "kind": "current_source_owner",
       "path": "scripts/general-server-shard-durations.json",
-      "sha256": "816a74512ab3416344217d932838f9a46b7057d1a53b804de4811f037c9ff77f",
+      "sha256": "e61cfa29704191af269db30ebe7268b7e0ac6a67a6fe1d32f58780c8b4dfce09",
       "changeIds": [
         "SCR-V10-CI-RELEASE-AND-CATALOG-GOVERNANCE"
       ],
