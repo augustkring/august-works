@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { heartbeatRuns, issueComments, issueThreadInteractions, issues } from "@paperclipai/db";
 import type { NativePayloadSourceInput, PlanReviewContext } from "@paperclipai/shared";
@@ -71,11 +71,17 @@ export async function captureNativeAcceptedPlanReview(input: {
       accepted.issueId !== input.issueId || accepted.key !== "plan" ||
       typeof accepted.documentId !== "string" || typeof accepted.revisionId !== "string" ||
       !Number.isSafeInteger(accepted.revisionNumber) || Number(accepted.revisionNumber) < 1) return null;
+  // Bootstrap capture runs before Native admission persists nativeIssueId, so
+  // a fresh continuation Run is bound to its Task only by its own wake context.
+  // Accept exactly that: the Run's context names this Task and the Run is either
+  // not yet Native-bound or bound to this same Task. A Run bound to, or woken
+  // for, any other Task never matches.
   const [run] = await input.db.select({ responsibleUserId: heartbeatRuns.responsibleUserId,
     companyId: heartbeatRuns.companyId, issueId: heartbeatRuns.nativeIssueId, agentId: heartbeatRuns.agentId,
   }).from(heartbeatRuns).where(and(eq(heartbeatRuns.id, input.runId),
     eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.agentId, input.agentId),
-    eq(heartbeatRuns.nativeIssueId, input.issueId))).limit(1);
+    or(isNull(heartbeatRuns.nativeIssueId), eq(heartbeatRuns.nativeIssueId, input.issueId)),
+    sql`${heartbeatRuns.contextSnapshot}->>'issueId' = ${input.issueId}`)).limit(1);
   if (!run || run.responsibleUserId !== input.responsibleUserId) return null;
   const [selectedOwner] = await input.db.select({ row: issueThreadInteractions,
     sourceVersion: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` })
