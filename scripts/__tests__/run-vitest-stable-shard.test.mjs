@@ -51,7 +51,7 @@ function dryRunJson(args, envOverrides = {}) {
   return JSON.parse(result.stdout);
 }
 
-const SHARD_COUNT = 12;
+const SHARD_COUNT = 18;
 const SERIALIZED_SHARD_COUNT = 9;
 
 
@@ -394,16 +394,16 @@ const managedNativeSuitePaths = [
 ];
 const MANAGED_NATIVE_SHARD_COUNT = managedNativeSuitePaths.length;
 
-// Mirrors pr-trusted.yml (12 shards, called by pr.yml so GITHUB_WORKFLOW is
+// Mirrors pr-trusted.yml (SHARD_COUNT shards, called by pr.yml so GITHUB_WORKFLOW is
 // "PR"): the chat suite runs in its dedicated lanes and the cargo-dependent
 // native-runner suite in the Rust-cached final Verify Paperclip Runner vitest
 // shard, so together the three cover the full server group exactly.
 test("PR server, managed Native, chat and Rust lanes form a complete non-overlapping cover", () => {
   const prEnv = { GITHUB_WORKFLOW: "PR" };
   const full = dryRunJson(["--mode", "general", "--group", "general-server", "--shard-index", "0", "--shard-count", "1"], prEnv);
-  const shards = Array.from({ length: 12 }, (_, index) => dryRunJson([
+  const shards = Array.from({ length: SHARD_COUNT }, (_, index) => dryRunJson([
     "--mode", "general", "--group", "general-server-without-chat",
-    "--shard-index", String(index), "--shard-count", "12",
+    "--shard-index", String(index), "--shard-count", String(SHARD_COUNT),
   ], prEnv));
   const files = shards.flatMap((shard) => shard.selectedGeneralServerSuites);
   assert.ok(!files.includes(chatSuitePath));
@@ -637,4 +637,46 @@ test("AWV4 server jobs share the qualified Native observer installer", () => {
     "the session-observer flag follows its finite qualification control");
   assert.ok(socketQualification >= 0 && socketQualification < socketFlag,
     "the model-socket flag follows its owner-qualification control");
+});
+
+// Regression guard for the cancelled General tests shards (runs 43525294898,
+// 43488585377, 43412221333): a stale manifest made twelve shards look like
+// ~230s each while they really ran 17-20 minutes against a 20 minute limit.
+test("the PR general-server matrix lists exactly SHARD_COUNT shards", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/pr-trusted.yml"), "utf8");
+  const rows = [...workflow.matchAll(/- group: general-server-without-chat\n\s+group_label: server \((\d+)\/(\d+)\)\n\s+shard_index: (\d+)\n\s+shard_count: (\d+)/g)];
+  assert.equal(rows.length, SHARD_COUNT);
+  assert.deepEqual(rows.map((row) => Number(row[3])), Array.from({ length: SHARD_COUNT }, (_, index) => index));
+  assert.ok(rows.every((row) => Number(row[2]) === SHARD_COUNT && Number(row[4]) === SHARD_COUNT));
+  assert.ok(rows.every((row, index) => Number(row[1]) === index + 1));
+});
+
+test("the PR general_tests job gives only the whole-file managed Native shards a longer timeout", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/pr-trusted.yml"), "utf8");
+  const job = workflow.slice(workflow.indexOf("\n  general_tests:"));
+  const timeout = job.match(/\n    timeout-minutes: (.+)\n/);
+  assert.ok(timeout, "general_tests must set timeout-minutes");
+  assert.equal(
+    timeout[1],
+    "${{ matrix.group == 'general-server-managed-native' && 30 || 20 }}",
+  );
+});
+
+test("the checked-in durations keep every PR general-server shard well inside the 20 minute limit", () => {
+  const durations = loadShardDurations(durationsManifest);
+  const prEnv = { GITHUB_WORKFLOW: "PR" };
+  const files = dryRunJson(
+    ["--mode", "general", "--group", "general-server-without-chat", "--shard-index", "0", "--shard-count", "1"],
+    prEnv,
+  ).selectedGeneralServerSuites;
+  const missing = files.filter((file) => durations[file] === undefined);
+  // New suites fall back to the median weight, so a few are fine; a manifest
+  // that has lost track of most suites would silently unbalance the shards.
+  assert.ok(missing.length <= files.length * 0.1, `${missing.length} of ${files.length} suites have no recorded duration; refresh ${path.basename(durationsManifest)}`);
+  const shards = partitionGeneralServerSuites(files, SHARD_COUNT, durations);
+  // Observed job cost: ~34s setup + 1.05 x summed vitest time + ~2.9s per file.
+  const predictedSeconds = shards.map((shard) => 34 + (1.05 * shard.totalWeight) / 1000 + 2.9 * shard.files.length);
+  assert.ok(Math.max(...predictedSeconds) <= 15 * 60, `slowest predicted shard ${(Math.max(...predictedSeconds) / 60).toFixed(1)} min exceeds 15 min`);
+  const meanSeconds = predictedSeconds.reduce((a, b) => a + b, 0) / predictedSeconds.length;
+  assert.ok(Math.max(...predictedSeconds) <= meanSeconds * 1.25, "shards must stay balanced within 25% of the mean");
 });
