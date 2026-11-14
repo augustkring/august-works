@@ -277,7 +277,7 @@ describe("dependency scheduling through the installed Native text draft controll
     }, async ({ runId, issueId, stage }) => {
       if (stage === "claim" && redactSecret)
         await createRunSecretRedactionRegistry(db).register(f.home, runId, secret);
-      if (stage !== "dispatch") return;
+      if (stage !== "dispatch" || !await isNativeSelectedDispatch(runId)) return;
       reachedDispatch = true;
       const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
       const [taskVersion] = await db.execute<{ version: string; ownerHash: string; snapshot: unknown; digestValid: boolean | null }>(sql`select
@@ -1634,7 +1634,7 @@ describe("dependency scheduling through the installed Native text draft controll
         .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, interaction!.id)));
       expect(interactionRun?.contextSnapshot).toMatchObject({ treeHoldInteraction: true,
         activeTreeHold: { holdId: hold!.id, rootIssueId: ancestor.id, mode: "pause", interaction: true, reason: privateReason } });
-      await vi.waitFor(() => { expect(calls).toBe(1); }, { timeout: 20_000, interval: 25 });
+      await vi.waitFor(() => { expect(calls).toBe(1); }, { timeout: 30_000, interval: 25 });
       await heartbeat.drainActiveRunExecutions();
       expect(calls).toBe(1);
       await assertCompletedDraft(fixture, entry, interaction!.id, output);
@@ -1736,7 +1736,11 @@ describe("dependency scheduling through the installed Native text draft controll
     }, async ({ stage, runId }) => {
       if (stage === "claim") await createRunSecretRedactionRegistry(db).register(f.home, runId, inlineSecret);
     });
-  }, 60_000);
+  }, 120_000);
+  // First model dispatch slows as earlier cases in this file fill the shared
+  // database (about 25 s after a dozen cases locally, under 5 s alone). The
+  // waits below are test budgets, not product limits; ledger item PERF1
+  // tracks the slowdown itself.
   it("runs unrelated assigned Native Text tasks concurrently under separate issue claims", async () => {
     const fixture = await seedInstalledDraft();
     const { f, model } = fixture;
@@ -1788,11 +1792,11 @@ describe("dependency scheduling through the installed Native text draft controll
         });
         const first = await wake(entries[0]!.task.id);
         expect(first).not.toBeNull();
-        await vi.waitFor(() => { expect(calls).toBe(1); }, { timeout: 10_000, interval: 25 });
+        await vi.waitFor(() => { expect(calls).toBe(1); }, { timeout: 30_000, interval: 25 });
         const second = await wake(entries[1]!.task.id);
         expect(second).not.toBeNull();
         expect(second!.id).not.toBe(first!.id);
-        await vi.waitFor(() => { expect(calls).toBe(2); }, { timeout: 10_000, interval: 25 });
+        await vi.waitFor(() => { expect(calls).toBe(2); }, { timeout: 30_000, interval: 25 });
 
         const runs = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, f.home), notInArray(heartbeatRuns.id, fixture.conformanceRunIds)));
         expect(runs).toHaveLength(2);
@@ -1828,7 +1832,17 @@ describe("dependency scheduling through the installed Native text draft controll
         releaseBoth();
       }
     });
-  }, 60_000);
+  }, 120_000);
+
+  // A fresh automation Native run passes the chat-control dispatch gate twice:
+  // once before Native selection (runtime still legacy, before inherited input
+  // is reconstructed) and again at the final provider handoff. Hooks that
+  // observe the provider handoff use only the Native-selected call.
+  async function isNativeSelectedDispatch(runId: string) {
+    const [current] = await db.select({ runtimeMode: heartbeatRuns.runtimeMode })
+      .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+    return current?.runtimeMode === "native";
+  }
 
   // Same current-Human/Plan and installed HTTP/listener owners as the two
   // cases above. The new cases share only their identical local setup/proofs.
@@ -2161,7 +2175,7 @@ describe("dependency scheduling through the installed Native text draft controll
         const holder = await wake(entries[0]!.task.id);
         expect(holder).not.toBeNull();
         await vi.waitFor(() => { expect(calls).toBe(1); expect(dispatchedPlans).toEqual([entries[0]!.plan.id]); },
-          { timeout: 10_000, interval: 25 });
+          { timeout: 30_000, interval: 25 });
         const blocked = await wake(entries[1]!.task.id), ready = await wake(entries[2]!.task.id);
         expect(blocked).not.toBeNull(); expect(ready).not.toBeNull();
         expect(new Set([holder!.id, blocked!.id, ready!.id]).size).toBe(3);
@@ -2213,7 +2227,7 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(runs.every(run => run.status !== "queued" && run.status !== "running")).toBe(true);
       } finally { releaseHolder(); }
     });
-  }, 60_000);
+  }, 120_000);
 
   it.each(["intact", "lost", "copied"] as const)(
     "persists and consumes the chat-control admission marker on a real Native Text C0 Plan: %s",
@@ -2250,6 +2264,7 @@ describe("dependency scheduling through the installed Native text draft controll
         { status: 200, headers: { "content-type": "application/json" } });
       };
       let secondDispatchMarkerObserved = false;
+      const preSelectionDispatchRunIds = new Set<string>();
       await withInstalledDraftTransport(fixture, fetch, async heartbeat => {
         try {
           entries.push(await createDraftPlan(fixture, "Marker admission holder draft"));
@@ -2269,7 +2284,7 @@ describe("dependency scheduling through the installed Native text draft controll
           await vi.waitFor(() => {
             expect(calls).toBe(1);
             expect(dispatchedPlanIds).toEqual([entries[0]!.plan.id]);
-          }, { timeout: 10_000, interval: 25 });
+          }, { timeout: 30_000, interval: 25 });
           const [activeFirst] = await db.select().from(heartbeatRuns)
             .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, first!.id)));
           expect(activeFirst).toMatchObject({ invocationSource: "automation", runtimeMode: "native", driverKind: "aw_text_messages", status: "running" });
@@ -2300,7 +2315,15 @@ describe("dependency scheduling through the installed Native text draft controll
         const [row] = await db.select().from(heartbeatRuns)
           .where(and(eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.id, runId)));
         expect(row).toBeDefined();
-        expect(row).toMatchObject({ invocationSource: "automation", runtimeMode: "native", driverKind: "aw_text_messages" });
+        // The pre-selection dispatch read is the first gate to consume the
+        // marker; the Native-selected provider handoff then sees it admitted.
+        if (preSelectionDispatchRunIds.has(runId)) {
+          expect(row).toMatchObject({ invocationSource: "automation", runtimeMode: "native", driverKind: "aw_text_messages" });
+          expect(readChatControlRecoveryAdmission(row!)).toBe("admitted");
+          return;
+        }
+        preSelectionDispatchRunIds.add(runId);
+        expect(row).toMatchObject({ invocationSource: "automation", runtimeMode: "legacy", runtimeModeResolvedAt: null });
         expect(readChatControlRecoveryAdmission(row!)).toBe("required");
         if (entryIndex === 1) {
           secondDispatchMarkerObserved = true;
@@ -2337,8 +2360,10 @@ describe("dependency scheduling through the installed Native text draft controll
       } else {
         expect(calls).toBe(1);
         expect(dispatchedPlanIds).toEqual([entries[0]!.plan.id]);
-        expect(secondRun).toMatchObject({ nativeIssueId: entries[1]!.task.id, invocationSource: "automation",
-          runtimeMode: "native", driverKind: "aw_text_messages", status: "failed",
+        // The pre-selection dispatch read fails closed before Native selection,
+        // so no Native session, driver, or issue binding is ever recorded.
+        expect(secondRun).toMatchObject({ nativeIssueId: null, invocationSource: "automation",
+          runtimeMode: "legacy", runtimeModeResolvedAt: null, nativeSessionId: null, driverKind: null, status: "failed",
           errorCode: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE,
           resultJson: expect.objectContaining({ automaticRecovery: { code: CHAT_CONTROL_RECOVERY_UNRESOLVED_CODE, providerDispatched: false } }) });
         const [secondWake] = await db.select().from(agentWakeupRequests)
@@ -2360,6 +2385,7 @@ describe("dependency scheduling through the installed Native text draft controll
         expect(await documentService(db).getIssueDocumentByKey(entries[1]!.task.id, "result")).toBeNull();
       }
     },
+    120_000,
   );
 
   it("pauses an installed Native Text Run through the canonical Human Agent-pause owner before selection", async () => {
@@ -2514,7 +2540,7 @@ describe("dependency scheduling through the installed Native text draft controll
         }
       };
       const beforeDispatch = async ({runId,issueId,stage}: {runId:string;issueId:string;stage:"claim"|"dispatch"}) => {
-        if (stage !== "dispatch" || phase !== "after_selection") return;
+        if (stage !== "dispatch" || phase !== "after_selection" || !await isNativeSelectedDispatch(runId)) return;
         if (!heartbeatOwner || !entry) throw new Error("cancellation_fence_owner_missing");
         dispatchReached = true;
         expect(issueId).toBe(entry.task.id);expect(runId).toBe(selectedRunId);

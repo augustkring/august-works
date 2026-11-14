@@ -66,7 +66,10 @@ it("denies an authenticated Reviewer's missing-comment decision on the actual st
   let fixtureExecutorId = "";
   let fixtureReviewerId = "";
   let preNativeStageSummary: { runId: string; body: string } | null = null;
-  const backendOwner = createControlledNativeSignoffBackend();
+  const backendOwner = createControlledNativeSignoffBackend({
+    runnerInstanceId: async runId => (await db.select({ runnerInstanceId: heartbeatRuns.runnerInstanceId })
+      .from(heartbeatRuns).where(eq(heartbeatRuns.id, runId)).limit(1))[0]?.runnerInstanceId,
+  });
   const { controlsByRun, waitForBackend, controlledBackend } = backendOwner;
   await withManagedNativeHeartbeatFixture({
     db,

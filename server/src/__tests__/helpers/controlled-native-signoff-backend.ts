@@ -1,8 +1,17 @@
 import type { NativeExecutionInput, NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
 
 /** Existing API-policy backend control, shared with its UI caller. This does
- * not dispatch a model or qualify provider/SDK behavior. */
-export function createControlledNativeSignoffBackend() {
+ * not dispatch a model or qualify provider/SDK behavior.
+ *
+ * The control-plane port accepts runner events only from the Run's effective
+ * runner instance (`paperclip-control-plane-port.ts`, source binding check).
+ * Under a managed runnerd Host that is the durable runner binding, which the
+ * executor persists on `heartbeat_runs.runner_instance_id` before the turn.
+ * Callers with a database pass `runnerInstanceId` so the injected terminal
+ * event carries that persisted identity; without it the turn id is used. */
+export function createControlledNativeSignoffBackend(options: {
+  runnerInstanceId?: (runId: string) => Promise<string | null | undefined>;
+} = {}) {
   type BackendControl = { started: Promise<void>; completion: Promise<void>; release: () => void; markStarted: () => void;
     waitForStart: () => Promise<void>; attempts: number; observations: { descriptor: boolean; openSession: boolean; startTurn: boolean } };
   const controlsByRun = new Map<string, BackendControl>();
@@ -79,8 +88,10 @@ export function createControlledNativeSignoffBackend() {
               attemptClosedPromise.then(() => false),
             ]);
             if (!released || cancelled || attemptClosed) return;
+            const sourceInstanceId = (await options.runnerInstanceId?.(identity.runId)) ?? turnId;
+            if (cancelled || attemptClosed) return;
             yield { schema: "paperclip.prp.event.v1" as const, sourceEventId: `${turnId}:terminal`, sourceSeq: 1,
-              sourceInstanceId: turnId, sourceKind: "runner" as const, runId: identity.runId,
+              sourceInstanceId, sourceKind: "runner" as const, runId: identity.runId,
               normalizedSessionId: identity.sessionId, turnId, eventType: "turn.completed" as const,
               schemaVersion: 1 as const, priority: 0 as const, emittedAt: new Date().toISOString(), payload: {} };
           },

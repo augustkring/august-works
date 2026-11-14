@@ -5571,7 +5571,7 @@
         },
         {
           "path": "server/src/__tests__/agent-conversations.test.ts",
-          "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9"
+          "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279"
         },
         {
           "path": "server/src/__tests__/agent-hire-ai-connections.test.ts",
@@ -5623,7 +5623,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-local-environment.test.ts",
-          "sha256": "b45618a9f532cbfd0b3b1c76b70fe5a6509b0136c7e0f113d42a00bbd7127112"
+          "sha256": "f7e6ea92b0eadd8bf3ba60e40973540ad5213a82cc9ad593b48bbfc2cfd23484"
         },
         {
           "path": "server/src/__tests__/heartbeat-lock-release-on-reassignment.test.ts",
@@ -5687,7 +5687,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
-          "sha256": "9539e04954850c410e595828e8cf95db05c4313d03311864fba490cb5b137e0b"
+          "sha256": "1aabef3e7c8d81d3bce821c6570ff2d932b7e545679f4594b7108af0f6d8c425"
         },
         {
           "path": "server/src/__tests__/heartbeat-task-drain.test.ts",
@@ -7023,7 +7023,7 @@
       "sources": [
         {
           "path": "server/src/__tests__/agent-conversations.test.ts",
-          "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9"
+          "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279"
         },
         {
           "path": "server/src/__tests__/analytical-context-privacy.integration.test.ts",
@@ -8940,7 +8940,7 @@
         },
         {
           "path": "server/src/__tests__/agent-conversations.test.ts",
-          "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9"
+          "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279"
         },
         {
           "path": "server/src/__tests__/agent-runtime-fabric-v5.test.ts",
@@ -13876,7 +13876,7 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-          "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb"
+          "sha256": "5d402eaa978038ddad670b4a3ad734cf69af8e60378108c087d14cbf8dab9fed"
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-scheduler.integration.test.ts",
@@ -24814,11 +24814,11 @@
         },
         {
           "path": "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
-          "sha256": "bdb997bb48648d666b67d3bbf83f9ed90012fa683d2c2a2310148770974dc214"
+          "sha256": "bb174a504fb4e79a4e3f9468da0ee8ca283af10458b6adf563cd8e65352d4818"
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
-          "sha256": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096"
+          "sha256": "ae6fc28b315ad3203566831638fc4fd9c40e84c3991bc9a6185a0fc166046433"
         },
         {
           "path": "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "c00f414f19ec220a7107166099d3f7e325e05176d3326b6fe4036dea011c9d33"
+          "sha256": "2aa83a7a02ec0c0c4dbbdc6995fa03608b58e01e36db14ac0a80dde73cd0c36c"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -32069,7 +32069,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
-          "sha256": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096"
+          "sha256": "ae6fc28b315ad3203566831638fc4fd9c40e84c3991bc9a6185a0fc166046433"
         },
         {
           "path": "server/src/__tests__/helpers/current-human-membership-fixture.ts",
@@ -47216,7 +47216,7 @@
       "id": "source:server/src/__tests__/agent-conversations.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/agent-conversations.test.ts",
-      "sha256": "6fb6cbb9458c6a60489d3ec66fd613c8ae0c9a7f377d7a656635c67706fe9fe9",
+      "sha256": "2c05711f9425fc2c64f8301c0d8468967fd065c2b59669869681d0351b85c279",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-04",
@@ -47406,7 +47406,7 @@
       "id": "source:server/src/__tests__/heartbeat-local-environment.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-local-environment.test.ts",
-      "sha256": "b45618a9f532cbfd0b3b1c76b70fe5a6509b0136c7e0f113d42a00bbd7127112",
+      "sha256": "f7e6ea92b0eadd8bf3ba60e40973540ad5213a82cc9ad593b48bbfc2cfd23484",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -47640,7 +47640,7 @@
       "id": "source:server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-task-drain-admission-release.test.ts",
-      "sha256": "9539e04954850c410e595828e8cf95db05c4313d03311864fba490cb5b137e0b",
+      "sha256": "1aabef3e7c8d81d3bce821c6570ff2d932b7e545679f4594b7108af0f6d8c425",
       "changeIds": [
         "SCR-V10-HOTSPOT-02"
       ],
@@ -52736,7 +52736,7 @@
       "id": "source:server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-dependency-draft-controller.integration.test.ts",
-      "sha256": "a8da296de88a570fa26016602effe52b3a7c0bcc2b1a16fda010a0994e800aeb",
+      "sha256": "5d402eaa978038ddad670b4a3ad734cf69af8e60378108c087d14cbf8dab9fed",
       "changeIds": [
         "SCR-V10-WORKFLOWS-DURABLE-OPERATIONS"
       ],
@@ -62970,7 +62970,7 @@
       "id": "source:server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/heartbeat-managed-native-interaction-retry.integration.test.ts",
-      "sha256": "bdb997bb48648d666b67d3bbf83f9ed90012fa683d2c2a2310148770974dc214",
+      "sha256": "bb174a504fb4e79a4e3f9468da0ee8ca283af10458b6adf563cd8e65352d4818",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
@@ -62985,7 +62985,7 @@
       "id": "source:server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
-      "sha256": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096",
+      "sha256": "ae6fc28b315ad3203566831638fc4fd9c40e84c3991bc9a6185a0fc166046433",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
@@ -63903,7 +63903,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "c00f414f19ec220a7107166099d3f7e325e05176d3326b6fe4036dea011c9d33",
+      "sha256": "2aa83a7a02ec0c0c4dbbdc6995fa03608b58e01e36db14ac0a80dde73cd0c36c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
