@@ -3,7 +3,9 @@ import { readNativeReviewAssignmentContext } from "../native-runtime/native-revi
 import { NATIVE_ATTACHMENT_CLEANUP_PREPARATION_PURPOSE, NATIVE_ATTACHMENT_STAGE_PREPARATION_PURPOSE, parseNativeRemoteAttachmentStageCommand } from "../native-runtime/native-attachment-remote-stage.js";
 import { captureNativeRemoteAttachmentReadbackOwner, captureNativeRemoteAttachmentStageOwner } from "../native-runtime/native-attachment-remote-stage-owner.js";
 import { NATIVE_GIT_CONTEXT_PROBE_SCRIPT } from "@paperclipai/adapter-utils/execution-target";
-import { buildWorkspaceTarExtractCommand, buildRemoveDeletedPathsCommand } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
+import { buildWorkspaceTarExtractCommand, buildRemoveDeletedPathsCommand, buildWorkspaceRestoreTarCommand,
+  serverVerifiedWorkspaceRestoreExclude } from "@paperclipai/adapter-utils/sandbox-managed-runtime";
+import { buildRemoteFileChunkReadCommand, buildRemoteFileSizeCommand, buildRemoteRemovePathCommand } from "@paperclipai/adapter-utils/command-managed-runtime";
 import { hostVersionMeetsMinimum } from "./catalog.js";
 import { runtimeCommercialReason } from "./commercial.js";
 import type { NotifyCompany } from "../notifications/notifications.js";
@@ -508,6 +510,38 @@ export function exactNativeWorkspacePrepareCommand(input: {
     return paths !== null && script === buildRemoveDeletedPathsCommand({ remoteDir: input.taskRoot, deletedPaths: paths });
   }
   return false;
+}
+
+/** Highest chunk index of the bounded restore read (3 MiB chunks, 3 GiB archive). */
+const NATIVE_CONFORMANCE_RESTORE_MAX_CHUNK_INDEX = 1023;
+
+/** Outbound restore of the server-owned provider-conformance workspace. The
+ * hidden probe Run has exactly one model turn, so its settle cannot use the
+ * ordinary brokered command lane. Only the commands the shared restore
+ * producer emits for a server-verified projectless root are accepted: archive
+ * the task root (runtime root excluded) into the fixed runtime archive, read
+ * that archive back in bounded chunks, and remove it. No input, environment or
+ * other path is accepted. Callers must also hold the current conformance
+ * workspace owner and require a credentialless request. */
+export function exactNativeConformanceWorkspaceRestoreCommand(input: {
+  request: import("@paperclipai/shared").RuntimeSandboxExecRelayRequest;
+  taskRoot: string;
+  execution: ReturnType<typeof parseNativeExecutionInput>;
+}): boolean {
+  const { argv, stdinBase64, cwd, env } = input.request;
+  if (input.execution.provider.kind !== "opencode" || input.execution.session.driverKind !== "opencode_server" ||
+    !path.posix.isAbsolute(input.taskRoot) || path.posix.normalize(input.taskRoot) !== input.taskRoot ||
+    path.resolve(input.execution.workspace.cwd) !== input.taskRoot || cwd !== input.taskRoot || stdinBase64 !== "" ||
+    Object.keys(env ?? {}).length !== 0 || argv.length !== 3 || argv[0] !== "sh" || argv[1] !== "-c") return false;
+  const script = argv[2]!;
+  const archive = path.posix.join(input.taskRoot, ".paperclip-runtime", "paperclip-runner", "workspace-download.tar");
+  if (script === buildWorkspaceRestoreTarCommand({ workspaceRemoteDir: input.taskRoot, archivePath: archive,
+    exclude: serverVerifiedWorkspaceRestoreExclude() })) return true;
+  if (script === buildRemoteFileSizeCommand(archive) || script === buildRemoteRemovePathCommand(archive)) return true;
+  const chunk = / skip=(0|[1-9][0-9]{0,3}) count=1 /.exec(script);
+  const chunkIndex = chunk ? Number(chunk[1]) : -1;
+  return chunkIndex >= 0 && chunkIndex <= NATIVE_CONFORMANCE_RESTORE_MAX_CHUNK_INDEX &&
+    script === buildRemoteFileChunkReadCommand(archive, chunkIndex);
 }
 
 function exactNativeProviderArtifactChunkCommand(input: {
@@ -3827,10 +3861,13 @@ export function runtimeControlService(
         const onlyExactManagedModelEnvironment = managedModelEnvironmentKeys.every(key => allowedManagedModelEnvironmentKeys.has(key));
         const noWorkloadCredential = credentials.mode === "none" && credentials.bindings.length === 0 &&
           request.brokerCredential === undefined && !Object.keys(request.env ?? {}).some(key => forbiddenEnvironmentKeys.includes(key));
+        // The settle-time restore stays in this credentialless owner; it is
+        // matched only here, never in the Worker or conversation lanes.
         const exactWorkspace = nativeWorkspacePrepare && request.modelBrokerCredential === undefined &&
           request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
-          exactNativeWorkspacePrepareCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
-            expectedProviderLeaseId: source.lease.providerLeaseId ?? undefined });
+          (exactNativeWorkspacePrepareCommand({ request, taskRoot: conformanceWorkspaceRoot, execution,
+            expectedProviderLeaseId: source.lease.providerLeaseId ?? undefined }) ||
+            exactNativeConformanceWorkspaceRestoreCommand({ request, taskRoot: conformanceWorkspaceRoot, execution }));
         const exactArtifact = providerArtifactPreparation && request.modelBrokerCredential === undefined &&
           request.modelBrokerSession === undefined && noWorkloadCredential && noManagedModelEnvironment &&
           (exactNativeProviderArtifactChunkCommand({ request, taskRoot: conformanceWorkspaceRoot }) ||

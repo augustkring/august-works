@@ -162,6 +162,21 @@ const REMOTE_WRITE_FALLBACK_BASE64_CHUNK_SIZE = 4 * 1024 * 1024;
 const REMOTE_WRITE_FALLBACK_DECODED_CHUNK_SIZE = (REMOTE_WRITE_FALLBACK_BASE64_CHUNK_SIZE / 4) * 3;
 const REMOTE_READ_CHUNK_BYTES = REMOTE_WRITE_FALLBACK_DECODED_CHUNK_SIZE;
 
+// Named builders for the shell-backed read/remove transport. RuntimeControl
+// matches the conformance workspace restore against these exact strings, so
+// the producer below must use them rather than inline copies.
+export function buildRemoteFileSizeCommand(remotePath: string): string {
+  return `wc -c < ${shellQuote(remotePath)}`;
+}
+
+export function buildRemoteFileChunkReadCommand(remotePath: string, chunkIndex: number): string {
+  return `dd if=${shellQuote(remotePath)} bs=${REMOTE_READ_CHUNK_BYTES} skip=${chunkIndex} count=1 2>/dev/null | base64`;
+}
+
+export function buildRemoteRemovePathCommand(remotePath: string): string {
+  return `rm -rf ${shellQuote(remotePath)}`;
+}
+
 function base64EncodedLength(byteLength: number): number {
   return Math.ceil(byteLength / 3) * 4;
 }
@@ -351,7 +366,7 @@ export function createCommandManagedRuntimeClient(input: {
       // detected without materializing the whole file as one stdout string.
       let sizeResult;
       try {
-        sizeResult = await runShell(`wc -c < ${shellQuote(remotePath)}`);
+        sizeResult = await runShell(buildRemoteFileSizeCommand(remotePath));
       } catch (error) {
         // Shell-backed sandbox reads need the same absent-file contract as fs.
         // Confirm the parent is searchable so permission/transport failures are
@@ -385,9 +400,7 @@ export function createCommandManagedRuntimeClient(input: {
         return Buffer.alloc(0);
       }
       for (let chunkIndex = 0; decodedSoFar < totalBytes; chunkIndex++) {
-        const result = await runShell(
-          `dd if=${shellQuote(remotePath)} bs=${REMOTE_READ_CHUNK_BYTES} skip=${chunkIndex} count=1 2>/dev/null | base64`,
-        );
+        const result = await runShell(buildRemoteFileChunkReadCommand(remotePath, chunkIndex));
         const chunk = Buffer.from(result.stdout.replace(/\s+/g, ""), "base64");
         if (chunk.byteLength === 0) break;
         decodedChunks.push(chunk);
@@ -419,7 +432,7 @@ export function createCommandManagedRuntimeClient(input: {
     remove: async (remotePath) => {
       const result = await input.runner.execute({
         command: shellCommand,
-        args: shellCommandArgs(`rm -rf ${shellQuote(remotePath)}`),
+        args: shellCommandArgs(buildRemoteRemovePathCommand(remotePath)),
         cwd: input.commandCwd,
         timeoutMs: input.timeoutMs,
         ...(nativeWorkspacePreparationActive ? { nativePreparationPurpose: "native_workspace_prepare" as const } : {}),
@@ -567,6 +580,14 @@ export async function prepareCommandManagedRuntime(input: {
   workspaceRepositoryMode?: "discover" | "server_verified_none";
   /** Internal capability set only by the verified Native workspace-sync owner. */
   nativeWorkspacePreparation?: boolean;
+  /**
+   * Keep the trusted preparation purpose on the outbound workspace restore.
+   * Set only by the server-owned provider-conformance workspace owner: its
+   * hidden Run has no other credentialless lane for the restore, and
+   * RuntimeControl matches each restore command exactly. Other owners restore
+   * through their Run's ordinary command lane.
+   */
+  nativeWorkspaceRestorePreparation?: boolean;
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: CommandManagedRuntimeAsset[];
@@ -603,6 +624,15 @@ export async function prepareCommandManagedRuntime(input: {
   )) {
     throw new Error("native_workspace_prepare_scope_invalid");
   }
+  const retainPreparationForRestore = input.nativeWorkspaceRestorePreparation === true;
+  if (retainPreparationForRestore && (input.nativeWorkspacePreparation !== true ||
+    input.workspaceRepositoryMode !== "server_verified_none" || (input.preserveAbsentOnRestore?.length ?? 0) > 0 ||
+    (input.workspaceExclude?.length ?? 0) > 0)) {
+    throw new Error("native_workspace_restore_scope_invalid");
+  }
+  const finishPreparation = () => {
+    if (!retainPreparationForRestore) client.finishNativeWorkspacePreparation();
+  };
   const runtimeSpec: SandboxRemoteExecutionSpec = {
     transport: "sandbox",
     provider: input.spec.providerKey ?? "sandbox",
@@ -655,7 +685,7 @@ export async function prepareCommandManagedRuntime(input: {
           onRuntimeProgress: input.onRuntimeProgress,
           runtimeSpan: input.runtimeSpan,
         });
-        client.finishNativeWorkspacePreparation();
+        finishPreparation();
         return prepared;
       }
     }
@@ -701,6 +731,6 @@ export async function prepareCommandManagedRuntime(input: {
     onRuntimeProgress: input.onRuntimeProgress,
     runtimeSpan: input.runtimeSpan,
   });
-  client.finishNativeWorkspacePreparation();
+  finishPreparation();
   return prepared;
 }

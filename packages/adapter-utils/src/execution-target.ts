@@ -1427,6 +1427,8 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
   workspaceRepositoryMode?: "discover" | "server_verified_none";
   /** Internal capability set only by the verified Native workspace-sync owner. */
   nativeWorkspacePreparation?: boolean;
+  /** Provider-conformance owner only: keep the preparation purpose on the outbound restore. */
+  nativeWorkspaceRestorePreparation?: boolean;
   workspaceExclude?: string[];
   preserveAbsentOnRestore?: string[];
   assets?: AdapterManagedRuntimeAsset[];
@@ -1509,6 +1511,7 @@ export async function prepareAdapterExecutionTargetRuntime(input: {
     workspaceGitSnapshot: input.workspaceGitSnapshot,
     workspaceRepositoryMode: input.workspaceRepositoryMode,
     nativeWorkspacePreparation: input.nativeWorkspacePreparation,
+    nativeWorkspaceRestorePreparation: input.nativeWorkspaceRestorePreparation,
     workspaceExclude: input.workspaceExclude,
     preserveAbsentOnRestore: input.preserveAbsentOnRestore,
     assets: input.assets,

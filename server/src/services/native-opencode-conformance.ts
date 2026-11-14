@@ -733,7 +733,10 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           const workspaceSync = await prepareNativeWorkspaceSync({ db, runId, companyId: input.companyId,
             workspaceId: input.harness.workspaceRoot.workspaceId, workspaceLocalDir: input.harness.workspaceRoot.cwd,
             target: acquired.executionTarget, lease: acquired.lease, resourceDisposition: "stop_and_retain",
-            workspaceRepositoryMode: "server_verified_none", nativeWorkspacePreparation: true, requireCleanRemoteAdoption: true });
+            workspaceRepositoryMode: "server_verified_none", nativeWorkspacePreparation: true, requireCleanRemoteAdoption: true,
+            // The hidden probe Run has one model turn and no worker attempt, so
+            // settle restores through this same credentialless conformance owner.
+            nativeWorkspaceRestorePreparation: true });
           if (!workspaceSync?.reference || !await assertNativeWorkspaceSyncServerVerifiedNone({ runId, reference: workspaceSync.reference,
             companyId: input.companyId, workspaceId: input.harness.workspaceRoot.workspaceId,
             leaseId: acquired.lease.id, providerLeaseId: acquired.executionTarget.sandboxLeaseAcquisition?.providerLeaseId ?? acquired.lease.providerLeaseId ?? "",
