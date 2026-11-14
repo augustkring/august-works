@@ -89,6 +89,7 @@ import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provide
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { verifyRuntimeToolsToken } from "../../runtime-tools-token.js";
 import { findNativeChatWorkspaceScope, nativeChatWorkspaceCwd } from "../native-runtime/native-chat-workspace.js";
+import { readRuntimeChannelConversationScope, runtimeConversationGeneration, runtimeConversationOwnerExact } from "./runtime-conversation-owner.js";
 import { assertNativePayloadSourceSetCurrent, assertNativeTaskSourceOwnerCurrent, assertNativeWorkspaceMetadataSourcesCurrent } from "../native-direct-input.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -3803,7 +3804,12 @@ export function runtimeControlService(
         request.modelBrokerCredential !== undefined;
       let nativeSessionStartValid = false;
       let nativeHarnessStateValid = false;
-      const workerPreparationRoot = source.providerConformanceBootstrap ? null :
+      // A chat_channel Task has no web-conversation columns. Its conversation
+      // owner is the current linked-Human inbound wake, read from the persisted
+      // Run and Task only; null keeps the existing Worker/web checks below.
+      const channelScope = source.providerConformanceBootstrap ? null :
+        await readRuntimeChannelConversationScope(tx, { run: source.run, task: source.source.task });
+      const workerPreparationRoot = source.providerConformanceBootstrap || channelScope ? null :
         await currentWorkerNativePreparationRoot(tx, source, nativePreparationPurpose);
       const conformanceWorkspaceRoot = await currentConformanceNativeWorkspaceRoot(source, nativePreparationPurpose);
       if (conformanceWorkspaceRoot !== null) {
@@ -3951,10 +3957,9 @@ export function runtimeControlService(
           "PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN", "PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND",
           "PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS",
         ].includes(key));
-        const exactConversation = task.conversationAgentId === source.run.agentId &&
-          task.conversationUserId === source.run.responsibleUserId && task.assigneeAgentId === source.run.agentId &&
-          task.conversationState === "active" && task.conversationRetiredAt === null &&
-          task.executionRunId === source.run.id && task.conversationSessionGeneration === generation && generation !== null &&
+        const exactConversation = runtimeConversationOwnerExact(task, source.run, channelScope) &&
+          task.assigneeAgentId === source.run.agentId &&
+          task.executionRunId === source.run.id && runtimeConversationGeneration(task, channelScope) === generation && generation !== null &&
           ["in_review", "in_progress"].includes(task.status) && source.run.status === "running" &&
           source.run.runtimeMode === "native" && source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
           source.run.contextSnapshot?.conversationSessionGeneration === generation && source.manifest.runId === source.run.id &&
@@ -3979,9 +3984,9 @@ export function runtimeControlService(
           !exactNativeProviderArtifactChunkCommand({ request, taskRoot: expectedTaskRoot }))
           throw forbidden("Provider artifact relay chunk is outside its exact private Task target");
       }
-      const workerNativeSessionStart = nativeSessionStart && !source.providerConformanceBootstrap &&
+      const workerNativeSessionStart = nativeSessionStart && !source.providerConformanceBootstrap && !channelScope &&
         source.source.task.conversationAgentId === null && source.source.task.conversationUserId === null;
-      const workerModelSessionRefresh = !nativePreparationPurpose && request.modelBrokerSession?.phase === "refresh" &&
+      const workerModelSessionRefresh = !nativePreparationPurpose && request.modelBrokerSession?.phase === "refresh" && !channelScope &&
         source.source.task.conversationAgentId === null && source.source.task.conversationUserId === null;
       if (workerModelSessionRefresh) {
         const profile = source.run.runnerProfileJson && typeof source.run.runnerProfileJson === "object" &&
@@ -4075,10 +4080,9 @@ export function runtimeControlService(
           execution.completionContract.sha256 === source.run.completionContractSha256 &&
           execution.provider.kind === "opencode" && execution.workspace.cwd === expectedTaskRoot &&
           typeof execution.task.prompt === "string" && execution.task.prompt.length > 0;
-        const exactHumanTask = task.conversationAgentId === source.run.agentId &&
-          task.conversationUserId === source.run.responsibleUserId && task.assigneeAgentId === source.run.agentId &&
-          task.conversationState === "active" && task.conversationRetiredAt === null &&
-          task.executionRunId === source.run.id && task.conversationSessionGeneration === generation && generation !== null &&
+        const exactHumanTask = runtimeConversationOwnerExact(task, source.run, channelScope) &&
+          task.assigneeAgentId === source.run.agentId &&
+          task.executionRunId === source.run.id && runtimeConversationGeneration(task, channelScope) === generation && generation !== null &&
           ["in_review", "in_progress"].includes(task.status) && source.run.status === "running" &&
           source.run.runtimeMode === "native" && source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
           contextSnapshot.conversationSessionGeneration === generation && source.manifest.runId === source.run.id &&
@@ -4391,16 +4395,15 @@ export function runtimeControlService(
               conversationModelClaims.exp * 1000 >= Date.now() &&
               Date.parse(modelCredential.expiresAt) <= conversationModelClaims.exp * 1000,
             tokenBinding: conversationBinding.issueId === task.id &&
-              conversationBinding.conversationSessionGeneration === task.conversationSessionGeneration &&
+              conversationBinding.conversationSessionGeneration === runtimeConversationGeneration(task, channelScope) &&
               conversationBinding.executionManifestId === source.manifest.id &&
               conversationBinding.executionManifestHash === source.manifest.hash,
             runBinding: source.run.status === "running" && source.run.runtimeMode === "native" &&
               source.run.scopeKind === "issue" && source.run.nativeIssueId === task.id &&
-              source.run.responsibleUserId === task.conversationUserId &&
-              source.run.contextSnapshot?.conversationSessionGeneration === task.conversationSessionGeneration,
-            conversationOwner: task.conversationAgentId === source.run.agentId &&
-              task.conversationUserId === source.run.responsibleUserId && task.assigneeAgentId === source.run.agentId &&
-              task.conversationState === "active" && task.conversationRetiredAt === null &&
+              source.run.responsibleUserId === (channelScope ? channelScope.responsibleUserId : task.conversationUserId) &&
+              source.run.contextSnapshot?.conversationSessionGeneration === runtimeConversationGeneration(task, channelScope),
+            conversationOwner: runtimeConversationOwnerExact(task, source.run, channelScope) &&
+              task.assigneeAgentId === source.run.agentId &&
               task.executionRunId === source.run.id && ["in_review", "in_progress"].includes(task.status),
             manifestBinding: source.manifest.runId === source.run.id && source.manifest.agentId === source.run.agentId &&
               source.manifest.hash === conversationBinding.executionManifestHash &&
@@ -4571,7 +4574,12 @@ export function runtimeControlService(
       throw forbidden("Sandbox execution workspace is outside its current filesystem policy", { code: "sandbox_execution_cwd_outside_policy" });
     const attempt = initialSource.attempt?.attempt ?? Math.max(1, initialSource.run.continuationAttempt + 1);
     const conversationTask = initialSource.source.task;
-    const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;
+    // A chat_channel Task carries no web-conversation columns; its owner is the
+    // current linked-Human inbound wake (same projection as the model gateway).
+    const channelScope = initialSource.providerConformanceBootstrap ? null :
+      await readRuntimeChannelConversationScope(db, { run: initialSource.run, task: conversationTask });
+    const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null ||
+      channelScope !== null;
     let conversationTaskRoot: string | null = null;
     let conversationExecution: ReturnType<typeof parseNativeExecutionInput> | null = null;
     const runProfile = initialSource.run.runnerProfileJson && typeof initialSource.run.runnerProfileJson === "object" &&
@@ -4691,7 +4699,7 @@ export function runtimeControlService(
         runnerInstanceId, leaseId: initialSource.lease.id, sessionDeadlineAt: sessionCeilingAt.toISOString(),
         ...(expectedCapabilityHash ? { expectedCapabilityHash } : {}) };
     }
-    if (conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null) {
+    if (hasConversationIdentity) {
       const contextSnapshot = initialSource.run.contextSnapshot &&
         typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown>
@@ -4777,12 +4785,11 @@ export function runtimeControlService(
       const task = initialSource.source.task;
       const contextSnapshot = initialSource.run.contextSnapshot && typeof initialSource.run.contextSnapshot === "object"
         ? initialSource.run.contextSnapshot as Record<string, unknown> : {};
-      if (!workerPreparationRoot && (runnerProfile?.provider !== "opencode" || task.conversationAgentId !== initialSource.run.agentId ||
-        task.conversationUserId !== initialSource.run.responsibleUserId || task.conversationState !== "active" ||
-        task.conversationRetiredAt !== null || task.executionRunId !== initialSource.run.id ||
+      if (!workerPreparationRoot && (runnerProfile?.provider !== "opencode" ||
+        !runtimeConversationOwnerExact(task, initialSource.run, channelScope) || task.executionRunId !== initialSource.run.id ||
         !["in_review", "in_progress"].includes(task.status) || initialSource.run.runtimeMode !== "native" ||
         initialSource.run.scopeKind !== "issue" || initialSource.run.nativeIssueId !== task.id ||
-        contextSnapshot.conversationSessionGeneration !== task.conversationSessionGeneration ||
+        contextSnapshot.conversationSessionGeneration !== runtimeConversationGeneration(task, channelScope) ||
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
         initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId))
         throw conflict("Provider artifact preparation requires the current Native conversation Run and manifest");
@@ -4795,15 +4802,11 @@ export function runtimeControlService(
       const profile = initialSource.capability.modelBrokerProviderProfile;
       if (!options.workerModels || !profile || !credentialBrokerOrigin || !managedModelBrokerOrigin)
         throw conflict("Qualified managed model broker is unavailable");
-      const conversationTask = initialSource.source.task;
-      const hasConversationIdentity = conversationTask.conversationAgentId !== null || conversationTask.conversationUserId !== null;
-      if (hasConversationIdentity && (conversationTask.conversationAgentId !== initialSource.run.agentId ||
-        conversationTask.conversationUserId !== initialSource.run.responsibleUserId ||
-        conversationTask.conversationState !== "active" || conversationTask.conversationRetiredAt !== null ||
-        conversationTask.conversationSessionGeneration < 0 || conversationTask.executionRunId !== initialSource.run.id ||
+      if (hasConversationIdentity && (!runtimeConversationOwnerExact(conversationTask, initialSource.run, channelScope) ||
+        runtimeConversationGeneration(conversationTask, channelScope) < 0 || conversationTask.executionRunId !== initialSource.run.id ||
         !["in_review", "in_progress"].includes(conversationTask.status) || initialSource.run.scopeKind !== "issue" ||
         initialSource.run.nativeIssueId !== conversationTask.id ||
-        initialSource.run.contextSnapshot?.conversationSessionGeneration !== conversationTask.conversationSessionGeneration ||
+        initialSource.run.contextSnapshot?.conversationSessionGeneration !== runtimeConversationGeneration(conversationTask, channelScope) ||
         initialSource.manifest.runId !== initialSource.run.id || initialSource.manifest.agentId !== initialSource.run.agentId ||
         initialSource.manifest.manifest.responsibleUserId !== initialSource.run.responsibleUserId))
         throw conflict("Current Native conversation Human, generation, Run and manifest are required");
