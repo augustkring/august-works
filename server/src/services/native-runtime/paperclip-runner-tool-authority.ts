@@ -1123,9 +1123,14 @@ export class PaperclipRunnerToolAuthority {
           else exactProjection = false;
         }
         const sourceClosure = nativeSourceSetFromObservedOwners(owners);
+        // Return the timestamp as the ISO string the provider receives. The result
+        // digest hashes this object, and canonical JSON would hash a Date as {}:
+        // the digest would then omit the timestamp and differ from the gateway's
+        // hash of the provider-visible JSON.
         const result = { comments: orderedComments.map(({ sourceVersion: _sourceVersion,
           payloadSourceSnapshot: _payloadSourceSnapshot,
-          payloadSourceSnapshotInvalidated: _payloadSourceSnapshotInvalidated, ...comment }) => comment) };
+          payloadSourceSnapshotInvalidated: _payloadSourceSnapshotInvalidated, createdAt, ...comment }) =>
+          ({ ...comment, createdAt: createdAt.toISOString() })) };
         const emptyHistorySourceSet: NativePayloadSourceSet = {
           policy: { ...emptyNativeSourcePolicy(), issueIds: [this.binding.issueId] }, inputs: [],
         };

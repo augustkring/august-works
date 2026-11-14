@@ -469,7 +469,13 @@ describe("PaperclipRunnerToolAuthority", () => {
       arguments: {} }, { nativeToolCallIdentity: { tool: "get_task_history", callId: "history-read-real", turnId: "history-turn" },
       onNativeInputToolResult: async capture => { captures.push(capture); } }) as { comments: Array<{ id: string; body: string }> };
     expect(result.comments).toEqual([expect.objectContaining({ id: comment!.id, body: "A real retained history body" })]);
+    // The provider receives this result as JSON. The captured digest must cover
+    // exactly that JSON, timestamps included, or the gateway rejects the replay.
+    const providerVisible = JSON.parse(JSON.stringify(result)) as { comments: Array<{ createdAt: unknown }> };
+    expect(providerVisible.comments[0]!.createdAt).toBe(comment!.createdAt.toISOString());
+    expect(result).toEqual(providerVisible);
     expect(captures).toHaveLength(1);
+    expect(captures[0]!.resultDigest).toBe(nativeSha256(providerVisible));
     expect(captures[0]).toMatchObject({ turnId: "history-turn", callId: "history-read-real", tool: "get_task_history",
       resultDigest: nativeSha256(result), sourceSet: null,
       observedSourceInputs: [expect.objectContaining({ kind: "comment", issueId: fixture.issueId,
