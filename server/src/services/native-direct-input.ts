@@ -2329,6 +2329,18 @@ export function nativeManagedProgressCommentSourceSet(capture: NativeModelOutput
   return { policy, inputs };
 }
 
+/** The Run receipt entry for a settled managed progress tool_result. Unlike
+ * the comment snapshot above, it keeps the consumed source policy: the
+ * producing Run's own dispatch is provenance for this result, not a consumed
+ * source, so it never widens the receipt's readable Run IDs. The executor
+ * records exactly this entry; the gateway and the shared consumed-source
+ * validator require it. */
+export function nativeManagedProgressReceiptSourceSet(capture: NativeModelOutputCapture,
+  source: Extract<NativePayloadSourceInput, { kind: "tool_result" }>): NativePayloadSourceSet {
+  return { policy: capture.sourceSet.policy,
+    inputs: unionNativePayloadSourceInputs([[source], [capture.dispatch], capture.sourceSet.inputs]) };
+}
+
 /** Validate the server-only provider/tool output carrier against the settled
  * Messages response, recorded tool-use block, dispatch association, and exact
  * run receipt source set. The caller never supplies this object. */
@@ -5783,12 +5795,12 @@ async function assertNativeManagedSemanticToolResultCurrentInScope(db: Db | Tran
     const body = typeof args.body === "string" ? args.body : fail();
     const commentId = typeof progress?.commentId === "string" ? progress.commentId : "";
     const snapshotSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
-    const progressSourceInputs = unionNativePayloadSourceInputs([[input.source], [outputCapture.dispatch], outputCapture.sourceSet.inputs]);
+    const progressReceiptSet = nativeManagedProgressReceiptSourceSet(outputCapture, input.source);
     if (progress?.callId !== input.source.callId || progress.argumentsHash !== capture.argumentsHash ||
       progress.resultDigest !== input.source.contentHash || result.commentId !== commentId ||
-      !commentId || progressSourceInputs.length > 256 ||
-      !isDeepStrictEqual(additional[0]!.policy, outputCapture.sourceSet.policy) ||
-      !isDeepStrictEqual(additional[0]!.inputs, progressSourceInputs)) fail();
+      !commentId || progressReceiptSet.inputs.length > 256 ||
+      !isDeepStrictEqual(additional[0]!.policy, progressReceiptSet.policy) ||
+      !isDeepStrictEqual(additional[0]!.inputs, progressReceiptSet.inputs)) fail();
     const [comment] = await db.select({ id: issueComments.id, issueId: issueComments.issueId,
       authorType: issueComments.authorType, authorAgentId: issueComments.authorAgentId,
       createdByRunId: issueComments.createdByRunId, body: issueComments.body, sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,

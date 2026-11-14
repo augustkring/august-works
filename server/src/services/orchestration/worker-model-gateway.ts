@@ -79,7 +79,7 @@ import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import { resolveDelegatedContextManifestBindings } from "../context/delegated-context-binding.js";
 import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
 import { captureNativeBlockedHumanInteraction, assertNativeManagedConsumedSourceSetCurrent, assertNativeProjectSourceCurrent,
-  assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet,
+  assertNativeModelOutputCaptureCurrent, nativeManagedProgressCommentSourceSet, nativeManagedProgressReceiptSourceSet,
   assertNativeAssignedMcpApprovalErrorCurrent, assertNativeAssignedMcpSearchResultCurrent } from "../native-direct-input.js";
 import { PROCESS_START_REQUESTED, IN_PROCESS_BACKEND_ADMITTED } from "../native-local-process-stop.js";
 import { assertManagedNativeProjectRepositoriesAuthorizationCurrent, assertNativeManagedProjectCreateReceiptCurrent,
@@ -1279,14 +1279,19 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: ManagedModelC
           const progress = managedRecord(capture.progressComment);
           const outputCapture = managedRecord(progress.outputCapture) as unknown as NativeModelOutputCapture;
           const sourceSetValue = outputCapture.sourceSet;
-          const commentSourceSet = nativeManagedProgressCommentSourceSet(outputCapture);
+          // Still refuses a capture whose consumed inputs already contain its dispatch.
+          nativeManagedProgressCommentSourceSet(outputCapture);
           const sourcePolicy = nativePayloadSourcePolicySchema.safeParse(sourceSetValue?.policy);
           const sourceInputs = nativePayloadSourceInputSchema.array().safeParse(sourceSetValue?.inputs);
-          const expectedInputs = sourceInputs.success
-            ? unionNativePayloadSourceInputs([[source], commentSourceSet.inputs]) : [];
-          const expectedEntries = sourcePolicy.success && sourceInputs.success
+          const parsedSource = nativePayloadSourceInputSchema.safeParse(source);
+          // The Run receipt entry keeps the consumed source policy. The comment
+          // snapshot (checked against nativeManagedProgressCommentSourceSet
+          // above) is the only owner that adds the producing dispatch Run.
+          const expectedReceiptSet = sourcePolicy.success && sourceInputs.success && parsedSource.success &&
+            parsedSource.data.kind === "tool_result" ? nativeManagedProgressReceiptSourceSet(outputCapture, parsedSource.data) : null;
+          const expectedEntries = expectedReceiptSet
             ? receipt.data.additionalInputs.filter(entry => entry.responsibleUserId === claims.responsible_user_id &&
-              isDeepStrictEqual(entry.policy, commentSourceSet.policy) && isDeepStrictEqual(entry.inputs, expectedInputs)) : [];
+              isDeepStrictEqual(entry.policy, expectedReceiptSet.policy) && isDeepStrictEqual(entry.inputs, expectedReceiptSet.inputs)) : [];
           const exactCopies = receipt.data.additionalInputs.reduce((count, entry) => count + entry.inputs.filter(value =>
             value.kind === "tool_result" && isDeepStrictEqual(value, source)).length, 0);
           const conflictingCopies = receipt.data.additionalInputs.some(entry => entry.inputs.some(value =>

@@ -97,6 +97,35 @@ describe("direct Human comment payload source capture", () => {
       .toMatchObject({ payloadSourceProtocolVersion: 0, payloadSourceSnapshot: null });
   });
 
+  it("keeps a caller's protocol 1 request when the caller's transaction is also the service handle", async () => {
+    // Run-authored owners (managed report_progress) call
+    // issueService(tx).addComment(..., tx, 1) and seal the unsealed protocol 1
+    // row in the same transaction. The serialized append path must not drop
+    // that request; omitting it must still store unknown protocol 0.
+    const f = await seed();
+    const requested = await db.transaction(async tx => issueService(tx as unknown as typeof db)
+      .addComment(f.issue.id, "Caller-sealed input", { userId: f.userId }, {}, tx, 1));
+    const omitted = await db.transaction(async tx => issueService(tx as unknown as typeof db)
+      .addComment(f.issue.id, "Caller without a protocol", { userId: f.userId }, {}, tx));
+    expect((await readOwner(requested.id)).row).toMatchObject({ payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null });
+    expect((await readOwner(omitted.id)).row).toMatchObject({ payloadSourceProtocolVersion: 0, payloadSourceSnapshot: null });
+    // Protocol 1 alone is not a source proof: nothing is captured or audited
+    // until the caller's own seal binds a snapshot.
+    expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId),
+      eq(activityLog.action, "comment.payload_source_captured")))).toHaveLength(0);
+  });
+
+  it("does not let a caller's protocol request upgrade a direct Human replay", async () => {
+    const f = await seed(), clientRequestId = randomUUID(), body = "Existing unknown Human input";
+    const [old] = await db.insert(issueComments).values({ companyId: f.companyId, issueId: f.issue.id,
+      authorUserId: f.userId, authorType: "user", body, clientRequestId, payloadSourceProtocolVersion: 0 }).returning();
+    // A direct Human input decides its protocol from freshness alone.
+    const replay = await db.transaction(async tx => issueService(tx as unknown as typeof db)
+      .addComment(f.issue.id, body, { userId: f.userId }, { clientRequestId, manualInputActor: f.actor }, tx, 1));
+    expect(replay.id).toBe(old!.id);
+    expect((await readOwner(old!.id)).row).toMatchObject({ payloadSourceProtocolVersion: 0, payloadSourceSnapshot: null });
+  });
+
   it("routes the source audit through the Task owner so another member cannot receive its private live event", async () => {
     const f = await seed(), other = await seed();
     await db.insert(companyMemberships).values({ companyId: f.companyId, principalType: "user",
