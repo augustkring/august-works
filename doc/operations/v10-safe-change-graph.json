@@ -24818,7 +24818,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
-          "sha256": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096"
+          "sha256": "ae6fc28b315ad3203566831638fc4fd9c40e84c3991bc9a6185a0fc166046433"
         },
         {
           "path": "server/src/__tests__/helpers/heartbeat-runtime-fixtures.ts",
@@ -25066,7 +25066,7 @@
         },
         {
           "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-          "sha256": "c00f414f19ec220a7107166099d3f7e325e05176d3326b6fe4036dea011c9d33"
+          "sha256": "2aa83a7a02ec0c0c4dbbdc6995fa03608b58e01e36db14ac0a80dde73cd0c36c"
         },
         {
           "path": "server/src/services/native-runtime/management-analytical-tools.test.ts",
@@ -32069,7 +32069,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
-          "sha256": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096"
+          "sha256": "ae6fc28b315ad3203566831638fc4fd9c40e84c3991bc9a6185a0fc166046433"
         },
         {
           "path": "server/src/__tests__/helpers/current-human-membership-fixture.ts",
@@ -62985,7 +62985,7 @@
       "id": "source:server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/controlled-native-signoff-backend.ts",
-      "sha256": "d3a5efd9a4edb65c587230d25f2d06c86327dd901808fc4cb1543d64f87d8096",
+      "sha256": "ae6fc28b315ad3203566831638fc4fd9c40e84c3991bc9a6185a0fc166046433",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY",
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
@@ -63903,7 +63903,7 @@
       "id": "source:server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/native-runtime/managed-signoff-api-policy.integration.test.ts",
-      "sha256": "c00f414f19ec220a7107166099d3f7e325e05176d3326b6fe4036dea011c9d33",
+      "sha256": "2aa83a7a02ec0c0c4dbbdc6995fa03608b58e01e36db14ac0a80dde73cd0c36c",
       "changeIds": [
         "SCR-V10-NATIVE-RUNTIME-AND-AUTHORITY"
       ],
