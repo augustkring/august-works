@@ -45,6 +45,23 @@ import { parseEnvironmentDriverConfig } from "./environment-config.js";
 import { contextManifestService } from "./context/context-manifest.js";
 import { createNativeOpenCodeConformanceProbeBackend } from "./native-runtime/native-session-executor.js";
 import { parseNativeExecutionInput } from "../vendor/paperclip-runner/index.js";
+import { logger } from "../middleware/logger.js";
+
+/** Operator diagnostic for a stopped conformance proof. The shared serializer
+ * keeps only the error type, HTTP status, allow-listed message and numeric
+ * location. The stage, step and code are fixed identifiers: a typed error
+ * code, or a server-authored `managed_opencode_*`/`native_*` error name. They
+ * carry no provider, prompt or company content. */
+function logNativeOpenCodeConformanceFailure(stage: "probe" | "turn" | "evidence_retention", error: unknown,
+  context: { groupId: string; runCount?: number; probeKind?: string; step: string | null }) {
+  const details = error && typeof error === "object" && "details" in error ? (error as { details?: unknown }).details : null;
+  const rawCode = details && typeof details === "object" && "code" in details ? (details as { code?: unknown }).code : null;
+  const message = error instanceof Error ? error.message : null;
+  const errorCode = typeof rawCode === "string" && /^[a-z0-9_]{1,100}$/.test(rawCode) ? rawCode
+    : typeof message === "string" && /^(?:managed_opencode|native)_[a-z0-9_]{1,100}$/.test(message) ? message : null;
+  logger.warn({ err: error, stage, errorCode, groupId: context.groupId, runCount: context.runCount ?? null,
+    probeKind: context.probeKind ?? null, step: context.step }, "native_opencode_conformance_failed");
+}
 
 export type NativeOpenCodeRemoteProbeContext = Readonly<{
   createBackend(): Promise<NativeSessionBackend>;
@@ -254,10 +271,14 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
     catch { /* close below must still confirm local settlement */ }
   };
   const previous = probe.previous;
+  // Content-free progress marker for the failure log below.
+  let turnStep: "claim" | "backend" | "session" | "dispatch" | "events" | "verify" = "claim";
   try {
     coordinator = await claimNativeExecutionCoordinator({ db: input.db, execution: input.execution,
       runnerInstanceId: input.runnerInstanceId });
+    turnStep = "backend";
     const backend = await input.createBackend();
+    turnStep = "session";
     const launchIntent = await appendHeartbeatRunEvent(input.db, { companyId: probe.identity.companyId,
       runId: probe.identity.runId, agentId: probe.identity.agentId, eventType: PROCESS_START_REQUESTED,
       stream: "system", level: "info", message: "Native conformance session launch requested." });
@@ -276,6 +297,7 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
     snapshot = await session.snapshot({ signal });
     const source = probe.resolveSource ? await probe.resolveSource() : probe.source;
     if (!source) throw forbidden("The server-owned Native conformance source descriptor is required");
+    turnStep = "dispatch";
     const turnInput: Parameters<NativeSession["startTurn"]>[0] = {
       message: { role: "user", text: probe.prompt }, ...(previous ? { continuation: true as const } : {}) };
     const dispatchId = await recordNativeModelInputDispatchIntent({ db: input.db, runId: probe.identity.runId,
@@ -296,6 +318,7 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
       idempotencyKey: `opencode-conformance:${probe.identity.runId}:${source.probeId}:${source.dispatchNonce}`,
       signal, streamEnded: () => turnStreamEnded, delayMs: probe.cancelAfterMs, cancel: abort,
     });
+    turnStep = "events";
     for await (const event of session.events()) {
       signal.throwIfAborted();
       if (event.runId !== probe.identity.runId || event.normalizedSessionId !== probe.identity.sessionId ||
@@ -311,14 +334,16 @@ export async function runManagedOpenCodeProbe(input: { db: Db; createBackend(): 
       if (["turn.interrupted", "turn.failed"].includes(event.eventType)) { state = "failed"; break; }
     }
     turnStreamEnded = true;
+    turnStep = "verify";
     if (cancelAfterObservedWire) await cancelAfterObservedWire;
     if (probe.cancelAfterMs !== undefined && (!cancellationRequested || !cancellationObserved || state !== "cancelled"))
       throw new Error("managed_opencode_cancel_not_observed");
     if (probe.expectedOutput !== undefined && (state !== "completed" || output.trim() !== probe.expectedOutput))
       throw new Error("managed_opencode_probe_output_mismatch");
     if (state === "completed") snapshot = await session.snapshot({ signal });
-  } catch {
+  } catch (error) {
     state = cancellationObserved ? "cancelled" : signal.aborted || cancellationRequested ? "unknown" : "failed";
+    logNativeOpenCodeConformanceFailure("turn", error, { groupId: input.groupId, step: turnStep });
   } finally {
     turnStreamEnded = true;
     signal.removeEventListener("abort", abort);
@@ -797,8 +822,11 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           throw error;
         }
       }
+      // Content-free progress markers for the failure log below.
+      const probeProgress: { current: { kind: string; step: "open" | "run" | "settle" | "release" | "receipt" } | null } = { current: null };
       async function probe(target: typeof primary, harness: typeof primaryHarness,
         probeKind: NativeOpenCodeConformanceSourceAuthority["probeKind"], probeMarker: string, expectedOutput?: string, cancel = false) {
+        probeProgress.current = { kind: probeKind, step: "open" };
         const targetQuote = quote(target);
         const oldReservations = await db.select({ id: orchestrationModelReservations.id }).from(orchestrationModelReservations)
           .where(eq(orchestrationModelReservations.planId, harness.plan.id));
@@ -848,6 +876,7 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           companyId: target.agent.companyId, runId: run.id, leaseId: lease!.id,
         });
         if (!preflightAuthority) throw forbidden("Current Sandbox Host and lease authority are required before Native session start");
+        probeProgress.current = { kind: probeKind, step: "run" };
         const result = await runManagedOpenCodeProbe({ db, createBackend: remote.createBackend, execution: remote.execution,
           runnerInstanceId: remote.runnerInstanceId, responsibleUserId: userId, groupId, planId: harness.plan.id, profileId: target.profile.id,
           probe: { identity: remote.identity,
@@ -891,15 +920,18 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
             throw forbidden("The unclaimed conformance Run is owned by another Native finalization path");
           }
         }
+        probeProgress.current = { kind: probeKind, step: "settle" };
         await remote.settle(result.state);
         const terminal = { status: result.state === "completed" ? "succeeded" as const : result.state === "cancelled" ? "cancelled" as const : "failed" as const,
           errorCode: result.state === "completed" ? null : result.state === "cancelled" ? "provider_conformance_cancelled" : "provider_conformance_unsettled",
           error: result.state === "completed" ? null : "The actual Native OpenCode probe did not complete cleanly.",
           resultJson: { nativeOpenCodeConformanceProbe: true, observedState: result.state } };
+        probeProgress.current = { kind: probeKind, step: "release" };
         await releaseCoordinator(terminal);
         await db.update(agents).set({ status: target.agent.status, updatedAt: new Date() })
           .where(and(eq(agents.companyId, target.agent.companyId), eq(agents.id, target.agent.id), eq(agents.status, "running")));
         settled = true;
+        probeProgress.current = { kind: probeKind, step: "receipt" };
         if (result.state === "completed" && result.snapshot) snapshots.set(target.agent.id, result.snapshot);
         probeHistory.set(target.agent.id, [...historyPrefix, { role: "user", text: prompt },
           ...(result.state === "completed" ? [{ role: "assistant" as const, text: result.output }] : [])]);
@@ -989,7 +1021,11 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
       return { binding, checks, requiredChecks,
         runIds: runs, groupId, reservationIds: ledgerIds, unknownChargeReservationIds: cancellation.reservation.status === "unknown" ? [cancellation.reservation.id] : [],
         failure: null };
-      } catch {
+      } catch (error) {
+        // Retain failed-retest and spend evidence below, but never hide why the
+        // proof stopped: the operator log carries a content-free projection.
+        logNativeOpenCodeConformanceFailure("probe", error, { groupId, runCount: runs.length,
+          probeKind: probeProgress.current?.kind, step: probeProgress.current?.step ?? null });
         if (!runs.length) throw forbidden("The managed OpenCode probe did not start; no current qualification evidence was changed");
         const reservationRows = await db.select({ id: orchestrationModelReservations.id, status: orchestrationModelReservations.status })
           .from(orchestrationModelReservations).where(inArray(orchestrationModelReservations.planId,
@@ -1031,7 +1067,9 @@ export function nativeOpenCodeConformanceService(db: Db, options: Options) {
           return { binding, checks: failedChecks, requiredChecks, runIds: runs, groupId, reservationIds,
             unknownChargeReservationIds,
             failure: "Actual managed OpenCode lifecycle, wire settlement, isolation, or cancellation proof was incomplete." };
-        } catch {
+        } catch (retentionError) {
+          logNativeOpenCodeConformanceFailure("evidence_retention", retentionError, { groupId, runCount: runs.length,
+            probeKind: probeProgress.current?.kind, step: probeProgress.current?.step ?? null });
           return { binding: null, checks: failedChecks, requiredChecks, runIds: runs, groupId,
             reservationIds, unknownChargeReservationIds,
             failure: "Actual managed OpenCode lifecycle or current-authority proof was incomplete." };
