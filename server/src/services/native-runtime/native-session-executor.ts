@@ -12041,6 +12041,10 @@ async function executePaperclipNativeSessionWithinScope(
     attempt,
     controller,
   });
+  // Set once the installed in-process controller admits a turn. Records the
+  // settlement receipt at most once, and only after this exact backend's close
+  // owner joined its work promise.
+  let recordInProcessBackendSettlement: (() => Promise<void>) | null = null;
   try {
     if (input.managedGitHub) {
       githubAccess ??= await createNativeGitHubAccess({
@@ -12223,6 +12227,28 @@ async function executePaperclipNativeSessionWithinScope(
       : null;
     nativeSessionExecuteStartedAtMs = Date.now();
     const installedInProcessDraft = isPreparedNativeDraftBackend(input.db, input.execution, input.backend);
+    if (installedInProcessDraft) {
+      let settlementRecorded = false;
+      recordInProcessBackendSettlement = async () => {
+        // The exact backend's close owner joined its work promise. executeNativeSession
+        // return alone is insufficient because generic close is bounded and may
+        // retain/quarantine unfinished cleanup. This is not a local/remote stop claim.
+        // A cancelled or failed turn settles the same way once that join completed;
+        // without it the run stays cleanup-pending (fail closed).
+        if (settlementRecorded || launchEventSeq === null || !awTextDraftBackendCloseSettled(input.backend)) return;
+        await appendHeartbeatRunEvent(input.db, {
+          companyId: input.execution.binding.companyId,
+          runId: input.execution.binding.runId,
+          agentId: input.execution.binding.agentId,
+          eventType: IN_PROCESS_BACKEND_SETTLED,
+          stream: "system",
+          level: "info",
+          message: "Installed in-process Native draft controller turn settled.",
+          payload: { admissionEventSeq: launchEventSeq },
+        });
+        settlementRecorded = true;
+      };
+    }
     native = await trace.measure(
       "native.session.execute",
       async () => {
@@ -12688,21 +12714,7 @@ async function executePaperclipNativeSessionWithinScope(
       }
       await input.onLog?.("stderr", "[paperclip-runner] managed credential refresh failed; provider session retired.\n");
     }
-    if (installedInProcessDraft && launchEventSeq !== null && awTextDraftBackendCloseSettled(input.backend)) {
-      // The exact backend's close owner joined its work promise. executeNativeSession
-      // return alone is insufficient because generic close is bounded and may
-      // retain/quarantine unfinished cleanup. This is not a local/remote stop claim.
-      await appendHeartbeatRunEvent(input.db, {
-        companyId: input.execution.binding.companyId,
-        runId: input.execution.binding.runId,
-        agentId: input.execution.binding.agentId,
-        eventType: IN_PROCESS_BACKEND_SETTLED,
-        stream: "system",
-        level: "info",
-        message: "Installed in-process Native draft controller turn settled.",
-        payload: { admissionEventSeq: launchEventSeq },
-      });
-    }
+    await recordInProcessBackendSettlement?.();
     if (native.terminal.runTerminalState === "succeeded") {
       // A truncated, verified external-chat wake cannot settle from the
       // provider's partial inline prompt. The run-scoped reader records a
@@ -12735,6 +12747,11 @@ async function executePaperclipNativeSessionWithinScope(
       // with a retry or release the still-live runner's lease.
       throw new NativeControllerDetachedForRestartError();
     }
+    // A cancelled or failed in-process turn owns no OS process. Once its close
+    // owner joined the work promise, record the same settlement receipt as a
+    // successful turn. If recording fails, cleanup stays pending (fail closed)
+    // and the original failure still propagates.
+    await recordInProcessBackendSettlement?.().catch(() => undefined);
     const protocolIntegrityFailure =
       error instanceof NativeSessionProtocolIntegrityError ? error : null;
     const ownershipUnverified =
