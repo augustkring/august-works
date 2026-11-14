@@ -63,10 +63,13 @@ async function runAcceptedInteractionSetupFailure(transient: boolean) {
         ? 'Sandbox provider "managed" is installed via plugin "fixture.managed", but its worker is not running.'
         : 'Sandbox provider "managed" is not installed or its plugin worker is not running.');
     },
-    beforeProviderResponse: async ({ companyId: currentCompany, run, issueId }) => {
-      if (!actualFirstRunId) actualFirstRunId = run.id;
-      if (run.id !== actualFirstRunId || issueId !== taskId) return;
-      companyId = currentCompany;
+    // The fixture calls providerReply before beforeProviderResponse, so a
+    // revision read there reaches only the next call. Read the committed plan
+    // revision and pending confirmation before each authenticated model request,
+    // so call 2 and call 3 see what write_document and request_human_input saved.
+    beforeManagedModelRequest: async ({ runId, issueId }) => {
+      if (!actualFirstRunId) actualFirstRunId = runId;
+      if (runId !== actualFirstRunId || !companyId || !taskId || issueId !== taskId) return;
       const [saved] = await db.select({ documentId: documents.id, revisionId: documents.latestRevisionId,
         revisionNumber: documents.latestRevisionNumber }).from(issueDocuments).innerJoin(documents,
         and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
