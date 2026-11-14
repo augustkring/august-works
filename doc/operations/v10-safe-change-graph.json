@@ -32105,7 +32105,7 @@
         },
         {
           "path": "server/src/__tests__/helpers/v5-fixtures.ts",
-          "sha256": "12c9f8186b55bed2ea595110981bc0c37e09d53ca70fafd894769aa0fa34a6ae"
+          "sha256": "34e553ad63b4e9ca88124b6dfef1bf071b484c68812204e36f036b1994eaeadb"
         },
         {
           "path": "server/src/__tests__/product-identity-routes.test.ts",
@@ -72440,7 +72440,7 @@
       "id": "source:server/src/__tests__/helpers/v5-fixtures.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/helpers/v5-fixtures.ts",
-      "sha256": "12c9f8186b55bed2ea595110981bc0c37e09d53ca70fafd894769aa0fa34a6ae",
+      "sha256": "34e553ad63b4e9ca88124b6dfef1bf071b484c68812204e36f036b1994eaeadb",
       "changeIds": [
         "SCR-V10-PRODUCT-IDENTITY-HELP-LANGUAGE"
       ],

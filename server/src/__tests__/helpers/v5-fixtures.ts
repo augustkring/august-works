@@ -21,9 +21,11 @@ export async function seedV5Companies(db: Db) {
   // later user.locale and companies.locale/timezone columns.
   await db.execute(sql`insert into "user" (id,name,email,email_verified,created_at,updated_at)
     values (${userId},'Operator',${`${userId}@test.invalid`},true,${now},${now})`);
+  // Production prefixes are upper case (deriveIssuePrefixBase), and identifier
+  // routes look tasks up by the upper-cased identifier, so keep fixtures canonical.
   await db.execute(sql`insert into companies (id,name,issue_prefix,created_at,updated_at) values
-    (${home},'Home',${`H${home.slice(0, 7)}`},${now},${now}),
-    (${guest},'Guest',${`G${guest.slice(0, 7)}`},${now},${now})`);
+    (${home},'Home',${`H${home.slice(0, 7).toUpperCase()}`},${now},${now}),
+    (${guest},'Guest',${`G${guest.slice(0, 7).toUpperCase()}`},${now},${now})`);
   await db.execute(sql`insert into company_memberships(company_id,principal_type,principal_id,status,membership_role)
     values (${home}::uuid,'user',${userId},'active','owner'),(${guest}::uuid,'user',${userId},'active','owner')`);
   await db.insert(principalPermissionGrants).values([home, guest].flatMap((companyId) => grantsForHumanRole("owner").map((grant) => ({ companyId, principalType: "user", principalId: userId, ...grant }))));
