@@ -4513,7 +4513,7 @@
         },
         {
           "path": "server/src/services/orchestration/native-tool-boundary.ts",
-          "sha256": "734f0b69f84fa962509b1195340579cf5b9d22023498de01e2997a6385e13a50"
+          "sha256": "e0c22dced7df522cd0ca8ddb1cd7eef68953ee4f51adbd7ddcd7693d77efdf20"
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
@@ -5787,7 +5787,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b"
+          "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef"
         },
         {
           "path": "server/src/__tests__/v9-agent-publication.integration.test.ts",
@@ -9168,7 +9168,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b"
+          "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef"
         },
         {
           "path": "server/src/__tests__/v8-company-purge.integration.test.ts",
@@ -10229,7 +10229,7 @@
         },
         {
           "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-          "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b"
+          "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef"
         },
         {
           "path": "server/src/__tests__/v9-agent-authored-definition.integration.test.ts",
@@ -10373,7 +10373,7 @@
         },
         {
           "path": "server/src/services/orchestration/native-tool-boundary.ts",
-          "sha256": "734f0b69f84fa962509b1195340579cf5b9d22023498de01e2997a6385e13a50"
+          "sha256": "e0c22dced7df522cd0ca8ddb1cd7eef68953ee4f51adbd7ddcd7693d77efdf20"
         },
         {
           "path": "server/src/services/orchestration/worker-model-gateway.ts",
@@ -47054,7 +47054,7 @@
       "id": "source:server/src/services/orchestration/native-tool-boundary.ts",
       "kind": "current_source_owner",
       "path": "server/src/services/orchestration/native-tool-boundary.ts",
-      "sha256": "734f0b69f84fa962509b1195340579cf5b9d22023498de01e2997a6385e13a50",
+      "sha256": "e0c22dced7df522cd0ca8ddb1cd7eef68953ee4f51adbd7ddcd7693d77efdf20",
       "changeIds": [
         "SCR-V10-HOTSPOT-01",
         "SCR-V10-HOTSPOT-07"
@@ -48025,7 +48025,7 @@
       "id": "source:server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
       "kind": "current_source_owner",
       "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
-      "sha256": "d25e49066b7da43f117400db654159df81441d8eed5092701992840fa04ff67b",
+      "sha256": "bfe4e248449607eb0f638dffc16ecb496709e46fad3fa60280c3532e47fe7bef",
       "changeIds": [
         "SCR-V10-HOTSPOT-02",
         "SCR-V10-HOTSPOT-06",
