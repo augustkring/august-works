@@ -68,7 +68,7 @@ import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
 import { materializeNativeInteractionResponses } from "./native-interaction-bridge.js";
 import { assertNativePayloadSourceSetCurrent, assertNativeReadResultSourceSetOwnersCurrent,
-  assertNativeProjectSourceCurrent } from "../native-direct-input.js";
+  assertNativeProjectSourceCurrent, nativePayloadSnapshotSql } from "../native-direct-input.js";
 import { ensureProjectAccessMember, projectService } from "../projects.js";
 import { publicNativePayloadRow } from "../native-payload-public.js";
 import { configureSaasStorageService } from "../../storage/index.js";
@@ -1135,6 +1135,261 @@ describe("native model input dispatch intent", () => {
     expect((forgedProfile.nativeInputSourceReceipt as { additionalInputs: unknown[] }).additionalInputs).toEqual([]);
     expect(() => assertNativeRunReadSourceHistoryQualified(forgedProfile, { runId: forgedAssociation.seeded.runId,
       responsibleUserId: userId })).toThrow("native_read_result_source_history_unavailable");
+  });
+
+  it("reads back a sealed Run-authored comment only with its own Run's nested provenance", async () => {
+    const userId = randomUUID(), sessionId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Nested provenance Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 3_600_000) });
+    const boardActor = { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [companyId],
+      memberships: [{ companyId, membershipRole: "member", status: "active" as const }] };
+    const emptyPolicy = { issueIds: [] as string[], projectIds: [] as string[], runIds: [] as string[],
+      memoryIds: [] as string[], foundationRevisionIds: [] as string[] };
+    type SourceSet = { policy: typeof emptyPolicy; inputs: NativePayloadSourceInput[] };
+
+    // One acknowledged Native turn whose first history read (H1) is recorded
+    // in the Run receipt exactly as the executor records it.
+    const prepare = async () => {
+      const createdIssue = await issueService(db).create(companyId, { title: "Read back Run progress", description: "A current Human source",
+        createdByUserId: userId }, db, undefined, { manualInputActor: boardActor });
+      const seeded = await seed({ existingIssueId: createdIssue.id, responsibleUserId: userId });
+      await db.update(issues).set({ status: "in_progress", assigneeAgentId: agentId, executionRunId: seeded.runId })
+        .where(and(eq(issues.companyId, companyId), eq(issues.id, createdIssue.id)));
+      await issueService(db).addComment(createdIssue.id, "Current Human request.", { userId }, { manualInputActor: boardActor });
+      const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
+      const task = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
+      const references: NativeRenderedSourceReference[] = [];
+      const markdown = buildPaperclipTaskMarkdown({ issue: { id: createdIssue.id, identifier: task!.identifier,
+        title: task!.title, description: task!.description, workMode: task!.workMode } },
+        { onRenderedSource: source => references.push(source) })!;
+      const completion = await ensureNativeCompletionContract({ db, companyId,
+        issue: { id: createdIssue.id, title: task!.title, description: task!.description }, actorId: agentId });
+      await db.update(heartbeatRuns).set({ completionContractId: completion.row.id,
+        completionContractSha256: completion.row.canonicalSha256 }).where(eq(heartbeatRuns.id, seeded.runId));
+      const sourceSet = buildNativeBootstrapSourceSet({ companyId, runId: seeded.runId, agentId, issueId: createdIssue.id,
+        renderedMarkdown: markdown, renderedMarkdownDigest: createHash("sha256").update(markdown, "utf8").digest("hex"), references,
+        candidates: [{ kind: "task", id: createdIssue.id, input: taskCaptureHolder.value!.input,
+          payloadSourceSnapshot: taskCaptureHolder.value!.payloadSourceSnapshot }], runtimeInputs: [], contextManifestIds: [],
+        additionalInputs: [{ kind: "completion_contract", issueId: createdIssue.id, contractId: completion.row.id,
+          revision: String(completion.row.revision), contentHash: completion.row.canonicalSha256 },
+          { kind: "workspace_metadata", runId: seeded.runId, executionWorkspaceId: seeded.runId, origin: "task_session",
+            sourceVersion: `task-session:${seeded.runId}`, contentHash: createHash("sha256").update(JSON.stringify({ cwd: "/native",
+              repoUrl: null, repoRef: null, branchName: null }), "utf8").digest("hex") }],
+        rolePackInputs: [], unsupportedInputPresent: false });
+      expect(sourceSet).not.toBeNull();
+      await initializeRunIdentity(db, { companyId, runId: seeded.runId, issueId: createdIssue.id,
+        responsibleUserId: userId, cause: "dispatch" });
+      const execution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
+        issue: { id: createdIssue.id, identifier: task!.identifier, title: task!.title, description: task!.description, workMode: "standard" },
+        taskPrompt: markdown, workspace: { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null },
+        normalizedSessionId: null, completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
+          schemaVersion: completion.row.schemaVersion, contract: completion.contract }, runtimeContext: nativeRuntimeContextFixture() });
+      await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
+      const turnInput = { message: { role: "user" as const, text: JSON.stringify(buildNativeModelEnvelope(execution)) }, requestedCollaborationMode: "default" as const };
+      const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: nativeSha256(execution.task) };
+      const binding = dispatchArgs(seeded, turnInput);
+      const dispatchId = await recordNativeModelInputDispatchIntent({ ...binding, bootstrapSourceClosure: closure });
+      const turnId = `nested-provenance-turn-${seeded.runId}`;
+      await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, dispatchId, turnInput, turnId), sourceClosure: closure });
+      const authority = new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId: createdIssue.id, runId: seeded.runId });
+      const actor = { type: "agent" as const, source: "none" as const, companyId, agentId, runId: seeded.runId, onBehalfOfUserId: userId };
+      /** An actual get_task_history call under this acknowledged turn. */
+      const read = async (callId: string) => {
+        expect(await recordNativeToolCallDispatchAssociation({ ...binding, turnId, callId, tool: "get_task_history",
+          argumentsHash: nativeSha256({}) })).toBe(true);
+        let captured: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"] | null = null;
+        await authority.execute({ tool: "get_task_history", callId, arguments: {} }, {
+          nativeToolCallIdentity: { tool: "get_task_history", callId, turnId },
+          onNativeInputToolResult: async capture => { captured = capture; } });
+        if (!captured) throw new Error("nested_provenance_history_capture_missing");
+        return captured as Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"];
+      };
+      const record = (capture: Parameters<typeof recordNativeInputToolResultIntent>[0]["capture"]) =>
+        recordNativeInputToolResultIntent({ ...binding, agentId, capture });
+      const receipt = async () => {
+        const [row] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+        return nativeRunInputSourceReceiptSchema.parse((row!.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt);
+      };
+      const h1 = await read(`nested-h1-${seeded.runId}`);
+      expect(h1.sourceSet).not.toBeNull();
+      await record(h1);
+      const h1Entry = (await receipt()).additionalInputs.find(entry => entry.inputs[0]?.kind === "tool_result" &&
+        entry.inputs[0].callId === h1.callId);
+      expect(h1Entry).toBeDefined();
+      return { issueId: createdIssue.id, runId: seeded.runId, seeded, actor, read, record, receipt,
+        h1Entry: h1Entry! as SourceSet & { responsibleUserId: string | null } };
+    };
+    type Prepared = Awaited<ReturnType<typeof prepare>>;
+    const checkHistory = (ctx: Prepared, sourceSet: SourceSet, tool: "get_task_history" | "get_task_context" = "get_task_history") =>
+      assertNativeReadResultSourceSetOwnersCurrent(db, { companyId, issueId: ctx.issueId, runId: ctx.runId, actor: ctx.actor,
+        tool, sourceSet });
+    /** Seal a protocol-1 comment exactly as managed report_progress does. */
+    const sealRunComment = async (ctx: Prepared, body: string, snapshot: SourceSet,
+      author: { runId?: string; agentId?: string; issueId?: string } = {}) => {
+      const issueId = author.issueId ?? ctx.issueId;
+      const comment = await issueService(db).addComment(issueId, body, { agentId: author.agentId ?? agentId,
+        runId: author.runId ?? ctx.runId }, { authorizationReason: "native_runner" }, db, 1);
+      await db.update(issueComments).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("comment", snapshot.policy, snapshot.inputs) })
+        .where(and(eq(issueComments.companyId, companyId), eq(issueComments.id, comment.id)));
+      return comment.id;
+    };
+    /** The source set get_task_history derives from exactly one returned comment. */
+    const historySetFor = async (ctx: Prepared, commentId: string): Promise<SourceSet> => {
+      const [row] = await db.select({ sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+        payloadSourceSnapshot: issueComments.payloadSourceSnapshot }).from(issueComments).where(eq(issueComments.id, commentId));
+      const view = await issueService(db).getComment(commentId);
+      const snapshot = row!.payloadSourceSnapshot as NativePayloadSourceSnapshot;
+      const policy = { ...emptyPolicy };
+      for (const key of Object.keys(policy) as (keyof typeof emptyPolicy)[])
+        policy[key] = [...new Set([...(key === "issueIds" ? [ctx.issueId] : []), ...snapshot.policy[key]])].sort();
+      return { policy, inputs: [{ kind: "comment", issueId: ctx.issueId, commentId, sourceVersion: row!.sourceVersion,
+        contentHash: nativeCommentProjectionHash({ body: view!.body, presentation: view!.presentation, metadata: view!.metadata }) },
+      ...snapshot.inputs] };
+    };
+    const withRun = (policy: typeof emptyPolicy, ...runIds: string[]) =>
+      ({ ...policy, runIds: [...new Set([...policy.runIds, ...runIds])].sort() });
+    const hash = (seed: string) => createHash("sha256").update(seed).digest("hex");
+    const conversationDispatch = (runId: string, issueId: string, dispatchAgentId = agentId) => ({
+      kind: "conversation_model_dispatch" as const, runId, agentId: dispatchAgentId, issueId, conversationSessionGeneration: 0,
+      executionManifestId: randomUUID(), executionManifestHash: hash(`manifest-${runId}`), reservationId: randomUUID(),
+      callId: `messages:${randomUUID()}`, requestHash: hash(`request-${runId}`), wireBodyHash: hash(`wire-${runId}`),
+      responseHash: hash(`response-${runId}`) });
+    const workerDispatch = (runId: string) => ({ kind: "worker_model_dispatch" as const, runId, reservationId: randomUUID(),
+      callId: `messages:${randomUUID()}`, requestHash: hash(`worker-request-${runId}`), wireBodyHash: hash(`worker-wire-${runId}`),
+      responseHash: hash(`worker-response-${runId}`) });
+
+    // Positive: a Run-authored progress comment whose sealed snapshot nests
+    // the producing Run's earlier history result is read back by that Run.
+    const ctx = await prepare();
+    const h1Marker = ctx.h1Entry.inputs[0] as Extract<NativePayloadSourceInput, { kind: "tool_result" }>;
+    expect(h1Marker).toMatchObject({ kind: "tool_result", runId: ctx.runId, toolName: "get_task_history" });
+    const progressId = await sealRunComment(ctx, "Run progress over its earlier history read.",
+      { policy: withRun(ctx.h1Entry.policy, ctx.runId), inputs: ctx.h1Entry.inputs });
+    const h2 = await ctx.read(`nested-h2-${ctx.runId}`);
+    expect(h2.sourceSet).not.toBeNull();
+    expect(h2.sourceSet!.inputs).toContainEqual(h1Marker);
+    expect(h2.sourceSet!.inputs).toContainEqual(expect.objectContaining({ kind: "comment", commentId: progressId }));
+    // The nested provenance adds no Run beyond the comment's own sealed policy.
+    expect(h2.sourceSet!.policy.runIds).toEqual([ctx.runId]);
+    await expect(checkHistory(ctx, h2.sourceSet as SourceSet)).resolves.toBeUndefined();
+    await ctx.record(h2);
+    const h2Entry = (await ctx.receipt()).additionalInputs.find(entry => entry.inputs[0]?.kind === "tool_result" &&
+      entry.inputs[0].callId === h2.callId);
+    expect(h2Entry).toBeDefined();
+    expect(h2Entry!.policy).toEqual(h2.sourceSet!.policy);
+    await expect(assertNativePayloadSourceSetCurrent(db, { companyId, issueId: ctx.issueId, runId: ctx.runId, actor: ctx.actor,
+      policy: h2Entry!.policy, inputs: h2Entry!.inputs })).resolves.toBeUndefined();
+    const [h2Run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, ctx.runId));
+    expect(() => assertNativeRunReadSourceHistoryQualified(h2Run!.runnerProfileJson as Record<string, unknown>,
+      { runId: ctx.runId, responsibleUserId: userId })).not.toThrow();
+    // The same nested set stays closed to every other read-result tool.
+    await expect(checkHistory(ctx, h2.sourceSet as SourceSet, "get_task_context")).rejects.toMatchObject({ status: 403 });
+
+    // A nested model dispatch reaches the existing historical dispatch owner:
+    // one without its exact reservation, wire intent and receipt prefix fails.
+    const conversationId = await sealRunComment(ctx, "Conversation progress with a stale dispatch.", {
+      policy: withRun({ ...emptyPolicy, issueIds: [ctx.issueId] }, ctx.runId),
+      inputs: [conversationDispatch(ctx.runId, ctx.issueId)] });
+    await expect(checkHistory(ctx, await historySetFor(ctx, conversationId)))
+      .rejects.toThrow("A Native historical conversation model dispatch changed");
+    const workerId = await sealRunComment(ctx, "Worker progress with a stale dispatch.", {
+      policy: withRun({ ...emptyPolicy, issueIds: [ctx.issueId] }, ctx.runId), inputs: [workerDispatch(ctx.runId)] });
+    await expect(checkHistory(ctx, await historySetFor(ctx, workerId)))
+      .rejects.toThrow("A Native historical model dispatch changed");
+
+    const provenanceDenied = "A Native history comment provenance is unavailable";
+    // A top-level marker that no returned comment snapshot nests.
+    const humanOnly = ctx.h1Entry.inputs.slice(1);
+    await expect(checkHistory(ctx, { policy: ctx.h1Entry.policy, inputs: [...humanOnly, h1Marker] }))
+      .rejects.toThrow(provenanceDenied);
+    const progressSet = await historySetFor(ctx, progressId);
+    await expect(checkHistory(ctx, { ...progressSet, inputs: [...progressSet.inputs, workerDispatch(ctx.runId)] }))
+      .rejects.toThrow(provenanceDenied);
+    // The read result must not carry a Run that no returned snapshot owns.
+    const sameTaskRun = await seed({ existingIssueId: ctx.issueId, responsibleUserId: userId });
+    await expect(checkHistory(ctx, { ...progressSet, policy: withRun(progressSet.policy, sameTaskRun.runId) }))
+      .rejects.toThrow(provenanceDenied);
+    // A marker from a Run that is not the comment's createdByRunId.
+    for (const marker of [conversationDispatch(sameTaskRun.runId, ctx.issueId), workerDispatch(sameTaskRun.runId),
+      { ...h1Marker, runId: sameTaskRun.runId }]) {
+      const id = await sealRunComment(ctx, `Other Run marker ${randomUUID()}`, {
+        policy: withRun({ ...emptyPolicy, issueIds: [ctx.issueId] }, ctx.runId, sameTaskRun.runId), inputs: [marker] });
+      await expect(checkHistory(ctx, await historySetFor(ctx, id))).rejects.toThrow(provenanceDenied);
+    }
+    // The comment's own snapshot policy must already own the producing Run.
+    const unownedRunId = await sealRunComment(ctx, "Progress whose policy omits its Run.",
+      { policy: ctx.h1Entry.policy, inputs: ctx.h1Entry.inputs });
+    await expect(checkHistory(ctx, await historySetFor(ctx, unownedRunId))).rejects.toThrow(provenanceDenied);
+    // A marker for another Task, even from the same Run.
+    const otherTask = await issueService(db).create(companyId, { title: "Other Task", description: "Unrelated",
+      createdByUserId: userId }, db, undefined, { manualInputActor: boardActor });
+    const otherTaskMarkerId = await sealRunComment(ctx, "Progress with another Task's dispatch.", {
+      policy: withRun({ ...emptyPolicy, issueIds: [ctx.issueId] }, ctx.runId), inputs: [conversationDispatch(ctx.runId, otherTask.id)] });
+    await expect(checkHistory(ctx, await historySetFor(ctx, otherTaskMarkerId))).rejects.toThrow(provenanceDenied);
+    // A comment produced by a Run bound to another Task.
+    const otherTaskRun = await seed({ existingIssueId: otherTask.id, responsibleUserId: userId });
+    const otherRunCommentId = await sealRunComment(ctx, "Progress by another Task's Run.", {
+      policy: withRun({ ...emptyPolicy, issueIds: [ctx.issueId] }, otherTaskRun.runId),
+      inputs: [workerDispatch(otherTaskRun.runId)] }, { runId: otherTaskRun.runId });
+    await expect(checkHistory(ctx, await historySetFor(ctx, otherRunCommentId))).rejects.toThrow(provenanceDenied);
+    // A comment and marker naming a Run of another company.
+    const foreignCompanyId = randomUUID(), foreignAgentId = randomUUID(), foreignRunId = randomUUID();
+    await db.insert(companies).values({ id: foreignCompanyId, name: "Foreign provenance company", issuePrefix: `F${randomUUID().slice(0, 4).toUpperCase()}` });
+    await db.insert(agents).values({ id: foreignAgentId, companyId: foreignCompanyId, name: "Foreign agent", adapterType: "paperclip_runner" });
+    await db.insert(heartbeatRuns).values({ id: foreignRunId, companyId: foreignCompanyId, agentId: foreignAgentId,
+      runtimeMode: "native", status: "running", nativeIssueId: null });
+    const [foreignComment] = await db.insert(issueComments).values({ companyId, issueId: ctx.issueId, body: "Foreign Run progress",
+      authorAgentId: agentId, authorType: "agent", createdByRunId: foreignRunId, payloadSourceProtocolVersion: 1 }).returning();
+    await db.update(issueComments).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("comment",
+      withRun({ ...emptyPolicy, issueIds: [ctx.issueId] }, foreignRunId), [workerDispatch(foreignRunId)]) })
+      .where(eq(issueComments.id, foreignComment!.id));
+    await expect(checkHistory(ctx, await historySetFor(ctx, foreignComment!.id))).rejects.toThrow(provenanceDenied);
+    // A Human-authored comment cannot carry Run provenance.
+    const [humanComment] = await db.insert(issueComments).values({ companyId, issueId: ctx.issueId, body: "Human text",
+      authorUserId: userId, authorType: "user", payloadSourceProtocolVersion: 1 }).returning();
+    await db.update(issueComments).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("comment",
+      withRun(ctx.h1Entry.policy, ctx.runId), ctx.h1Entry.inputs) }).where(eq(issueComments.id, humanComment!.id));
+    await expect(checkHistory(ctx, await historySetFor(ctx, humanComment!.id))).rejects.toThrow(provenanceDenied);
+    // Neither can a Human-authored row that names this Run and its agent.
+    const [humanRunComment] = await db.insert(issueComments).values({ companyId, issueId: ctx.issueId, body: "Human text in a Run",
+      authorUserId: userId, authorAgentId: agentId, authorType: "user", createdByRunId: ctx.runId, payloadSourceProtocolVersion: 1 }).returning();
+    await db.update(issueComments).set({ payloadSourceSnapshot: nativePayloadSnapshotSql("comment",
+      withRun(ctx.h1Entry.policy, ctx.runId), ctx.h1Entry.inputs) }).where(eq(issueComments.id, humanRunComment!.id));
+    await expect(checkHistory(ctx, await historySetFor(ctx, humanRunComment!.id))).rejects.toThrow(provenanceDenied);
+    // Only the producing Run's dispatch and tool-result markers qualify.
+    const reviewMarkerId = await sealRunComment(ctx, "Progress with a review dispatch.", {
+      policy: withRun({ ...emptyPolicy, issueIds: [ctx.issueId] }, ctx.runId), inputs: [{ kind: "review_model_dispatch",
+        runId: ctx.runId, reservationId: randomUUID(), callId: "messages:review", planId: randomUUID(), issueId: ctx.issueId,
+        interactionId: randomUUID(), decisionId: randomUUID(), sourceRunId: ctx.runId, sourceWorkerId: randomUUID(),
+        sourceAgentId: agentId, sourceResultId: randomUUID(), sourceAttemptId: randomUUID(), expectedPlanVersion: 1,
+        sourceReceiptDigest: hash("review-receipt"), sourceResultCanonicalSha256: hash("review-result"), reviewerAgentId: agentId,
+        executionManifestId: randomUUID(), requestHash: hash("review-request"), wireBodyHash: hash("review-wire"),
+        responseHash: hash("review-response") }] });
+    await expect(checkHistory(ctx, await historySetFor(ctx, reviewMarkerId)))
+      .rejects.toThrow("The Native read result source set is unavailable");
+
+    // Stale, invalidated and deleted owners are refused for a recorded read.
+    const staleId = await sealRunComment(ctx, "Progress that becomes stale.",
+      { policy: withRun(ctx.h1Entry.policy, ctx.runId), inputs: ctx.h1Entry.inputs });
+    const staleSet = await historySetFor(ctx, staleId);
+    await expect(checkHistory(ctx, staleSet)).resolves.toBeUndefined();
+    await db.update(issueComments).set({ updatedAt: new Date(Date.now() + 5_000) }).where(eq(issueComments.id, staleId));
+    await expect(checkHistory(ctx, staleSet)).rejects.toThrow(provenanceDenied);
+    const invalidatedId = await sealRunComment(ctx, "Progress that is edited.",
+      { policy: withRun(ctx.h1Entry.policy, ctx.runId), inputs: ctx.h1Entry.inputs });
+    const invalidatedSet = await historySetFor(ctx, invalidatedId);
+    await db.update(issueComments).set({ payloadSourceSnapshot: null }).where(eq(issueComments.id, invalidatedId));
+    const [invalidated] = await db.select({ invalidated: issueComments.payloadSourceSnapshotInvalidated }).from(issueComments)
+      .where(eq(issueComments.id, invalidatedId));
+    expect(invalidated?.invalidated).toBe(true);
+    await expect(checkHistory(ctx, invalidatedSet)).rejects.toThrow(provenanceDenied);
+    const deletedId = await sealRunComment(ctx, "Progress that is deleted.",
+      { policy: withRun(ctx.h1Entry.policy, ctx.runId), inputs: ctx.h1Entry.inputs });
+    const deletedSet = await historySetFor(ctx, deletedId);
+    await db.update(issueComments).set({ deletedAt: new Date() }).where(eq(issueComments.id, deletedId));
+    await expect(checkHistory(ctx, deletedSet)).rejects.toThrow(provenanceDenied);
   });
 
   it("appends a real same-conversation attachment read only under its acknowledged Native call", async () => {
