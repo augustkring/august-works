@@ -1573,11 +1573,11 @@
     },
     {
       "path": "server/src/__tests__/chat-channels.integration.test.ts",
-      "sha256": "372d2610758fb0e51324a65f4274d463e4b4696cec8d201aa183c7d345b711bc"
+      "sha256": "c72d36592eebcb29f608a343764cabfe5692afe0efd3fa10572df005c69547dc"
     },
     {
       "path": "server/src/services/chat-channels.ts",
-      "sha256": "cdf774e9f1680e3991c5af5e2a6f700e4052059ae9f9e0ffddd824bc4fed7c8d"
+      "sha256": "148980dcdc6ff4bc47700db8722e46db6e18599e8c292b0eb3cd80f722b5943e"
     },
     {
       "path": "server/src/services/native-runtime/chat-inbound-wakeup-owner.ts",
