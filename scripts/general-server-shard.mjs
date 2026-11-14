@@ -29,6 +29,32 @@ export function loadShardDurations(manifestPath) {
   return result;
 }
 
+// Wall time a shard spends before Vitest starts when it selects a suite that
+// needs extra preparation. The manifest records only the time Vitest reports
+// per file, so without this the balancer treats that shard as no heavier than
+// the others. The built-server restart suite makes run-vitest-stable.mjs run
+// `pnpm --filter @paperclipai/server build` and `build:runtime` first, which
+// includes a cold release cargo build of the Runner: 298s, 377s and 377s in
+// PR runs 43604552172, 43611423219 and 43625233041 (2026-11-14). That shard
+// was cancelled at the 20 minute job limit after 52 of 65 files.
+export const GENERAL_SERVER_SUITE_PREPARATION_MS = Object.freeze({
+  "server/src/__tests__/scheduled-work-server-restart.integration.test.ts": 380_000,
+});
+
+// Adds each suite's preparation cost to its measured duration, so the
+// partition accounts for the whole time the shard job spends on that suite.
+export function withSuitePreparationCost(
+  durations,
+  preparation = GENERAL_SERVER_SUITE_PREPARATION_MS,
+) {
+  const fallbackWeight = defaultSuiteWeight(durations);
+  const result = { ...durations };
+  for (const [file, ms] of Object.entries(preparation)) {
+    result[file] = (durations[file] ?? fallbackWeight) + ms;
+  }
+  return result;
+}
+
 // Weight assigned to suites absent from the manifest (new or renamed files).
 // The median keeps one unknown suite from skewing a shard the way a mean
 // dragged up by a few 30s+ suites would.

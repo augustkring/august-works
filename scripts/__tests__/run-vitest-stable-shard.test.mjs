@@ -8,9 +8,11 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
+  GENERAL_SERVER_SUITE_PREPARATION_MS,
   defaultSuiteWeight,
   loadShardDurations,
   partitionGeneralServerSuites,
+  withSuitePreparationCost,
 } from "../general-server-shard.mjs";
 
 import { assertSelectedTests, partitionTestLines } from "../test-line-shard.mjs";
@@ -323,7 +325,7 @@ test("the real shard partition is duration-balanced", () => {
   // Mirrors the PR matrix: general-server-without-chat across SHARD_COUNT
   // runners, with the chat suite carried by the dedicated general-chat lanes
   // and the native-runner suite by the Rust-cached PR vitest lane.
-  const durations = loadShardDurations(durationsManifest);
+  const durations = withSuitePreparationCost(loadShardDurations(durationsManifest));
   const fallback = defaultSuiteWeight(durations);
   const shards = Array.from({ length: SHARD_COUNT }, (_, index) =>
     dryRunJson(
@@ -663,7 +665,7 @@ test("the PR general_tests job gives only the whole-file managed Native shards a
 });
 
 test("the checked-in durations keep every PR general-server shard well inside the 20 minute limit", () => {
-  const durations = loadShardDurations(durationsManifest);
+  const durations = withSuitePreparationCost(loadShardDurations(durationsManifest));
   const prEnv = { GITHUB_WORKFLOW: "PR" };
   const files = dryRunJson(
     ["--mode", "general", "--group", "general-server-without-chat", "--shard-index", "0", "--shard-count", "1"],
@@ -679,4 +681,41 @@ test("the checked-in durations keep every PR general-server shard well inside th
   assert.ok(Math.max(...predictedSeconds) <= 15 * 60, `slowest predicted shard ${(Math.max(...predictedSeconds) / 60).toFixed(1)} min exceeds 15 min`);
   const meanSeconds = predictedSeconds.reduce((a, b) => a + b, 0) / predictedSeconds.length;
   assert.ok(Math.max(...predictedSeconds) <= meanSeconds * 1.25, "shards must stay balanced within 25% of the mean");
+});
+
+test("a suite that needs a built server carries its preparation time in the shard weight", () => {
+  const restartSuite = "server/src/__tests__/scheduled-work-server-restart.integration.test.ts";
+  // run-vitest-stable.mjs builds the server only for this suite; keep the
+  // preparation cost keyed to the same file.
+  assert.match(readFileSync(script, "utf8"), new RegExp(`"${restartSuite.replaceAll(".", "\\.")}"`));
+  assert.deepEqual(Object.keys(GENERAL_SERVER_SUITE_PREPARATION_MS), [restartSuite]);
+  const measured = loadShardDurations(durationsManifest);
+  const weighted = withSuitePreparationCost(measured);
+  assert.equal(weighted[restartSuite], measured[restartSuite] + GENERAL_SERVER_SUITE_PREPARATION_MS[restartSuite]);
+  for (const [file, ms] of Object.entries(measured)) {
+    if (file !== restartSuite) assert.equal(weighted[file], ms);
+  }
+  // A suite missing from the manifest starts from the median weight.
+  assert.equal(withSuitePreparationCost({ a: 1, b: 3, c: 5 }, { d: 10 }).d, 13);
+  assert.equal(measured[restartSuite] < GENERAL_SERVER_SUITE_PREPARATION_MS[restartSuite], true);
+});
+
+test("the PR shard holding the built-server suite is predicted inside the 15 minute budget", () => {
+  const restartSuite = "server/src/__tests__/scheduled-work-server-restart.integration.test.ts";
+  const prEnv = { GITHUB_WORKFLOW: "PR" };
+  const measured = loadShardDurations(durationsManifest);
+  const fallback = defaultSuiteWeight(measured);
+  const shard = Array.from({ length: SHARD_COUNT }, (_, index) =>
+    dryRunJson(
+      ["--mode", "general", "--group", "general-server-without-chat", "--shard-index", String(index), "--shard-count", String(SHARD_COUNT)],
+      prEnv,
+    ).selectedGeneralServerSuites,
+  ).find((files) => files.includes(restartSuite));
+  assert.ok(shard, "one PR shard must select the built-server restart suite");
+  const vitestMs = shard.reduce((sum, file) => sum + (measured[file] ?? fallback), 0);
+  const predictedSeconds = 34
+    + GENERAL_SERVER_SUITE_PREPARATION_MS[restartSuite] / 1000
+    + (1.05 * vitestMs) / 1000
+    + 2.9 * shard.length;
+  assert.ok(predictedSeconds <= 15 * 60, `restart shard predicted at ${(predictedSeconds / 60).toFixed(1)} min`);
 });
