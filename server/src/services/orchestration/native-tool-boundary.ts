@@ -4,6 +4,9 @@ import {
   agentIdentities,
   companies,
   agentExecutionManifests,
+  chatConversations,
+  chatEndpoints,
+  companyMemberships,
   heartbeatRuns,
   issues,
   orchestrationPlans,
@@ -128,6 +131,37 @@ async function scope(db: Db, b: Binding) {
   return null;
 }
 
+/** AgentMail Tasks are `chat_channel` Tasks whose senders are external
+ * correspondents, never linked Humans, so the linked-Human channel owner can
+ * never apply to them. Their authority is the explicit inbox policy bound to
+ * the Task (an active AgentMail endpoint assigned to this Agent, which always
+ * admits agent execution with explicit publication) together with the Task's
+ * current responsible Human (seeded from the inbox sponsor), who must hold an
+ * active, non-viewer membership. Returns false when the Task is not bound to an
+ * AgentMail endpoint; throws when it is but any of these facts is not current. */
+async function assertNativeEmailConversationToolScope(db: Db, b: Binding,
+  issue: typeof issues.$inferSelect, run: typeof heartbeatRuns.$inferSelect | undefined): Promise<boolean> {
+  const bound = await db.select({ conversation: chatConversations, endpoint: chatEndpoints }).from(chatConversations)
+    .innerJoin(chatEndpoints, and(eq(chatEndpoints.companyId, chatConversations.companyId),
+      eq(chatEndpoints.id, chatConversations.endpointId)))
+    .where(and(eq(chatConversations.companyId, b.companyId), eq(chatConversations.issueId, b.issueId))).limit(2);
+  if (!bound.some(row => row.endpoint.provider === "agentmail")) return false;
+  const deny = () => forbidden("Native email conversation tool is outside its current inbox policy and responsible Human");
+  // The company-scoped conversation row is the durable Task-to-inbox binding.
+  const { endpoint } = bound[0]!;
+  if (bound.length !== 1 || endpoint.provider !== "agentmail" || endpoint.status !== "active" ||
+      endpoint.archivedAt !== null || endpoint.externalExecutionPolicy !== "agent" || endpoint.publicationMode !== "explicit" ||
+      endpoint.assignedAgentId !== b.agentId || issue.hiddenAt !== null || issue.assigneeAgentId !== b.agentId ||
+      issue.executionRunId !== b.runId || ["done", "cancelled"].includes(issue.status) || !issue.responsibleUserId ||
+      !run || run.status !== "running" || run.runtimeMode !== "native" || run.nativeIssueId !== b.issueId ||
+      run.responsibleUserId !== issue.responsibleUserId) throw deny();
+  const [membership] = await db.select({ status: companyMemberships.status, role: companyMemberships.membershipRole })
+    .from(companyMemberships).where(and(eq(companyMemberships.companyId, b.companyId),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, run.responsibleUserId))).limit(1);
+  if (membership?.status !== "active" || membership.role === "viewer") throw deny();
+  return true;
+}
+
 /** Prove the same no-plan scope used by `withOrchestrationNativeTool` for a
  * Native conversation action whose durable semantic receipt is its owner.
  * This never creates or substitutes a tool invocation. */
@@ -139,6 +173,7 @@ export async function assertNativeConversationToolNoPlanScope(db: Db, b: {
   if (issue?.originKind !== "chat_channel") return;
   const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, b.companyId),
     eq(heartbeatRuns.id, b.runId), eq(heartbeatRuns.agentId, b.agentId))).limit(1);
+  if (await assertNativeEmailConversationToolScope(db, b, issue, run)) return;
   const generation = run?.contextSnapshot?.conversationSessionGeneration;
   const sourceCommentId = run?.contextSnapshot?.wakeCommentId;
   if (!run || run.status !== "running" || run.runtimeMode !== "native" || run.nativeIssueId !== b.issueId ||

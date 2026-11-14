@@ -127,6 +127,11 @@ import { createChatSdkEndpointRuntime } from "../services/chat-sdk-runtime.js";
 import type { TelegramDraftControl } from "../services/chat-telegram-draft-stop.js";
 import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 import { seedCurrentHumanMembership } from "./helpers/current-human-membership-fixture.js";
+import {
+  readRuntimeChannelConversationScope,
+  runtimeConversationGeneration,
+  runtimeConversationOwnerExact,
+} from "../services/runtime/runtime-conversation-owner.js";
 import { admitMockedLegacyDispatch, resetMockedLegacyDispatch } from "./helpers/mocked-legacy-paid-dispatch.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 
@@ -4032,6 +4037,19 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     };
   }
 
+  it("turns agent execution on by default only for linked-people-only Slack channels", async () => {
+    const fixture = await seedCompany();
+    const { service } = createService();
+    const app = routesApp(db, fixture.companyId, service);
+    const slack = await request(app).post(`/api/companies/${fixture.companyId}/chat-endpoints`)
+      .send({ provider: "slack", assignedAgentId: fixture.assignedAgentId }).expect(201);
+    const discord = await request(app).post(`/api/companies/${fixture.companyId}/chat-endpoints`)
+      .send({ provider: "discord", assignedAgentId: fixture.assignedAgentId }).expect(201);
+    expect(slack.body).toMatchObject({ allowUnlinkedPeople: false, externalExecutionPolicy: "agent" });
+    // Providers that admit unlinked people keep the restricted default.
+    expect(discord.body).toMatchObject({ allowUnlinkedPeople: true, externalExecutionPolicy: "restricted" });
+  });
+
   it("creates a channel-purpose connection and rejects attempts to change its assigned agent", async () => {
     const fixture = await seedCompany();
     const { service } = createService();
@@ -4048,6 +4066,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       assignedAgentName: "Maya",
       status: "draft",
       allowUnlinkedPeople: false,
+      externalExecutionPolicy: "agent",
       setup: { command: expect.stringMatching(/^\/maya-[a-z0-9]{6}$/) },
     });
     const createdCommand = createResponse.body.setup.command as string;
@@ -54172,6 +54191,94 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     },
   );
 
+  // C2: RuntimeControl used to recognise a conversation only by the web Task
+  // columns, so a Slack Task (which has none) fell through to the Worker gates.
+  it("lets RuntimeControl see a Slack Native turn only through its current linked-Human inbound owner", async () => {
+    const fixture = await seedCompany();
+    const other = await seedCompany();
+    const { callbacks, endpoint, service } = await configuredSlackEndpoint(fixture, {
+      allowUnlinkedPeople: false,
+      linkedBoardUser: true,
+    });
+    try {
+      await seedCurrentHumanSourceActor(db, [fixture.companyId], "owner-user");
+      await db.update(chatEndpoints).set({ externalExecutionPolicy: "agent" })
+        .where(eq(chatEndpoints.id, endpoint.id));
+      const channel = makeThread({ channelId: "C-RUNTIME-OWNER", id: "slack:C-RUNTIME-OWNER:7070.1", name: "runtime-owner" });
+      const original = makeMessage({ id: "7070.1", text: "@maya answer in this conversation", mentioned: true, userId: "UBOARD" });
+      await deliverMessage({ callbacks, endpointId: endpoint.id, thread: channel.thread, message: original, trigger: "mention" });
+      await qualifySetupRoundTrip(service, endpoint.id, "UBOARD");
+      await service.test(endpoint.id, "owner-user");
+      const [conversation] = await service.listConversations(endpoint.id);
+      const runId = randomUUID();
+      await db.insert(heartbeatRuns).values({
+        id: runId,
+        companyId: fixture.companyId,
+        agentId: fixture.assignedAgentId,
+        nativeIssueId: conversation.issueId,
+        responsibleUserId: "owner-user",
+        runtimeMode: "native",
+        status: "running",
+        contextSnapshot: {
+          ...(await chatWakeContext({ endpointId: endpoint.id, issueId: conversation.issueId, provider: "slack", providerMessageId: original.id })),
+          conversationSessionGeneration: conversation.sessionGeneration,
+          conversationMode: true,
+        },
+      });
+      await db.update(issues).set({ executionRunId: runId, status: "in_progress" })
+        .where(eq(issues.id, conversation.issueId));
+      const readOwner = async (runOverride: Partial<typeof heartbeatRuns.$inferSelect> = {}) => {
+        const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, runId));
+        const [task] = await db.select().from(issues).where(eq(issues.id, conversation.issueId));
+        const candidate = { ...run!, ...runOverride };
+        return { run: candidate, task: task!, scope: await readRuntimeChannelConversationScope(db, { run: candidate, task: task! }) };
+      };
+
+      const current = await readOwner();
+      expect(current.task).toMatchObject({ originKind: "chat_channel", conversationAgentId: null, conversationUserId: null });
+      // The pre-fix predicate (web Task columns only) refuses this Task.
+      expect(runtimeConversationOwnerExact(current.task, current.run, null)).toBe(false);
+      expect(current.scope).toMatchObject({ kind: "chat_channel_conversation", companyId: fixture.companyId,
+        issueId: conversation.issueId, agentId: fixture.assignedAgentId, responsibleUserId: "owner-user", runId,
+        sessionGeneration: conversation.sessionGeneration, endpointId: endpoint.id, provider: "slack" });
+      expect(runtimeConversationOwnerExact(current.task, current.run, current.scope)).toBe(true);
+      expect(runtimeConversationGeneration(current.task, current.scope)).toBe(conversation.sessionGeneration);
+      // A scope never transfers to another Agent, Human or Run.
+      expect(runtimeConversationOwnerExact(current.task, { ...current.run, agentId: fixture.replacementAgentId }, current.scope)).toBe(false);
+      expect(runtimeConversationOwnerExact(current.task, { ...current.run, responsibleUserId: "other-user" }, current.scope)).toBe(false);
+      expect(runtimeConversationOwnerExact(current.task, { ...current.run, id: randomUUID() }, current.scope)).toBe(false);
+
+      // Negative: another company, another Human, or a Run that does not own the Task.
+      expect((await readOwner({ companyId: other.companyId })).scope).toBeNull();
+      expect((await readOwner({ responsibleUserId: "other-user" })).scope).toBeNull();
+      expect((await readOwner({ id: randomUUID() })).scope).toBeNull();
+      expect((await readOwner({ contextSnapshot: { ...current.run.contextSnapshot, wakeCommentId: randomUUID() } })).scope).toBeNull();
+
+      // Negative: the linked Human is removed, downgraded to viewer, or unlinked;
+      // or the endpoint owner withdraws agent execution.
+      const membership = and(eq(companyMemberships.companyId, fixture.companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, "owner-user"));
+      const link = and(eq(chatIdentityLinks.endpointId, endpoint.id), eq(chatIdentityLinks.paperclipUserId, "owner-user"));
+      await db.update(companyMemberships).set({ status: "suspended" }).where(membership);
+      expect((await readOwner()).scope).toBeNull();
+      await db.update(companyMemberships).set({ status: "active", membershipRole: "viewer" }).where(membership);
+      expect((await readOwner()).scope).toBeNull();
+      await db.update(companyMemberships).set({ membershipRole: "operator" }).where(membership);
+      await db.update(chatIdentityLinks).set({ status: "revoked" }).where(link);
+      expect((await readOwner()).scope).toBeNull();
+      await db.update(chatIdentityLinks).set({ status: "linked" }).where(link);
+      await db.update(chatEndpoints).set({ externalExecutionPolicy: "restricted" }).where(eq(chatEndpoints.id, endpoint.id));
+      expect((await readOwner()).scope).toBeNull();
+      await db.update(chatEndpoints).set({ externalExecutionPolicy: "agent" }).where(eq(chatEndpoints.id, endpoint.id));
+      // Restoring every fact restores exactly the same owner.
+      expect((await readOwner()).scope).toMatchObject({ runId, responsibleUserId: "owner-user" });
+    } finally {
+      await db.update(chatConversations).set({ state: "completed" })
+        .where(and(eq(chatConversations.companyId, fixture.companyId), eq(chatConversations.endpointId, endpoint.id)));
+      await retirePublicationFixture(service, endpoint.id);
+    }
+  });
+
   it.each(["deletion", "edit", "revoked_edit"] as const)(
     "refuses an otherwise eligible exact Slack retry after %s without admitting source changes",
     async (kind) => {
@@ -56948,6 +57055,10 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       githubUnavailableFile,
       linkedOriginalActor ? "ORIGINAL task, not the failed request" : undefined,
     );
+    // Failed chat retries are the restricted-channel recovery owner. Slack now
+    // defaults to agent execution, so pin the restricted policy these cases cover.
+    await db.update(chatEndpoints).set({ externalExecutionPolicy: "restricted" })
+      .where(eq(chatEndpoints.id, context.endpoint.id));
     let retrySourceMessageId = context.messageId;
     if (linkedOriginalActor) {
       const timestamp = Math.floor(Date.now() / 1000);

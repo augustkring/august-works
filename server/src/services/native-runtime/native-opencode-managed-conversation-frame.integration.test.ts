@@ -1521,7 +1521,10 @@ describe.skipIf(!qualifiedOpenCodeBinary())("managed Native conversation OpenCod
     const stopRequests: Array<Promise<{ status: number; body: unknown }>> = [];
     const stop = (runId: string) => {
       if (!wire.app || !wire.origin || !wire.cookie) throw new Error("Actual Human Stop app is unavailable");
-      const requested = request(wire.app).post(`/api/heartbeat-runs/${runId}/cancel`)
+      // Send Stop to the same listener the browser origin names. request(app)
+      // would bind an ephemeral host, and the board CSRF guard rightly refuses
+      // that cross-origin mutation with 403 before any Stop authority runs.
+      const requested = request(wire.origin).post(`/api/heartbeat-runs/${runId}/cancel`)
         .set("cookie", wire.cookie).set("origin", wire.origin).timeout({ response: 30_000, deadline: 45_000 })
         .then(response => ({ status: response.status, body: response.body }));
       void requested.catch(() => undefined);
